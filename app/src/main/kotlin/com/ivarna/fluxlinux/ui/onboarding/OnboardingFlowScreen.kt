@@ -599,12 +599,15 @@ private fun HostSetupPage(onBack: () -> Unit, onNext: () -> Unit) {
     val context = LocalContext.current
     var bootstrapDone by remember { mutableStateOf(TerminalLauncher.isHostSetupDone(context)) }
     var initializing by remember { mutableStateOf(false) }
+    var failed by remember { mutableStateOf(false) }
     var progress by remember { mutableStateOf(0f) }
     var statusText by remember { mutableStateOf("") }
     val colors = MaterialTheme.colorScheme
 
     fun startInit() {
+        if (initializing) return
         initializing = true
+        failed = false
         statusText = "Extracting host bootstrap…"
         TerminalLauncher.prepareHost(
             context,
@@ -615,8 +618,9 @@ private fun HostSetupPage(onBack: () -> Unit, onNext: () -> Unit) {
             onDone = { ok ->
                 initializing = false
                 bootstrapDone = TerminalLauncher.isHostSetupDone(context)
+                failed = !bootstrapDone
                 statusText = if (bootstrapDone) "Host environment ready."
-                else "Setup failed — check device storage."
+                else "Setup failed — check storage space and network, then retry."
             }
         )
     }
@@ -699,8 +703,8 @@ private fun HostSetupPage(onBack: () -> Unit, onNext: () -> Unit) {
                         }
 
                         MethodChip(
-                            label = if (bootstrapDone) "READY" else if (initializing) "EXTRACTING" else "PENDING",
-                            color = if (bootstrapDone) Color(0xFF69F0AE) else if (initializing) FluxAccentMagenta else Color(0xFFFFA000)
+                            label = if (bootstrapDone) "READY" else if (initializing) "EXTRACTING" else if (failed) "RETRY" else "PENDING",
+                            color = if (bootstrapDone) Color(0xFF69F0AE) else if (initializing) FluxAccentMagenta else if (failed) Color(0xFFFFA000) else Color(0xFFFFA000)
                         )
                     }
 

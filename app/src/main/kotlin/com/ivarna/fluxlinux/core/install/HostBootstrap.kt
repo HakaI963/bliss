@@ -16,6 +16,7 @@ object HostBootstrap {
 
     const val IVARNA_PACKAGE = "com.ivarna.fluxlinux"
     const val ZENITHBLUE_PACKAGE = "com.zenithblue.fluxlinux"
+    const val FOLIO_PACKAGE = "com.nopiece.folio"
 
     val IVARNA = PinnedReleaseArchive(
         fileName = "bootstrap_com.ivarna.fluxlinux.tar",
@@ -31,9 +32,20 @@ object HostBootstrap {
         minBytes = 50L * 1024L * 1024L
     )
 
+    // Folio ships assets/bootstrap.tar like the other flavors; the release tag
+    // has no folio tar yet, so its repair fallback reuses the ivarna tar
+    // (same usr/ payload; prefix is rewritten at extract time).
+    val FOLIO = PinnedReleaseArchive(
+        fileName = IVARNA.fileName,
+        sha256 = IVARNA.sha256,
+        url = IVARNA.url,
+        minBytes = IVARNA.minBytes
+    )
+
     fun forApplicationId(applicationId: String): PinnedReleaseArchive =
         when (applicationId) {
             ZENITHBLUE_PACKAGE -> ZENITHBLUE
+            FOLIO_PACKAGE -> FOLIO
             else -> IVARNA
         }
 
