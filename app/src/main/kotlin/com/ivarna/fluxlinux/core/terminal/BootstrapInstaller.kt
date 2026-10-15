@@ -309,15 +309,24 @@ object BootstrapInstaller {
             } else if (type == '2') {
                 outFile.parentFile?.mkdirs()
                 try {
-                    java.nio.file.Files.createSymbolicLink(
-                        outFile.toPath(),
-                        java.nio.file.Paths.get(linkName)
-                    )
+                    val link = outFile.toPath()
+                    val target = java.nio.file.Paths.get(linkName)
+                    if (!(java.nio.file.Files.isSymbolicLink(link) &&
+                                java.nio.file.Files.readSymbolicLink(link) == target)
+                    ) {
+                        // Replace stale/wrong entries with a real link — never
+                        // overwrite with a copy (a copy loses +x and a later
+                        // retry dies with EACCES exit=126 on this file).
+                        java.nio.file.Files.deleteIfExists(link)
+                        java.nio.file.Files.createSymbolicLink(link, target)
+                    }
                 } catch (e: Exception) {
                     try {
                         val linkTarget = File(outFile.parentFile, linkName)
                         if (linkTarget.exists() && linkTarget.isFile) {
                             linkTarget.copyTo(outFile, overwrite = true)
+                            // Copies lose Unix modes — restore owner-exec.
+                            outFile.setExecutable(true, false)
                         }
                     } catch (_: Exception) {}
                 }

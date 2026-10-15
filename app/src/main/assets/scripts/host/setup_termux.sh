@@ -46,12 +46,12 @@ export TERMUX_VERSION="${TERMUX_VERSION:-flux-host}"
 export PATH="$PREFIX/bin:$PREFIX/bin/applets:/system/bin:/system/xbin${PATH:+:$PATH}"
 export LD_LIBRARY_PATH="$PREFIX/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 
-# Early exec hardening (W^X / SELinux): the first external call below must not
-# depend on $PREFIX/bin being runnable yet. Re-assert owner-exec on the host
-# tool dirs with the SYSTEM chmod (always runnable), then avoid fork+exec where
-# a shell expansion gives the identical value.
+# Early exec repair (W^X / retry damage): files extracted without Unix modes
+# (or clobbered on a previous retry) fail with EACCES exit=126. Re-assert 755
+# on the host tool dirs with the SYSTEM chmod (always runnable), before any
+# $PREFIX/bin/* call below.
 if [ -d "$PREFIX/bin" ] && [ -x /system/bin/chmod ]; then
-    /system/bin/chmod 700 "$PREFIX/bin/"* "$PREFIX/libexec/"* 2>/dev/null || true
+    /system/bin/chmod -R 755 "$PREFIX/bin" "$PREFIX/libexec" "$PREFIX/lib/apt/methods" 2>/dev/null || true
 fi
 
 PREFIX_DEFAULT="$PREFIX"
