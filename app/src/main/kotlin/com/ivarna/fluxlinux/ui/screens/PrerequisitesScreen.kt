@@ -1775,7 +1775,7 @@ fun FinalInstructionsStep(
         // Warning Card
         androidx.compose.material3.Card(
             colors = androidx.compose.material3.CardDefaults.cardColors(
-                containerColor = Color.WhiteContainer
+                containerColor = Color.White
             ),
             shape = RoundedCornerShape(16.dp),
             modifier = Modifier.fillMaxWidth().border(1.dp, androidx.compose.material3.MaterialTheme.colorScheme.error, RoundedCornerShape(16.dp))
