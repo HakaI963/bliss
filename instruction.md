@@ -15,8 +15,9 @@ Quick facts:
 | App id / brand | `com.nopiece.folio` / "Folio" |
 | Source package | `com.ivarna.fluxlinux` |
 | Branch | `main` |
-| Latest shipped CI | run `38712100456` (commit `10ef127`) |
-| Released APK | [`folio-debug-10ef127`](https://github.com/HakaI963/folio/releases/tag/folio-debug-10ef127) `app-folio-debug.apk` (177,088,881 B) |
+| Latest green CI | run `38776662519` (commit `33c97e9`) |
+| Released APK | [`folio-debug-33c97e9`](https://github.com/HakaI963/folio/releases/tag/folio-debug-33c97e9) `app-folio-debug.apk` (177,124,385 B) |
+| APK sha256 | `48445f6834200425943eb992b25fabfff62020de2210c862fcc1de7e7f7ec713` |
 | Verify APK proof | package `com.nopiece.folio`, `targetSdkVersion 28`, `assets/bootstrap.tar` 129,792,000 B, libbash/libproot/libloader*.so packaged |
 | Signing | debug only (per-run keystore — uninstall before re-install) |
 | CI gate | `.github/workflows/build.yml` compiles **main sources only** (`assembleFolioDebug` + bootstrap assembly + Verify APK). Unit tests are not part of the gate. |
@@ -190,9 +191,9 @@ The historical "verify before restarting" checklist is fully resolved: nav crash
 
 ## 10. Next steps (ordered)
 
-1. **Commit + push this overhaul** (changed files only; exclude gitignored bootstrap/rootfs/jniLibs artifacts).
-2. **CI compile + "Verify APK"** — fix any compile error that surfaces (main sourceset only). Confirm: package `com.nopiece.folio`, `targetSdkVersion 28`, `assets/bootstrap.tar` packaged.
-3. **Release** `folio-debug-<commit>` with the built `app-folio-debug.apk`; update §0 quick facts.
+1. ~~Commit + push this overhaul~~ — **done** (`b64ddd6` + sync fix `33c97e9`).
+2. ~~CI compile + "Verify APK"~~ — **green** (run `38776662519`: all steps ✓, Verify APK passed).
+3. ~~Release~~ — **done**: [`folio-debug-33c97e9`](https://github.com/HakaI963/folio/releases/tag/folio-debug-33c97e9).
 4. **On-device QA** (cannot be done in this environment):
    - Initialize Host still succeeds (`exit=126` regression check).
    - Tab switching Home ↔ Distros ↔ Settings never crashes; chrome hides on terminal; no content hidden behind the floating nav (scroll to last item on Home/Distros).
@@ -204,7 +205,7 @@ The historical "verify before restarting" checklist is fully resolved: nav crash
 
 ## 11. Definition of done for this phase
 
-- CI green with "Verify APK" passing (`com.nopiece.folio`, `targetSdkVersion 28`) — **pending the push in §10.1**.
+- CI green with "Verify APK" passing (`com.nopiece.folio`, `targetSdkVersion 28`) — **done** (run `38776662519`); release `folio-debug-33c97e9` published.
 - Every item in §4 marked DONE — **done** (on-device confirmation is §10.4).
 - Wave-3 branding sweep clean — **done** (residuals are functional/never-touch only).
 - Working tree verified locally by: `bash -n` on all 88 scripts, import-resolution sweep + brace/paren scanner on all 165 `.kt`, byte-identical diff guard for `host/setup_termux.sh`, signature/call-site checks for every refactored API.
