@@ -7,6 +7,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -45,18 +46,19 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.ivarna.fluxlinux.ui.theme.BrandCream
-import com.ivarna.fluxlinux.ui.theme.FluxAccentCyan
-import com.ivarna.fluxlinux.ui.theme.FluxAccentMagenta
-import com.ivarna.fluxlinux.ui.theme.FluxDarkGrey
-import com.ivarna.fluxlinux.ui.theme.FluxHairline
+import com.ivarna.fluxlinux.ui.theme.FolioBackground
+import com.ivarna.fluxlinux.ui.theme.FrostHairline
+import com.ivarna.fluxlinux.ui.theme.FrostSurface
+import com.ivarna.fluxlinux.ui.theme.StatusDot
+import com.ivarna.fluxlinux.ui.theme.TextMuted
+import com.ivarna.fluxlinux.ui.theme.TextPrimary
+import com.ivarna.fluxlinux.ui.theme.TextSecondary
 
 /**
  * Shared install progress UI for onboarding + Distros [InstallConfigScreen].
@@ -138,16 +140,16 @@ fun InstallProgressPanel(
                     .background(
                         when {
                             failed -> colors.error.copy(alpha = 0.15f)
-                            isDone -> Color(0xFF69F0AE).copy(alpha = 0.15f)
-                            else -> FluxAccentMagenta.copy(alpha = 0.15f)
+                            isDone -> StatusDot.copy(alpha = 0.15f)
+                            else -> TextPrimary.copy(alpha = 0.10f)
                         }
                     )
                     .border(
                         1.dp,
                         when {
                             failed -> colors.error.copy(alpha = 0.4f)
-                            isDone -> Color(0xFF69F0AE).copy(alpha = 0.4f)
-                            else -> FluxAccentMagenta.copy(alpha = 0.4f)
+                            isDone -> StatusDot.copy(alpha = 0.4f)
+                            else -> FrostHairline
                         },
                         CircleShape
                     ),
@@ -162,8 +164,8 @@ fun InstallProgressPanel(
                     contentDescription = null,
                     tint = when {
                         failed -> colors.error
-                        isDone -> Color(0xFF69F0AE)
-                        else -> FluxAccentMagenta
+                        isDone -> StatusDot
+                        else -> TextPrimary.copy(alpha = pulseAlpha)
                     },
                     modifier = Modifier.size(24.dp)
                 )
@@ -178,7 +180,7 @@ fun InstallProgressPanel(
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(16.dp))
                 .background(colors.surface.copy(alpha = 0.75f))
-                .border(1.dp, FluxHairline, RoundedCornerShape(16.dp))
+                .border(0.75.dp, FrostHairline, RoundedCornerShape(16.dp))
                 .padding(16.dp)
         ) {
             Column {
@@ -203,15 +205,15 @@ fun InstallProgressPanel(
                         fontWeight = FontWeight.Bold,
                         color = when {
                             failed -> colors.error
-                            isDone -> Color(0xFF69F0AE)
-                            else -> FluxAccentMagenta
+                            isDone -> StatusDot
+                            else -> TextPrimary
                         }
                     )
                 }
 
                 Spacer(Modifier.height(10.dp))
 
-                // Progress Bar with Gradient Look
+                // Progress Bar
                 LinearProgressIndicator(
                     progress = { percent / 100f },
                     modifier = Modifier
@@ -220,8 +222,8 @@ fun InstallProgressPanel(
                         .clip(RoundedCornerShape(4.dp)),
                     color = when {
                         failed -> colors.error
-                        isDone -> Color(0xFF69F0AE)
-                        else -> FluxAccentMagenta
+                        isDone -> StatusDot
+                        else -> TextPrimary
                     },
                     trackColor = colors.surfaceVariant.copy(alpha = 0.5f)
                 )
@@ -261,7 +263,7 @@ fun InstallProgressPanel(
                 Icon(
                     imageVector = Icons.Filled.Code,
                     contentDescription = null,
-                    tint = FluxAccentCyan,
+                    tint = TextSecondary,
                     modifier = Modifier.size(16.dp)
                 )
                 Spacer(Modifier.width(6.dp))
@@ -275,7 +277,7 @@ fun InstallProgressPanel(
 
             TextButton(
                 onClick = onToggleLog,
-                colors = ButtonDefaults.textButtonColors(contentColor = Color.White)
+                colors = ButtonDefaults.textButtonColors(contentColor = TextPrimary)
             ) {
                 Text(
                     if (showLog) "Hide Console" else "Show Console",
@@ -295,13 +297,13 @@ fun InstallProgressPanel(
                     .fillMaxSize()
                     .clip(RoundedCornerShape(14.dp))
                     .background(Color(0xFF0D0D11))
-                    .border(1.dp, FluxHairline, RoundedCornerShape(14.dp))
+                    .border(0.75.dp, FrostHairline, RoundedCornerShape(14.dp))
                     .padding(12.dp)
                     .verticalScroll(logScroll)
             ) {
                 Text(
                     text = logText.ifBlank { "Initializing installation stream…" },
-                    color = if (logText.isBlank()) Color(0xFF78909C) else Color(0xFFCFD8DC),
+                    color = if (logText.isBlank()) TextMuted else TextSecondary,
                     fontSize = 11.sp,
                     fontFamily = FontFamily.Monospace,
                     lineHeight = 16.sp
@@ -324,8 +326,8 @@ fun InstallProgressPanel(
                         .fillMaxWidth()
                         .height(54.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color.White,
-                        contentColor = Color.Black
+                        containerColor = TextPrimary,
+                        contentColor = FolioBackground
                     ),
                     shape = CircleShape
                 ) {
@@ -346,12 +348,13 @@ fun InstallProgressPanel(
                             .fillMaxWidth()
                             .height(54.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = Color.White,
-                            contentColor = Color.Black
+                            containerColor = FrostSurface,
+                            contentColor = TextPrimary
                         ),
+                        border = BorderStroke(0.75.dp, FrostHairline),
                         shape = CircleShape
                     ) {
-                        Text("Back to Configuration", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                        Text("Back to Configuration", fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
                     }
                 }
             }
@@ -363,8 +366,8 @@ fun InstallProgressPanel(
                         .fillMaxWidth()
                         .height(54.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color.White,
-                        contentColor = Color.Black
+                        containerColor = TextPrimary,
+                        contentColor = FolioBackground
                     ),
                     shape = CircleShape
                 ) {
@@ -386,14 +389,14 @@ fun InstallThemePickRow(
 ) {
     val shape = RoundedCornerShape(14.dp)
     val colors = MaterialTheme.colorScheme
-    val borderColor = if (selected) FluxAccentMagenta else FluxHairline
+    val borderColor = if (selected) TextPrimary else FrostHairline
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(shape)
             .background(
-                if (selected) FluxAccentMagenta.copy(alpha = 0.12f)
+                if (selected) TextPrimary.copy(alpha = 0.12f)
                 else colors.surface.copy(alpha = 0.75f)
             )
             .border(if (selected) 1.5.dp else 1.dp, borderColor, shape)
@@ -405,7 +408,7 @@ fun InstallThemePickRow(
             selected = selected,
             onClick = onSelect,
             colors = RadioButtonDefaults.colors(
-                selectedColor = FluxAccentMagenta,
+                selectedColor = TextPrimary,
                 unselectedColor = colors.onSurface.copy(alpha = 0.4f)
             )
         )

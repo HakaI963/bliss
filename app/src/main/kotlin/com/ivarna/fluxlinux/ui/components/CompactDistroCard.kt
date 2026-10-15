@@ -87,7 +87,7 @@ fun CompactDistroCard(
             }
             .clip(RoundedCornerShape(16.dp))
             .background(FrostSurface)
-            .border(1.dp, FolioFrostBorder, RoundedCornerShape(16.dp))
+            .border(0.75.dp, FolioFrostBorder, RoundedCornerShape(16.dp))
             .then(clickableMod)
             .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically

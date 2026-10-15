@@ -42,7 +42,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ivarna.fluxlinux.core.data.Distro
-import com.ivarna.fluxlinux.ui.theme.FluxAccentCyan
+import com.ivarna.fluxlinux.ui.theme.TextSecondary
 
 private val CardShape = RoundedCornerShape(14.dp)
 private val MethodProot = Color(0xFF00B8D4)
@@ -86,7 +86,7 @@ fun DistroCard(
             .padding(horizontal = 16.dp, vertical = 5.dp)
             .clip(CardShape)
             .background(colors.surface.copy(alpha = 0.72f))
-            .border(BorderStroke(1.dp, colors.outlineVariant.copy(alpha = 0.45f)), CardShape)
+            .border(BorderStroke(0.75.dp, colors.outlineVariant.copy(alpha = 0.45f)), CardShape)
     ) {
         Box(
             modifier = Modifier
@@ -233,7 +233,7 @@ fun DistroCard(
                             icon = Icons.AutoMirrored.Filled.OpenInNew,
                             onClick = onOpenDisplay,
                             enabled = isGuiRunning || isGuiStarting,
-                            containerColor = FluxAccentCyan,
+                            containerColor = TextSecondary,
                             contentColor = Color.Black,
                             modifier = Modifier.weight(1f)
                         )
@@ -241,7 +241,7 @@ fun DistroCard(
                             label = "Stop",
                             icon = Icons.Default.Stop,
                             onClick = onStop,
-                            containerColor = com.ivarna.fluxlinux.ui.theme.FluxDanger,
+                            containerColor = com.ivarna.fluxlinux.ui.theme.FolioDanger,
                             contentColor = Color.White,
                             modifier = Modifier.weight(0.85f)
                         )
@@ -311,7 +311,7 @@ fun MethodTabs(
             .height(40.dp)
             .clip(shape)
             .background(colors.surface.copy(alpha = 0.72f))
-            .border(BorderStroke(1.dp, colors.outlineVariant.copy(alpha = 0.45f)), shape)
+            .border(BorderStroke(0.75.dp, colors.outlineVariant.copy(alpha = 0.45f)), shape)
     ) {
         MethodTabSegment(
             label = prootText,
@@ -375,7 +375,7 @@ fun MethodChip(
     Box(
         modifier = modifier
             .background(color.copy(alpha = 0.18f), RoundedCornerShape(4.dp))
-            .border(BorderStroke(1.dp, color.copy(alpha = 0.45f)), RoundedCornerShape(4.dp))
+            .border(BorderStroke(0.75.dp, color.copy(alpha = 0.45f)), RoundedCornerShape(4.dp))
             .padding(horizontal = 5.dp, vertical = 1.dp)
     ) {
         Text(
@@ -450,7 +450,7 @@ fun GlassSettingCard(
             )
             .border(
                 1.dp,
-                com.ivarna.fluxlinux.ui.theme.FluxHairline,
+                com.ivarna.fluxlinux.ui.theme.FrostHairline,
                 shape
             )
     ) {

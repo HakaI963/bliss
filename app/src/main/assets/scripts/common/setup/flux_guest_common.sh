@@ -8,7 +8,7 @@ export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 unset LD_LIBRARY_PATH
 unset LD_PRELOAD
 
-_flux_log() { echo "FluxLinux: $*"; }
+_flux_log() { echo "Folio: $*"; }
 
 # Portable stat: GNU coreutils uses `-c %u`, BSD userland (Chimera) uses `-f %u`.
 _flux_stat_u() { stat -c %u "$1" 2>/dev/null || stat -f %u "$1" 2>/dev/null || true; }
@@ -143,7 +143,7 @@ _flux_repair_sudo_pam() {
             for _pam in /etc/pam.d/sudo /etc/pam.d/sudo-i; do
                 cat > "$_pam" <<'PAM'
 #%PAM-1.0
-# FluxLinux proot: pam_unix/audit cannot run → sudo asks for a password.
+# Folio proot: pam_unix/audit cannot run → sudo asks for a password.
 auth       sufficient pam_permit.so
 account    sufficient pam_permit.so
 password   sufficient pam_permit.so
@@ -185,7 +185,7 @@ _flux_ensure_sudo() {
             mkdir -p /usr/local/bin
             cat > /usr/local/bin/sudo <<'EOF'
 #!/bin/sh
-# FluxLinux shim: sudo -> doas (nopass flux).
+# Folio shim: sudo -> doas (nopass flux).
 exec doas "$@"
 EOF
             chmod 755 /usr/local/bin/sudo
@@ -260,12 +260,12 @@ _flux_require_startxfce4() {
     if [ ! -e /usr/bin/startxfce4 ] && [ ! -e /usr/sbin/startxfce4 ] \
         && [ ! -e /usr/local/bin/startxfce4 ] \
         && ! command -v startxfce4 >/dev/null 2>&1; then
-        echo "FluxLinux: ERROR: startxfce4 missing after desktop install"
+        echo "Folio: ERROR: startxfce4 missing after desktop install"
         exit 1
     fi
 }
 
-# Materialize a UTF-8 locale so launchers / agnosterzak / pokemon work.
+# Materialize a UTF-8 locale so launchers / the zsh prompt / pokemon work.
 # Manjaro ARM bootstrap has a fully-commented locale.gen and no
 # locale-archive; localedef *into the archive* often fails under proot.
 # Directory locales (--no-archive) work. Never export a name glibc cannot
@@ -328,7 +328,7 @@ if [ -n "$_pick" ]; then
 else
   unset LC_ALL
   export LANG=C
-  echo "FluxLinux: WARNING: no UTF-8 locale in locale -a; zsh staying LANG=C" >&2
+  echo "Folio: WARNING: no UTF-8 locale in locale -a; zsh staying LANG=C" >&2
 fi
 unset _have _c _pick
 EOF

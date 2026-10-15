@@ -3,8 +3,8 @@
 # Uninstalls Debian Chroot environment (Requires Root)
 
 # Paths (Must match setup_debian_chroot.sh)
-DEBIANPATH="/data/local/tmp/chrootDebian"
-LAUNCH_SCRIPTS="/data/local/tmp/start_debian.sh /data/local/tmp/start_debian_gui.sh /data/local/tmp/enter_debian.sh"
+DEBIANPATH="/data/local/folio/chroots/debian"
+LAUNCH_SCRIPTS="/data/local/folio/helpers/start_debian.sh /data/local/folio/helpers/start_debian_gui.sh /data/local/folio/helpers/enter_debian.sh"
 
 # Error Handler
 error() {
@@ -35,7 +35,7 @@ _rr=""
 for _c in \
   "${FLUX_RESOLVE_BB:-}" \
   "$(dirname "$0")/resolve_bb.sh" \
-  /data/local/tmp/fluxlinux_resolve_bb.sh
+  /data/local/folio/helpers/fluxlinux_resolve_bb.sh
 do
   [ -n "$_c" ] && [ -f "$_c" ] && _rr="$_c" && break
 done
@@ -47,9 +47,9 @@ fi
 if [ -z "${BB:-}" ]; then
   if [ -n "${FLUX_BB:-}" ] && [ -x "$FLUX_BB" ] &&
      "$FLUX_BB" --list >/dev/null 2>&1; then BB="$FLUX_BB"; fi
-  if [ -z "${BB:-}" ] && [ -x /data/local/tmp/flux_busybox ] &&
-     /data/local/tmp/flux_busybox --list >/dev/null 2>&1; then
-    BB=/data/local/tmp/flux_busybox
+  if [ -z "${BB:-}" ] && [ -x /data/local/folio/busybox/flux_busybox ] &&
+     /data/local/folio/busybox/flux_busybox --list >/dev/null 2>&1; then
+    BB=/data/local/folio/busybox/flux_busybox
   fi
   if [ -z "${BB:-}" ]; then
     for path in \
@@ -142,7 +142,7 @@ done
 success "Uninstallation Complete!"
 
 # 4. Notify App
-progress "Notifying FluxLinux App..."
+progress "Notifying Folio App..."
 echo "Running: am start -a android.intent.action.VIEW -d \"fluxlinux://callback?result=success&name=distro_uninstall_debian_chroot\""
 am start -a android.intent.action.VIEW -d "fluxlinux://callback?result=success&name=distro_uninstall_debian_chroot" >/dev/null 2>&1
 echo "Callback exit code: $?"

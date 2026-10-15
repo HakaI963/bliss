@@ -5,6 +5,7 @@ import com.ivarna.fluxlinux.core.data.Distro
 import com.ivarna.fluxlinux.core.data.terminalComponentFor
 import com.ivarna.fluxlinux.core.install.DistroInstallProfile
 import com.ivarna.fluxlinux.core.root.BusyBoxPaths
+import com.ivarna.fluxlinux.core.root.ChrootPaths
 import com.ivarna.fluxlinux.core.root.RootShell
 
 /**
@@ -36,7 +37,7 @@ object UninstallSessionFactory {
                 val resolverStaged = RootShell.stageAsset(ctx, BusyBoxPaths.RESOLVER_ASSET)
                     ?: TermuxHostPaths.hostScript(ctx, "resolve_bb.sh").absolutePath
                 val chrootPath = profile?.chrootPath.orEmpty()
-                val tmpPath = "/data/local/tmp/$name"
+                val tmpPath = "${ChrootPaths.STAGING_DIR}/$name"
                 val stagedQ = staged.replace("'", "'\\''")
                 val resolverQ = resolverStaged.replace("'", "'\\''")
                 val chrootQ = chrootPath.replace("'", "'\\''")
@@ -44,7 +45,7 @@ object UninstallSessionFactory {
                 // Copy out of app-private storage (su often cannot read it),
                 // then run with FLUX_CHROOT on the su command (su drops env).
                 val inner =
-                    "cp -f '$stagedQ' '$tmpPath' && chmod 755 '$tmpPath' && " +
+                    "mkdir -p '${ChrootPaths.STAGING_DIR}' && cp -f '$stagedQ' '$tmpPath' && chmod 755 '$tmpPath' && " +
                         "{ cp -f '$resolverQ' '${BusyBoxPaths.RESOLVER_ON_DEVICE}' && " +
                         "chmod 755 '${BusyBoxPaths.RESOLVER_ON_DEVICE}' || true; } && " +
                         "${bbExport}FLUX_RESOLVE_BB='${BusyBoxPaths.RESOLVER_ON_DEVICE}' " +

@@ -8,7 +8,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,10 +17,14 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -30,6 +35,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
@@ -40,7 +46,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ivarna.fluxlinux.R
 import com.ivarna.fluxlinux.ui.theme.FolioBackground
+import com.ivarna.fluxlinux.ui.theme.FrostHairline
+import com.ivarna.fluxlinux.ui.theme.FrostSurface
 import com.ivarna.fluxlinux.ui.theme.TextPrimary
+import com.ivarna.fluxlinux.ui.theme.TextSecondary
 import com.termux.view.TerminalView
 
 /**
@@ -189,12 +198,21 @@ object TerminalKeyInjector {
     }
 }
 
+/** Compact frost key metrics shared by every toolbar key. */
+private val KeyShape = RoundedCornerShape(9.dp)
+private val KeyHeight = 36.dp
+
 /**
- * Nativecode-style special-keys toolbar (2 rows + optional F-keys row).
+ * Nativecode-style special-keys toolbar, Folio frost edition.
  *
- * Row 1: CTRL · ALT · SHFT · ESC · TAB · ENT · BKSP — equal weight, 44dp, edge-to-edge.
- * Row 2: horizontal scroll — arrow icons, DEL / Ins, symbols `/\|~-_\`, Fn toggle.
- * Row 3: F1–F12 (toggled via Fn). Image attach is out of scope for v1 (plan §4).
+ * Row 1 (always): CTRL · ALT · SHIFT · ESC · TAB — lockable modifiers + core keys.
+ * Row 2 (always): ← ↑ ↓ → · ENT · BKSP · Fn — arrows, enter/backspace, Fn toggle.
+ * Row 3 (Fn on): scrollable F1–F12 + INS/DEL + symbols `/\|~-_\`.
+ *
+ * Keys are monochrome frosted pills (FrostSurface, hairline border, 9dp radius);
+ * pressed or active modifiers render as a white pill with carbon text. Input still
+ * goes exclusively through [TerminalKeyInjector.injectKey] — special keys via
+ * `TerminalView.onKeyDown/onKeyUp`, printable symbols via `inputCodePoint`.
  */
 @Composable
 fun TerminalExtraKeys(
@@ -202,12 +220,11 @@ fun TerminalExtraKeys(
     terminalView: () -> TerminalView?,
     modifier: Modifier = Modifier
 ) {
-    val row2Scroll = rememberScrollState()
-    val fRowScroll = rememberScrollState()
+    val fnRowScroll = rememberScrollState()
     var fnVisible by remember { mutableStateOf(false) }
-    // Nativecode keyWidth = screenWidthPx / 8 → screenWidthDp / 8.
+    // Compact key width for the scrollable Fn row; >= 40dp so keys stay tappable.
     val keyWidth: Dp = with(LocalDensity.current) {
-        (LocalConfiguration.current.screenWidthDp / 8).dp
+        (LocalConfiguration.current.screenWidthDp / 9).coerceIn(40, 56).dp
     }
 
     fun press(key: String) {
@@ -224,162 +241,219 @@ fun TerminalExtraKeys(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.9f))
+            // TerminalScreen's parent already consumes these bottom insets, so this
+            // is a no-op there; kept so the bar never underlaps the system nav or
+            // the keyboard if it is ever hosted without that padding.
+            .imePadding()
+            .navigationBarsPadding()
     ) {
-        // ── Row 1: modifiers + core keys (equal weight, 44dp) ───────────────
-        Row(modifier = Modifier.fillMaxWidth().height(44.dp)) {
-            ModifierKey("CTRL", modState.ctrlActive, modState.ctrlLocked, { modState.toggleCtrl() }, { modState.lockCtrl() }, Modifier.weight(1f))
-            ModifierKey("ALT", modState.altActive, modState.altLocked, { modState.toggleAlt() }, { modState.lockAlt() }, Modifier.weight(1f))
-            ModifierKey("SHFT", modState.shiftActive, modState.shiftLocked, { modState.toggleShift() }, { modState.lockShift() }, Modifier.weight(1f))
-            CoreKey("ESC", { press("ESC") }, Modifier.weight(1f))
-            CoreKey("TAB", { press("TAB") }, Modifier.weight(1f))
-            CoreKey("ENT", { press("ENTER") }, Modifier.weight(1f))
-            CoreKey("BKSP", { press("BKSP") }, Modifier.weight(1f))
-        }
-
-        // ── Row 2: scrollable special keys ──────────────────────────────────
-        Row(
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .horizontalScroll(row2Scroll)
-                .padding(vertical = 2.dp),
-            horizontalArrangement = Arrangement.spacedBy(2.dp)
+                .height(1.dp)
+                .background(FrostHairline)
+        )
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.background.copy(alpha = 0.92f))
+                .padding(horizontal = 6.dp, vertical = 5.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            IconKey(painterResource(R.drawable.ic_arrow_left), "Arrow left", { press("LEFT") }, keyWidth)
-            IconKey(painterResource(R.drawable.ic_arrow_up), "Arrow up", { press("UP") }, keyWidth)
-            IconKey(painterResource(R.drawable.ic_arrow_down), "Arrow down", { press("DOWN") }, keyWidth)
-            IconKey(painterResource(R.drawable.ic_arrow_right), "Arrow right", { press("RIGHT") }, keyWidth)
-            IconKey(painterResource(R.drawable.ic_backspace), "Delete", { press("DEL") }, keyWidth)
-            TextKey("Ins", { press("INS") }, keyWidth)
-            listOf("/", "|", "~", "-", "_", "\\").forEach { sym ->
-                TextKey(sym, { press(sym) }, keyWidth)
-            }
-            TextKey("Fn", { fnVisible = !fnVisible }, keyWidth, active = fnVisible)
-        }
-
-        // ── Row 3: F-keys (toggle via Fn) ───────────────────────────────────
-        if (fnVisible) {
+            // ── Row 1: lockable modifiers + core keys ───────────────────────
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .horizontalScroll(fRowScroll)
-                    .padding(bottom = 2.dp),
-                horizontalArrangement = Arrangement.spacedBy(2.dp)
+                    .height(KeyHeight),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                (1..12).forEach { n ->
-                    TextKey("F$n", { press("F$n") }, keyWidth)
+                TerminalKey(
+                    label = "CTRL",
+                    active = modState.ctrlActive,
+                    locked = modState.ctrlLocked,
+                    onClick = { modState.toggleCtrl() },
+                    onLongClick = { modState.lockCtrl() },
+                    modifier = Modifier.weight(1f).fillMaxHeight()
+                )
+                TerminalKey(
+                    label = "ALT",
+                    active = modState.altActive,
+                    locked = modState.altLocked,
+                    onClick = { modState.toggleAlt() },
+                    onLongClick = { modState.lockAlt() },
+                    modifier = Modifier.weight(1f).fillMaxHeight()
+                )
+                TerminalKey(
+                    label = "SHIFT",
+                    active = modState.shiftActive,
+                    locked = modState.shiftLocked,
+                    onClick = { modState.toggleShift() },
+                    onLongClick = { modState.lockShift() },
+                    modifier = Modifier.weight(1f).fillMaxHeight()
+                )
+                TerminalKey(
+                    label = "ESC",
+                    onClick = { press("ESC") },
+                    modifier = Modifier.weight(1f).fillMaxHeight()
+                )
+                TerminalKey(
+                    label = "TAB",
+                    onClick = { press("TAB") },
+                    modifier = Modifier.weight(1f).fillMaxHeight()
+                )
+            }
+
+            // ── Row 2: arrows + ENT / BKSP + Fn ─────────────────────────────
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(KeyHeight),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                TerminalKey(
+                    painter = painterResource(R.drawable.ic_arrow_left),
+                    contentDescription = "Arrow left",
+                    onClick = { press("LEFT") },
+                    modifier = Modifier.weight(1f).fillMaxHeight()
+                )
+                TerminalKey(
+                    painter = painterResource(R.drawable.ic_arrow_up),
+                    contentDescription = "Arrow up",
+                    onClick = { press("UP") },
+                    modifier = Modifier.weight(1f).fillMaxHeight()
+                )
+                TerminalKey(
+                    painter = painterResource(R.drawable.ic_arrow_down),
+                    contentDescription = "Arrow down",
+                    onClick = { press("DOWN") },
+                    modifier = Modifier.weight(1f).fillMaxHeight()
+                )
+                TerminalKey(
+                    painter = painterResource(R.drawable.ic_arrow_right),
+                    contentDescription = "Arrow right",
+                    onClick = { press("RIGHT") },
+                    modifier = Modifier.weight(1f).fillMaxHeight()
+                )
+                TerminalKey(
+                    label = "ENT",
+                    onClick = { press("ENTER") },
+                    modifier = Modifier.weight(1f).fillMaxHeight()
+                )
+                TerminalKey(
+                    painter = painterResource(R.drawable.ic_backspace),
+                    contentDescription = "Backspace",
+                    onClick = { press("BKSP") },
+                    modifier = Modifier.weight(1f).fillMaxHeight()
+                )
+                TerminalKey(
+                    label = "Fn",
+                    active = fnVisible,
+                    onClick = { fnVisible = !fnVisible },
+                    modifier = Modifier.weight(1f).fillMaxHeight()
+                )
+            }
+
+            // ── Row 3: F1–F12 + INS/DEL + symbols (toggle via Fn) ───────────
+            if (fnVisible) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(fnRowScroll),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    (1..12).forEach { n ->
+                        TerminalKey(
+                            label = "F$n",
+                            onClick = { press("F$n") },
+                            modifier = Modifier.width(keyWidth).height(KeyHeight)
+                        )
+                    }
+                    listOf("INS", "DEL").forEach { key ->
+                        TerminalKey(
+                            label = key,
+                            onClick = { press(key) },
+                            modifier = Modifier.width(keyWidth).height(KeyHeight)
+                        )
+                    }
+                    listOf("/", "|", "~", "-", "_", "\\").forEach { sym ->
+                        TerminalKey(
+                            label = sym,
+                            onClick = { press(sym) },
+                            modifier = Modifier.width(keyWidth).height(KeyHeight)
+                        )
+                    }
                 }
             }
         }
     }
 }
 
+/**
+ * Frost pill key: FrostSurface + hairline border, TextSecondary label.
+ * Pressed / active = white pill with carbon text. A locked modifier
+ * (long-press) gets a carbon ring + badge dot.
+ */
 @Composable
-private fun ModifierKey(
-    label: String,
-    active: Boolean,
-    locked: Boolean,
-    onPress: () -> Unit,
-    onLongPress: () -> Unit,
-    modifier: Modifier = Modifier
+private fun TerminalKey(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    label: String? = null,
+    painter: Painter? = null,
+    contentDescription: String? = null,
+    active: Boolean = false,
+    locked: Boolean = false,
+    onLongClick: (() -> Unit)? = null
 ) {
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val emphasized = active || pressed
+    val background = when {
+        active -> TextPrimary
+        pressed -> TextPrimary.copy(alpha = 0.85f)
+        else -> FrostSurface
+    }
+
     Box(
         contentAlignment = Alignment.Center,
         modifier = modifier
-            .fillMaxHeight()
-            .background(
-                if (active) TextPrimary.copy(alpha = 0.92f)
-                else MaterialTheme.colorScheme.surface
+            .clip(KeyShape)
+            .background(background)
+            .border(
+                width = if (locked) 2.dp else 1.dp,
+                color = if (locked) FolioBackground else FrostHairline,
+                shape = KeyShape
             )
-            // R5: LOCKED (long-press) gets an outline ring + badge dot so it is
-            // visually distinct from a one-shot active modifier.
-            // Frost: dark ring/dot on the white active pill.
-            .then(
-                if (locked) Modifier.border(2.dp, FolioBackground)
-                else Modifier
+            .combinedClickable(
+                interactionSource = interaction,
+                indication = null,
+                onClick = onClick,
+                onLongClick = onLongClick
             )
-            .combinedClickable(onClick = onPress, onLongClick = onLongPress)
     ) {
-        Text(
-            text = label,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold,
-            color = if (active) FolioBackground
-            else MaterialTheme.colorScheme.onSurface
-        )
+        if (painter != null) {
+            Icon(
+                painter = painter,
+                contentDescription = contentDescription,
+                tint = if (emphasized) FolioBackground else TextSecondary,
+                modifier = Modifier.size(18.dp)
+            )
+        } else if (label != null) {
+            Text(
+                text = label,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = if (emphasized) FolioBackground else TextSecondary,
+                maxLines = 1
+            )
+        }
         if (locked) {
             Box(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .padding(3.dp)
-                    .size(6.dp)
+                    .size(5.dp)
                     .background(FolioBackground, CircleShape)
             )
         }
-    }
-}
-
-@Composable
-private fun CoreKey(label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Box(
-        contentAlignment = Alignment.Center,
-        modifier = modifier
-            .fillMaxHeight()
-            .background(MaterialTheme.colorScheme.surface)
-            .combinedClickable(onClick = onClick)
-    ) {
-        Text(
-            text = label,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Medium,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-    }
-}
-
-@Composable
-private fun IconKey(
-    painter: Painter,
-    contentDescription: String,
-    onClick: () -> Unit,
-    width: Dp
-) {
-    Box(
-        contentAlignment = Alignment.Center,
-        modifier = Modifier
-            .width(width)
-            .height(44.dp)
-            .background(MaterialTheme.colorScheme.surface)
-            .combinedClickable(onClick = onClick)
-    ) {
-        Icon(
-            painter = painter,
-            contentDescription = contentDescription,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.width(22.dp).height(22.dp)
-        )
-    }
-}
-
-@Composable
-private fun TextKey(label: String, onClick: () -> Unit, width: Dp, active: Boolean = false) {
-    Box(
-        contentAlignment = Alignment.Center,
-        modifier = Modifier
-            .width(width)
-            .height(44.dp)
-            .background(
-                if (active) TextPrimary.copy(alpha = 0.92f)
-                else MaterialTheme.colorScheme.surface
-            )
-            .combinedClickable(onClick = onClick)
-    ) {
-        Text(
-            text = label,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Medium,
-            color = if (active) FolioBackground
-            else MaterialTheme.colorScheme.onSurface
-        )
     }
 }

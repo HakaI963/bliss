@@ -5,10 +5,10 @@
 
 DISTRO_NAME="${1:-alpine}"
 
-echo "FluxLinux: Configuring ${DISTRO_NAME} (Alpine Family)..."
+echo "Folio: Configuring ${DISTRO_NAME} (Alpine Family)..."
 
 if [ "$(id -u)" -ne 0 ]; then
-    echo "FluxLinux: ERROR: must run as root inside the guest (got uid=$(id -u))."
+    echo "Folio: ERROR: must run as root inside the guest (got uid=$(id -u))."
     exit 1
 fi
 
@@ -22,7 +22,7 @@ export TMPDIR=/tmp
 
 # 1. DNS (minirootfs ships without resolv.conf; keep multi-NS for proot flakiness)
 if [ ! -s /etc/resolv.conf ] || ! grep -q nameserver /etc/resolv.conf 2>/dev/null; then
-    echo "FluxLinux: Writing /etc/resolv.conf"
+    echo "Folio: Writing /etc/resolv.conf"
     printf 'nameserver 8.8.8.8\nnameserver 1.1.1.1\nnameserver 8.8.4.4\n' > /etc/resolv.conf
 fi
 
@@ -33,14 +33,14 @@ if [ -f /etc/apk/repositories ]; then
     fi
 fi
 
-echo "FluxLinux: apk update..."
+echo "Folio: apk update..."
 apk update || {
-    echo "FluxLinux: apk update failed (network / repos)"
+    echo "Folio: apk update failed (network / repos)"
     exit 1
 }
 
 # 3. Bootstrap tools (bash for later scripts; shadow for useradd; sudo)
-echo "FluxLinux: Installing base packages..."
+echo "Folio: Installing base packages..."
 apk add --no-cache \
     bash \
     sudo \
@@ -55,7 +55,7 @@ apk add --no-cache \
     dbus \
     dbus-x11 \
     || {
-        echo "FluxLinux: base package install failed"
+        echo "Folio: base package install failed"
         exit 1
     }
 
@@ -73,38 +73,57 @@ if [ ! -e /var/lib/dbus/machine-id ]; then
     fi
 fi
 
-# 4. XFCE desktop (always include xfce4-session for failsafe session name)
-echo "FluxLinux: Installing XFCE4..."
+# 4. Desktop gate: FLUX_DESKTOP (env mirror FLUX_DESKTOP_ENV) = xfce | kde | none.
+# Unset/empty → xfce (backward compat); xfce4 is normalized to xfce.
+DESKTOP_CHOICE="${FLUX_DESKTOP:-${FLUX_DESKTOP_ENV:-xfce}}"
+case "$DESKTOP_CHOICE" in
+    xfce4) DESKTOP_CHOICE=xfce ;;
+esac
+
+# Shared fonts + Mesa — needed by any desktop (and by text rendering alone).
 apk add --no-cache \
-    xfce4 \
-    xfce4-session \
-    xfce4-settings \
-    xfce4-panel \
-    xfce4-terminal \
-    xfce4-screensaver \
-    xfdesktop \
-    xfwm4 \
-    thunar \
     adwaita-icon-theme \
     ttf-dejavu \
     mesa-dri-gallium \
     mesa-gl \
     || {
-        echo "FluxLinux: XFCE package install failed"
+        echo "Folio: base graphics package install failed"
         exit 1
     }
-# Named Pulse *client* only — do not pull the xfce4 metapackage for audio.
-apk add --no-cache libpulse pulseaudio-utils xfce4-pulseaudio 2>/dev/null \
-    || apk add --no-cache libpulse pulseaudio-utils 2>/dev/null || true
 
-if [ ! -e /usr/bin/startxfce4 ]; then
-    echo "FluxLinux: ERROR: startxfce4 missing after apk install"
-    exit 1
+# XFCE desktop (always include xfce4-session for failsafe session name)
+if [ "$DESKTOP_CHOICE" = "xfce" ]; then
+    echo "Folio: Installing XFCE4..."
+    apk add --no-cache \
+        xfce4 \
+        xfce4-session \
+        xfce4-settings \
+        xfce4-panel \
+        xfce4-terminal \
+        xfce4-screensaver \
+        xfdesktop \
+        xfwm4 \
+        thunar \
+        || {
+            echo "Folio: XFCE package install failed"
+            exit 1
+        }
+
+    if [ ! -e /usr/bin/startxfce4 ]; then
+        echo "Folio: ERROR: startxfce4 missing after apk install"
+        exit 1
+    fi
+fi
+
+# Named Pulse *client* only — do not pull the xfce4 metapackage for audio.
+apk add --no-cache libpulse pulseaudio-utils 2>/dev/null || true
+if [ "$DESKTOP_CHOICE" = "xfce" ]; then
+    apk add --no-cache xfce4-pulseaudio 2>/dev/null || true
 fi
 
 # Glycin image loaders invoke bubblewrap; real bwrap fails under proot and aborts
 # GTK (exit 134). Install a shim that drops sandbox flags but keeps --dbus-fd.
-echo "FluxLinux: Installing proot-safe bwrap shim for glycin loaders..."
+echo "Folio: Installing proot-safe bwrap shim for glycin loaders..."
 apk add --no-cache glycin-image-rs glycin-svg gdk-pixbuf 2>/dev/null || true
 if [ -x /usr/bin/bwrap ] && [ ! -e /usr/bin/bwrap.real ] && \
    ! grep -q 'FluxLinux proot' /usr/bin/bwrap 2>/dev/null; then
@@ -129,7 +148,7 @@ chmod 755 /usr/bin/bwrap
 
 # 5. User flux (prefer uid 1000 when free — matches common XFCE defaults)
 if ! id flux >/dev/null 2>&1; then
-    echo "FluxLinux: Creating user flux..."
+    echo "Folio: Creating user flux..."
     if command -v useradd >/dev/null 2>&1; then
         if ! id -u 1000 >/dev/null 2>&1; then
             useradd -m -u 1000 -s /bin/bash flux 2>/dev/null \
@@ -228,12 +247,12 @@ _flux_fix_apk_writable() {
     touch /var/log/apk.log 2>/dev/null || true
     chmod 666 /var/log/apk.log 2>/dev/null || true
 }
-echo "FluxLinux: Ensuring apk database is writable (proot-safe)…"
+echo "Folio: Ensuring apk database is writable (proot-safe)…"
 _flux_fix_apk_writable
 
 mkdir -p /etc/fluxlinux
 printf '%s\n' virgl > /etc/fluxlinux/gpu_mode
-echo "FluxLinux: gpu_mode=virgl (first-paint; hw-accel may upgrade)"
+echo "Folio: gpu_mode=virgl (first-paint; hw-accel may upgrade)"
 
-echo "FluxLinux: ${DISTRO_NAME} Alpine setup complete!"
+echo "Folio: ${DISTRO_NAME} Alpine setup complete!"
 exit 0

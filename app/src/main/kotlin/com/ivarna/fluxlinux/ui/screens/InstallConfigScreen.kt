@@ -21,10 +21,15 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Brush
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -43,6 +48,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -51,8 +57,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ivarna.fluxlinux.core.data.Distro
+import com.ivarna.fluxlinux.core.install.DesktopChoice
+import com.ivarna.fluxlinux.core.install.DesktopInstallSelection
 import com.ivarna.fluxlinux.core.install.DistroInstallProfile
+import com.ivarna.fluxlinux.core.install.InstallExtra
 import com.ivarna.fluxlinux.core.install.OnboardingInstallRunner
+import com.ivarna.fluxlinux.ui.components.FluxSwitch
 import com.ivarna.fluxlinux.ui.components.FrostContainer
 import com.ivarna.fluxlinux.ui.components.FrostDivider
 import com.ivarna.fluxlinux.ui.components.FrostGroupTitle
@@ -68,9 +78,10 @@ import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 import dev.chrisbanes.haze.materials.HazeMaterials
 
 /**
- * Thin install wizard: XFCE + customization only (no feature modules).
+ * Thin install wizard: desktop picker (Terminal only / XFCE4 / KDE Plasma) +
+ * theme + optional hardware acceleration (no feature modules).
  * Uses [OnboardingInstallRunner] for both proot and chroot.
- * Grouped-sheet layout: Appearance / Includes / Actions with compact pills.
+ * Grouped-sheet layout: Desktop / Extras / Appearance / Includes / Actions with compact pills.
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class)
 @Composable
@@ -83,6 +94,8 @@ fun InstallConfigScreen(
     val context = LocalContext.current
     val appCtx = context.applicationContext
     var selectedTheme by remember { mutableStateOf("dark") }
+    var selectedDesktop by remember(distro.id) { mutableStateOf(DesktopChoice.XFCE) }
+    var hwAccel by remember(distro.id) { mutableStateOf(true) }
     var phase by remember { mutableStateOf(InstallPhase.OPTIONS) }
     var percent by remember { mutableIntStateOf(0) }
     var phaseLabel by remember { mutableStateOf("") }
@@ -102,7 +115,15 @@ fun InstallConfigScreen(
         detail = ""
         logText = ""
         phase = InstallPhase.RUNNING
-        runner.start(distro.id, selectedTheme) { progress ->
+        val desktop = selectedDesktop
+        val extras: Set<InstallExtra> =
+            if (hwAccel) emptySet() else setOf(InstallExtra.SKIP_HW_ACCEL)
+        runner.start(
+            distroId = distro.id,
+            theme = selectedTheme,
+            desktop = desktop,
+            extras = extras
+        ) { progress ->
             percent = progress.overallPercent
             phaseLabel = progress.phaseLabel
             detail = progress.detail
@@ -115,7 +136,12 @@ fun InstallConfigScreen(
             }
             if (progress.finished && !progress.failed) {
                 phase = InstallPhase.DONE
-                Toast.makeText(context, "Base desktop installed", Toast.LENGTH_SHORT).show()
+                val toast = if (desktop == DesktopChoice.NONE) {
+                    "Terminal base installed"
+                } else {
+                    "Base desktop installed"
+                }
+                Toast.makeText(context, toast, Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -126,17 +152,29 @@ fun InstallConfigScreen(
 
     val profile = DistroInstallProfile.forId(distro.id)
     val isChroot = distro.id.contains("chroot")
-    val rootfsLine = when {
-        distro.id.startsWith("alpine") ->
-            "Installs Alpine 3.24 minirootfs, XFCE4 (apk), and Flux customization. "
-        distro.id.startsWith("fedora") ->
-            "Installs Fedora 44 rootfs, XFCE4 (dnf), Mesa, and Flux customization. "
-        distro.id.startsWith("void") ->
-            "Installs Void Linux rootfs, XFCE4 (xbps), Mesa, and Flux customization. "
-        distro.id.startsWith("opensuse") ->
-            "Installs openSUSE Tumbleweed rootfs, XFCE4 (zypper), Mesa, and Flux customization. "
-        else ->
-            "Installs ${profile?.displayName ?: distro.name} rootfs, XFCE4, and Flux customization. "
+    val kdeAvailable = remember(distro.id) {
+        DesktopInstallSelection.kdePlasmaAvailable(distro.id)
+    }
+    val terminalOnly = selectedDesktop == DesktopChoice.NONE
+
+    val baseLine = when {
+        distro.id.startsWith("alpine") -> "Alpine 3.24 minirootfs"
+        distro.id.startsWith("fedora") -> "Fedora 44 container rootfs"
+        distro.id.startsWith("void") -> "Void Linux (glibc aarch64) rootfs"
+        distro.id.startsWith("opensuse") -> "openSUSE Tumbleweed rootfs"
+        else -> "${profile?.displayName ?: distro.name} rootfs"
+    }
+    val xfceManagerNote = when {
+        distro.id.startsWith("alpine") -> " (apk)"
+        distro.id.startsWith("fedora") -> " (dnf)"
+        distro.id.startsWith("void") -> " (xbps)"
+        distro.id.startsWith("opensuse") -> " (zypper)"
+        else -> ""
+    }
+    val rootfsLine = when (selectedDesktop) {
+        DesktopChoice.NONE -> "Installs $baseLine as a terminal base (no desktop). "
+        DesktopChoice.XFCE -> "Installs $baseLine, XFCE4$xfceManagerNote, and Folio theming. "
+        DesktopChoice.KDE -> "Installs $baseLine, KDE Plasma, and Folio theming. "
     } + "App modules can be added later from Distro Settings."
 
     val includes: List<Pair<ImageVector, String>> = buildList {
@@ -149,12 +187,35 @@ fun InstallConfigScreen(
                 else -> "${profile?.displayName ?: distro.name} rootfs"
             }
         )
-        add(Icons.Default.CheckCircle to "XFCE4 desktop")
-        if (distro.id.startsWith("fedora") || distro.id.startsWith("void") || distro.id.startsWith("opensuse")) {
+        when (selectedDesktop) {
+            DesktopChoice.XFCE -> add(Icons.Default.CheckCircle to "XFCE4 desktop")
+            DesktopChoice.KDE -> add(Icons.Default.CheckCircle to "KDE Plasma desktop")
+            DesktopChoice.NONE ->
+                add(Icons.Default.CheckCircle to "Terminal base — no desktop packages")
+        }
+        if (!terminalOnly && hwAccel && profile?.hwAccelScript != null) {
             add(Icons.Default.CheckCircle to "Mesa / VirGL hardware acceleration")
         }
-        add(Icons.Default.CheckCircle to "Flux theme / wallpapers / fonts")
-        if (isChroot) add(Icons.Default.CheckCircle to "Requires root (KernelSU / Magisk)")
+        if (!terminalOnly) {
+            add(
+                Icons.Default.CheckCircle to when (selectedDesktop) {
+                    DesktopChoice.KDE -> "KDE Plasma theming / wallpapers / Zsh"
+                    else -> "Folio theme / wallpapers / fonts"
+                }
+            )
+        }
+    }
+
+    val actionsTitle = when {
+        isChroot && terminalOnly -> "Install terminal base (Root)"
+        isChroot -> "Install base desktop (Root)"
+        terminalOnly -> "Install terminal base"
+        else -> "Install base desktop"
+    }
+    val actionsSubtitle = when (selectedDesktop) {
+        DesktopChoice.NONE -> "Terminal base — no desktop"
+        DesktopChoice.XFCE -> "XFCE4 + theme ($selectedTheme)"
+        DesktopChoice.KDE -> "KDE Plasma + theme ($selectedTheme)"
     }
 
     GlassScaffold(
@@ -214,6 +275,72 @@ fun InstallConfigScreen(
                     modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp)
                 )
 
+                FrostGroupTitle("Desktop")
+                FrostContainer {
+                    ThemeSheetRow(
+                        icon = Icons.Default.Terminal,
+                        title = "Terminal only",
+                        subtitle = "Rootfs + shell — no desktop packages",
+                        selected = terminalOnly,
+                        onSelect = { selectedDesktop = DesktopChoice.NONE }
+                    )
+                    FrostDivider()
+                    ThemeSheetRow(
+                        icon = Icons.Default.Palette,
+                        title = "XFCE4",
+                        subtitle = "Lightweight classic desktop",
+                        selected = selectedDesktop == DesktopChoice.XFCE,
+                        onSelect = { selectedDesktop = DesktopChoice.XFCE }
+                    )
+                    FrostDivider()
+                    ThemeSheetRow(
+                        icon = Icons.Default.Brush,
+                        title = "KDE Plasma",
+                        subtitle = if (kdeAvailable) {
+                            "Feature-rich, highly customizable desktop"
+                        } else {
+                            "Not available for this distro"
+                        },
+                        selected = selectedDesktop == DesktopChoice.KDE,
+                        onSelect = { selectedDesktop = DesktopChoice.KDE },
+                        enabled = kdeAvailable
+                    )
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+
+                FrostGroupTitle("Extras")
+                FrostContainer {
+                    SwitchSheetRow(
+                        icon = Icons.Default.Speed,
+                        title = "Hardware acceleration",
+                        subtitle = if (terminalOnly) {
+                            "Not applicable to terminal-only installs"
+                        } else {
+                            "Installs GPU drivers (Turnip / VirGL) when supported"
+                        },
+                        checked = hwAccel && !terminalOnly,
+                        enabled = !terminalOnly,
+                        onCheckedChange = { hwAccel = it }
+                    )
+                    if (isChroot) {
+                        FrostDivider()
+                        InfoSheetRow(
+                            icon = Icons.Default.Info,
+                            title = "Root required",
+                            subtitle = "Grant superuser (KernelSU / Magisk) when prompted."
+                        )
+                    }
+                    if (terminalOnly) {
+                        FrostDivider()
+                        InfoSheetRow(
+                            icon = Icons.Default.Info,
+                            title = "Terminal only",
+                            subtitle = "No desktop packages, theming, or GPU drivers."
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+
                 FrostGroupTitle("Appearance")
                 FrostContainer {
                     ThemeSheetRow(
@@ -221,7 +348,8 @@ fun InstallConfigScreen(
                         title = "Dark",
                         subtitle = "Sleek default",
                         selected = selectedTheme == "dark",
-                        onSelect = { selectedTheme = "dark" }
+                        onSelect = { selectedTheme = "dark" },
+                        enabled = !terminalOnly
                     )
                     FrostDivider()
                     ThemeSheetRow(
@@ -229,7 +357,8 @@ fun InstallConfigScreen(
                         title = "Light",
                         subtitle = "Bright desktop",
                         selected = selectedTheme == "light",
-                        onSelect = { selectedTheme = "light" }
+                        onSelect = { selectedTheme = "light" },
+                        enabled = !terminalOnly
                     )
                 }
                 Spacer(modifier = Modifier.height(12.dp))
@@ -273,13 +402,13 @@ fun InstallConfigScreen(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                if (isChroot) "Install base desktop (Root)" else "Install base desktop",
+                                actionsTitle,
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.Medium,
                                 color = TextPrimary
                             )
                             Text(
-                                "XFCE + theme (${selectedTheme})",
+                                actionsSubtitle,
                                 fontSize = 12.sp,
                                 color = TextMuted,
                                 maxLines = 1
@@ -314,31 +443,48 @@ fun InstallConfigScreen(
     }
 }
 
+/** 36dp rounded icon chip shared by the option rows. */
+@Composable
+private fun SheetIconChip(icon: ImageVector) {
+    Box(
+        modifier = Modifier
+            .size(36.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f))
+            .border(
+                1.dp,
+                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f),
+                RoundedCornerShape(10.dp)
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = TextSecondary,
+            modifier = Modifier.size(18.dp)
+        )
+    }
+}
+
 @Composable
 private fun ThemeSheetRow(
     icon: ImageVector,
     title: String,
     subtitle: String,
     selected: Boolean,
-    onSelect: () -> Unit
+    onSelect: () -> Unit,
+    enabled: Boolean = true
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onSelect() }
-            .padding(horizontal = 18.dp, vertical = 12.dp),
+            .clickable(enabled = enabled) { onSelect() }
+            .padding(horizontal = 18.dp, vertical = 12.dp)
+            .alpha(if (enabled) 1f else 0.5f),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(
-            modifier = Modifier
-                .size(36.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f))
-                .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f), RoundedCornerShape(10.dp)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(imageVector = icon, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(18.dp))
-        }
+        SheetIconChip(icon)
         Spacer(modifier = Modifier.width(14.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(title, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = TextPrimary)
@@ -347,8 +493,57 @@ private fun ThemeSheetRow(
         RadioButton(
             selected = selected,
             onClick = onSelect,
+            enabled = enabled,
             colors = RadioButtonDefaults.colors(selectedColor = TextPrimary)
         )
+    }
+}
+
+@Composable
+private fun SwitchSheetRow(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    enabled: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 18.dp, vertical = 12.dp)
+            .alpha(if (enabled) 1f else 0.5f),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        SheetIconChip(icon)
+        Spacer(modifier = Modifier.width(14.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = TextPrimary)
+            Text(subtitle, fontSize = 12.sp, color = TextMuted)
+        }
+        Spacer(modifier = Modifier.width(12.dp))
+        FluxSwitch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            enabled = enabled
+        )
+    }
+}
+
+@Composable
+private fun InfoSheetRow(icon: ImageVector, title: String, subtitle: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 18.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        SheetIconChip(icon)
+        Spacer(modifier = Modifier.width(14.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = TextPrimary)
+            Text(subtitle, fontSize = 12.sp, color = TextMuted)
+        }
     }
 }
 

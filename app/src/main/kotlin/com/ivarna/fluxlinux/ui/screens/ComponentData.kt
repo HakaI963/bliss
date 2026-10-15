@@ -47,7 +47,7 @@ val componentDetailsMap = mapOf(
     "customization" to ComponentDetail(
         icon = Icons.Default.Palette,
         packages = listOf(
-            "Flux Theme Assets" to "120 MB",
+            "Folio Theme Assets" to "120 MB",
             "Wallpapers (4K)" to "50 MB",
             "Nerd Fonts (JetBrainsMono)" to "30 MB"
         ),
@@ -69,7 +69,7 @@ val componentDetailsMap = mapOf(
     "kde_customization" to ComponentDetail(
         icon = Icons.Default.Brush,
         packages = listOf(
-            "Flux Theme Assets" to "120 MB",
+            "Folio Theme Assets" to "120 MB",
             "Papirus Icons (KDE)" to "50 MB",
             "Wallpapers (4K)" to "50 MB",
             "Nerd Fonts (JetBrainsMono)" to "30 MB",

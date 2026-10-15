@@ -1,5 +1,5 @@
 #!/bin/sh
-# FluxLinux: glycin/GTK spawn bwrap with many --ro-bind paths.
+# Folio: glycin/GTK spawn bwrap with many --ro-bind paths.
 # Exec the glycin loader (or /usr/bin/true), never an earlier bind source.
 pick=""
 while [ $# -gt 0 ]; do

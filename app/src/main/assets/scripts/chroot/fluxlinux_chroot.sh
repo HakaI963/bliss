@@ -1,5 +1,5 @@
 #!/system/bin/sh
-# fluxlinux-chroot v2.9
+# fluxlinux-chroot v2.10
 # SSOT chroot runner for NativeCode Debian 13 (requires root).
 # Do not nest this under run_debian13_root.sh — it already owns mounts + one chroot.
 # Guest entry always uses env -i + Debian PATH (never Android /system PATH).
@@ -17,7 +17,7 @@
 #   FLUX_CHROOT  FLUX_PACKAGE  FLUX_HOST_TMP  FLUX_PREFIX  FLUX_BB  FLUX_SHELL
 set -u
 
-VERSION_STR="fluxlinux-chroot v2.9"
+VERSION_STR="fluxlinux-chroot v2.10"
 # Prefer caller-pinned env (RootShell / start_gui). Fallbacks cover both store flavors.
 if [ -z "${FLUX_PACKAGE:-}" ]; then
   if [ -d /data/data/com.zenithblue.fluxlinux/files/usr ]; then
@@ -26,7 +26,7 @@ if [ -z "${FLUX_PACKAGE:-}" ]; then
     FLUX_PACKAGE=com.ivarna.fluxlinux
   fi
 fi
-FLUX_CHROOT="${FLUX_CHROOT:-/data/local/tmp/chrootDebian13}"
+FLUX_CHROOT="${FLUX_CHROOT:-/data/local/folio/chroots/debian}"
 FLUX_HOST_TMP="${FLUX_HOST_TMP:-/data/data/${FLUX_PACKAGE}/files/usr/tmp}"
 FLUX_PREFIX="${FLUX_PREFIX:-/data/data/${FLUX_PACKAGE}/files/usr}"
 LOGIN_SHELL="${FLUX_SHELL:-zsh}"
@@ -62,7 +62,7 @@ require_root() {
 _rr=""
 for _c in \
   "$(dirname "$0")/resolve_bb.sh" \
-  /data/local/tmp/fluxlinux_resolve_bb.sh
+  /data/local/folio/helpers/fluxlinux_resolve_bb.sh
 do
   [ -n "$_c" ] && [ -f "$_c" ] && _rr="$_c" && break
 done
@@ -86,8 +86,8 @@ if [ "$_RESOLVE_BB_SOURCED" != "1" ]; then
     BB=""
     if [ -n "${FLUX_BB:-}" ] && bb_ok "$FLUX_BB"; then
       BB="$FLUX_BB"
-    elif bb_ok /data/local/tmp/flux_busybox; then
-      BB=/data/local/tmp/flux_busybox
+    elif bb_ok /data/local/folio/busybox/flux_busybox; then
+      BB=/data/local/folio/busybox/flux_busybox
     else
       for path in \
         /data/adb/ksu/bin/busybox \
@@ -122,11 +122,12 @@ if [ "$_RESOLVE_BB_SOURCED" != "1" ]; then
       fi
     fi
     [ -n "$BB" ] || return 1
-    if [ "$BB" != /data/local/tmp/flux_busybox ]; then
-      cp -f "$BB" /data/local/tmp/flux_busybox 2>/dev/null \
-        && chmod 755 /data/local/tmp/flux_busybox 2>/dev/null \
-        && bb_ok /data/local/tmp/flux_busybox \
-        && BB=/data/local/tmp/flux_busybox || true
+    if [ "$BB" != /data/local/folio/busybox/flux_busybox ]; then
+      mkdir -p /data/local/folio/busybox 2>/dev/null || true
+      cp -f "$BB" /data/local/folio/busybox/flux_busybox 2>/dev/null \
+        && chmod 755 /data/local/folio/busybox/flux_busybox 2>/dev/null \
+        && bb_ok /data/local/folio/busybox/flux_busybox \
+        && BB=/data/local/folio/busybox/flux_busybox || true
     fi
     return 0
   }
@@ -401,7 +402,7 @@ guest_login_user() {
   guest_userspec /bin/sh -c "cd 2>/dev/null || true; $_inner"
 }
 
-# App uid cannot stat /data/local/tmp (SELinux). Resolve as root from the rootfs.
+# App uid cannot stat /data/local/folio (SELinux). Resolve as root from the rootfs.
 resolve_login_shell() {
   _req="${1:-zsh}"
   case "$_req" in
@@ -463,7 +464,7 @@ export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp}"
 
 export ZSH="${ZSH:-$HOME/.oh-my-zsh}"
 if [ -f "$ZSH/oh-my-zsh.sh" ]; then
-  ZSH_THEME="agnosterzak"
+  ZSH_THEME="folio"
   DISABLE_UPDATE_PROMPT=true
   DISABLE_AUTO_UPDATE=true
   ZSH_DISABLE_COMPFIX=true
@@ -476,6 +477,53 @@ if command -v apk >/dev/null 2>&1 && command -v sudo >/dev/null 2>&1; then
 fi
 ZSHRC
   fi
+  # Monochrome Folio prompt theme (replaces the removed agnosterzak theme).
+  if [ -d "$_home/.oh-my-zsh" ]; then
+    mkdir -p "$_home/.oh-my-zsh/custom/themes" 2>/dev/null || true
+    rm -f "$_home/.oh-my-zsh/custom/themes/agnosterzak.zsh-theme" 2>/dev/null || true
+    if [ ! -s "$_home/.oh-my-zsh/custom/themes/folio.zsh-theme" ]; then
+      cat > "$_home/.oh-my-zsh/custom/themes/folio.zsh-theme" <<'FOLIO_THEME_EOF'
+# folio.zsh-theme — Folio's minimal monochrome prompt.
+# White/gray on black only; ASCII-safe (no powerline glyphs, no ANSI colors 31-44).
+# Segments:  time  folio  working-dir  input-char
+PROMPT='%F{240}%D{%H:%M}%f %F{255}folio%f %F{250}%~%f %F{255}%#%f '
+PROMPT2='%F{240}> %f'
+FOLIO_THEME_EOF
+    fi
+  fi
+  # Existing old profile: point it at the new theme (kept file intact otherwise).
+  if [ -f "$_home/.zshrc" ] && grep -q 'ZSH_THEME="agnosterzak"' "$_home/.zshrc" 2>/dev/null; then
+    sed -i 's|ZSH_THEME="agnosterzak"|ZSH_THEME="folio"|' "$_home/.zshrc" 2>/dev/null || true
+  fi
+  # Monochrome Folio fastfetch preset (local; replaces the remote colorful one).
+  if [ ! -s "$_home/.local/share/fastfetch/presets/termux.jsonc" ]; then
+    mkdir -p "$_home/.local/share/fastfetch/presets" 2>/dev/null || true
+    cat > "$_home/.local/share/fastfetch/presets/termux.jsonc" <<'FFEOF'
+{
+  "logo": null,
+  "display": { "separator": " ›  " },
+  "modules": [
+    { "type": "os", "key": "OS  " },
+    { "type": "kernel", "key": "KER " },
+    { "type": "cpu", "key": "CPU " },
+    { "type": "gpu", "key": "GPU " },
+    { "type": "packages", "key": "PKG " },
+    { "type": "shell", "key": "SH  " },
+    { "type": "terminal", "key": "TER " },
+    {
+      "type": "disk",
+      "key": "DSK ",
+      "folders": ["/"],
+      "showRemovable": false,
+      "showHidden": false,
+      "showSubvolumes": false
+    },
+    { "type": "memory", "key": "MEM " },
+    { "type": "swap", "key": "SWP " }
+  ]
+}
+FFEOF
+  fi
   if [ ! -f "$_home/.zprofile" ]; then
     printf '%s\n' '[[ -o interactive ]] || { [ -f "$HOME/.zshrc" ] && . "$HOME/.zshrc"; }' \
       > "$_home/.zprofile"
@@ -486,7 +534,9 @@ ZSHRC
     sed -i 's|^\(flux:[^:]*:[^:]*:[^:]*:[^:]*:[^:]*\):.*|\1:/bin/zsh|' \
       "$FLUX_CHROOT/etc/passwd" 2>/dev/null || true
   fi
-  chown --reference="$_home" "$_home/.zshrc" "$_home/.zprofile" 2>/dev/null || true
+  chown --reference="$_home" "$_home/.zshrc" "$_home/.zprofile" \
+    "$_home/.oh-my-zsh/custom/themes/folio.zsh-theme" \
+    "$_home/.local/share/fastfetch/presets/termux.jsonc" 2>/dev/null || true
 }
 
 guest_login() {

@@ -265,7 +265,7 @@ fun X11SettingsScreen(
                     containerColor = FolioSurface,
                     contentColor = MaterialTheme.colorScheme.onSurface
                 ),
-                border = BorderStroke(1.dp, FrostHairline),
+                border = BorderStroke(0.75.dp, FrostHairline),
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier.fillMaxWidth().height(48.dp)
             ) {

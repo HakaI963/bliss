@@ -1,8 +1,8 @@
 #!/bin/sh
 # uninstall_alpine_chroot.sh — remove Alpine chroot (Requires Root)
 
-ALPINEPATH="${FLUX_CHROOT:-/data/local/tmp/chrootAlpine}"
-LAUNCH_SCRIPTS="/data/local/tmp/start_alpine_gui.sh /data/local/tmp/stop_alpine_gui.sh /data/local/tmp/enter_alpine.sh /data/local/tmp/uninstall_alpine_chroot.sh"
+ALPINEPATH="${FLUX_CHROOT:-/data/local/folio/chroots/alpine}"
+LAUNCH_SCRIPTS="/data/local/folio/helpers/start_alpine_gui.sh /data/local/folio/helpers/stop_alpine_gui.sh /data/local/folio/helpers/enter_alpine.sh /data/local/folio/helpers/uninstall_alpine_chroot.sh"
 
 error()    { printf "\033[1;31m[!] %s\033[0m\n" "$1"; }
 success()  { printf "\033[1;32m[✓] %s\033[0m\n" "$1"; }
@@ -21,7 +21,7 @@ _rr=""
 for _c in \
   "${FLUX_RESOLVE_BB:-}" \
   "$(dirname "$0")/resolve_bb.sh" \
-  /data/local/tmp/fluxlinux_resolve_bb.sh
+  /data/local/folio/helpers/fluxlinux_resolve_bb.sh
 do
   [ -n "$_c" ] && [ -f "$_c" ] && _rr="$_c" && break
 done
@@ -33,9 +33,9 @@ fi
 if [ -z "${BB:-}" ]; then
   if [ -n "${FLUX_BB:-}" ] && [ -x "$FLUX_BB" ] &&
      "$FLUX_BB" --list >/dev/null 2>&1; then BB="$FLUX_BB"; fi
-  if [ -z "${BB:-}" ] && [ -x /data/local/tmp/flux_busybox ] &&
-     /data/local/tmp/flux_busybox --list >/dev/null 2>&1; then
-    BB=/data/local/tmp/flux_busybox
+  if [ -z "${BB:-}" ] && [ -x /data/local/folio/busybox/flux_busybox ] &&
+     /data/local/folio/busybox/flux_busybox --list >/dev/null 2>&1; then
+    BB=/data/local/folio/busybox/flux_busybox
   fi
   if [ -z "${BB:-}" ]; then
     for path in \
@@ -112,7 +112,7 @@ success "Uninstallation Complete!"
 
 mount -t tracefs tracefs /sys/kernel/tracing 2>/dev/null || true
 
-progress "Notifying FluxLinux App..."
+progress "Notifying Folio App..."
 /system/bin/am start -a android.intent.action.VIEW \
     -d "fluxlinux://callback?result=success&name=distro_uninstall_alpine_chroot" \
     >/dev/null 2>&1 || true

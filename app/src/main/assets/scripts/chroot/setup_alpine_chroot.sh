@@ -3,7 +3,7 @@
 # Installs Alpine 3.24 minirootfs chroot (Requires Root).
 # Family/XFCE install is owned by onboarding family phase (setup_alpine_family.sh).
 
-ALPINEPATH="${FLUX_CHROOT:-/data/local/tmp/chrootAlpine}"
+ALPINEPATH="${FLUX_CHROOT:-/data/local/folio/chroots/alpine}"
 USERNAME="flux"
 
 PKG="${TERMUX_APP__PACKAGE_NAME:-com.ivarna.fluxlinux}"
@@ -199,8 +199,11 @@ configure_alpine_chroot() {
     touch "$ALPINEPATH/.flux_configured"
     success "Alpine Environment Configured (rootfs + user; XFCE via family phase)!"
 
+    # Root-staged helper/launchers live in the Folio helpers dir (idempotent).
+    mkdir -p /data/local/folio/helpers
+
     # Stage SSOT helper
-    HELPER="/data/local/tmp/fluxlinux_chroot.sh"
+    HELPER="/data/local/folio/helpers/fluxlinux_chroot.sh"
     progress "Installing chroot SSOT helper at $HELPER..."
     HELPER_SRC=""
     for cand in \
@@ -225,26 +228,26 @@ configure_alpine_chroot() {
     for s in start_alpine_gui.sh stop_alpine_gui.sh; do
         src="/data/data/${PKG}/files/home/$s"
         if [ -f "$src" ]; then
-            cp -f "$src" "/data/local/tmp/$s"
-            chmod +x "/data/local/tmp/$s"
+            cp -f "$src" "/data/local/folio/helpers/$s"
+            chmod +x "/data/local/folio/helpers/$s"
             success "Staged $s"
         fi
     done
 
     # Thin CLI launcher
-    CLI_SCRIPT="/data/local/tmp/enter_alpine.sh"
+    CLI_SCRIPT="/data/local/folio/helpers/enter_alpine.sh"
     cat > "$CLI_SCRIPT" <<'EOF'
 #!/system/bin/sh
-HELPER=/data/local/tmp/fluxlinux_chroot.sh
+HELPER=/data/local/folio/helpers/fluxlinux_chroot.sh
 [ -f "$HELPER" ] || { echo "fluxlinux_chroot.sh missing" >&2; exit 127; }
-export FLUX_CHROOT="${FLUX_CHROOT:-/data/local/tmp/chrootAlpine}"
+export FLUX_CHROOT="${FLUX_CHROOT:-/data/local/folio/chroots/alpine}"
 echo "Entering Alpine Chroot (CLI)..."
 exec sh "$HELPER" login --user flux --shell zsh
 EOF
     chmod 755 "$CLI_SCRIPT"
 
     cleanup_mounts
-    success "FluxLinux: Alpine Chroot Setup Complete!"
+    success "Folio: Alpine Chroot Setup Complete!"
 
     am start -a android.intent.action.VIEW \
         -d "fluxlinux://callback?result=success&name=distro_install_alpine_chroot" \
@@ -265,7 +268,7 @@ _rr=""
 for _c in \
   "${FLUX_RESOLVE_BB:-}" \
   "$(dirname "$0")/resolve_bb.sh" \
-  /data/local/tmp/fluxlinux_resolve_bb.sh
+  /data/local/folio/helpers/fluxlinux_resolve_bb.sh
 do
   [ -n "$_c" ] && [ -f "$_c" ] && _rr="$_c" && break
 done
@@ -278,9 +281,9 @@ if [ -z "${BB:-}" ]; then
   # sidecar missing (desktop/uninstall/staged setup) — same B1 walk as resolve_bb
   if [ -n "${FLUX_BB:-}" ] && [ -x "$FLUX_BB" ] &&
      "$FLUX_BB" --list >/dev/null 2>&1; then BB="$FLUX_BB"; fi
-  if [ -z "${BB:-}" ] && [ -x /data/local/tmp/flux_busybox ] &&
-     /data/local/tmp/flux_busybox --list >/dev/null 2>&1; then
-    BB=/data/local/tmp/flux_busybox
+  if [ -z "${BB:-}" ] && [ -x /data/local/folio/busybox/flux_busybox ] &&
+     /data/local/folio/busybox/flux_busybox --list >/dev/null 2>&1; then
+    BB=/data/local/folio/busybox/flux_busybox
   fi
   if [ -z "${BB:-}" ]; then
     for path in \
@@ -299,13 +302,13 @@ if [ -z "${BB:-}" ]; then
   fi
 fi
 if [ -z "${BB:-}" ]; then
-  echo "FluxLinux: ERROR — root-capable busybox not found" >&2
+  echo "Folio: ERROR — root-capable busybox not found" >&2
   exit 1
 fi
 
     progress "Using Root Busybox: $BB"
 
-    ALPINEPATH="${FLUX_CHROOT:-/data/local/tmp/chrootAlpine}"
+    ALPINEPATH="${FLUX_CHROOT:-/data/local/folio/chroots/alpine}"
 
     # Only treat as fully installed when marker + bash + flux user exist.
     # Minirootfs always has bin/sh + sbin/apk — those alone must NOT skip configure.

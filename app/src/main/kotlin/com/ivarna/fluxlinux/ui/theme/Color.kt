@@ -13,8 +13,10 @@ val FolioCard = Color(0xFF18181B)
 val FrostSurface = Color(0xFFFFFFFF).copy(alpha = 0.05f)
 val FrostSurfaceElevated = Color(0xFFFFFFFF).copy(alpha = 0.09f)
 val FrostHairline = Color(0xFFFFFFFF).copy(alpha = 0.06f)
+// Soft top sheen for frosted panels: fades from a lit edge to nothing.
+val FrostTopSheen = Color(0xFFFFFFFF).copy(alpha = 0.05f)
 val FolioFrostBorder: Brush = Brush.verticalGradient(
-    listOf(Color.White.copy(alpha = 0.14f), Color.White.copy(alpha = 0.04f))
+    listOf(Color.White.copy(alpha = 0.12f), Color.White.copy(alpha = 0.035f))
 )
 val TextPrimary = Color(0xFFF4F4F5)
 val TextSecondary = Color(0xFFA1A1AA)

@@ -4,17 +4,28 @@
 
 DISTRO_NAME="${1:-debian}"
 
-echo "FluxLinux: Configuring ${DISTRO_NAME} (Debian Family)..."
+echo "Folio: Configuring ${DISTRO_NAME} (Debian Family)..."
 
 # 1. Update and Install Core Packages
 export DEBIAN_FRONTEND=noninteractive
 apt update -y || exit 1
-apt install -y sudo xfce4 xfce4-goodies dbus-x11 tigervnc-standalone-server || exit 1
+apt install -y sudo dbus-x11 tigervnc-standalone-server || exit 1
+# Desktop gate: FLUX_DESKTOP (env mirror FLUX_DESKTOP_ENV) = xfce | kde | none.
+# Unset/empty → xfce (backward compat); xfce4 is normalized to xfce.
+DESKTOP_CHOICE="${FLUX_DESKTOP:-${FLUX_DESKTOP_ENV:-xfce}}"
+case "$DESKTOP_CHOICE" in
+    xfce4) DESKTOP_CHOICE=xfce ;;
+esac
+if [ "$DESKTOP_CHOICE" = "xfce" ]; then
+    apt install -y xfce4 xfce4-goodies || exit 1
+fi
 # Named Pulse *client* only — do not treat xfce4 as the audio path.
 DEBIAN_FRONTEND=noninteractive apt install -y --no-install-recommends \
-    libpulse0 pulseaudio-utils xfce4-pulseaudio-plugin || \
-DEBIAN_FRONTEND=noninteractive apt install -y --no-install-recommends \
     libpulse0 pulseaudio-utils || true
+if [ "$DESKTOP_CHOICE" = "xfce" ]; then
+    DEBIAN_FRONTEND=noninteractive apt install -y --no-install-recommends \
+        xfce4-pulseaudio-plugin || true
+fi
 
 # Stock Mesa for first XFCE paint. hw-accel may replace this with Turnip later.
 DEBIAN_FRONTEND=noninteractive apt install -y --no-install-recommends \
@@ -24,7 +35,7 @@ DEBIAN_FRONTEND=noninteractive apt install -y --no-install-recommends \
     || true
 mkdir -p /etc/fluxlinux
 printf '%s\n' virgl > /etc/fluxlinux/gpu_mode
-echo "FluxLinux: gpu_mode=virgl (first-paint; hw-accel may upgrade)"
+echo "Folio: gpu_mode=virgl (first-paint; hw-accel may upgrade)"
 
 # 2. Create User 'flux'
 if ! id "flux" &>/dev/null; then
@@ -78,4 +89,4 @@ EOF
     fi
 fi
 
-echo "FluxLinux: ${DISTRO_NAME} Setup Complete!"
+echo "Folio: ${DISTRO_NAME} Setup Complete!"

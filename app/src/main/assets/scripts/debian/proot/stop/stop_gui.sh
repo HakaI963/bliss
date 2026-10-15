@@ -16,24 +16,24 @@ mkdir -p "$PROOT_TMP_DIR" 2>/dev/null || true
 PKG="$TERMUX_APP__PACKAGE_NAME"
 
 echo "========================================"
-echo "FluxLinux: Stopping GUI for $DISTRO"
+echo "Folio: Stopping GUI for $DISTRO"
 echo "========================================"
 
-# Step 1: Kill XFCE inside the guest (targeted login — does NOT pkill proot).
+# Step 1: Kill the guest desktop (targeted login — does NOT pkill proot).
 # Host-only pkill often misses proot-namespaced guest DE processes.
-echo "[1/4] Stopping XFCE4 in guest ($DISTRO)..."
-if command -v python >/dev/null 2>&1 && [ -x "$TERMUX__PREFIX/bin/proot-distro" ] || [ -f "$TERMUX__PREFIX/bin/proot-distro" ]; then
+# One shared process list covers XFCE4 *and* KDE Plasma, so Stop works for
+# whichever desktop is running (and never leaves a Plasma daemon behind).
+GUEST_DE_PROCS="xfce4-session xfwm4 xfdesktop xfce4-panel xfce4-notifyd startxfce4 plasmashell kwin_x11 startplasma-x11 startplasma plasma_session ksmserver kded6 kded5 kglobalacceld kglobalaccel5 kactivitymanagerd kscreen_backend kquitapp6 kquitapp5 polkit-kde-agent-1"
+echo "[1/4] Stopping desktop in guest ($DISTRO)..."
+if [ -f "$TERMUX__PREFIX/bin/proot-distro" ]; then
   python "$TERMUX__PREFIX/bin/proot-distro" login "$DISTRO" -- \
-    /bin/bash -c 'killall -9 xfce4-session xfwm4 xfdesktop xfce4-panel startxfce4 plasmashell kwin_x11 startplasma-x11 plasma_session ksmserver 2>/dev/null; true' \
+    /bin/bash -c "killall -9 $GUEST_DE_PROCS 2>/dev/null; rm -rf /home/flux/.cache/runtime 2>/dev/null; true" \
     >/dev/null 2>&1 || true
 fi
 # Best-effort host-side names too (some proot trees expose them)
-pkill -9 -f "xfce4-session" 2>/dev/null || true
-pkill -9 -f "xfwm4" 2>/dev/null || true
-pkill -9 -f "xfdesktop" 2>/dev/null || true
-pkill -9 -f "xfce4-panel" 2>/dev/null || true
-pkill -9 -f "startxfce4" 2>/dev/null || true
-pkill -9 -f "plasmashell|kwin_x11|startplasma-x11|plasma_session|ksmserver|kded6" 2>/dev/null || true
+for _p in $GUEST_DE_PROCS; do
+  pkill -9 -f "$_p" 2>/dev/null || true
+done
 pkill -9 -f "dbus-daemon.*--session" 2>/dev/null || true
 
 # Step 2: Leave proot-distro / generic proot shells alone

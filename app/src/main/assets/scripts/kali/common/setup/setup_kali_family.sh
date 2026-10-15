@@ -22,10 +22,10 @@ fi
 # kali-linux-default / kali-linux-large. Flux is uid 1000; leave user kali (uid 100000).
 
 DISTRO_NAME="${1:-kali}"
-echo "FluxLinux: Configuring ${DISTRO_NAME} (Kali Family)..."
+echo "Folio: Configuring ${DISTRO_NAME} (Kali Family)..."
 
 if [ "$(id -u)" -ne 0 ]; then
-    echo "FluxLinux: ERROR: must run as root inside the guest (got uid=$(id -u))."
+    echo "Folio: ERROR: must run as root inside the guest (got uid=$(id -u))."
     exit 1
 fi
 
@@ -38,7 +38,7 @@ _flux_disable_guest_selinux
 _flux_apt_prep
 
 if ! command -v apt-get >/dev/null 2>&1; then
-    echo "FluxLinux: ERROR: apt-get not found"
+    echo "Folio: ERROR: apt-get not found"
     exit 1
 fi
 
@@ -46,7 +46,7 @@ _flux_log "apt-get update (kali-rolling only)..."
 if ! apt-get update; then
     _flux_log "apt-get update failed once — retrying"
     apt-get update || {
-        echo "FluxLinux: apt-get update failed (repos/network)"
+        echo "Folio: apt-get update failed (repos/network)"
         exit 1
     }
 fi
@@ -56,23 +56,36 @@ apt-get install -y --no-install-recommends \
     bash sudo passwd adduser ca-certificates curl wget unzip tar xz-utils \
     git zsh python3 locales \
     dbus dbus-x11 || {
-        echo "FluxLinux: base package install failed"
+        echo "Folio: base package install failed"
         exit 1
     }
 
 _flux_ensure_dbus
 
-_flux_log "Installing XFCE4 (targeted — never kali-desktop-xfce)..."
-if ! apt-get install -y --no-install-recommends \
-    xfce4-session xfce4-panel xfce4-settings xfce4-terminal \
-    xfdesktop4 xfwm4 thunar \
-    adwaita-icon-theme fonts-dejavu-core \
-    libgl1-mesa-dri libegl1 mesa-utils; then
-    _flux_log "targeted XFCE install failed — falling back to xfce4 metapackage"
-    apt-get install -y --no-install-recommends xfce4 || {
-        echo "FluxLinux: XFCE install failed"
-        exit 1
-    }
+# Desktop gate: FLUX_DESKTOP (env mirror FLUX_DESKTOP_ENV) = xfce | kde | none.
+# Unset/empty → xfce (backward compat); xfce4 is normalized to xfce.
+DESKTOP_CHOICE="${FLUX_DESKTOP:-${FLUX_DESKTOP_ENV:-xfce}}"
+case "$DESKTOP_CHOICE" in
+    xfce4) DESKTOP_CHOICE=xfce ;;
+esac
+if [ "$DESKTOP_CHOICE" = "xfce" ]; then
+    _flux_log "Installing XFCE4 (targeted — never kali-desktop-xfce)..."
+    if ! apt-get install -y --no-install-recommends \
+        xfce4-session xfce4-panel xfce4-settings xfce4-terminal \
+        xfdesktop4 xfwm4 thunar \
+        adwaita-icon-theme fonts-dejavu-core \
+        libgl1-mesa-dri libegl1 mesa-utils; then
+        _flux_log "targeted XFCE install failed — falling back to xfce4 metapackage"
+        apt-get install -y --no-install-recommends xfce4 || {
+            echo "Folio: XFCE install failed"
+            exit 1
+        }
+    fi
+else
+    # Shared fonts + Mesa for non-XFCE desktops (best-effort).
+    apt-get install -y --no-install-recommends \
+        adwaita-icon-theme fonts-dejavu-core \
+        libgl1-mesa-dri libegl1 mesa-utils 2>/dev/null || true
 fi
 
 # NetHunter leftover user kali (uid 100000). Lock it so Terminal/Home never default to it.
@@ -82,7 +95,9 @@ if id kali >/dev/null 2>&1; then
 fi
 
 _flux_ensure_en_us_locale || exit 1
-_flux_require_startxfce4
+if [ "$DESKTOP_CHOICE" = "xfce" ]; then
+    _flux_require_startxfce4
+fi
 _flux_ensure_groups
 _flux_ensure_user
 _flux_ensure_sudo
@@ -91,5 +106,5 @@ _flux_setup_pulse
 _flux_write_gpu_mode virgl
 _flux_fix_pm_writable
 
-echo "FluxLinux: ${DISTRO_NAME} Kali setup complete!"
+echo "Folio: ${DISTRO_NAME} Kali setup complete!"
 exit 0

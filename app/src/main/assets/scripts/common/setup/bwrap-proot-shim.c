@@ -5,7 +5,7 @@
 #include <unistd.h>
 
 /*
- * FluxLinux: glycin/GTK spawn "bwrap" with many --ro-bind paths.
+ * Folio: glycin/GTK spawn "bwrap" with many --ro-bind paths.
  * Exec the glycin loader (or /usr/bin/true from the availability probe),
  * never an earlier bind source like /etc/ld.so.cache.
  */

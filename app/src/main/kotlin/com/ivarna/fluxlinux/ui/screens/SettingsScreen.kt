@@ -181,7 +181,7 @@ fun SettingsScreen(
                 FrostRow(
                     icon = Icons.Default.History,
                     title = "Legacy Termux",
-                    subtitle = "Leftover installs from FluxLinux ≤ v1.8.0",
+                    subtitle = "Leftover installs from Folio ≤ v1.8.0",
                     onClick = { onNavigateToLegacyTermuxSettings?.invoke() }
                 )
             }

@@ -17,72 +17,73 @@ export PATH="$TERMUX_PREFIX/bin:$TERMUX_PREFIX/bin/applets:/system/bin:/system/x
 
 case "$DISTRO_HINT" in
   alpine|alpine_chroot)
-    CHROOT_PATH="${CHROOT_PATH:-/data/local/tmp/chrootAlpine}"
+    CHROOT_PATH="${CHROOT_PATH:-/data/local/folio/chroots/alpine}"
     ROOT_STOP_NAME="${ROOT_STOP_NAME:-stop_alpine_gui.sh}"
     ;;
   fedora|fedora_chroot)
-    CHROOT_PATH="${CHROOT_PATH:-/data/local/tmp/chrootFedora}"
+    CHROOT_PATH="${CHROOT_PATH:-/data/local/folio/chroots/fedora}"
     ROOT_STOP_NAME="${ROOT_STOP_NAME:-stop_guest_gui.sh}"
     ;;
   void|void_chroot)
-    CHROOT_PATH="${CHROOT_PATH:-/data/local/tmp/chrootVoid}"
+    CHROOT_PATH="${CHROOT_PATH:-/data/local/folio/chroots/void}"
     ROOT_STOP_NAME="${ROOT_STOP_NAME:-stop_guest_gui.sh}"
     ;;
   opensuse|opensuse_chroot)
-    CHROOT_PATH="${CHROOT_PATH:-/data/local/tmp/chrootOpenSUSE}"
+    CHROOT_PATH="${CHROOT_PATH:-/data/local/folio/chroots/opensuse}"
     ROOT_STOP_NAME="${ROOT_STOP_NAME:-stop_guest_gui.sh}"
     ;;
   deepin|deepin_chroot)
-    CHROOT_PATH="${CHROOT_PATH:-/data/local/tmp/chrootDeepin}"
+    CHROOT_PATH="${CHROOT_PATH:-/data/local/folio/chroots/deepin}"
     ROOT_STOP_NAME="${ROOT_STOP_NAME:-stop_guest_gui.sh}"
     ;;
   chimera|chimera_chroot)
-    CHROOT_PATH="${CHROOT_PATH:-/data/local/tmp/chrootChimera}"
+    CHROOT_PATH="${CHROOT_PATH:-/data/local/folio/chroots/chimera}"
     ROOT_STOP_NAME="${ROOT_STOP_NAME:-stop_guest_gui.sh}"
     ;;
   manjaro|manjaro_chroot)
-    CHROOT_PATH="${CHROOT_PATH:-/data/local/tmp/chrootManjaro}"
+    CHROOT_PATH="${CHROOT_PATH:-/data/local/folio/chroots/manjaro}"
     ROOT_STOP_NAME="${ROOT_STOP_NAME:-stop_guest_gui.sh}"
     ;;
   ubuntu|ubuntu_chroot)
-    CHROOT_PATH="${CHROOT_PATH:-/data/local/tmp/chrootUbuntu}"
+    CHROOT_PATH="${CHROOT_PATH:-/data/local/folio/chroots/ubuntu}"
     ROOT_STOP_NAME="${ROOT_STOP_NAME:-stop_guest_gui.sh}"
     ;;
   kali|kali_chroot)
-    CHROOT_PATH="${CHROOT_PATH:-/data/local/tmp/chrootKali}"
+    CHROOT_PATH="${CHROOT_PATH:-/data/local/folio/chroots/kali}"
     ROOT_STOP_NAME="${ROOT_STOP_NAME:-stop_guest_gui.sh}"
     ;;
   parrot|parrot_chroot)
-    CHROOT_PATH="${CHROOT_PATH:-/data/local/tmp/chrootParrot}"
+    CHROOT_PATH="${CHROOT_PATH:-/data/local/folio/chroots/parrot}"
     ROOT_STOP_NAME="${ROOT_STOP_NAME:-stop_guest_gui.sh}"
     ;;
   archlinux|archlinux_chroot)
-    CHROOT_PATH="${CHROOT_PATH:-/data/local/tmp/chrootArch}"
+    CHROOT_PATH="${CHROOT_PATH:-/data/local/folio/chroots/archlinux}"
     ROOT_STOP_NAME="${ROOT_STOP_NAME:-stop_guest_gui.sh}"
     ;;
   *)
-    CHROOT_PATH="${CHROOT_PATH:-/data/local/tmp/chrootDebian13}"
+    CHROOT_PATH="${CHROOT_PATH:-/data/local/folio/chroots/debian}"
     ROOT_STOP_NAME="${ROOT_STOP_NAME:-stop_debian13_gui.sh}"
     ;;
 esac
 ROOT_STOP_SCRIPT="$TERMUX_HOME/$ROOT_STOP_NAME"
-ROOT_STOP_TMP="/data/local/tmp/$ROOT_STOP_NAME"
+ROOT_STOP_TMP="/data/local/folio/helpers/$ROOT_STOP_NAME"
 RESOLVER_SRC="$TERMUX_HOME/resolve_bb.sh"
-RESOLVER_TMP="/data/local/tmp/fluxlinux_resolve_bb.sh"
+RESOLVER_TMP="/data/local/folio/helpers/fluxlinux_resolve_bb.sh"
 
 echo "========================================"
-echo "FluxLinux: STOP XFCE (chroot mode)"
+echo "Folio: STOP XFCE (chroot mode)"
 echo "  distro=$DISTRO_HINT path=$CHROOT_PATH"
 echo "========================================"
 
 if [ ! -f "$ROOT_STOP_SCRIPT" ]; then
-  echo "FluxLinux: [WARN] missing $ROOT_STOP_SCRIPT — best-effort kill only"
+  echo "Folio: [WARN] missing $ROOT_STOP_SCRIPT — best-effort kill only"
 else
   SU_BIN=su
   for s in /system/bin/su /system/xbin/su /sbin/su; do
     if [ -x "$s" ]; then SU_BIN="$s"; break; fi
   done
-  "$SU_BIN" -c "cp -f '$ROOT_STOP_SCRIPT' '$ROOT_STOP_TMP' 2>/dev/null; \
+  "$SU_BIN" -c "mkdir -p '/data/local/folio/helpers'; \
+    cp -f '$ROOT_STOP_SCRIPT' '$ROOT_STOP_TMP' 2>/dev/null; \
     [ -f '$RESOLVER_SRC' ] && cp -f '$RESOLVER_SRC' '$RESOLVER_TMP' 2>/dev/null; \
     chmod 755 '$ROOT_STOP_TMP' '$RESOLVER_TMP' 2>/dev/null; \
     DEBIANPATH='$CHROOT_PATH' CHROOT_ROOT='$CHROOT_PATH' FLUX_CHROOT='$CHROOT_PATH' \

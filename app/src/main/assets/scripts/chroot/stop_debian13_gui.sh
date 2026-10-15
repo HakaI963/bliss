@@ -2,7 +2,7 @@
 # stop_debian13_gui.sh — root: stop XFCE in Debian chroot + host X11 sockets
 # Does NOT pkill proot (proot stop is stop_gui.sh only).
 
-DEBIANPATH="${DEBIANPATH:-/data/local/tmp/chrootDebian13}"
+DEBIANPATH="${DEBIANPATH:-/data/local/folio/chroots/debian}"
 if [ -z "${TARGET_PREFIX:-}" ]; then
   if [ -n "${FLUX_PREFIX:-}" ]; then
     TARGET_PREFIX="$FLUX_PREFIX"
@@ -16,7 +16,7 @@ if [ -z "${TARGET_PREFIX:-}" ]; then
 fi
 
 echo "========================================"
-echo "FluxLinux: Stopping Chroot XFCE"
+echo "Folio: Stopping Chroot XFCE"
 echo "========================================"
 
 # resolve root BusyBox (manager built-in; NDK module not required)
@@ -24,7 +24,7 @@ _rr=""
 for _c in \
   "${FLUX_RESOLVE_BB:-}" \
   "$(dirname "$0")/resolve_bb.sh" \
-  /data/local/tmp/fluxlinux_resolve_bb.sh
+  /data/local/folio/helpers/fluxlinux_resolve_bb.sh
 do
   [ -n "$_c" ] && [ -f "$_c" ] && _rr="$_c" && break
 done
@@ -37,9 +37,9 @@ if [ -z "${BB:-}" ]; then
   # sidecar missing (desktop/uninstall/staged setup) — same B1 walk as resolve_bb
   if [ -n "${FLUX_BB:-}" ] && [ -x "$FLUX_BB" ] &&
      "$FLUX_BB" --list >/dev/null 2>&1; then BB="$FLUX_BB"; fi
-  if [ -z "${BB:-}" ] && [ -x /data/local/tmp/flux_busybox ] &&
-     /data/local/tmp/flux_busybox --list >/dev/null 2>&1; then
-    BB=/data/local/tmp/flux_busybox
+  if [ -z "${BB:-}" ] && [ -x /data/local/folio/busybox/flux_busybox ] &&
+     /data/local/folio/busybox/flux_busybox --list >/dev/null 2>&1; then
+    BB=/data/local/folio/busybox/flux_busybox
   fi
   if [ -z "${BB:-}" ]; then
     for path in \
@@ -58,15 +58,15 @@ if [ -z "${BB:-}" ]; then
   fi
 fi
 if [ -z "${BB:-}" ]; then
-  echo "FluxLinux: ERROR — root-capable busybox not found" >&2
+  echo "Folio: ERROR — root-capable busybox not found" >&2
   exit 1
 fi
 
 
-echo "[1/4] Kill XFCE in chroot..."
+echo "[1/4] Kill desktop session in chroot..."
 if [ -n "$BB" ] && [ -d "$DEBIANPATH" ]; then
   $BB chroot "$DEBIANPATH" /bin/su - root -c \
-    "killall -9 xfce4-session xfwm4 xfdesktop xfce4-panel plasmashell kwin_x11 startplasma-x11 plasma_session ksmserver dbus-launch dbus-daemon 2>/dev/null; true" \
+    "killall -9 xfce4-session xfwm4 xfdesktop xfce4-panel xfce4-notifyd startxfce4 plasmashell kwin_x11 startplasma-x11 startplasma plasma_session ksmserver kded6 kded5 kglobalacceld kglobalaccel5 kactivitymanagerd kscreen_backend kquitapp6 kquitapp5 polkit-kde-agent-1 dbus-launch dbus-daemon 2>/dev/null; rm -rf /home/flux/.cache/runtime 2>/dev/null; true" \
     >/dev/null 2>&1
 fi
 

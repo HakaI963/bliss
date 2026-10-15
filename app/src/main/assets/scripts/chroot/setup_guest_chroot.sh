@@ -8,7 +8,7 @@
 #   FLUX_ROOTFS_URL (GitHub release download fallback)
 #   TERMUX_APP__PACKAGE_NAME, TERMUX__HOME
 
-GUESTPATH="${FLUX_CHROOT:-/data/local/tmp/chrootGuest}"
+GUESTPATH="${FLUX_CHROOT:-/data/local/folio/chroots/guest}"
 USERNAME="flux"
 DISTRO_LABEL="${FLUX_DISTRO_LABEL:-guest}"
 
@@ -207,7 +207,10 @@ configure_guest_chroot() {
     touch "$GUESTPATH/.flux_configured"
     success "$DISTRO_LABEL environment configured (rootfs + user; XFCE via family phase)!"
 
-    HELPER="/data/local/tmp/fluxlinux_chroot.sh"
+    # Root-staged helper/launchers live in the Folio helpers dir (idempotent).
+    mkdir -p /data/local/folio/helpers
+
+    HELPER="/data/local/folio/helpers/fluxlinux_chroot.sh"
     progress "Installing chroot SSOT helper at $HELPER..."
     HELPER_SRC=""
     for cand in \
@@ -231,14 +234,14 @@ configure_guest_chroot() {
     for s in start_guest_gui.sh stop_guest_gui.sh; do
         src="/data/data/${PKG}/files/home/$s"
         if [ -f "$src" ]; then
-            cp -f "$src" "/data/local/tmp/$s"
-            chmod +x "/data/local/tmp/$s"
+            cp -f "$src" "/data/local/folio/helpers/$s"
+            chmod +x "/data/local/folio/helpers/$s"
             success "Staged $s"
         fi
     done
 
     cleanup_mounts
-    success "FluxLinux: $DISTRO_LABEL Chroot Setup Complete!"
+    success "Folio: $DISTRO_LABEL Chroot Setup Complete!"
 
     am start -a android.intent.action.VIEW \
         -d "fluxlinux://callback?result=success&name=distro_install_${DISTRO_LABEL}_chroot" \
@@ -259,7 +262,7 @@ _rr=""
 for _c in \
   "${FLUX_RESOLVE_BB:-}" \
   "$(dirname "$0")/resolve_bb.sh" \
-  /data/local/tmp/fluxlinux_resolve_bb.sh
+  /data/local/folio/helpers/fluxlinux_resolve_bb.sh
 do
   [ -n "$_c" ] && [ -f "$_c" ] && _rr="$_c" && break
 done
@@ -272,9 +275,9 @@ if [ -z "${BB:-}" ]; then
   # sidecar missing (desktop/uninstall/staged setup) — same B1 walk as resolve_bb
   if [ -n "${FLUX_BB:-}" ] && [ -x "$FLUX_BB" ] &&
      "$FLUX_BB" --list >/dev/null 2>&1; then BB="$FLUX_BB"; fi
-  if [ -z "${BB:-}" ] && [ -x /data/local/tmp/flux_busybox ] &&
-     /data/local/tmp/flux_busybox --list >/dev/null 2>&1; then
-    BB=/data/local/tmp/flux_busybox
+  if [ -z "${BB:-}" ] && [ -x /data/local/folio/busybox/flux_busybox ] &&
+     /data/local/folio/busybox/flux_busybox --list >/dev/null 2>&1; then
+    BB=/data/local/folio/busybox/flux_busybox
   fi
   if [ -z "${BB:-}" ]; then
     for path in \
@@ -293,13 +296,13 @@ if [ -z "${BB:-}" ]; then
   fi
 fi
 if [ -z "${BB:-}" ]; then
-  echo "FluxLinux: ERROR — root-capable busybox not found" >&2
+  echo "Folio: ERROR — root-capable busybox not found" >&2
   exit 1
 fi
 
     progress "Using Root Busybox: $BB"
 
-    GUESTPATH="${FLUX_CHROOT:-/data/local/tmp/chrootGuest}"
+    GUESTPATH="${FLUX_CHROOT:-/data/local/folio/chroots/guest}"
 
     if [ -f "$GUESTPATH/.flux_configured" ] && \
        { [ -e "$GUESTPATH/bin/bash" ] || [ -e "$GUESTPATH/usr/bin/bash" ]; } && \

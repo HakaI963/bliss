@@ -33,6 +33,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -43,10 +45,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ivarna.fluxlinux.ui.theme.FrostHairline
 import com.ivarna.fluxlinux.ui.theme.FrostSurface
+import com.ivarna.fluxlinux.ui.theme.FrostTopSheen
 import com.ivarna.fluxlinux.ui.theme.FolioFrostBorder
 import com.ivarna.fluxlinux.ui.theme.TextMuted
 import com.ivarna.fluxlinux.ui.theme.TextPrimary
 import com.ivarna.fluxlinux.ui.theme.TextSecondary
+
+// Frost edge system: 0.75dp outer hairlines, 0.5dp inner dividers, full-round pills.
+private val FrostEdgeWidth = 0.75.dp
+private val FrostPillShape = RoundedCornerShape(50)
 
 fun folioSpring() = spring<Float>(dampingRatio = 0.78f, stiffness = 380f)
 
@@ -79,7 +86,17 @@ fun FrostContainer(
             .fillMaxWidth()
             .clip(RoundedCornerShape(corner))
             .background(FrostSurface)
-            .border(1.dp, FolioFrostBorder, RoundedCornerShape(corner))
+            .border(FrostEdgeWidth, FolioFrostBorder, RoundedCornerShape(corner))
+            .drawBehind {
+                // Soft inner sheen: the glass reads as lit from above.
+                drawRect(
+                    brush = Brush.verticalGradient(
+                        0f to FrostTopSheen,
+                        1f to Color.White.copy(alpha = 0f),
+                        endY = 28.dp.toPx()
+                    )
+                )
+            }
             .padding(vertical = 4.dp),
         content = content
     )
@@ -159,8 +176,12 @@ fun FrostPill(
     val fg = if (primary) Color(0xFF09090B) else TextPrimary
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(50))
+            .clip(FrostPillShape)
             .background(bg)
+            .then(
+                if (primary) Modifier
+                else Modifier.border(FrostEdgeWidth, FolioFrostBorder, FrostPillShape)
+            )
             .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 8.dp),
         contentAlignment = Alignment.Center
@@ -181,11 +202,17 @@ fun RowScope.FrostTabPill(
         animationSpec = spring(dampingRatio = 0.78f, stiffness = 380f),
         label = "pill"
     )
+    val edge by animateColorAsState(
+        if (selected) FrostHairline else Color.Transparent,
+        animationSpec = spring(dampingRatio = 0.78f, stiffness = 380f),
+        label = "pillEdge"
+    )
     Box(
         modifier = Modifier
             .weight(1f)
-            .clip(RoundedCornerShape(50))
+            .clip(FrostPillShape)
             .background(bg)
+            .border(FrostEdgeWidth, edge, FrostPillShape)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,

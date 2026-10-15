@@ -4,18 +4,14 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.graphics.luminance
-import com.ivarna.fluxlinux.ui.theme.FluxBackgroundEnd
-import com.ivarna.fluxlinux.ui.theme.FluxBackgroundMid
-import com.ivarna.fluxlinux.ui.theme.FluxBackgroundStart
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.haze
 
@@ -30,8 +26,14 @@ fun GlassScaffold(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(androidx.compose.material3.MaterialTheme.colorScheme.background)
+            .background(MaterialTheme.colorScheme.background)
     ) {
+        // Folio ambient backdrop: pure carbon + very faint drifting light pools.
+        // Sits behind the Scaffold and behind the floating nav overlay, and
+        // never installs pointer input, so it can never eat touches. Shared by
+        // every GlassScaffold caller (Home, install wizard, distro settings).
+        FolioAnimatedBackground(modifier = Modifier.fillMaxSize())
+
         Scaffold(
             containerColor = Color.Transparent,
             topBar = topBar,
@@ -49,11 +51,11 @@ fun GlassScaffold(
                 }
             }
         )
-        
+
         // Overlay Floating Bottom Bar
         Box(
             modifier = Modifier
-                .align(androidx.compose.ui.Alignment.BottomCenter)
+                .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
         ) {
             bottomBar()

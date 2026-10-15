@@ -10,7 +10,7 @@ do
         exec /bin/sh "$f" "$@"
     fi
 done
-echo "FluxLinux: setup_hw_accel_guest.sh not found — writing virgl"
+echo "Folio: setup_hw_accel_guest.sh not found — writing virgl"
 mkdir -p /etc/fluxlinux
 printf '%s\n' virgl > /etc/fluxlinux/gpu_mode
 exit 0

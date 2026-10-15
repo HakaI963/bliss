@@ -20,10 +20,10 @@ fi
 # setup_void_family.sh — Void Linux glibc aarch64 XFCE (proot + chroot). xbps.
 
 DISTRO_NAME="${1:-void}"
-echo "FluxLinux: Configuring ${DISTRO_NAME} (Void Family)..."
+echo "Folio: Configuring ${DISTRO_NAME} (Void Family)..."
 
 if [ "$(id -u)" -ne 0 ]; then
-    echo "FluxLinux: ERROR: must run as root inside the guest (got uid=$(id -u))."
+    echo "Folio: ERROR: must run as root inside the guest (got uid=$(id -u))."
     exit 1
 fi
 
@@ -32,7 +32,7 @@ _flux_ensure_tmp
 _flux_ensure_dns
 
 if ! command -v xbps-install >/dev/null 2>&1; then
-    echo "FluxLinux: ERROR: xbps-install not found"
+    echo "Folio: ERROR: xbps-install not found"
     exit 1
 fi
 
@@ -53,7 +53,7 @@ export SYSTEMD_OFFLINE=1
 
 _flux_log "xbps-install sync..."
 xbps-install -Sy || {
-    echo "FluxLinux: xbps sync failed (network / repos)"
+    echo "Folio: xbps sync failed (network / repos)"
     exit 1
 }
 # Rolling Void often requires updating xbps itself before any other transaction.
@@ -70,17 +70,26 @@ xbps-install -y dbus-x11 2>/dev/null || true
 
 _flux_ensure_dbus
 
-# Minimal XFCE only — do NOT install the `xfce4` metapackage (pulls ffmpeg,
-# gstreamer plugins, parole, … hundreds of extras under proot/chroot).
-_flux_log "Installing XFCE4 (minimal session)..."
-xbps-install -y \
-    xfce4-session xfce4-panel xfce4-settings xfce4-terminal \
-    xfdesktop xfwm4 \
-    || {
-        echo "FluxLinux: XFCE package install failed"
-        exit 1
-    }
-xbps-install -y Thunar 2>/dev/null || xbps-install -y thunar 2>/dev/null || true
+# Desktop gate: FLUX_DESKTOP (env mirror FLUX_DESKTOP_ENV) = xfce | kde | none.
+# Unset/empty → xfce (backward compat); xfce4 is normalized to xfce.
+DESKTOP_CHOICE="${FLUX_DESKTOP:-${FLUX_DESKTOP_ENV:-xfce}}"
+case "$DESKTOP_CHOICE" in
+    xfce4) DESKTOP_CHOICE=xfce ;;
+esac
+if [ "$DESKTOP_CHOICE" = "xfce" ]; then
+    # Minimal XFCE only — do NOT install the `xfce4` metapackage (pulls ffmpeg,
+    # gstreamer plugins, parole, … hundreds of extras under proot/chroot).
+    _flux_log "Installing XFCE4 (minimal session)..."
+    xbps-install -y \
+        xfce4-session xfce4-panel xfce4-settings xfce4-terminal \
+        xfdesktop xfwm4 \
+        || {
+            echo "Folio: XFCE package install failed"
+            exit 1
+        }
+    xbps-install -y Thunar 2>/dev/null || xbps-install -y thunar 2>/dev/null || true
+fi
+# Shared fonts + Mesa — needed by any desktop (best-effort).
 xbps-install -y adwaita-icon-theme dejavu-fonts-ttf mesa mesa-dri 2>/dev/null || true
 
 if ! ls /usr/lib/locale 2>/dev/null | grep -qi 'en_US'; then
@@ -91,7 +100,9 @@ if command -v _flux_ensure_en_us_locale >/dev/null 2>&1; then
     _flux_ensure_en_us_locale || exit 1
 fi
 
-_flux_require_startxfce4
+if [ "$DESKTOP_CHOICE" = "xfce" ]; then
+    _flux_require_startxfce4
+fi
 _flux_ensure_user
 _flux_ensure_sudo
 _flux_ensure_home
@@ -99,5 +110,5 @@ _flux_setup_pulse
 _flux_write_gpu_mode virgl
 _flux_fix_pm_writable
 
-echo "FluxLinux: ${DISTRO_NAME} Void setup complete!"
+echo "Folio: ${DISTRO_NAME} Void setup complete!"
 exit 0

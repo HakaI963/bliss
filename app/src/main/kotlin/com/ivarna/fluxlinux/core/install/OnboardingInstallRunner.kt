@@ -26,6 +26,12 @@ import java.util.concurrent.atomic.AtomicReference
  *
  * Distro identity from [DistroInstallProfile] (Debian + Alpine).
  *
+ * Desktop choice ([DesktopChoice]) is threaded to guest scripts as
+ * `FLUX_DESKTOP=xfce|kde|none` (exported in the base/family + chroot rootfs env)
+ * and drives which desktop components run: XFCE keeps today's family +
+ * customization path, KDE runs the distro's `kde_plasma` + `kde_customization`
+ * components (data-driven, Debian family only), NONE skips desktop packages.
+ *
  * Cancel: generation token + destroy active process; never mutates StateManager after cancel.
  * Overlapping [start] cancels the previous run first.
  */
@@ -72,10 +78,16 @@ class OnboardingInstallRunner(private val ctx: Context) {
      *
      * Starts [BaseInstallService] FGS immediately so the system does not kill the
      * process during long rootfs / package work.
+     *
+     * @param desktop requested base desktop; KDE silently falls back to XFCE when
+     *   the distro's component data has no `kde_plasma` (see [DesktopInstallSelection]).
+     * @param extras optional plan extras; empty = today's defaults (hw-accel on).
      */
     fun start(
         distroId: String,
         theme: String = "dark",
+        desktop: DesktopChoice = DesktopChoice.XFCE,
+        extras: Set<InstallExtra> = emptySet(),
         onProgress: (Progress) -> Unit
     ) {
         // Invalidate any in-flight job before resetting cancel flag
@@ -108,7 +120,10 @@ class OnboardingInstallRunner(private val ctx: Context) {
             return
         }
         val method = profile.method
-        val phases = BaseDesktopInstallPlan.phasesFor(method, profile.displayName)
+        val desktopChoice = DesktopInstallSelection.sanitize(distroId, desktop)
+        val phases = BaseDesktopInstallPlan.phasesFor(
+            method, profile.displayName, desktopChoice.envValue
+        )
         busy.set(true)
         lastNotifPercent = -1
         lastNotifLabel = ""
@@ -116,7 +131,7 @@ class OnboardingInstallRunner(private val ctx: Context) {
         try {
             BaseInstallService.start(
                 appCtx,
-                title = "FluxLinux — Installing",
+                title = "Folio — Installing",
                 text = "${profile.displayName} base desktop",
                 percent = 0
             )
@@ -129,10 +144,13 @@ class OnboardingInstallRunner(private val ctx: Context) {
                     postCancelled(onProgress, phases)
                     return@execute
                 }
+                if (desktopChoice != desktop) {
+                    log(phases, 0, onProgress, "KDE Plasma not available for this distro — using XFCE4")
+                }
                 if (method == "chroot") {
-                    runChroot(distroId, theme, phases, onProgress, gen)
+                    runChroot(distroId, theme, desktopChoice, extras, phases, onProgress, gen)
                 } else {
-                    runProot(distroId, theme, phases, onProgress, gen)
+                    runProot(distroId, theme, desktopChoice, extras, phases, onProgress, gen)
                 }
             } catch (e: Exception) {
                 if (!isStale(gen)) {
@@ -172,6 +190,8 @@ class OnboardingInstallRunner(private val ctx: Context) {
     private fun runProot(
         distroId: String,
         theme: String,
+        desktop: DesktopChoice,
+        extras: Set<InstallExtra>,
         phases: List<BaseDesktopInstallPlan.Phase>,
         onProgress: (Progress) -> Unit,
         gen: Int
@@ -231,9 +251,14 @@ class OnboardingInstallRunner(private val ctx: Context) {
         if (abortIfCancelled(gen, phases, onProgress)) return
         val bash = TermuxHostPaths.libBash(appCtx).absolutePath
         val installScript = TermuxHostPaths.hostScript(appCtx, "flux_install.sh").absolutePath
-        val setupB64 = BaseDesktopInstallPlan.familySetupB64(appCtx, theme, distroId)
+        val setupB64 = BaseDesktopInstallPlan.familySetupB64(
+            appCtx, theme, distroId, desktop.envValue
+        )
         val env = HostCommandBuilder.envMap(appCtx, forceHostSetup = false, includeTerm = false).apply {
             put("PYTHONUNBUFFERED", "1")
+            // FLUX_DESKTOP contract — family scripts gate desktop packages on it.
+            put("FLUX_DESKTOP", desktop.envValue)
+            put("FLUX_DESKTOP_ENV", desktop.envValue)
             put("FLUX_ROOTFS_PATH", "${TermuxHostPaths.HOME}/${profile.rootfsFileName}")
             put("FLUX_ROOTFS_NAME", profile.rootfsFileName)
             put("FLUX_ROOTFS_SHA256", profile.rootfsSha256)
@@ -260,71 +285,182 @@ class OnboardingInstallRunner(private val ctx: Context) {
             postFail(onProgress, phases, "${profile.displayName} rootfs missing after install")
             return
         }
-        if (!isProotXfceInstalled(appCtx, profile.prootName)) {
-            postFail(
-                onProgress, phases,
-                "XFCE not found after install (startxfce4 missing). Retry setup."
+        when (desktop) {
+            DesktopChoice.XFCE -> {
+                if (!isProotXfceInstalled(appCtx, profile.prootName)) {
+                    postFail(
+                        onProgress, phases,
+                        "XFCE not found after install (startxfce4 missing). Retry setup."
+                    )
+                    return
+                }
+            }
+            DesktopChoice.KDE -> {
+                val kdeScript = DesktopInstallSelection.componentScriptName(
+                    distroId, DesktopInstallSelection.COMPONENT_KDE_PLASMA
+                )
+                if (kdeScript == null) {
+                    postFail(onProgress, phases, "KDE Plasma component missing for $distroId")
+                    return
+                }
+                log(phases, rootfsIdx, onProgress, "Installing KDE Plasma desktop…")
+                val kdeOk = runProotGuestScript(
+                    phases, rootfsIdx, onProgress, gen,
+                    prootName = profile.prootName,
+                    scriptAssetPath = kdeScript,
+                    envPrefix = "FLUX_DESKTOP=${DesktopChoice.KDE.envValue}"
+                )
+                if (abortIfCancelled(gen, phases, onProgress)) return
+                if (!kdeOk || !isProotKdeInstalled(appCtx, profile.prootName)) {
+                    postFail(
+                        onProgress, phases,
+                        "KDE Plasma not found after install (startplasma-x11 missing). Retry."
+                    )
+                    return
+                }
+            }
+            DesktopChoice.NONE -> {
+                log(phases, rootfsIdx, onProgress, "Terminal base install — no desktop packages")
+            }
+        }
+        completePhase(
+            phases, rootfsIdx, onProgress,
+            when (desktop) {
+                DesktopChoice.XFCE -> "${profile.displayName} + XFCE installed"
+                DesktopChoice.KDE -> "${profile.displayName} + KDE Plasma installed"
+                DesktopChoice.NONE -> "${profile.displayName} rootfs installed (terminal base)"
+            }
+        )
+
+        enter(
+            phases, customIdx, onProgress,
+            when (desktop) {
+                DesktopChoice.XFCE -> "Themes, wallpapers, fonts…"
+                DesktopChoice.KDE -> "KDE theming, wallpapers, Zsh…"
+                DesktopChoice.NONE -> "No desktop customization (terminal only)"
+            }
+        )
+        if (abortIfCancelled(gen, phases, onProgress)) return
+        var customOk = false
+        when (desktop) {
+            DesktopChoice.XFCE -> {
+                // Native host extract into proot rootfs (avoids proot thrashing on Papirus).
+                // Skip guest re-extract when this succeeds or assets are already present.
+                log(phases, customIdx, onProgress, "Staging XFCE theme/icons on host (native tar)…")
+                val hostThemeOk = try {
+                    ProotXfceAssetInstaller.install(appCtx, theme, profile.prootName) { line ->
+                        if (!isStale(gen) && line.isNotBlank()) log(phases, customIdx, onProgress, line)
+                    }
+                } catch (e: Exception) {
+                    log(phases, customIdx, onProgress, "Host theme stage error: ${e.message}")
+                    false
+                }
+                if (abortIfCancelled(gen, phases, onProgress)) return
+                log(phases, customIdx, onProgress, "Staging Oh My Zsh on host (avoids proot hang)…")
+                val hostOmzOk = try {
+                    ProotZshBootstrap.install(appCtx, profile.prootName) { line ->
+                        if (!isStale(gen) && line.isNotBlank()) log(phases, customIdx, onProgress, line)
+                    }
+                } catch (e: Exception) {
+                    log(phases, customIdx, onProgress, "Host Oh My Zsh stage error: ${e.message}")
+                    false
+                }
+                if (abortIfCancelled(gen, phases, onProgress)) return
+                val skipAssets = if (hostThemeOk) "1" else "0"
+                val skipOmz = if (hostOmzOk) "1" else "0"
+                customOk = runProotGuestScript(
+                    phases, customIdx, onProgress, gen,
+                    prootName = profile.prootName,
+                    scriptAssetPath = profile.customizationScript,
+                    envPrefix = "FLUX_THEME=$theme " +
+                        "FLUX_SKIP_THEME_ICONS=$skipAssets " +
+                        "FLUX_SKIP_OMZ=$skipOmz " +
+                        "FLUX_SKIP_POKEMON=0 " +
+                        "FLUX_ASSET_DIR=/tmp/flux_xfce_assets"
+                )
+                if (abortIfCancelled(gen, phases, onProgress)) return
+                if (!customOk) {
+                    log(phases, customIdx, onProgress, "Customization failed or partial — you can retry from Distro Settings")
+                }
+            }
+            DesktopChoice.KDE -> {
+                // KDE customization downloads its own theme/icons/OMZ (no host staging).
+                val kdeCustomScript = DesktopInstallSelection.componentScriptName(
+                    distroId, DesktopInstallSelection.COMPONENT_KDE_CUSTOMIZATION
+                )
+                if (kdeCustomScript == null) {
+                    log(phases, customIdx, onProgress, "KDE customization component missing — skipped")
+                } else {
+                    customOk = runProotGuestScript(
+                        phases, customIdx, onProgress, gen,
+                        prootName = profile.prootName,
+                        scriptAssetPath = kdeCustomScript,
+                        envPrefix = "FLUX_THEME=$theme FLUX_DESKTOP=${DesktopChoice.KDE.envValue}"
+                    )
+                    if (abortIfCancelled(gen, phases, onProgress)) return
+                    if (!customOk) {
+                        log(
+                            phases, customIdx, onProgress,
+                            "KDE customization failed or partial — you can retry from Distro Settings"
+                        )
+                    }
+                }
+            }
+            DesktopChoice.NONE -> {
+                log(phases, customIdx, onProgress, "Terminal-only install — desktop customization skipped")
+            }
+        }
+
+        if (abortIfCancelled(gen, phases, onProgress)) return
+        val hwOk = if (hwAccelWanted(desktop, extras)) {
+            runHwAccelIfPresent(
+                profile, method = "proot", phases, customIdx, onProgress, gen, chrootPath = null
             )
-            return
-        }
-        completePhase(phases, rootfsIdx, onProgress, "${profile.displayName} + XFCE installed")
-
-        enter(phases, customIdx, onProgress, "Themes, wallpapers, fonts…")
-        if (abortIfCancelled(gen, phases, onProgress)) return
-        // Native host extract into proot rootfs (avoids proot thrashing on Papirus).
-        // Skip guest re-extract when this succeeds or assets are already present.
-        log(phases, customIdx, onProgress, "Staging XFCE theme/icons on host (native tar)…")
-        val hostThemeOk = try {
-            ProotXfceAssetInstaller.install(appCtx, theme, profile.prootName) { line ->
-                if (!isStale(gen) && line.isNotBlank()) log(phases, customIdx, onProgress, line)
-            }
-        } catch (e: Exception) {
-            log(phases, customIdx, onProgress, "Host theme stage error: ${e.message}")
+        } else {
+            log(
+                phases, customIdx, onProgress,
+                if (desktop == DesktopChoice.NONE) "Hardware acceleration skipped (terminal only)"
+                else "Hardware acceleration skipped (user choice)"
+            )
             false
         }
-        if (abortIfCancelled(gen, phases, onProgress)) return
-        log(phases, customIdx, onProgress, "Staging Oh My Zsh on host (avoids proot hang)…")
-        val hostOmzOk = try {
-            ProotZshBootstrap.install(appCtx, profile.prootName) { line ->
-                if (!isStale(gen) && line.isNotBlank()) log(phases, customIdx, onProgress, line)
+
+        completePhase(
+            phases, customIdx, onProgress,
+            when (desktop) {
+                DesktopChoice.XFCE -> "Customization done"
+                DesktopChoice.KDE -> "KDE customization done"
+                DesktopChoice.NONE -> "Terminal base ready"
             }
-        } catch (e: Exception) {
-            log(phases, customIdx, onProgress, "Host Oh My Zsh stage error: ${e.message}")
-            false
-        }
-        if (abortIfCancelled(gen, phases, onProgress)) return
-        val skipAssets = if (hostThemeOk) "1" else "0"
-        val skipOmz = if (hostOmzOk) "1" else "0"
-        val customOk = runProotGuestScript(
-            phases, customIdx, onProgress, gen,
-            prootName = profile.prootName,
-            scriptAssetPath = profile.customizationScript,
-            envPrefix = "FLUX_THEME=$theme " +
-                "FLUX_SKIP_THEME_ICONS=$skipAssets " +
-                "FLUX_SKIP_OMZ=$skipOmz " +
-                "FLUX_SKIP_POKEMON=0 " +
-                "FLUX_ASSET_DIR=/tmp/flux_xfce_assets"
         )
-        if (abortIfCancelled(gen, phases, onProgress)) return
-        if (!customOk) {
-            log(phases, customIdx, onProgress, "Customization failed or partial — you can retry from Distro Settings")
-        }
-
-        if (abortIfCancelled(gen, phases, onProgress)) return
-        val hwOk = runHwAccelIfPresent(
-            profile, method = "proot", phases, customIdx, onProgress, gen, chrootPath = null
-        )
-
-        completePhase(phases, customIdx, onProgress, "Customization done")
 
         if (abortIfCancelled(gen, phases, onProgress)) return
         StateManager.setDistroInstalled(appCtx, distroId, true)
-        StateManager.setComponentInstalled(appCtx, distroId, "xfce4_desktop", true)
+        when (desktop) {
+            DesktopChoice.XFCE -> {
+                StateManager.setComponentInstalled(
+                    appCtx, distroId, DesktopInstallSelection.COMPONENT_XFCE, true
+                )
+                if (customOk) {
+                    StateManager.setComponentInstalled(
+                        appCtx, distroId, DesktopInstallSelection.COMPONENT_CUSTOMIZATION, true
+                    )
+                }
+            }
+            DesktopChoice.KDE -> {
+                StateManager.setComponentInstalled(
+                    appCtx, distroId, DesktopInstallSelection.COMPONENT_KDE_PLASMA, true
+                )
+                if (customOk) {
+                    StateManager.setComponentInstalled(
+                        appCtx, distroId, DesktopInstallSelection.COMPONENT_KDE_CUSTOMIZATION, true
+                    )
+                }
+            }
+            DesktopChoice.NONE -> Unit
+        }
         if (hwOk) {
             StateManager.setComponentInstalled(appCtx, distroId, "hw_accel", true)
-        }
-        if (customOk) {
-            StateManager.setComponentInstalled(appCtx, distroId, "customization", true)
         }
         StateManager.triggerRefresh()
         postSuccess(onProgress, phases)
@@ -333,6 +469,8 @@ class OnboardingInstallRunner(private val ctx: Context) {
     private fun runChroot(
         distroId: String,
         theme: String,
+        desktop: DesktopChoice,
+        extras: Set<InstallExtra>,
         phases: List<BaseDesktopInstallPlan.Phase>,
         onProgress: (Progress) -> Unit,
         gen: Int
@@ -349,7 +487,7 @@ class OnboardingInstallRunner(private val ctx: Context) {
         if (!RootShell.isRootAvailable()) {
             postFail(
                 onProgress, phases,
-                "Root not available. Grant superuser to FluxLinux, then retry."
+                "Root not available. Grant superuser to Folio, then retry."
             )
             return
         }
@@ -428,6 +566,8 @@ class OnboardingInstallRunner(private val ctx: Context) {
                 "export FLUX_ROOTFS_URL='${profile.rootfsUrl}'; " +
                 "export FLUX_CHROOT='$chrootPath'; " +
                 "export FLUX_DISTRO_LABEL='$label'; " +
+                "export FLUX_DESKTOP='${desktop.envValue}'; " +
+                "export FLUX_DESKTOP_ENV='${desktop.envValue}'; " +
                 "export TERMUX_APP__PACKAGE_NAME='${TermuxHostPaths.PACKAGE}'; " +
                 "export TERMUX__HOME='$envHome'; " +
                 "export PYTHONUNBUFFERED=1; " +
@@ -459,69 +599,191 @@ class OnboardingInstallRunner(private val ctx: Context) {
         log(phases, rootfsIdx, onProgress, "Chroot rootfs verified (root probe)")
         completePhase(phases, rootfsIdx, onProgress, "Chroot rootfs ready")
 
-        enter(phases, xfceIdx, onProgress, "Installing XFCE packages…")
+        enter(
+            phases, xfceIdx, onProgress,
+            when (desktop) {
+                DesktopChoice.XFCE -> "Installing XFCE packages…"
+                DesktopChoice.KDE -> "Installing KDE Plasma packages…"
+                DesktopChoice.NONE -> "Configuring terminal base…"
+            }
+        )
         if (abortIfCancelled(gen, phases, onProgress)) return
-        val familyPayload = BaseDesktopInstallPlan.familySetupPayload(appCtx, theme, distroId)
+        val familyPayload = BaseDesktopInstallPlan.familySetupPayload(
+            appCtx, theme, distroId, desktop.envValue
+        )
         val familyExit = runChrootGuestBlocking(
             familyPayload, user = "root", phases, xfceIdx, onProgress, chrootPath
         )
         if (abortIfCancelled(gen, phases, onProgress)) return
         if (familyExit != 0) {
-            postFail(onProgress, phases, "XFCE setup failed (exit $familyExit)")
-            return
-        }
-        if (!TerminalLauncher.isChrootXfceInstalled(chrootPath)) {
-            postFail(
-                onProgress, phases,
-                "XFCE not found after family setup (startxfce4 missing). Retry."
-            )
-            return
-        }
-        completePhase(phases, xfceIdx, onProgress, "XFCE installed")
-
-        enter(phases, customIdx, onProgress, "Themes, wallpapers, fonts…")
-        if (abortIfCancelled(gen, phases, onProgress)) return
-        // Stage theme/icon/cursor/wallpaper into the chroot guest /tmp (root copy).
-        // The customization script extracts from /tmp/flux_xfce_assets with guest
-        // tar; icons have no download fallback, so this staging is mandatory.
-        log(phases, customIdx, onProgress, "Staging XFCE theme/icons into chroot…")
-        try {
-            com.ivarna.fluxlinux.core.install.ProotXfceAssetInstaller.installToChroot(
-                appCtx, theme, chrootPath
-            ) { line ->
-                if (!isStale(gen) && line.isNotBlank()) log(phases, customIdx, onProgress, line)
+            val setupLabel = when (desktop) {
+                DesktopChoice.XFCE -> "XFCE"
+                DesktopChoice.KDE -> "KDE base"
+                DesktopChoice.NONE -> "Base system"
             }
-        } catch (e: Exception) {
-            log(phases, customIdx, onProgress, "chroot theme stage error: ${e.message}")
+            postFail(onProgress, phases, "$setupLabel setup failed (exit $familyExit)")
+            return
         }
-        val customPayload = BaseDesktopInstallPlan.customizationPayload(appCtx, theme, distroId)
-        val customExit = runChrootGuestBlocking(
-            customPayload, user = "root", phases, customIdx, onProgress, chrootPath
+        when (desktop) {
+            DesktopChoice.XFCE -> {
+                if (!TerminalLauncher.isChrootXfceInstalled(chrootPath)) {
+                    postFail(
+                        onProgress, phases,
+                        "XFCE not found after family setup (startxfce4 missing). Retry."
+                    )
+                    return
+                }
+            }
+            DesktopChoice.KDE -> {
+                val kdePayload = BaseDesktopInstallPlan.kdePlasmaPayload(appCtx, theme, distroId)
+                if (kdePayload == null) {
+                    postFail(onProgress, phases, "KDE Plasma component missing for $distroId")
+                    return
+                }
+                val kdeExit = runChrootGuestBlocking(
+                    kdePayload, user = "root", phases, xfceIdx, onProgress, chrootPath
+                )
+                if (abortIfCancelled(gen, phases, onProgress)) return
+                if (kdeExit != 0) {
+                    postFail(onProgress, phases, "KDE Plasma setup failed (exit $kdeExit)")
+                    return
+                }
+                if (!isChrootKdeInstalled(chrootPath)) {
+                    postFail(
+                        onProgress, phases,
+                        "KDE Plasma not found after setup (startplasma-x11 missing). Retry."
+                    )
+                    return
+                }
+            }
+            DesktopChoice.NONE -> {
+                log(phases, xfceIdx, onProgress, "Terminal base install — no desktop packages")
+            }
+        }
+        completePhase(
+            phases, xfceIdx, onProgress,
+            when (desktop) {
+                DesktopChoice.XFCE -> "XFCE installed"
+                DesktopChoice.KDE -> "KDE Plasma installed"
+                DesktopChoice.NONE -> "Base system ready"
+            }
+        )
+
+        enter(
+            phases, customIdx, onProgress,
+            when (desktop) {
+                DesktopChoice.XFCE -> "Themes, wallpapers, fonts…"
+                DesktopChoice.KDE -> "KDE theming, wallpapers, Zsh…"
+                DesktopChoice.NONE -> "No desktop customization (terminal only)"
+            }
         )
         if (abortIfCancelled(gen, phases, onProgress)) return
-        if (customExit != 0) {
-            log(phases, customIdx, onProgress, "Customization failed or partial (exit $customExit)")
+        var customOk = false
+        when (desktop) {
+            DesktopChoice.XFCE -> {
+                // Stage theme/icon/cursor/wallpaper into the chroot guest /tmp (root copy).
+                // The customization script extracts from /tmp/flux_xfce_assets with guest
+                // tar; icons have no download fallback, so this staging is mandatory.
+                log(phases, customIdx, onProgress, "Staging XFCE theme/icons into chroot…")
+                try {
+                    com.ivarna.fluxlinux.core.install.ProotXfceAssetInstaller.installToChroot(
+                        appCtx, theme, chrootPath
+                    ) { line ->
+                        if (!isStale(gen) && line.isNotBlank()) log(phases, customIdx, onProgress, line)
+                    }
+                } catch (e: Exception) {
+                    log(phases, customIdx, onProgress, "chroot theme stage error: ${e.message}")
+                }
+                val customPayload = BaseDesktopInstallPlan.customizationPayload(appCtx, theme, distroId)
+                val customExit = runChrootGuestBlocking(
+                    customPayload, user = "root", phases, customIdx, onProgress, chrootPath
+                )
+                if (abortIfCancelled(gen, phases, onProgress)) return
+                if (customExit != 0) {
+                    log(phases, customIdx, onProgress, "Customization failed or partial (exit $customExit)")
+                }
+                customOk = customExit == 0
+            }
+            DesktopChoice.KDE -> {
+                // KDE customization downloads its own theme/icons/OMZ — no host staging.
+                val customPayload = BaseDesktopInstallPlan.customizationPayload(
+                    appCtx, theme, distroId, desktop.envValue
+                )
+                val customExit = runChrootGuestBlocking(
+                    customPayload, user = "root", phases, customIdx, onProgress, chrootPath
+                )
+                if (abortIfCancelled(gen, phases, onProgress)) return
+                if (customExit != 0) {
+                    log(phases, customIdx, onProgress, "KDE customization failed or partial (exit $customExit)")
+                }
+                customOk = customExit == 0
+            }
+            DesktopChoice.NONE -> {
+                log(phases, customIdx, onProgress, "Terminal-only install — desktop customization skipped")
+            }
         }
 
         if (abortIfCancelled(gen, phases, onProgress)) return
-        val hwOk = runHwAccelIfPresent(
-            profile, method = "chroot", phases, customIdx, onProgress, gen, chrootPath = chrootPath
-        )
+        val hwOk = if (hwAccelWanted(desktop, extras)) {
+            runHwAccelIfPresent(
+                profile, method = "chroot", phases, customIdx, onProgress, gen, chrootPath = chrootPath
+            )
+        } else {
+            log(
+                phases, customIdx, onProgress,
+                if (desktop == DesktopChoice.NONE) "Hardware acceleration skipped (terminal only)"
+                else "Hardware acceleration skipped (user choice)"
+            )
+            false
+        }
 
-        completePhase(phases, customIdx, onProgress, "Customization done")
+        completePhase(
+            phases, customIdx, onProgress,
+            when (desktop) {
+                DesktopChoice.XFCE -> "Customization done"
+                DesktopChoice.KDE -> "KDE customization done"
+                DesktopChoice.NONE -> "Terminal base ready"
+            }
+        )
 
         if (abortIfCancelled(gen, phases, onProgress)) return
         StateManager.setDistroInstalled(appCtx, distroId, true)
-        StateManager.setComponentInstalled(appCtx, distroId, "xfce4_desktop", true)
+        when (desktop) {
+            DesktopChoice.XFCE -> {
+                StateManager.setComponentInstalled(
+                    appCtx, distroId, DesktopInstallSelection.COMPONENT_XFCE, true
+                )
+                if (customOk) {
+                    StateManager.setComponentInstalled(
+                        appCtx, distroId, DesktopInstallSelection.COMPONENT_CUSTOMIZATION, true
+                    )
+                }
+            }
+            DesktopChoice.KDE -> {
+                StateManager.setComponentInstalled(
+                    appCtx, distroId, DesktopInstallSelection.COMPONENT_KDE_PLASMA, true
+                )
+                if (customOk) {
+                    StateManager.setComponentInstalled(
+                        appCtx, distroId, DesktopInstallSelection.COMPONENT_KDE_CUSTOMIZATION, true
+                    )
+                }
+            }
+            DesktopChoice.NONE -> Unit
+        }
         if (hwOk) {
             StateManager.setComponentInstalled(appCtx, distroId, "hw_accel", true)
-        }
-        if (customExit == 0) {
-            StateManager.setComponentInstalled(appCtx, distroId, "customization", true)
         }
         StateManager.triggerRefresh()
         postSuccess(onProgress, phases)
     }
+
+    /**
+     * Hardware acceleration runs for desktop installs unless the user opted out
+     * ([InstallExtra.SKIP_HW_ACCEL]); terminal-only installs never run it.
+     */
+    private fun hwAccelWanted(desktop: DesktopChoice, extras: Set<InstallExtra>): Boolean =
+        desktop != DesktopChoice.NONE && InstallExtra.SKIP_HW_ACCEL !in extras
 
     /**
      * Run the guest hw-accel installer with host-detected FLUX_GPU.
@@ -862,7 +1124,7 @@ class OnboardingInstallRunner(private val ctx: Context) {
         try {
             BaseInstallService.update(
                 appCtx,
-                title = "FluxLinux — $label",
+                title = "Folio — $label",
                 text = detail,
                 percent = percent
             )
@@ -875,6 +1137,33 @@ class OnboardingInstallRunner(private val ctx: Context) {
         val root = File(ctx.filesDir, "usr/var/lib/proot-distro/containers/$prootName/rootfs")
         return File(root, "usr/bin/startxfce4").exists() ||
             File(root, "usr/sbin/startxfce4").exists()
+    }
+
+    private fun isProotKdeInstalled(ctx: Context, prootName: String = "debian"): Boolean {
+        val root = File(ctx.filesDir, "usr/var/lib/proot-distro/containers/$prootName/rootfs")
+        return File(root, "usr/bin/startplasma-x11").exists() ||
+            File(root, "usr/bin/plasmashell").exists()
+    }
+
+    /** Mirror of ChrootDetection.isXfceInstalled for KDE Plasma — background thread only. */
+    private fun isChrootKdeInstalled(
+        chrootPath: String = com.ivarna.fluxlinux.core.root.ChrootPaths.CHROOT_PATH
+    ): Boolean {
+        val startPlasma = "$chrootPath/usr/bin/startplasma-x11"
+        val plasmaShell = "$chrootPath/usr/bin/plasmashell"
+        if (File(startPlasma).exists() || File(plasmaShell).exists()) return true
+        if (!RootShell.isRootAvailable()) return false
+        // Avoid blocking the main thread
+        if (Looper.myLooper() == Looper.getMainLooper()) return false
+        return try {
+            RootShell.capture(
+                "if [ -e '$startPlasma' ] || [ -e '$plasmaShell' ]; " +
+                    "then echo YES; else echo NO; fi",
+                timeoutMs = 8_000L
+            ).contains("YES")
+        } catch (_: Exception) {
+            false
+        }
     }
 
     companion object {

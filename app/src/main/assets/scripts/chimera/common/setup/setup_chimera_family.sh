@@ -25,10 +25,10 @@ fi
 #   - no bash/useradd/sudo in bootstrap — install shadow+bash BEFORE user creation
 
 DISTRO_NAME="${1:-chimera}"
-echo "FluxLinux: Configuring ${DISTRO_NAME} (Chimera Family)..."
+echo "Folio: Configuring ${DISTRO_NAME} (Chimera Family)..."
 
 if [ "$(id -u)" -ne 0 ]; then
-    echo "FluxLinux: ERROR: must run as root inside the guest (got uid=$(id -u))."
+    echo "Folio: ERROR: must run as root inside the guest (got uid=$(id -u))."
     exit 1
 fi
 
@@ -36,7 +36,7 @@ _flux_ensure_tmp
 _flux_ensure_dns
 
 if ! command -v apk >/dev/null 2>&1; then
-    echo "FluxLinux: ERROR: apk not found"
+    echo "Folio: ERROR: apk not found"
     exit 1
 fi
 
@@ -47,7 +47,7 @@ printf 'cache-packages\n' > /etc/apk/config
 
 _flux_log "apk update..."
 apk update || {
-    echo "FluxLinux: apk update failed (repos/network)"
+    echo "Folio: apk update failed (repos/network)"
     exit 1
 }
 
@@ -61,7 +61,7 @@ if ! apk add bash shadow opendoas ca-certificates curl wget2 unzip gtar xz \
         cmd:wget2 cmd:unzip cmd:gtar cmd:xz cmd:git cmd:zsh cmd:python \
         cmd:dbus-run-session \
         fonts-dejavu || {
-            echo "FluxLinux: base package install failed"
+            echo "Folio: base package install failed"
             exit 1
         }
 fi
@@ -82,25 +82,35 @@ _flux_log "Enabling user repo (chimera-repo-user)..."
 apk add chimera-repo-user 2>/dev/null || true
 apk update || true
 
-_flux_log "Installing XFCE4 (targeted — never the xfce4 metapackage)..."
-if ! apk add xfce4-session xfce4-panel xfce4-settings xfce4-terminal \
-        xfdesktop xfwm4 thunar \
-        mesa mesa-dri; then
-    _flux_log "XFCE pkg names differ — retrying via cmd: virtual providers"
-    apk add cmd:startxfce4 cmd:xfce4-panel cmd:xfce4-settings \
-        cmd:xfce4-terminal cmd:xfdesktop cmd:xfwm4 cmd:thunar \
-        mesa mesa-dri || {
-            echo "FluxLinux: XFCE install failed"
-            exit 1
-        }
-fi
+# Desktop gate: FLUX_DESKTOP (env mirror FLUX_DESKTOP_ENV) = xfce | kde | none.
+# Unset/empty → xfce (backward compat); xfce4 is normalized to xfce.
+DESKTOP_CHOICE="${FLUX_DESKTOP:-${FLUX_DESKTOP_ENV:-xfce}}"
+case "$DESKTOP_CHOICE" in
+    xfce4) DESKTOP_CHOICE=xfce ;;
+esac
 
-# startxfce4 may land outside /usr/bin (e.g. /usr/libexec) — pin a known path
-# so host probes (Kotlin + start_guest_gui.sh) find it.
-if [ ! -e /usr/bin/startxfce4 ] && command -v startxfce4 >/dev/null 2>&1; then
-    _sx="$(command -v startxfce4)"
-    ln -sf "$_sx" /usr/bin/startxfce4 2>/dev/null || true
-    _flux_log "linked startxfce4: $_sx → /usr/bin/startxfce4"
+# Shared Mesa — needed by any desktop (best-effort; names may differ on Chimera).
+apk add mesa mesa-dri 2>/dev/null || true
+
+if [ "$DESKTOP_CHOICE" = "xfce" ]; then
+    _flux_log "Installing XFCE4 (targeted — never the xfce4 metapackage)..."
+    if ! apk add xfce4-session xfce4-panel xfce4-settings xfce4-terminal \
+            xfdesktop xfwm4 thunar; then
+        _flux_log "XFCE pkg names differ — retrying via cmd: virtual providers"
+        apk add cmd:startxfce4 cmd:xfce4-panel cmd:xfce4-settings \
+            cmd:xfce4-terminal cmd:xfdesktop cmd:xfwm4 cmd:thunar || {
+                echo "Folio: XFCE install failed"
+                exit 1
+            }
+    fi
+
+    # startxfce4 may land outside /usr/bin (e.g. /usr/libexec) — pin a known path
+    # so host probes (Kotlin + start_guest_gui.sh) find it.
+    if [ ! -e /usr/bin/startxfce4 ] && command -v startxfce4 >/dev/null 2>&1; then
+        _sx="$(command -v startxfce4)"
+        ln -sf "$_sx" /usr/bin/startxfce4 2>/dev/null || true
+        _flux_log "linked startxfce4: $_sx → /usr/bin/startxfce4"
+    fi
 fi
 
 # dbus machine-id: dbus-uuidgen if present; else write a hex id.
@@ -120,7 +130,9 @@ if [ ! -e /var/lib/dbus/machine-id ]; then
         || cp -f /etc/machine-id /var/lib/dbus/machine-id 2>/dev/null || true
 fi
 
-_flux_require_startxfce4
+if [ "$DESKTOP_CHOICE" = "xfce" ]; then
+    _flux_require_startxfce4
+fi
 _flux_ensure_groups
 _flux_ensure_user
 _flux_ensure_sudo
@@ -130,5 +142,5 @@ _flux_ensure_en_us_locale || exit 1
 _flux_write_gpu_mode virgl
 _flux_fix_pm_writable
 
-echo "FluxLinux: ${DISTRO_NAME} Chimera setup complete!"
+echo "Folio: ${DISTRO_NAME} Chimera setup complete!"
 exit 0

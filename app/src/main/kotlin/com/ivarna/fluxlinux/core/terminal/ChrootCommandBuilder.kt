@@ -25,7 +25,7 @@ object ChrootCommandBuilder {
         ensureHelperScript(ctx) // also stages the BusyBox resolver
         RootShell.resolveBusyBox()
         // Shell comes from loginShell; helper resolves the real binary as root
-        // (app uid cannot stat /data/local/tmp). When loginShell is null (legacy
+        // (app uid cannot stat /data/local/folio). When loginShell is null (legacy
         // callers), flux stays zsh and root stays bash (sh on Alpine paths).
         val isAlpine = chrootPath.contains("Alpine", ignoreCase = true)
         val fluxFlag = loginShell?.chrootFlag ?: "zsh"
@@ -66,7 +66,7 @@ object ChrootCommandBuilder {
         val isInteractive = GuestLoginShell.isInteractiveLogin(shellCmd)
 
         // Always `sh $HELPER` (not bare exec of script) — SELinux often blocks exec of
-        // /data/local/tmp/*.sh; /system/bin/sh interpreting the script is reliable.
+        // /data/local/folio/helpers/*.sh; /system/bin/sh interpreting the script is reliable.
         return when {
             isInteractive && u == "root" -> {
                 val wd = workdir?.let { " --workdir ${shellSingleQuote(it)}" } ?: ""

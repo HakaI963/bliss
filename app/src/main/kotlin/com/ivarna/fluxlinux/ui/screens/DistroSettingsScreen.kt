@@ -111,6 +111,18 @@ fun DistroSettingsScreen(
     var showUninstallDialog by remember { mutableStateOf(false) }
     var pendingUninstallComponent by remember { mutableStateOf<DistroComponent?>(null) }
 
+    // Honest re-run subtitle: the base reinstall follows whichever desktop this
+    // distro actually carries (XFCE4 / KDE Plasma), not a hardcoded "XFCE".
+    val reinstallSubtitle = remember(distro.id, refreshKey) {
+        when {
+            StateManager.isComponentInstalled(context, distro.id, "kde_plasma") ->
+                "Rootfs + KDE Plasma + customization"
+            StateManager.isComponentInstalled(context, distro.id, "xfce4_desktop") ->
+                "Rootfs + XFCE + customization"
+            else -> "Rootfs + desktop + customization"
+        }
+    }
+
     var showThemeSheet by remember { mutableStateOf(false) }
     var showGpuSheet by remember { mutableStateOf(false) }
     var activeComponent by remember { mutableStateOf<DistroComponent?>(null) }
@@ -224,7 +236,7 @@ fun DistroSettingsScreen(
                                         modifier = Modifier
                                             .size(8.dp)
                                             .clip(CircleShape)
-                                            .background(Color(0xFF22C55E))
+                                            .background(TextPrimary)
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(
@@ -260,7 +272,7 @@ fun DistroSettingsScreen(
                             Spacer(modifier = Modifier.width(14.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text("Re-run installation script", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = TextPrimary)
-                                Text("Rootfs + XFCE + customization", fontSize = 12.sp, color = TextMuted, maxLines = 1)
+                                Text(reinstallSubtitle, fontSize = 12.sp, color = TextMuted, maxLines = 1)
                             }
                             FrostPill(text = "Re-run", onClick = onReinstallDistro)
                         }
@@ -528,7 +540,19 @@ fun DistroSettingsScreen(
                         onClick = {
                             val comp = activeComponent
                             showThemeSheet = false
-                            if (comp != null) onInstallComponent(comp, mapOf("FLUX_THEME" to selectedTheme))
+                            if (comp != null) {
+                                // KDE customization needs to know it is KDE so the
+                                // guest script picks the KDE config set.
+                                val desktopEnv = if (comp.id == "kde_customization") {
+                                    "FLUX_DESKTOP" to "kde"
+                                } else {
+                                    "FLUX_DESKTOP" to "xfce"
+                                }
+                                onInstallComponent(
+                                    comp,
+                                    mapOf("FLUX_THEME" to selectedTheme, desktopEnv)
+                                )
+                            }
                         }
                     )
                 }
@@ -778,10 +802,10 @@ private fun ComponentSheetRow(
                         Box(
                             modifier = Modifier
                                 .clip(CircleShape)
-                                .background(Color(0xFF22C55E).copy(alpha = 0.15f))
+                                .background(TextPrimary.copy(alpha = 0.15f))
                                 .padding(horizontal = 8.dp, vertical = 2.dp)
                         ) {
-                            Text("Installed", fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF22C55E))
+                            Text("Installed", fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
                         }
                     }
                 }

@@ -4,6 +4,9 @@ import android.content.Intent
 import android.content.Context
 import com.ivarna.fluxlinux.core.data.Distro
 import com.ivarna.fluxlinux.core.data.ScriptManager
+import com.ivarna.fluxlinux.core.root.BusyBoxPaths
+import com.ivarna.fluxlinux.core.root.ChrootPaths
+import com.ivarna.fluxlinux.core.terminal.TermuxHostPaths
 
 /**
  * Legacy external-Termux intent builder.
@@ -49,7 +52,7 @@ object TermuxIntentFactory {
      * A simple "Ping" command to check if connection works.
      */
     fun buildTestConnectionIntent(): Intent {
-        return buildRunCommandIntent("echo 'FluxLinux: Connection Established!' && sleep 2")
+        return buildRunCommandIntent("echo 'Folio: Connection Established!' && sleep 2")
     }
 
     /**
@@ -114,21 +117,21 @@ object TermuxIntentFactory {
         
         val command = when {
             distroId == "termux" -> {
-                "pkg uninstall -y xfce4 xfce4-terminal tigervnc && echo 'FluxLinux: Termux Native Desktop Removed.' && sleep 1 && am start -a android.intent.action.VIEW -d \"$callbackUrl\""
+                "pkg uninstall -y xfce4 xfce4-terminal tigervnc && echo 'Folio: Termux Native Desktop Removed.' && sleep 1 && am start -a android.intent.action.VIEW -d \"$callbackUrl\""
             }
             distroId == "debian13_chroot" -> {
                 // Chroot: Inline uninstall logic (unmount, remove, callback)
                 // This avoids dependency on pre-deployed script files
                 """
                 su -c '
-                DEBIANPATH="/data/local/tmp/chrootDebian13"
+                DEBIANPATH="${ChrootPaths.DEBIAN_CHROOT_PATH}"
                 echo "Unmounting filesystems..."
                 for mnt in $(grep "${'$'}DEBIANPATH" /proc/mounts | awk "{print \${'$'}2}" | sort -r); do
                     umount -l "${'$'}mnt" 2>/dev/null
                 done
                 echo "Removing chroot directory..."
                 rm -rf "${'$'}DEBIANPATH"
-                rm -f /data/local/tmp/start_debian13*.sh /data/local/tmp/enter_debian13.sh /data/local/tmp/run_debian13_root.sh /data/local/tmp/stop_debian13*.sh /data/local/tmp/uninstall_debian13.sh
+                rm -f ${ChrootPaths.HELPERS_DIR}/start_debian13*.sh ${ChrootPaths.HELPERS_DIR}/enter_debian13.sh ${ChrootPaths.HELPERS_DIR}/run_debian13_root.sh ${ChrootPaths.HELPERS_DIR}/stop_debian13*.sh ${ChrootPaths.HELPERS_DIR}/uninstall_debian13.sh
                 echo "Chroot removed successfully!"
                 am start -a android.intent.action.VIEW -d "$callbackUrl"
                 '
@@ -138,14 +141,14 @@ object TermuxIntentFactory {
                 // Chroot: Inline uninstall logic
                 """
                 su -c '
-                DEBIANPATH="/data/local/tmp/chrootDebian"
+                DEBIANPATH="${ChrootPaths.DEBIAN_CHROOT_PATH}"
                 echo "Unmounting filesystems..."
                 for mnt in $(grep "${'$'}DEBIANPATH" /proc/mounts | awk "{print \${'$'}2}" | sort -r); do
                     umount -l "${'$'}mnt" 2>/dev/null
                 done
                 echo "Removing chroot directory..."
                 rm -rf "${'$'}DEBIANPATH"
-                rm -f /data/local/tmp/start_debian*.sh /data/local/tmp/enter_debian.sh /data/local/tmp/stop_debian*.sh /data/local/tmp/uninstall_debian*.sh
+                rm -f ${ChrootPaths.HELPERS_DIR}/start_debian*.sh ${ChrootPaths.HELPERS_DIR}/enter_debian.sh ${ChrootPaths.HELPERS_DIR}/stop_debian*.sh ${ChrootPaths.HELPERS_DIR}/uninstall_debian*.sh
                 echo "Chroot removed successfully!"
                 am start -a android.intent.action.VIEW -d "$callbackUrl"
                 '
@@ -153,19 +156,19 @@ object TermuxIntentFactory {
             }
             distroId.contains("chroot") -> {
                 // Generic chroot fallback
-                "su -c \"rm -rf /data/local/tmp/chroot*\" && echo 'Chroot removed.' && am start -a android.intent.action.VIEW -d \"$callbackUrl\""
+                "su -c \"rm -rf ${ChrootPaths.CHROOTS_DIR}/*\" && echo 'Chroot removed.' && am start -a android.intent.action.VIEW -d \"$callbackUrl\""
             }
             else -> {
                 // PRoot: Try proot-distro remove, retry once if it fails, then fallback to manual removal
                 """
                 echo "Attempting to remove $distroId..."
                 if proot-distro remove $distroId 2>/dev/null; then
-                    echo "FluxLinux: $distroId Uninstalled."
+                    echo "Folio: $distroId Uninstalled."
                 else
                     echo "First attempt failed, retrying..."
                     sleep 1
                     if proot-distro remove $distroId 2>/dev/null; then
-                        echo "FluxLinux: $distroId Uninstalled."
+                        echo "Folio: $distroId Uninstalled."
                     else
                         echo "proot-distro command failed, using manual removal..."
                         rm -rf ${'$'}PREFIX/var/lib/proot-distro/containers/$distroId \
@@ -175,7 +178,7 @@ object TermuxIntentFactory {
                                 /system/bin/su -c "rm -rf ${'$'}PREFIX/var/lib/proot-distro/containers/$distroId" </dev/null
                             fi
                         fi
-                        echo "FluxLinux: $distroId manually removed."
+                        echo "Folio: $distroId manually removed."
                     fi
                 fi
                 sleep 2
@@ -299,7 +302,7 @@ object TermuxIntentFactory {
         
         // Generate a random ID for the EOF marker to avoid collisions
         val eofMarker = "EOF_FLUX_INSTALL_${System.currentTimeMillis()}"
-        val targetPath = if (isChroot) "/data/local/tmp/flux_full_install.sh" else "$TERMUX_HOME_DIR/flux_full_install.sh"
+        val targetPath = if (isChroot) "${ChrootPaths.STAGING_DIR}/flux_full_install.sh" else "$TERMUX_HOME_DIR/flux_full_install.sh"
         val runnerCmd = if (isChroot) "sh" else "bash"
         
         // Command to decode: echo "..." | base64 -d | gunzip > script.sh
@@ -308,6 +311,7 @@ object TermuxIntentFactory {
         
         if (isChroot) {
             runnerScript.append("su -c '\n")
+            runnerScript.append("mkdir -p ${ChrootPaths.STAGING_DIR}\n")
         }
         
         runnerScript.append("cat << '$eofMarker' > $targetPath.b64\n")
@@ -329,7 +333,7 @@ object TermuxIntentFactory {
         runnerScript.append("if [ $? -eq 0 ]; then\n")
         runnerScript.append("    am start -a android.intent.action.VIEW -d \"$callbackUrl\"\n")
         runnerScript.append("else\n")
-        runnerScript.append("    echo \"FluxLinux: Installation Failed!\"\n")
+        runnerScript.append("    echo \"Folio: Installation Failed!\"\n")
         runnerScript.append("    am start -a android.intent.action.VIEW -d \"$errorUrl\"\n")
         runnerScript.append("fi\n")
         
@@ -356,17 +360,17 @@ object TermuxIntentFactory {
         
         if (distroId == "debian_chroot") {
             // Launch Chroot CLI using Android Root (su)
-            return buildRunCommandIntent("su -c \"sh /data/local/tmp/enter_debian.sh\"", runInBackground = false)
+            return buildRunCommandIntent("su -c \"sh ${ChrootPaths.HELPERS_DIR}/enter_debian.sh\"", runInBackground = false)
         }
 
         if (distroId == "debian13_chroot") {
             // Launch Debian 13 Chroot CLI using Android Root (su)
-            return buildRunCommandIntent("su -c \"sh /data/local/tmp/enter_debian13.sh\"", runInBackground = false)
+            return buildRunCommandIntent("su -c \"sh ${ChrootPaths.HELPERS_DIR}/enter_debian13.sh\"", runInBackground = false)
         }
         
         if (distroId == "arch_chroot") {
             // Launch Arch Chroot CLI (via generated script)
-            return buildRunCommandIntent("su -c \"sh /data/local/tmp/enter_arch.sh\"", runInBackground = false)
+            return buildRunCommandIntent("su -c \"sh ${ChrootPaths.HELPERS_DIR}/enter_arch.sh\"", runInBackground = false)
         }
         
         // Default to 'flux' user if setup, fallback to root if not (proot-distro handles login)
@@ -381,17 +385,17 @@ object TermuxIntentFactory {
     fun buildLaunchRootCliIntent(distroId: String): Intent {
         if (distroId == "debian_chroot") {
             // Launch Chroot CLI as Root
-            return buildRunCommandIntent("su -c \"sh /data/local/tmp/enter_debian_root.sh\"", runInBackground = false)
+            return buildRunCommandIntent("su -c \"sh ${ChrootPaths.HELPERS_DIR}/enter_debian_root.sh\"", runInBackground = false)
         }
 
         if (distroId == "debian13_chroot") {
             // Launch Debian 13 Chroot CLI as Root
-            return buildRunCommandIntent("su -c \"sh /data/local/tmp/enter_debian13_root.sh\"", runInBackground = false)
+            return buildRunCommandIntent("su -c \"sh ${ChrootPaths.HELPERS_DIR}/enter_debian13_root.sh\"", runInBackground = false)
         }
         
         if (distroId == "arch_chroot") {
             // Launch Arch Chroot CLI as Root
-            return buildRunCommandIntent("su -c \"sh /data/local/tmp/enter_arch_root.sh\"", runInBackground = false)
+            return buildRunCommandIntent("su -c \"sh ${ChrootPaths.HELPERS_DIR}/enter_arch_root.sh\"", runInBackground = false)
         }
         
         // For non-chroot distros, fall back to regular CLI (proot doesn't support true root)
@@ -454,15 +458,15 @@ object TermuxIntentFactory {
 
         if (distroId == "debian_chroot") {
             // For Chroot, we must decode the script on the HOST (Android)
-            // Write to Termux's tmp directory since that's what gets mounted into the chroot.
+            // Write to the host prefix tmp (bound into the chroot at /tmp).
             // Capture the chroot's exit code inside the su -c block, then fire
             // the matching callback after su exits.
-            val termuxTmp = "/data/data/com.termux/files/usr/tmp"
+            val hostTmp = TermuxHostPaths.TMPDIR
             val innerCommand = """
                 su -c '
-                mkdir -p $termuxTmp;
-                echo "$scriptB64" | base64 -d > $termuxTmp/flux_feature.sh;
-                chmod +x $termuxTmp/flux_feature.sh;
+                mkdir -p $hostTmp;
+                echo "$scriptB64" | base64 -d > $hostTmp/flux_feature.sh;
+                chmod +x $hostTmp/flux_feature.sh;
                 BB="${'$'}{FLUX_BB:-}";
                 if [ -z "${'$'}BB" ] || ! [ -x "${'$'}BB" ] || ! "${'$'}BB" --list >/dev/null 2>&1; then
                   BB="";
@@ -472,13 +476,13 @@ object TermuxIntentFactory {
                 fi;
                 if [ -z "${'$'}BB" ]; then BB="${'$'}(command -v busybox)"; fi;
                 if [ -z "${'$'}BB" ] || ! "${'$'}BB" --list >/dev/null 2>&1; then
-                  if [ -x /data/local/tmp/flux_busybox ] && /data/local/tmp/flux_busybox --list >/dev/null 2>&1; then
-                    BB=/data/local/tmp/flux_busybox;
+                  if [ -x ${BusyBoxPaths.PINNED} ] && ${BusyBoxPaths.PINNED} --list >/dev/null 2>&1; then
+                    BB=${BusyBoxPaths.PINNED};
                   fi;
                 fi;
-                "${'$'}BB" chroot /data/local/tmp/chrootDebian /bin/su - root -c "bash /tmp/flux_feature.sh$scriptArg";
+                "${'$'}BB" chroot ${ChrootPaths.DEBIAN_CHROOT_PATH} /bin/su - root -c "bash /tmp/flux_feature.sh$scriptArg";
                 STATUS=${'$'}?;
-                rm -f $termuxTmp/flux_feature.sh;
+                rm -f $hostTmp/flux_feature.sh;
                 exit ${'$'}STATUS;
                 ';
                 sleep 1;
@@ -491,22 +495,22 @@ object TermuxIntentFactory {
         if (distroId == "debian13_chroot") {
             // Debian 13 Chroot Feature Script
             // Uses generated helper for robustness, falls back to inline mounts if missing.
-            // Write to Termux's tmp directory since that's what gets mounted into the chroot
+            // Write to the host prefix tmp (bound into the chroot at /tmp)
             // This ensures the script is visible inside the chroot after /tmp is mounted
-            val termuxTmp = "/data/data/com.termux/files/usr/tmp"
+            val hostTmp = TermuxHostPaths.TMPDIR
             val innerCommand = """
                 su -c '
-                ROOT_RUNNER="/data/local/tmp/run_debian13_root.sh";
+                ROOT_RUNNER="${ChrootPaths.HELPERS_DIR}/run_debian13_root.sh";
                 if [ -f "${'$'}ROOT_RUNNER" ]; then
-                    mkdir -p $termuxTmp;
-                    echo "$scriptB64" | base64 -d > $termuxTmp/flux_feature.sh;
-                    chmod +x $termuxTmp/flux_feature.sh;
+                    mkdir -p $hostTmp;
+                    echo "$scriptB64" | base64 -d > $hostTmp/flux_feature.sh;
+                    chmod +x $hostTmp/flux_feature.sh;
                     sh "${'$'}ROOT_RUNNER" "bash /tmp/flux_feature.sh$scriptArg";
                     STATUS=${'$'}?;
-                    rm -f $termuxTmp/flux_feature.sh;
+                    rm -f $hostTmp/flux_feature.sh;
                 else
-                    mnt=/data/local/tmp/chrootDebian13;
-                    mkdir -p $termuxTmp;
+                    mnt=${ChrootPaths.DEBIAN_CHROOT_PATH};
+                    mkdir -p $hostTmp;
                     mount -o remount,dev,suid /data >/dev/null 2>&1;
                     mount -t proc proc ${'$'}mnt/proc >/dev/null 2>&1;
                     mount -t sysfs sysfs ${'$'}mnt/sys >/dev/null 2>&1;
@@ -515,9 +519,9 @@ object TermuxIntentFactory {
                     mkdir -p ${'$'}mnt/dev/shm;
                     mount -t tmpfs -o size=512M tmpfs ${'$'}mnt/dev/shm >/dev/null 2>&1;
                     mkdir -p ${'$'}mnt/tmp;
-                    mount --bind $termuxTmp ${'$'}mnt/tmp >/dev/null 2>&1;
-                    echo "$scriptB64" | base64 -d > $termuxTmp/flux_feature.sh;
-                    chmod +x $termuxTmp/flux_feature.sh;
+                    mount --bind $hostTmp ${'$'}mnt/tmp >/dev/null 2>&1;
+                    echo "$scriptB64" | base64 -d > $hostTmp/flux_feature.sh;
+                    chmod +x $hostTmp/flux_feature.sh;
                     BB="${'$'}{FLUX_BB:-}";
                     if [ -z "${'$'}BB" ] || ! [ -x "${'$'}BB" ] || ! "${'$'}BB" --list >/dev/null 2>&1; then
                       BB="";
@@ -527,13 +531,13 @@ object TermuxIntentFactory {
                     fi;
                     if [ -z "${'$'}BB" ]; then BB="${'$'}(command -v busybox)"; fi;
                     if [ -z "${'$'}BB" ] || ! "${'$'}BB" --list >/dev/null 2>&1; then
-                      if [ -x /data/local/tmp/flux_busybox ] && /data/local/tmp/flux_busybox --list >/dev/null 2>&1; then
-                        BB=/data/local/tmp/flux_busybox;
+                      if [ -x ${BusyBoxPaths.PINNED} ] && ${BusyBoxPaths.PINNED} --list >/dev/null 2>&1; then
+                        BB=${BusyBoxPaths.PINNED};
                       fi;
                     fi;
                     "${'$'}BB" chroot ${'$'}mnt /bin/su - root -c "bash /tmp/flux_feature.sh$scriptArg";
                     STATUS=${'$'}?;
-                    rm -f $termuxTmp/flux_feature.sh;
+                    rm -f $hostTmp/flux_feature.sh;
                 fi;
                 exit ${'$'}STATUS;
                 ';
@@ -568,14 +572,15 @@ object TermuxIntentFactory {
         val safeScript = if (!scriptContent.endsWith("\n")) "$scriptContent\n" else scriptContent
         val scriptB64 = android.util.Base64.encodeToString(safeScript.toByteArray(), android.util.Base64.NO_WRAP)
         
-        // Write to tmp, execute, then remove.
-        // We use /data/local/tmp as it is writable by shell and accessible by root.
+        // Write to the staging dir, execute, then remove.
+        // The Folio staging dir is writable by shell and accessible by root.
         val command = """
             su -c '
-            echo "$scriptB64" | base64 -d > /data/local/tmp/flux_root_task.sh
-            chmod +x /data/local/tmp/flux_root_task.sh
-            sh /data/local/tmp/flux_root_task.sh
-            rm -f /data/local/tmp/flux_root_task.sh
+            mkdir -p ${ChrootPaths.STAGING_DIR};
+            echo "$scriptB64" | base64 -d > ${ChrootPaths.STAGING_DIR}/flux_root_task.sh
+            chmod +x ${ChrootPaths.STAGING_DIR}/flux_root_task.sh
+            sh ${ChrootPaths.STAGING_DIR}/flux_root_task.sh
+            rm -f ${ChrootPaths.STAGING_DIR}/flux_root_task.sh
             '
         """.trimIndent().replace("\n", " ")
         
@@ -594,8 +599,9 @@ object TermuxIntentFactory {
         val chunkedEchos = "cat << 'EOF_B64' > \"\${S}.b64\"\n$scriptB64\nEOF_B64\n"
 
         return """
-            S="/data/local/tmp/$scriptName"
+            S="${ChrootPaths.STAGING_DIR}/$scriptName"
             if [ "${'$'}(id -u)" != "0" ]; then S="${'$'}HOME/$scriptName"; fi
+            if [ "${'$'}(id -u)" = "0" ]; then mkdir -p "${ChrootPaths.STAGING_DIR}"; fi
             $chunkedEchos
             base64 -d "${'$'}S.b64" > "${'$'}S"
             rm -f "${'$'}S.b64"

@@ -21,15 +21,15 @@ do
 done
 
 if ! command -v _flux_setup_pulse >/dev/null 2>&1; then
-    echo "FluxLinux: [AUDIO] ERROR flux_guest_common.sh not staged — cannot repair guest"
+    echo "Folio: [AUDIO] ERROR flux_guest_common.sh not staged — cannot repair guest"
     exit 0
 fi
 
 _flux_setup_pulse
 _have=$(_flux_guest_pactl || true)
 if [ -n "$_have" ]; then
-    echo "FluxLinux: [AUDIO] guest pactl=$_have"
+    echo "Folio: [AUDIO] guest pactl=$_have"
     exit 0
 fi
-echo "FluxLinux: [AUDIO] WARN guest pactl still missing"
+echo "Folio: [AUDIO] WARN guest pactl still missing"
 exit 0

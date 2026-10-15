@@ -31,10 +31,10 @@ class UkpaHostDispatchContractTest {
     )
 
     private val ukpaPaths = listOf(
-        "chrootUbuntu",
-        "chrootKali",
-        "chrootParrot",
-        "chrootArch"
+        "/data/local/folio/chroots/ubuntu",
+        "/data/local/folio/chroots/kali",
+        "/data/local/folio/chroots/parrot",
+        "/data/local/folio/chroots/archlinux"
     )
 
     @Test
@@ -69,11 +69,11 @@ class UkpaHostDispatchContractTest {
         val stop = repoFile("src/main/assets/scripts/chroot/stop_gui_chroot.sh").readText()
 
         val startDefault = start.substringAfter("*)").substringBefore("esac")
-        assertTrue(startDefault.contains("chrootDebian13"))
+        assertTrue(startDefault.contains("/data/local/folio/chroots/debian"))
         assertTrue(startDefault.contains("start_debian13_gui.sh"))
 
         val stopDefault = stop.substringAfter("*)").substringBefore("esac")
-        assertTrue(stopDefault.contains("chrootDebian13"))
+        assertTrue(stopDefault.contains("/data/local/folio/chroots/debian"))
         assertTrue(stopDefault.contains("stop_debian13_gui.sh"))
 
         val startAlpine = start.substringAfter("alpine|alpine_chroot").substringBefore(";;")
@@ -88,12 +88,12 @@ class UkpaHostDispatchContractTest {
             "src/main/assets/scripts/chroot/uninstall_guest_chroot.sh"
         ).readText()
         for (path in listOf(
-            "/data/local/tmp/chrootUbuntu",
-            "/data/local/tmp/chrootKali",
-            "/data/local/tmp/chrootParrot",
-            "/data/local/tmp/chrootArch",
-            "/data/local/tmp/chrootDebian13",
-            "/data/local/tmp/chrootManjaro"
+            "/data/local/folio/chroots/ubuntu",
+            "/data/local/folio/chroots/kali",
+            "/data/local/folio/chroots/parrot",
+            "/data/local/folio/chroots/archlinux",
+            "/data/local/folio/chroots/debian",
+            "/data/local/folio/chroots/manjaro"
         )) {
             assertTrue("uninstall allowlist missing $path", text.contains(path))
         }

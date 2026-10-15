@@ -3,7 +3,7 @@
 # Called by start_gui_chroot.sh after host Pulse/VirGL/X11 are up.
 # Paths: app package via FLUX_PACKAGE / TARGET_PREFIX (ivarna or zenithblue). Sticky guest /tmp preserved.
 
-CHROOT_ROOT="${CHROOT_ROOT:-/data/local/tmp/chrootAlpine}"
+CHROOT_ROOT="${CHROOT_ROOT:-/data/local/folio/chroots/alpine}"
 if [ -z "${TARGET_PREFIX:-}" ]; then
   if [ -n "${FLUX_PREFIX:-}" ]; then
     TARGET_PREFIX="$FLUX_PREFIX"
@@ -18,7 +18,7 @@ fi
 USERNAME="${USERNAME:-flux}"
 
 echo "========================================"
-echo "FluxLinux: Chroot XFCE (root stage)"
+echo "Folio: Chroot XFCE (root stage)"
 echo "  rootfs=$CHROOT_ROOT"
 echo "========================================"
 
@@ -27,7 +27,7 @@ _rr=""
 for _c in \
   "${FLUX_RESOLVE_BB:-}" \
   "$(dirname "$0")/resolve_bb.sh" \
-  /data/local/tmp/fluxlinux_resolve_bb.sh
+  /data/local/folio/helpers/fluxlinux_resolve_bb.sh
 do
   [ -n "$_c" ] && [ -f "$_c" ] && _rr="$_c" && break
 done
@@ -40,9 +40,9 @@ if [ -z "${BB:-}" ]; then
   # sidecar missing (desktop/uninstall/staged setup) — same B1 walk as resolve_bb
   if [ -n "${FLUX_BB:-}" ] && [ -x "$FLUX_BB" ] &&
      "$FLUX_BB" --list >/dev/null 2>&1; then BB="$FLUX_BB"; fi
-  if [ -z "${BB:-}" ] && [ -x /data/local/tmp/flux_busybox ] &&
-     /data/local/tmp/flux_busybox --list >/dev/null 2>&1; then
-    BB=/data/local/tmp/flux_busybox
+  if [ -z "${BB:-}" ] && [ -x /data/local/folio/busybox/flux_busybox ] &&
+     /data/local/folio/busybox/flux_busybox --list >/dev/null 2>&1; then
+    BB=/data/local/folio/busybox/flux_busybox
   fi
   if [ -z "${BB:-}" ]; then
     for path in \
@@ -61,28 +61,28 @@ if [ -z "${BB:-}" ]; then
   fi
 fi
 if [ -z "${BB:-}" ]; then
-  echo "FluxLinux: ERROR — root-capable busybox not found" >&2
+  echo "Folio: ERROR — root-capable busybox not found" >&2
   exit 1
 fi
 
-echo "FluxLinux: busybox=$BB"
+echo "Folio: busybox=$BB"
 
 if [ ! -d "$CHROOT_ROOT" ]; then
-  echo "FluxLinux: ERROR — chroot missing: $CHROOT_ROOT"
+  echo "Folio: ERROR — chroot missing: $CHROOT_ROOT"
   exit 1
 fi
 if [ ! -x "$CHROOT_ROOT/usr/bin/startxfce4" ] && [ ! -f "$CHROOT_ROOT/usr/bin/startxfce4" ]; then
-  echo "FluxLinux: ERROR — startxfce4 missing. Re-run chroot environment setup."
+  echo "Folio: ERROR — startxfce4 missing. Re-run chroot environment setup."
   exit 1
 fi
 
 # Soft SELinux (HyperOS / enforcing) — flux pattern; fail soft
 if command -v getenforce >/dev/null 2>&1; then
   SELINUX_STATUS=$(getenforce 2>/dev/null || true)
-  echo "FluxLinux: SELinux=$SELINUX_STATUS"
+  echo "Folio: SELinux=$SELINUX_STATUS"
   if [ "$SELINUX_STATUS" = "Enforcing" ]; then
-    setenforce 0 2>/dev/null && echo "FluxLinux: SELinux → Permissive (until reboot)" \
-      || echo "FluxLinux: [WARN] setenforce 0 failed"
+    setenforce 0 2>/dev/null && echo "Folio: SELinux → Permissive (until reboot)" \
+      || echo "Folio: [WARN] setenforce 0 failed"
   fi
 fi
 # PREFIX/tmp must stay app_data_file. Labeling it tmpfs:s0 makes termux-x11
@@ -95,7 +95,7 @@ if command -v chcon >/dev/null 2>&1; then
 fi
 restorecon -RF "$TARGET_PREFIX/tmp" 2>/dev/null || true
 
-HELPER="${HELPER:-/data/local/tmp/fluxlinux_chroot.sh}"
+HELPER="${HELPER:-/data/local/folio/helpers/fluxlinux_chroot.sh}"
 echo "[1/5] Mounts (SSOT if available)..."
 # Wait for host Loader to create X0 before --x11 bind
 mkdir -p "$TARGET_PREFIX/tmp/.X11-unix" 2>/dev/null || true
@@ -103,14 +103,14 @@ chmod 1777 "$TARGET_PREFIX/tmp/.X11-unix" 2>/dev/null || true
 i=0
 while [ $i -lt 15 ]; do
   if [ -S "$TARGET_PREFIX/tmp/.X11-unix/X0" ]; then
-    echo "FluxLinux: host X0 socket ready"
+    echo "Folio: host X0 socket ready"
     break
   fi
   i=$((i + 1))
   sleep 1
 done
 if [ ! -S "$TARGET_PREFIX/tmp/.X11-unix/X0" ]; then
-  echo "FluxLinux: [WARN] host X0 not seen yet — continuing"
+  echo "Folio: [WARN] host X0 not seen yet — continuing"
 fi
 
 if [ -f "$HELPER" ]; then
@@ -230,11 +230,11 @@ su -s \"\$FLUX_SU_SHELL\" - $USERNAME -c '
     else
       export LIBGL_ALWAYS_SOFTWARE=1
       export GALLIUM_DRIVER=llvmpipe
-      echo \"FluxLinux(guest): software GL fallback\"
+      echo \"Folio(guest): software GL fallback\"
     fi
     export GPU_MODE
   fi
-  echo \"FluxLinux(guest): GPU mode=\$GPU_MODE\"
+  echo \"Folio(guest): GPU mode=\$GPU_MODE\"
 
   if command -v dbus-run-session >/dev/null 2>&1; then
     exec dbus-run-session -- startxfce4

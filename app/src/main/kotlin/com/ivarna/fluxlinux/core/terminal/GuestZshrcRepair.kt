@@ -42,7 +42,7 @@ if [ -n "${'$'}_pick" ]; then
 else
   unset LC_ALL
   export LANG=C
-  echo "FluxLinux: WARNING: no UTF-8 locale in locale -a; zsh staying LANG=C" >&2
+  echo "Folio: WARNING: no UTF-8 locale in locale -a; zsh staying LANG=C" >&2
 fi
 unset _have _c _pick
 export PYTHONIOENCODING=UTF-8
@@ -199,7 +199,7 @@ if [ -n "${'$'}_pick" ]; then
 else
   unset LC_ALL
   export LANG=C
-  echo "FluxLinux: WARNING: no UTF-8 locale in locale -a; zsh staying LANG=C" >&2
+  echo "Folio: WARNING: no UTF-8 locale in locale -a; zsh staying LANG=C" >&2
 fi
 unset _have _c _pick
 """.trimStart()
@@ -244,7 +244,7 @@ if locale -a 2>/dev/null | grep -qiE 'C\.(utf8|UTF-8)'; then
   printf 'LANG=C.UTF-8\n' > /etc/locale.conf
   exit 0
 fi
-echo "FluxLinux: ERROR: no UTF-8 locale after generation (locale -a has neither en_US.utf8 nor C.utf8)" >&2
+echo "Folio: ERROR: no UTF-8 locale after generation (locale -a has neither en_US.utf8 nor C.utf8)" >&2
 exit 1
 """.trimStart()
 

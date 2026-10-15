@@ -40,7 +40,6 @@ import androidx.compose.material.icons.filled.DesktopWindows
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.FolderShared
-import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Usb
 import androidx.compose.material.icons.filled.Layers
@@ -91,6 +90,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ivarna.fluxlinux.R
@@ -107,15 +107,11 @@ import com.ivarna.fluxlinux.ui.components.MethodTab
 import com.ivarna.fluxlinux.ui.components.MethodTabs
 import com.ivarna.fluxlinux.ui.components.isChrootCard
 import com.ivarna.fluxlinux.ui.install.InstallProgressPanel
-import com.ivarna.fluxlinux.ui.theme.BrandCream
-import com.ivarna.fluxlinux.ui.theme.FluxAccentCyan
-import com.ivarna.fluxlinux.ui.theme.FluxAccentMagenta
-import com.ivarna.fluxlinux.ui.theme.FluxDarkGrey
-import com.ivarna.fluxlinux.ui.theme.FluxDarkSurface
-import com.ivarna.fluxlinux.ui.theme.FluxBodyMuted
-import com.ivarna.fluxlinux.ui.theme.FluxHairline
-import com.ivarna.fluxlinux.ui.theme.FluxSwitchUncheckedTrack
-import com.ivarna.fluxlinux.ui.theme.fluxMutedText
+import com.ivarna.fluxlinux.ui.theme.FolioBackground
+import com.ivarna.fluxlinux.ui.theme.FrostHairline
+import com.ivarna.fluxlinux.ui.theme.StatusDot
+import com.ivarna.fluxlinux.ui.theme.TextPrimary
+import com.ivarna.fluxlinux.ui.theme.TextSecondary
 
 private enum class OnboardStep { Welcome, Consent, HostSetup, DistroPick, Options, Storage, Running, Done }
 
@@ -177,7 +173,7 @@ fun OnboardingFlowScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(FluxDarkSurface)
+            .background(FolioBackground)
             .systemBarsPadding()
     ) {
         when (step) {
@@ -267,12 +263,12 @@ private fun WelcomePage(onNext: () -> Unit) {
                     .background(
                         Brush.linearGradient(
                             listOf(
-                                FluxAccentMagenta.copy(alpha = 0.25f),
-                                FluxAccentCyan.copy(alpha = 0.25f)
+                                TextSecondary.copy(alpha = 0.25f),
+                                TextSecondary.copy(alpha = 0.25f)
                             )
                         )
                     )
-                    .border(1.dp, FluxHairline, RoundedCornerShape(20.dp)),
+                    .border(0.75.dp, FrostHairline, RoundedCornerShape(20.dp)),
                 contentAlignment = Alignment.Center
             ) {
                 Image(
@@ -315,7 +311,7 @@ private fun WelcomePage(onNext: () -> Unit) {
             // Feature 1: PRoot & Chroot
             ModernFeatureCard(
                 icon = Icons.Filled.Storage,
-                iconTint = FluxAccentMagenta,
+                iconTint = TextSecondary,
                 title = "PRoot & Chroot",
                 description = "No root required with PRoot mode, or run with full native speed via Chroot on rooted devices."
             )
@@ -323,7 +319,7 @@ private fun WelcomePage(onNext: () -> Unit) {
             // Feature 2: Desktop & Themes
             ModernFeatureCard(
                 icon = Icons.Filled.DesktopWindows,
-                iconTint = FluxAccentCyan,
+                iconTint = TextSecondary,
                 title = "XFCE4 Desktop",
                 description = "Pre-configured desktop experience with Folio glass themes, icons, wallpapers, and fonts."
             )
@@ -331,7 +327,7 @@ private fun WelcomePage(onNext: () -> Unit) {
             // Feature 3: Integrated Terminal & X11
             ModernFeatureCard(
                 icon = Icons.Filled.Terminal,
-                iconTint = BrandCream,
+                iconTint = TextPrimary,
                 title = "Embedded Terminal & X11",
                 description = "Built-in hardware accelerated X11 display and multi-tab terminal with Oh My Zsh integration."
             )
@@ -345,7 +341,7 @@ private fun WelcomePage(onNext: () -> Unit) {
                     .heightIn(max = 130.dp)
                     .clip(RoundedCornerShape(16.dp))
                     .background(colors.surface.copy(alpha = 0.45f))
-                    .border(1.dp, FluxHairline, RoundedCornerShape(16.dp)),
+                    .border(0.75.dp, FrostHairline, RoundedCornerShape(16.dp)),
                 contentAlignment = Alignment.Center
             ) {
                 Image(
@@ -361,7 +357,7 @@ private fun WelcomePage(onNext: () -> Unit) {
                             Brush.verticalGradient(
                                 listOf(
                                     Color.Transparent,
-                                    FluxDarkSurface.copy(alpha = 0.65f)
+                                    FolioBackground.copy(alpha = 0.65f)
                                 )
                             )
                         )
@@ -393,7 +389,7 @@ private fun ModernFeatureCard(
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
             .background(colors.surface.copy(alpha = 0.72f))
-            .border(1.dp, FluxHairline, RoundedCornerShape(14.dp))
+            .border(0.75.dp, FrostHairline, RoundedCornerShape(14.dp))
             .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -468,7 +464,7 @@ private fun ConsentPage(onBack: () -> Unit, onNext: () -> Unit) {
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(16.dp))
                     .background(colors.surface.copy(alpha = 0.72f))
-                    .border(1.dp, FluxHairline, RoundedCornerShape(16.dp))
+                    .border(0.75.dp, FrostHairline, RoundedCornerShape(16.dp))
                     .padding(18.dp)
             ) {
                 Column {
@@ -477,13 +473,13 @@ private fun ConsentPage(onBack: () -> Unit, onNext: () -> Unit) {
                             modifier = Modifier
                                 .size(36.dp)
                                 .clip(CircleShape)
-                                .background(FluxAccentMagenta.copy(alpha = 0.15f)),
+                                .background(TextSecondary.copy(alpha = 0.15f)),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Filled.CloudDownload,
                                 contentDescription = null,
-                                tint = FluxAccentMagenta,
+                                tint = TextSecondary,
                                 modifier = Modifier.size(20.dp)
                             )
                         }
@@ -543,7 +539,7 @@ private fun ConsentPage(onBack: () -> Unit, onNext: () -> Unit) {
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            FolioPrimaryButton(
+            FolioSecondaryButton(
                 text = "Back",
                 onClick = onBack,
                 modifier = Modifier.weight(0.7f)
@@ -569,8 +565,8 @@ private fun DownloadItemBadge(
     Row(
         modifier = modifier
             .clip(RoundedCornerShape(10.dp))
-            .background(FluxDarkSurface.copy(alpha = 0.8f))
-            .border(1.dp, FluxHairline, RoundedCornerShape(10.dp))
+            .background(FolioBackground.copy(alpha = 0.8f))
+            .border(0.75.dp, FrostHairline, RoundedCornerShape(10.dp))
             .padding(horizontal = 10.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
@@ -585,7 +581,7 @@ private fun DownloadItemBadge(
             text = size,
             fontSize = 11.sp,
             fontWeight = FontWeight.Bold,
-            color = FluxAccentCyan
+            color = TextSecondary
         )
     }
 }
@@ -662,7 +658,7 @@ private fun HostSetupPage(onBack: () -> Unit, onNext: () -> Unit) {
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(16.dp))
                     .background(colors.surface.copy(alpha = 0.75f))
-                    .border(1.dp, FluxHairline, RoundedCornerShape(16.dp))
+                    .border(0.75.dp, FrostHairline, RoundedCornerShape(16.dp))
                     .padding(18.dp)
             ) {
                 Column {
@@ -677,15 +673,15 @@ private fun HostSetupPage(onBack: () -> Unit, onNext: () -> Unit) {
                                     .size(40.dp)
                                     .clip(RoundedCornerShape(10.dp))
                                     .background(
-                                        if (bootstrapDone) Color(0xFF69F0AE).copy(alpha = 0.15f)
-                                        else FluxAccentMagenta.copy(alpha = 0.15f)
+                                        if (bootstrapDone) StatusDot.copy(alpha = 0.15f)
+                                        else TextPrimary.copy(alpha = 0.10f)
                                     ),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     imageVector = if (bootstrapDone) Icons.Filled.CheckCircle else Icons.Filled.Memory,
                                     contentDescription = null,
-                                    tint = if (bootstrapDone) Color(0xFF69F0AE) else FluxAccentMagenta,
+                                    tint = if (bootstrapDone) StatusDot else TextPrimary,
                                     modifier = Modifier.size(22.dp)
                                 )
                             }
@@ -700,14 +696,14 @@ private fun HostSetupPage(onBack: () -> Unit, onNext: () -> Unit) {
                                 Text(
                                     text = if (bootstrapDone) "Initialized & Ready" else "Requires Setup",
                                     fontSize = 12.sp,
-                                    color = if (bootstrapDone) Color(0xFF69F0AE) else colors.onSurface.copy(alpha = 0.6f)
+                                    color = if (bootstrapDone) StatusDot else colors.onSurface.copy(alpha = 0.6f)
                                 )
                             }
                         }
 
                         MethodChip(
                             label = if (bootstrapDone) "READY" else if (initializing) "EXTRACTING" else if (failed) "RETRY" else "PENDING",
-                            color = if (bootstrapDone) Color(0xFF69F0AE) else if (initializing) FluxAccentMagenta else if (failed) Color(0xFFFFA000) else Color(0xFFFFA000)
+                            color = if (bootstrapDone) StatusDot else if (initializing) TextPrimary else TextSecondary
                         )
                     }
 
@@ -731,7 +727,7 @@ private fun HostSetupPage(onBack: () -> Unit, onNext: () -> Unit) {
                                     text = "${(progress * 100).toInt()}%",
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = FluxAccentMagenta
+                                    color = TextPrimary
                                 )
                             }
                             Spacer(Modifier.height(8.dp))
@@ -741,7 +737,7 @@ private fun HostSetupPage(onBack: () -> Unit, onNext: () -> Unit) {
                                     .fillMaxWidth()
                                     .height(6.dp)
                                     .clip(RoundedCornerShape(3.dp)),
-                                color = FluxAccentMagenta,
+                                color = TextPrimary,
                                 trackColor = colors.surfaceVariant.copy(alpha = 0.5f)
                             )
                         }
@@ -770,8 +766,8 @@ private fun HostSetupPage(onBack: () -> Unit, onNext: () -> Unit) {
                                 .fillMaxWidth()
                                 .height(54.dp),
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = Color.White,
-                                contentColor = Color.Black
+                                containerColor = TextPrimary,
+                                contentColor = FolioBackground
                             ),
                             shape = CircleShape
                         ) {
@@ -798,7 +794,7 @@ private fun HostSetupPage(onBack: () -> Unit, onNext: () -> Unit) {
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            FolioPrimaryButton(
+            FolioSecondaryButton(
                 text = "Back",
                 onClick = onBack,
                 modifier = Modifier.weight(0.7f)
@@ -970,7 +966,7 @@ private fun DistroPickPage(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            FolioPrimaryButton(
+            FolioSecondaryButton(
                 text = "Back",
                 onClick = onBack,
                 modifier = Modifier.weight(0.7f)
@@ -995,10 +991,10 @@ private fun ModernSelectableDistroCard(
 ) {
     val colors = MaterialTheme.colorScheme
     val borderColor by animateColorAsState(
-        if (selected) FluxAccentMagenta else FluxHairline,
+        if (selected) TextSecondary else FrostHairline,
         label = "border"
     )
-    val bgColor = if (selected) FluxAccentMagenta.copy(alpha = 0.12f)
+    val bgColor = if (selected) TextSecondary.copy(alpha = 0.12f)
     else colors.surface.copy(alpha = 0.72f)
 
     Row(
@@ -1015,7 +1011,7 @@ private fun ModernSelectableDistroCard(
             selected = selected,
             onClick = onClick,
             colors = RadioButtonDefaults.colors(
-                selectedColor = FluxAccentMagenta,
+                selectedColor = TextSecondary,
                 unselectedColor = colors.onSurface.copy(alpha = 0.4f)
             )
         )
@@ -1102,7 +1098,7 @@ private fun OptionsPage(
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(14.dp))
                     .background(colors.surface.copy(alpha = 0.72f))
-                    .border(1.dp, FluxHairline, RoundedCornerShape(14.dp))
+                    .border(0.75.dp, FrostHairline, RoundedCornerShape(14.dp))
                     .padding(14.dp)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1166,7 +1162,7 @@ private fun OptionsPage(
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(16.dp))
                     .background(colors.surface.copy(alpha = 0.75f))
-                    .border(1.dp, FluxHairline, RoundedCornerShape(16.dp))
+                    .border(0.75.dp, FrostHairline, RoundedCornerShape(16.dp))
                     .padding(16.dp)
             ) {
                 Column {
@@ -1174,7 +1170,7 @@ private fun OptionsPage(
                         Icon(
                             imageVector = Icons.Filled.Layers,
                             contentDescription = null,
-                            tint = FluxAccentCyan,
+                            tint = TextSecondary,
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(Modifier.width(8.dp))
@@ -1212,7 +1208,7 @@ private fun OptionsPage(
                                 modifier = Modifier
                                     .size(6.dp)
                                     .clip(CircleShape)
-                                    .background(FluxAccentMagenta)
+                                    .background(TextSecondary)
                             )
                             Spacer(Modifier.width(10.dp))
                             Text(
@@ -1258,7 +1254,7 @@ private fun OptionsPage(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            FolioPrimaryButton(
+            FolioSecondaryButton(
                 text = "Back",
                 onClick = onBack,
                 modifier = Modifier.weight(0.7f)
@@ -1285,12 +1281,12 @@ private fun ThemeOptionCard(
     modifier: Modifier = Modifier
 ) {
     val colors = MaterialTheme.colorScheme
-    val borderColor = if (selected) FluxAccentMagenta else FluxHairline
+    val borderColor = if (selected) TextSecondary else FrostHairline
 
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(14.dp))
-            .background(if (selected) FluxAccentMagenta.copy(alpha = 0.12f) else colors.surface.copy(alpha = 0.72f))
+            .background(if (selected) TextSecondary.copy(alpha = 0.12f) else colors.surface.copy(alpha = 0.72f))
             .border(if (selected) 1.5.dp else 1.dp, borderColor, RoundedCornerShape(14.dp))
             .clickable(onClick = onSelect)
             .padding(12.dp)
@@ -1307,14 +1303,14 @@ private fun ThemeOptionCard(
                         .size(24.dp)
                         .clip(CircleShape)
                         .background(if (isDark) Color(0xFF1E1E24) else Color(0xFFE8EAF6))
-                        .border(1.dp, FluxHairline, CircleShape),
+                        .border(0.75.dp, FrostHairline, CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
                     if (selected) {
                         Icon(
                             imageVector = Icons.Filled.Check,
                             contentDescription = null,
-                            tint = if (isDark) FluxAccentMagenta else Color(0xFF1E1E24),
+                            tint = if (isDark) TextSecondary else Color(0xFF1E1E24),
                             modifier = Modifier.size(14.dp)
                         )
                     }
@@ -1324,7 +1320,7 @@ private fun ThemeOptionCard(
                     selected = selected,
                     onClick = onSelect,
                     colors = RadioButtonDefaults.colors(
-                        selectedColor = FluxAccentMagenta,
+                        selectedColor = TextSecondary,
                         unselectedColor = colors.onSurface.copy(alpha = 0.4f)
                     ),
                     modifier = Modifier.size(20.dp)
@@ -1387,7 +1383,7 @@ private fun DonePage(
                             )
                         )
                     )
-                    .border(1.5.dp, FluxHairline, RoundedCornerShape(32.dp)),
+                    .border(1.5.dp, FrostHairline, RoundedCornerShape(32.dp)),
                 contentAlignment = Alignment.Center
             ) {
                 if (distro?.iconRes != null) {
@@ -1400,7 +1396,7 @@ private fun DonePage(
                     Icon(
                         imageVector = Icons.Filled.CheckCircle,
                         contentDescription = null,
-                        tint = Color(0xFF69F0AE),
+                        tint = StatusDot,
                         modifier = Modifier.size(52.dp)
                     )
                 }
@@ -1410,16 +1406,16 @@ private fun DonePage(
                 modifier = Modifier
                     .size(32.dp)
                     .clip(CircleShape)
-                    .background(FluxDarkSurface)
+                    .background(FolioBackground)
                     .padding(3.dp)
                     .clip(CircleShape)
-                    .background(Color(0xFF69F0AE)),
+                    .background(StatusDot),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Filled.Check,
                     contentDescription = null,
-                    tint = FluxDarkSurface,
+                    tint = FolioBackground,
                     modifier = Modifier.size(18.dp)
                 )
             }
@@ -1455,59 +1451,29 @@ private fun DonePage(
         Spacer(Modifier.height(32.dp))
 
         // Primary Action: Launch Desktop
-        Button(
-            onClick = onDesktop,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(54.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = Color.White,
-                contentColor = Color.Black
-            ),
-            shape = CircleShape
-        ) {
-            Icon(Icons.Filled.DesktopWindows, contentDescription = null, modifier = Modifier.size(20.dp))
-            Spacer(Modifier.width(10.dp))
-            Text("Start Desktop", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-        }
+        FolioPrimaryButton(
+            text = "Start Desktop",
+            icon = Icons.Filled.DesktopWindows,
+            onClick = onDesktop
+        )
 
         Spacer(Modifier.height(10.dp))
 
         // Secondary Action: Open Terminal
-        Button(
+        FolioSecondaryButton(
+            text = "Open Terminal",
             onClick = onTerminal,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(54.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = Color.White,
-                contentColor = Color.Black
-            ),
-            shape = CircleShape
-        ) {
-            Icon(Icons.Filled.Terminal, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(10.dp))
-            Text("Open Terminal", fontWeight = FontWeight.Bold, fontSize = 15.sp)
-        }
+            height = 50.dp
+        )
 
         Spacer(Modifier.height(10.dp))
 
         // Tertiary Action: Go to Dashboard
-        Button(
+        FolioSecondaryButton(
+            text = "Go to Dashboard",
             onClick = onHome,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(54.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = Color.White,
-                contentColor = Color.Black
-            ),
-            shape = CircleShape
-        ) {
-            Icon(Icons.Filled.Home, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(8.dp))
-            Text("Go to Dashboard", fontWeight = FontWeight.SemiBold, fontSize = 14.5.sp)
-        }
+            height = 50.dp
+        )
     }
 }
 
@@ -1527,7 +1493,7 @@ private fun StoragePage(onBack: () -> Unit, onNext: () -> Unit) {
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
     val granted = remember(resumeKey) { SharedStorageAccess.granted() }
-    val success = Color(0xFF69F0AE)
+    val success = StatusDot
 
     Column(
         modifier = Modifier
@@ -1549,13 +1515,13 @@ private fun StoragePage(onBack: () -> Unit, onNext: () -> Unit) {
                 modifier = Modifier
                     .size(84.dp)
                     .clip(CircleShape)
-                    .background((if (granted) success else FluxAccentMagenta).copy(alpha = 0.15f)),
+                    .background((if (granted) success else TextSecondary).copy(alpha = 0.15f)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Filled.FolderShared,
                     contentDescription = "Shared storage",
-                    tint = if (granted) success else FluxAccentMagenta,
+                    tint = if (granted) success else TextSecondary,
                     modifier = Modifier.size(44.dp)
                 )
             }
@@ -1573,7 +1539,7 @@ private fun StoragePage(onBack: () -> Unit, onNext: () -> Unit) {
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(16.dp))
                     .background(colors.surface.copy(alpha = 0.72f))
-                    .border(1.dp, FluxHairline, RoundedCornerShape(16.dp))
+                    .border(0.75.dp, FrostHairline, RoundedCornerShape(16.dp))
                     .padding(18.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
@@ -1612,11 +1578,16 @@ private fun StoragePage(onBack: () -> Unit, onNext: () -> Unit) {
 
         FolioPrimaryButton(
             text = if (granted) "Continue" else "Grant access",
-            icon = if (granted) Icons.AutoMirrored.Filled.ArrowForward else null,
+            icon = if (granted) Icons.AutoMirrored.Filled.ArrowForward else Icons.Filled.FolderShared,
             onClick = if (granted) onNext else { { SharedStorageAccess.openSettings(context) } }
         )
         if (!granted) {
-            FolioPrimaryButton(text = "Skip for now", onClick = onNext, modifier = Modifier.fillMaxWidth())
+            Spacer(Modifier.height(10.dp))
+            FolioSecondaryButton(
+                text = "Skip for now",
+                onClick = onNext,
+                height = 50.dp
+            )
         }
     }
 }
@@ -1624,7 +1595,7 @@ private fun StoragePage(onBack: () -> Unit, onNext: () -> Unit) {
 @Composable
 private fun StorageBenefit(icon: ImageVector, text: String) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Icon(icon, contentDescription = null, tint = FluxAccentCyan, modifier = Modifier.size(22.dp))
+        Icon(icon, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(22.dp))
         Spacer(Modifier.width(12.dp))
         Text(text, color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp, fontWeight = FontWeight.Medium)
     }
@@ -1657,7 +1628,7 @@ private fun StepHeader(
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = "Back",
-                    tint = BrandCream,
+                    tint = TextPrimary,
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -1679,7 +1650,7 @@ private fun StepHeader(
                 .fillMaxWidth()
                 .height(4.dp)
                 .clip(RoundedCornerShape(2.dp)),
-            color = FluxAccentMagenta,
+            color = TextSecondary,
             trackColor = colors.surfaceVariant.copy(alpha = 0.4f)
         )
 
@@ -1707,13 +1678,13 @@ private fun FluxConsentCheckboxCard(
         "I understand this setup downloads the selected Linux distro rootfs from GitHub Releases. That archive is not in the base APK."
     }
     val colors = MaterialTheme.colorScheme
-    val borderColor = if (consented) FluxAccentMagenta else FluxHairline
+    val borderColor = if (consented) TextSecondary else FrostHairline
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
-            .background(if (consented) FluxAccentMagenta.copy(alpha = 0.08f) else colors.surface.copy(alpha = 0.72f))
+            .background(if (consented) TextSecondary.copy(alpha = 0.08f) else colors.surface.copy(alpha = 0.72f))
             .border(1.dp, borderColor, RoundedCornerShape(14.dp))
             .clickable { onConsentChange(!consented) }
             .padding(14.dp),
@@ -1723,7 +1694,7 @@ private fun FluxConsentCheckboxCard(
             checked = consented,
             onCheckedChange = onConsentChange,
             colors = CheckboxDefaults.colors(
-                checkedColor = FluxAccentMagenta,
+                checkedColor = TextSecondary,
                 uncheckedColor = colors.onSurface.copy(alpha = 0.45f)
             )
         )
@@ -1753,10 +1724,10 @@ private fun FolioPrimaryButton(
             .fillMaxWidth()
             .height(54.dp),
         colors = ButtonDefaults.buttonColors(
-            containerColor = Color.White,
-            contentColor = Color.Black,
-            disabledContainerColor = Color.White.copy(alpha = 0.4f),
-            disabledContentColor = Color.Black.copy(alpha = 0.4f)
+            containerColor = TextPrimary,
+            contentColor = FolioBackground,
+            disabledContainerColor = TextPrimary.copy(alpha = 0.4f),
+            disabledContentColor = FolioBackground.copy(alpha = 0.4f)
         ),
         shape = CircleShape
     ) {
@@ -1765,6 +1736,34 @@ private fun FolioPrimaryButton(
             Spacer(Modifier.width(6.dp))
             Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp))
         }
+    }
+}
+
+@Composable
+private fun FolioSecondaryButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    height: Dp = 54.dp
+) {
+    val colors = MaterialTheme.colorScheme
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier
+            .fillMaxWidth()
+            .height(height),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = colors.surface.copy(alpha = 0.45f),
+            contentColor = colors.onBackground,
+            disabledContainerColor = colors.surface.copy(alpha = 0.25f),
+            disabledContentColor = colors.onBackground.copy(alpha = 0.4f)
+        ),
+        border = BorderStroke(0.75.dp, FrostHairline),
+        shape = CircleShape
+    ) {
+        Text(text, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
     }
 }
 

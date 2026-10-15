@@ -10,6 +10,14 @@ PKG="${TERMUX_APP__PACKAGE_NAME:-com.ivarna.fluxlinux}"
 _HOST_ENV="${TERMUX__PREFIX:-/data/data/${PKG}/files/usr}/etc/fluxlinux-host.env"
 [ -r "$_HOST_ENV" ] && . "$_HOST_ENV"
 
+# Normalize install-time FLUX_DESKTOP (xfce|xfce4|kde|none) → launch-time (xfce4|kde).
+# Unset/empty → xfce4 (backward compat); inner guest launchers only branch on "kde".
+case "${FLUX_DESKTOP:-}" in
+  kde) FLUX_DESKTOP=kde ;;
+  none) FLUX_DESKTOP=none ;;
+  *) FLUX_DESKTOP=xfce4 ;;
+esac
+
 PKG="${TERMUX_APP__PACKAGE_NAME:-$PKG}"
 TERMUX_PREFIX="${TERMUX__PREFIX:-/data/data/$PKG/files/usr}"
 TERMUX_HOME="${TERMUX__HOME:-/data/data/$PKG/files/home}"
@@ -26,81 +34,81 @@ export XKB_CONFIG_ROOT="$TERMUX_PREFIX/share/X11/xkb"
 # Resolve chroot path + guest launcher from distro hint (env overrides win)
 case "$DISTRO_HINT" in
   alpine|alpine_chroot)
-    CHROOT_PATH="${CHROOT_PATH:-/data/local/tmp/chrootAlpine}"
+    CHROOT_PATH="${CHROOT_PATH:-/data/local/folio/chroots/alpine}"
     ROOT_GUI_NAME="${ROOT_GUI_NAME:-start_alpine_gui.sh}"
     ;;
   fedora|fedora_chroot)
-    CHROOT_PATH="${CHROOT_PATH:-/data/local/tmp/chrootFedora}"
+    CHROOT_PATH="${CHROOT_PATH:-/data/local/folio/chroots/fedora}"
     ROOT_GUI_NAME="${ROOT_GUI_NAME:-start_guest_gui.sh}"
     ;;
   void|void_chroot)
-    CHROOT_PATH="${CHROOT_PATH:-/data/local/tmp/chrootVoid}"
+    CHROOT_PATH="${CHROOT_PATH:-/data/local/folio/chroots/void}"
     ROOT_GUI_NAME="${ROOT_GUI_NAME:-start_guest_gui.sh}"
     ;;
   opensuse|opensuse_chroot)
-    CHROOT_PATH="${CHROOT_PATH:-/data/local/tmp/chrootOpenSUSE}"
+    CHROOT_PATH="${CHROOT_PATH:-/data/local/folio/chroots/opensuse}"
     ROOT_GUI_NAME="${ROOT_GUI_NAME:-start_guest_gui.sh}"
     ;;
   deepin|deepin_chroot)
-    CHROOT_PATH="${CHROOT_PATH:-/data/local/tmp/chrootDeepin}"
+    CHROOT_PATH="${CHROOT_PATH:-/data/local/folio/chroots/deepin}"
     ROOT_GUI_NAME="${ROOT_GUI_NAME:-start_guest_gui.sh}"
     ;;
   chimera|chimera_chroot)
-    CHROOT_PATH="${CHROOT_PATH:-/data/local/tmp/chrootChimera}"
+    CHROOT_PATH="${CHROOT_PATH:-/data/local/folio/chroots/chimera}"
     ROOT_GUI_NAME="${ROOT_GUI_NAME:-start_guest_gui.sh}"
     ;;
   manjaro|manjaro_chroot)
-    CHROOT_PATH="${CHROOT_PATH:-/data/local/tmp/chrootManjaro}"
+    CHROOT_PATH="${CHROOT_PATH:-/data/local/folio/chroots/manjaro}"
     ROOT_GUI_NAME="${ROOT_GUI_NAME:-start_guest_gui.sh}"
     ;;
   ubuntu|ubuntu_chroot)
-    CHROOT_PATH="${CHROOT_PATH:-/data/local/tmp/chrootUbuntu}"
+    CHROOT_PATH="${CHROOT_PATH:-/data/local/folio/chroots/ubuntu}"
     ROOT_GUI_NAME="${ROOT_GUI_NAME:-start_guest_gui.sh}"
     ;;
   kali|kali_chroot)
-    CHROOT_PATH="${CHROOT_PATH:-/data/local/tmp/chrootKali}"
+    CHROOT_PATH="${CHROOT_PATH:-/data/local/folio/chroots/kali}"
     ROOT_GUI_NAME="${ROOT_GUI_NAME:-start_guest_gui.sh}"
     ;;
   parrot|parrot_chroot)
-    CHROOT_PATH="${CHROOT_PATH:-/data/local/tmp/chrootParrot}"
+    CHROOT_PATH="${CHROOT_PATH:-/data/local/folio/chroots/parrot}"
     ROOT_GUI_NAME="${ROOT_GUI_NAME:-start_guest_gui.sh}"
     ;;
   archlinux|archlinux_chroot)
-    CHROOT_PATH="${CHROOT_PATH:-/data/local/tmp/chrootArch}"
+    CHROOT_PATH="${CHROOT_PATH:-/data/local/folio/chroots/archlinux}"
     ROOT_GUI_NAME="${ROOT_GUI_NAME:-start_guest_gui.sh}"
     ;;
   *)
-    CHROOT_PATH="${CHROOT_PATH:-/data/local/tmp/chrootDebian13}"
+    CHROOT_PATH="${CHROOT_PATH:-/data/local/folio/chroots/debian}"
     ROOT_GUI_NAME="${ROOT_GUI_NAME:-start_debian13_gui.sh}"
     ;;
 esac
 ROOT_GUI_SCRIPT="$TERMUX_HOME/$ROOT_GUI_NAME"
-ROOT_GUI_TMP="/data/local/tmp/$ROOT_GUI_NAME"
+ROOT_GUI_TMP="/data/local/folio/helpers/$ROOT_GUI_NAME"
 HELPER_SRC="$TERMUX_HOME/fluxlinux_chroot.sh"
-HELPER_TMP="/data/local/tmp/fluxlinux_chroot.sh"
+HELPER_TMP="/data/local/folio/helpers/fluxlinux_chroot.sh"
 RESOLVER_SRC="$TERMUX_HOME/resolve_bb.sh"
-RESOLVER_TMP="/data/local/tmp/fluxlinux_resolve_bb.sh"
+RESOLVER_TMP="/data/local/folio/helpers/fluxlinux_resolve_bb.sh"
 
 echo "========================================"
-echo "FluxLinux: START XFCE (chroot mode)"
+echo "Folio: START XFCE (chroot mode)"
 echo "  distro=$DISTRO_HINT path=$CHROOT_PATH"
 echo "========================================"
 
 # Preflight chroot
 if [ ! -d "$CHROOT_PATH" ]; then
-  echo "FluxLinux: ERROR — chroot not found at $CHROOT_PATH"
+  echo "Folio: ERROR — chroot not found at $CHROOT_PATH"
   echo "Install rooted distro from onboarding or Distros."
   exit 1
 fi
 if [ ! -f "$CHROOT_PATH/.flux_configured" ] && \
    [ ! -e "$CHROOT_PATH/usr/bin/startxfce4" ] && \
    [ ! -e "$CHROOT_PATH/usr/sbin/startxfce4" ]; then
-  echo "FluxLinux: ERROR — chroot incomplete (no .flux_configured / startxfce4)."
+  echo "Folio: ERROR — chroot incomplete (no .flux_configured / startxfce4)."
   echo "Re-run base desktop install for the rooted distro."
   exit 1
 fi
 if [ ! -f "$ROOT_GUI_SCRIPT" ]; then
-  echo "FluxLinux: ERROR — missing $ROOT_GUI_SCRIPT (HostScriptDeployer failed?)"
+  echo "Folio: ERROR — missing $ROOT_GUI_SCRIPT (HostScriptDeployer failed?)"
   exit 1
 fi
 # Stage SSOT helper for root guest script (if present)
@@ -118,7 +126,7 @@ pkill -f termux-x11 2>/dev/null || true
 pkill -f "app_process.*termux-x11" 2>/dev/null || true
 sleep 1
 
-# Host Pulse (app uid) before su. Supervisor prints FluxLinux: [AUDIO] …
+# Host Pulse (app uid) before su. Supervisor prints Folio: [AUDIO] …
 if [ -x "$TERMUX_HOME/start_pulse_host.sh" ]; then
   bash "$TERMUX_HOME/start_pulse_host.sh" || true
 elif command -v start_pulse_host.sh >/dev/null 2>&1; then
@@ -127,17 +135,17 @@ fi
 
 # VirGL optional
 if command -v virgl_test_server_android >/dev/null; then
-  echo "FluxLinux: Starting VirGL server..."
+  echo "Folio: Starting VirGL server..."
   virgl_test_server_android --socket-path "$TERMUX_PREFIX/tmp/.virgl_test" >/dev/null 2>&1 &
   sleep 2
-  test -S "${TMPDIR}/.virgl_test" && echo "FluxLinux: VirGL socket ready" \
-    || echo "FluxLinux: [WARN] VirGL socket not found"
+  test -S "${TMPDIR}/.virgl_test" && echo "Folio: VirGL socket ready" \
+    || echo "Folio: [WARN] VirGL socket not found"
 else
-  echo "FluxLinux: VirGL unavailable; software GL in guest"
+  echo "Folio: VirGL unavailable; software GL in guest"
 fi
 
 # Embedded termux-x11 (same as proot start_gui.sh)
-echo "FluxLinux: Starting termux-x11 server..."
+echo "Folio: Starting termux-x11 server..."
 export XDG_RUNTIME_DIR="$TMPDIR"
 export DISPLAY=:0
 
@@ -157,13 +165,13 @@ if [ -z "$TERMUX_X11_APK_PATH" ] || [ ! -f "$TERMUX_X11_APK_PATH" ]; then
   TERMUX_X11_APK_PATH=$(/system/bin/find /data/app -name "base.apk" -path "*$PKG*" 2>/dev/null | head -1)
 fi
 export TERMUX_X11_APK_PATH
-echo "FluxLinux: APK path = $TERMUX_X11_APK_PATH"
+echo "Folio: APK path = $TERMUX_X11_APK_PATH"
 
 APP_LIB_DIR="/data/data/$PKG/lib"
 mkdir -p "$APP_LIB_DIR" 2>/dev/null
 # Re-extract when the APK is newer, else an app update keeps running the old X server.
 if { [ ! -f "$APP_LIB_DIR/libXlorie.so" ] || [ "$TERMUX_X11_APK_PATH" -nt "$APP_LIB_DIR/libXlorie.so" ]; } && [ -n "$TERMUX_X11_APK_PATH" ]; then
-  echo "FluxLinux: Extracting libXlorie.so..."
+  echo "Folio: Extracting libXlorie.so..."
   ( cd "$APP_LIB_DIR" && \
     unzip -o "$TERMUX_X11_APK_PATH" 'lib/arm64-v8a/libXlorie.so' 2>/dev/null && \
     mv -f lib/arm64-v8a/libXlorie.so . && rm -rf lib ) || \
@@ -203,20 +211,20 @@ while [ ! -S "$TMPDIR/.X11-unix/X0" ] && [ "$_i" -lt 30 ] && kill -0 "$XSERVER_P
   _i=$((_i + 1))
 done
 if [ ! -S "$TMPDIR/.X11-unix/X0" ] || ! kill -0 "$XSERVER_PID" 2>/dev/null; then
-  echo "FluxLinux: [ERROR] X server did not create $TMPDIR/.X11-unix/X0 within 15s (or exited)."
+  echo "Folio: [ERROR] X server did not create $TMPDIR/.X11-unix/X0 within 15s (or exited)."
   exit 1
 fi
-echo "FluxLinux: host X0 socket ready (X server PID=$XSERVER_PID)"
+echo "Folio: host X0 socket ready (X server PID=$XSERVER_PID)"
 
-echo "FluxLinux: Opening X11 activity..."
+echo "Folio: Opening X11 activity..."
 am start -n "$PKG/com.termux.x11.MainActivity" \
   --activity-single-top \
   --activity-clear-top 2>/dev/null || \
 am start -n "$PKG/com.termux.x11.MainActivity" 2>/dev/null
 sleep 1
 
-# Root stage: copy to /data/local/tmp (SELinux / exec-safe) then su
-echo "FluxLinux: Entering chroot as root..."
+# Root stage: copy to /data/local/folio/helpers (SELinux / exec-safe) then su
+echo "Folio: Entering chroot as root..."
 cp -f "$ROOT_GUI_SCRIPT" "$ROOT_GUI_TMP" 2>/dev/null || true
 if [ -f "$HELPER_SRC" ]; then
   cp -f "$HELPER_SRC" "$HELPER_TMP" 2>/dev/null || true
@@ -239,7 +247,8 @@ fi
 # DEBIANPATH = legacy name used by start_debian13_gui.sh
 # CHROOT_ROOT  = name used by start_alpine_gui.sh
 if [ -f "$ROOT_GUI_TMP" ] || cp -f "$ROOT_GUI_SCRIPT" "$ROOT_GUI_TMP" 2>/dev/null; then
-  "$SU_BIN" -c "cp -f '$ROOT_GUI_SCRIPT' '$ROOT_GUI_TMP' 2>/dev/null; \
+  "$SU_BIN" -c "mkdir -p '/data/local/folio/helpers'; \
+    cp -f '$ROOT_GUI_SCRIPT' '$ROOT_GUI_TMP' 2>/dev/null; \
     [ -f '$HELPER_SRC' ] && cp -f '$HELPER_SRC' '$HELPER_TMP' 2>/dev/null; \
     [ -f '$RESOLVER_SRC' ] && cp -f '$RESOLVER_SRC' '$RESOLVER_TMP' 2>/dev/null; \
     chmod 755 '$ROOT_GUI_TMP' '$HELPER_TMP' '$RESOLVER_TMP' 2>/dev/null; \
@@ -248,7 +257,8 @@ if [ -f "$ROOT_GUI_TMP" ] || cp -f "$ROOT_GUI_SCRIPT" "$ROOT_GUI_TMP" 2>/dev/nul
     FLUX_DESKTOP='${FLUX_DESKTOP:-xfce4}' FLUX_GPU_RUNTIME='${FLUX_GPU_RUNTIME:-}' \
     FLUX_BB='${FLUX_BB:-}' FLUX_RESOLVE_BB='$RESOLVER_TMP' sh '$ROOT_GUI_TMP'"
 else
-  "$SU_BIN" -c "cp -f '$ROOT_GUI_SCRIPT' '$ROOT_GUI_TMP' && chmod 755 '$ROOT_GUI_TMP' && \
+  "$SU_BIN" -c "mkdir -p '/data/local/folio/helpers' && \
+    cp -f '$ROOT_GUI_SCRIPT' '$ROOT_GUI_TMP' && chmod 755 '$ROOT_GUI_TMP' && \
     [ -f '$RESOLVER_SRC' ] && cp -f '$RESOLVER_SRC' '$RESOLVER_TMP' 2>/dev/null; \
     DEBIANPATH='$CHROOT_PATH' CHROOT_ROOT='$CHROOT_PATH' FLUX_CHROOT='$CHROOT_PATH' \
     TARGET_PREFIX='$TERMUX_PREFIX' HELPER='$HELPER_TMP' \
@@ -256,5 +266,5 @@ else
     FLUX_BB='${FLUX_BB:-}' FLUX_RESOLVE_BB='$RESOLVER_TMP' sh '$ROOT_GUI_TMP'"
 fi
 rc=$?
-echo "FluxLinux: chroot GUI exit=$rc"
+echo "Folio: chroot GUI exit=$rc"
 exit $rc

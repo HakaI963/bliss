@@ -194,6 +194,57 @@ fun HomeScreen(
         android.widget.Toast.makeText(context, "Log copied", android.widget.Toast.LENGTH_SHORT).show()
     }
 
+    /**
+     * Direct desktop launch from an environment-row pill. Same flow as the launch
+     * dialog: XFCE starts via DesktopLauncher; KDE opens the GPU picker first.
+     * Single-session guard: an active desktop is never duplicated.
+     */
+    fun launchDesktopFromRow(distro: Distro, isChrootRow: Boolean, kde: Boolean) {
+        if (isChrootRow && !rootAvailable) {
+            android.widget.Toast.makeText(
+                context,
+                "Grant superuser to Folio first",
+                android.widget.Toast.LENGTH_SHORT
+            ).show()
+            return
+        }
+        if (session != null && session.distroId != distro.id) {
+            android.widget.Toast.makeText(
+                context,
+                "Stop ${session.distroName} ${session.type} first",
+                android.widget.Toast.LENGTH_SHORT
+            ).show()
+            return
+        }
+        // Active session for this distro: the top active-desktop card owns Open/Stop.
+        if (session != null) return
+        if (DesktopLauncher.isSessionActive()) {
+            android.widget.Toast.makeText(
+                context,
+                "Stop ${session?.distroName ?: "active desktop"} first",
+                android.widget.Toast.LENGTH_SHORT
+            ).show()
+            return
+        }
+        if (kde) {
+            showKdeGpuPicker.value = distro
+        } else {
+            try {
+                DesktopLauncher.start(context, distro.id) { ok ->
+                    refreshKey.value++
+                    if (!ok) showDesktopLogs = true
+                }
+                showDesktopLogs = true
+            } catch (e: Exception) {
+                android.widget.Toast.makeText(
+                    context,
+                    "Launch failed: ${e.message}",
+                    android.widget.Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+    }
+
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 110.dp),
@@ -271,7 +322,7 @@ fun HomeScreen(
                                     if (needsRoot && !rootAvailable) {
                                         android.widget.Toast.makeText(
                                             context,
-                                            "Grant superuser to FluxLinux first",
+                                            "Grant superuser to Folio first",
                                             android.widget.Toast.LENGTH_SHORT
                                         ).show()
                                     } else {
@@ -289,6 +340,8 @@ fun HomeScreen(
                                         distroToLaunch.value = distro
                                     }
                                 },
+                                onLaunchXfce = { launchDesktopFromRow(distro, isChrootRow = false, kde = false) },
+                                onLaunchKde = { launchDesktopFromRow(distro, isChrootRow = false, kde = true) },
                                 onSettings = { onNavigateToSettings(distro) }
                             )
                             if (index < prootInstalled.lastIndex) FrostDivider()
@@ -324,7 +377,7 @@ fun HomeScreen(
                                     if (!rootAvailable) {
                                         android.widget.Toast.makeText(
                                             context,
-                                            "Grant superuser to FluxLinux first",
+                                            "Grant superuser to Folio first",
                                             android.widget.Toast.LENGTH_SHORT
                                         ).show()
                                     } else {
@@ -335,7 +388,7 @@ fun HomeScreen(
                                     if (!rootAvailable) {
                                         android.widget.Toast.makeText(
                                             context,
-                                            "Grant superuser to FluxLinux first",
+                                            "Grant superuser to Folio first",
                                             android.widget.Toast.LENGTH_SHORT
                                         ).show()
                                     } else if (session != null && session.distroId != distro.id) {
@@ -348,6 +401,8 @@ fun HomeScreen(
                                         distroToLaunch.value = distro
                                     }
                                 },
+                                onLaunchXfce = { launchDesktopFromRow(distro, isChrootRow = true, kde = false) },
+                                onLaunchKde = { launchDesktopFromRow(distro, isChrootRow = true, kde = true) },
                                 onSettings = { onNavigateToSettings(distro) }
                             )
                             if (index < chrootInstalled.lastIndex) FrostDivider()
@@ -393,7 +448,7 @@ fun HomeScreen(
                 shape = RoundedCornerShape(24.dp),
                 color = MaterialTheme.colorScheme.surface,
                 tonalElevation = 8.dp,
-                border = androidx.compose.foundation.BorderStroke(1.dp, FrostHairline)
+                border = androidx.compose.foundation.BorderStroke(0.75.dp, FrostHairline)
             ) {
                 Column(
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 22.dp),
@@ -405,7 +460,7 @@ fun HomeScreen(
                             .clip(RoundedCornerShape(20.dp))
                             .background(FrostSurface)
                             .border(
-                                androidx.compose.foundation.BorderStroke(1.dp, FrostHairline),
+                                androidx.compose.foundation.BorderStroke(0.75.dp, FrostHairline),
                                 RoundedCornerShape(20.dp)
                             ),
                         contentAlignment = Alignment.Center
@@ -657,9 +712,11 @@ fun HomeScreen(
 }
 
 // ─── Folio installed environment row ─────────────────────────────────────────
-// Grouped frost row: icon + name + env-type muted + Shell pill + gear to settings.
+// Grouped frost row: icon + name + env-type muted + Shell/desktop pills + gear.
 // Row tap opens the launch-mode dialog (shell / root / desktop); Shell pill is a
-// quick Shell open. Desktop start/stop stays single-session via DesktopLauncher.
+// quick Shell open; XFCE/KDE pills launch the desktop directly (KDE via the GPU
+// picker) and hide while this distro owns the active session, so the top
+// active-desktop card stays the single source of Open/Stop.
 @Composable
 private fun InstalledEnvRow(
     distro: Distro,
@@ -669,6 +726,8 @@ private fun InstalledEnvRow(
     desktopUi: DesktopLauncher.UiState,
     onShell: () -> Unit,
     onOpenLaunch: () -> Unit,
+    onLaunchXfce: () -> Unit,
+    onLaunchKde: () -> Unit,
     onSettings: () -> Unit
 ) {
     val context = LocalContext.current
@@ -682,6 +741,15 @@ private fun InstalledEnvRow(
         isRunning -> " · running"
         else -> ""
     }
+
+    // Desktop launch pills: only when the component is installed for this distro
+    // and the distro does not already own the active session (the top card owns
+    // open/stop then — no duplicate launch buttons).
+    val desktopActiveForThis = session != null && session.distroId == distro.id
+    val showXfceLaunch = !desktopActiveForThis &&
+        StateManager.isComponentInstalled(context, distro.id, "xfce4_desktop")
+    val showKdeLaunch = !desktopActiveForThis &&
+        StateManager.isComponentInstalled(context, distro.id, "kde_plasma")
 
     Row(
         modifier = Modifier
@@ -704,7 +772,7 @@ private fun InstalledEnvRow(
                     .size(36.dp)
                     .clip(RoundedCornerShape(10.dp))
                     .background(FrostSurface)
-                    .border(1.dp, FrostHairline, RoundedCornerShape(10.dp)),
+                    .border(0.75.dp, FrostHairline, RoundedCornerShape(10.dp)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
@@ -737,31 +805,91 @@ private fun InstalledEnvRow(
             )
         }
 
-        // Shell pill (white primary, compact)
-        Button(
-            onClick = onShell,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = TextPrimary,
-                contentColor = Color(0xFF09090B)
-            ),
-            shape = RoundedCornerShape(50),
-            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp),
-            modifier = Modifier.height(32.dp)
+        // Trailing controls: compact pills + settings gear, evenly spaced.
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            Text("Shell", fontWeight = FontWeight.Bold, fontSize = 13.sp, maxLines = 1)
-        }
+            // Shell pill (white primary, compact)
+            Button(
+                onClick = onShell,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = TextPrimary,
+                    contentColor = Color(0xFF09090B)
+                ),
+                shape = RoundedCornerShape(50),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                modifier = Modifier.height(30.dp)
+            ) {
+                Text("Shell", fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1)
+            }
 
-        IconButton(
-            onClick = onSettings,
-            modifier = Modifier.size(36.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Filled.Settings,
-                contentDescription = "Distro settings",
-                tint = TextSecondary,
-                modifier = Modifier.size(20.dp)
-            )
+            if (showXfceLaunch) {
+                EnvDesktopPill(
+                    icon = Icons.Filled.DesktopWindows,
+                    label = "XFCE",
+                    contentDescription = "Launch XFCE4 on ${distro.name}",
+                    onClick = onLaunchXfce
+                )
+            }
+
+            if (showKdeLaunch) {
+                EnvDesktopPill(
+                    icon = Icons.Filled.Widgets,
+                    label = "KDE",
+                    contentDescription = "Launch KDE Plasma on ${distro.name}",
+                    onClick = onLaunchKde
+                )
+            }
+
+            IconButton(
+                onClick = onSettings,
+                modifier = Modifier.size(34.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Settings,
+                    contentDescription = "Distro settings",
+                    tint = TextSecondary,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
         }
+    }
+}
+
+// Compact monochrome launch pill: frost surface, hairline border, small icon +
+// label. Same height/pill shape as the Shell button; no fill, no glow.
+@Composable
+private fun EnvDesktopPill(
+    icon: ImageVector,
+    label: String,
+    contentDescription: String,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .height(30.dp)
+            .clip(RoundedCornerShape(50))
+            .background(FrostSurface)
+            .border(0.75.dp, FrostHairline, RoundedCornerShape(50))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = TextSecondary,
+            modifier = Modifier.size(13.dp)
+        )
+        Spacer(Modifier.width(4.dp))
+        Text(
+            text = label,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = TextPrimary,
+            maxLines = 1
+        )
     }
 }
 
@@ -801,7 +929,7 @@ private fun DesktopLogsDialog(
             shape = RoundedCornerShape(20.dp),
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 6.dp,
-            border = androidx.compose.foundation.BorderStroke(1.dp, FrostHairline)
+            border = androidx.compose.foundation.BorderStroke(0.75.dp, FrostHairline)
         ) {
             Column(Modifier.padding(16.dp)) {
                 Row(
@@ -860,7 +988,7 @@ private fun DesktopLogsDialog(
                         .clip(RoundedCornerShape(12.dp))
                         .background(Color(0xFF101214))
                         .border(
-                            androidx.compose.foundation.BorderStroke(1.dp, FrostHairline),
+                            androidx.compose.foundation.BorderStroke(0.75.dp, FrostHairline),
                             RoundedCornerShape(12.dp)
                         )
                         .padding(12.dp)
@@ -955,7 +1083,7 @@ private fun LaunchModeAction(
             colors = ButtonDefaults.outlinedButtonColors(
                 contentColor = if (danger) FolioDanger else TextPrimary
             ),
-            border = androidx.compose.foundation.BorderStroke(1.dp, FrostHairline),
+            border = androidx.compose.foundation.BorderStroke(0.75.dp, FrostHairline),
             shape = RoundedCornerShape(16.dp),
             contentPadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp),
             modifier = Modifier.fillMaxWidth().height(64.dp)
@@ -1033,7 +1161,7 @@ private fun KdeGpuPickerDialog(
             shape = RoundedCornerShape(24.dp),
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 8.dp,
-            border = androidx.compose.foundation.BorderStroke(1.dp, FrostHairline)
+            border = androidx.compose.foundation.BorderStroke(0.75.dp, FrostHairline)
         ) {
             Column(
                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 28.dp),
@@ -1094,7 +1222,7 @@ private fun KdeGpuPickerDialog(
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(12.dp))
                         .background(FrostSurface)
-                        .border(androidx.compose.foundation.BorderStroke(1.dp, FrostHairline), RoundedCornerShape(12.dp))
+                        .border(androidx.compose.foundation.BorderStroke(0.75.dp, FrostHairline), RoundedCornerShape(12.dp))
                         .padding(12.dp)
                 ) {
                     Row(verticalAlignment = Alignment.Top) {
@@ -1152,7 +1280,7 @@ private fun GpuOptionCard(
             .clip(RoundedCornerShape(20.dp))
             .background(FrostSurface)
             .border(
-                androidx.compose.foundation.BorderStroke(1.dp, FrostHairline),
+                androidx.compose.foundation.BorderStroke(0.75.dp, FrostHairline),
                 RoundedCornerShape(20.dp)
             )
             .clickable(onClick = onClick)

@@ -1,9 +1,9 @@
 #!/bin/sh
-# uninstall_guest_chroot.sh — remove a FluxLinux guest chroot (Requires Root)
+# uninstall_guest_chroot.sh — remove a Folio guest chroot (Requires Root)
 # Target from FLUX_CHROOT (must be set). Does not remove shared fluxlinux_chroot.sh.
 
 GUESTPATH="${FLUX_CHROOT:-}"
-LAUNCH_SCRIPTS="/data/local/tmp/start_guest_gui.sh /data/local/tmp/stop_guest_gui.sh"
+LAUNCH_SCRIPTS="/data/local/folio/helpers/start_guest_gui.sh /data/local/folio/helpers/stop_guest_gui.sh"
 
 error()    { printf "\033[1;31m[!] %s\033[0m\n" "$1"; }
 success()  { printf "\033[1;32m[✓] %s\033[0m\n" "$1"; }
@@ -20,12 +20,12 @@ if [ -z "$GUESTPATH" ]; then
 fi
 
 case "$GUESTPATH" in
-    /data/local/tmp/chrootDebian13|/data/local/tmp/chrootAlpine|\
-    /data/local/tmp/chrootFedora|/data/local/tmp/chrootVoid|\
-    /data/local/tmp/chrootOpenSUSE|/data/local/tmp/chrootDeepin|\
-    /data/local/tmp/chrootChimera|/data/local/tmp/chrootManjaro|\
-    /data/local/tmp/chrootUbuntu|/data/local/tmp/chrootKali|\
-    /data/local/tmp/chrootParrot|/data/local/tmp/chrootArch) ;;
+    /data/local/folio/chroots/debian|/data/local/folio/chroots/alpine|\
+    /data/local/folio/chroots/fedora|/data/local/folio/chroots/void|\
+    /data/local/folio/chroots/opensuse|/data/local/folio/chroots/deepin|\
+    /data/local/folio/chroots/chimera|/data/local/folio/chroots/manjaro|\
+    /data/local/folio/chroots/ubuntu|/data/local/folio/chroots/kali|\
+    /data/local/folio/chroots/parrot|/data/local/folio/chroots/archlinux) ;;
     *)
         error "Refusing to remove unexpected path: $GUESTPATH"
         exit 1
@@ -40,7 +40,7 @@ _rr=""
 for _c in \
   "${FLUX_RESOLVE_BB:-}" \
   "$(dirname "$0")/resolve_bb.sh" \
-  /data/local/tmp/fluxlinux_resolve_bb.sh
+  /data/local/folio/helpers/fluxlinux_resolve_bb.sh
 do
   [ -n "$_c" ] && [ -f "$_c" ] && _rr="$_c" && break
 done
@@ -52,9 +52,9 @@ fi
 if [ -z "${BB:-}" ]; then
   if [ -n "${FLUX_BB:-}" ] && [ -x "$FLUX_BB" ] &&
      "$FLUX_BB" --list >/dev/null 2>&1; then BB="$FLUX_BB"; fi
-  if [ -z "${BB:-}" ] && [ -x /data/local/tmp/flux_busybox ] &&
-     /data/local/tmp/flux_busybox --list >/dev/null 2>&1; then
-    BB=/data/local/tmp/flux_busybox
+  if [ -z "${BB:-}" ] && [ -x /data/local/folio/busybox/flux_busybox ] &&
+     /data/local/folio/busybox/flux_busybox --list >/dev/null 2>&1; then
+    BB=/data/local/folio/busybox/flux_busybox
   fi
   if [ -z "${BB:-}" ]; then
     for path in \

@@ -68,7 +68,7 @@ fun ActiveDesktopCard(
             .fillMaxWidth()
             .clip(cardShape)
             .background(FrostSurface)
-            .border(1.dp, FolioFrostBorder, cardShape)
+            .border(0.75.dp, FolioFrostBorder, cardShape)
             .semantics(mergeDescendants = true) {
                 contentDescription = a11yDesc
             }
@@ -83,7 +83,7 @@ fun ActiveDesktopCard(
                     .size(40.dp)
                     .clip(RoundedCornerShape(12.dp))
                     .background(Color.White.copy(alpha = 0.06f))
-                    .border(1.dp, FrostHairline, RoundedCornerShape(12.dp)),
+                    .border(0.75.dp, FrostHairline, RoundedCornerShape(12.dp)),
                 contentAlignment = Alignment.Center
             ) {
                 if (iconRes != null) {
@@ -159,7 +159,7 @@ fun ActiveDesktopCard(
                 colors = ButtonDefaults.outlinedButtonColors(
                     contentColor = TextPrimary
                 ),
-                border = androidx.compose.foundation.BorderStroke(1.dp, FrostHairline),
+                border = androidx.compose.foundation.BorderStroke(0.75.dp, FrostHairline),
                 shape = RoundedCornerShape(50),
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
                 modifier = Modifier
@@ -180,7 +180,7 @@ fun ActiveDesktopCard(
                 colors = ButtonDefaults.outlinedButtonColors(
                     contentColor = FolioDanger
                 ),
-                border = androidx.compose.foundation.BorderStroke(1.dp, FrostHairline),
+                border = androidx.compose.foundation.BorderStroke(0.75.dp, FrostHairline),
                 shape = RoundedCornerShape(50),
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
                 modifier = Modifier

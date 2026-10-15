@@ -4,7 +4,7 @@
 DISTRO=${1:-debian}
 
 echo "========================================"
-echo "FluxLinux: Stopping GUI for $DISTRO"
+echo "Folio: Stopping GUI for $DISTRO"
 echo "========================================"
 
 # Step 1: Kill XFCE processes inside proot

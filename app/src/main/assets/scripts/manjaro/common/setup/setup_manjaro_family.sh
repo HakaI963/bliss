@@ -22,10 +22,10 @@ fi
 # setup_arch_family.sh. Empty pacman keyring → pacman-key --init is mandatory.
 
 DISTRO_NAME="${1:-manjaro}"
-echo "FluxLinux: Configuring ${DISTRO_NAME} (Manjaro Family)..."
+echo "Folio: Configuring ${DISTRO_NAME} (Manjaro Family)..."
 
 if [ "$(id -u)" -ne 0 ]; then
-    echo "FluxLinux: ERROR: must run as root inside the guest (got uid=$(id -u))."
+    echo "Folio: ERROR: must run as root inside the guest (got uid=$(id -u))."
     exit 1
 fi
 
@@ -38,7 +38,7 @@ _flux_ensure_tmp
 _flux_ensure_dns
 
 if ! command -v pacman >/dev/null 2>&1; then
-    echo "FluxLinux: ERROR: pacman not found"
+    echo "Folio: ERROR: pacman not found"
     exit 1
 fi
 
@@ -178,36 +178,50 @@ if ! pacman -Sy --noconfirm; then
         _flux_comment_community_repo
     fi
     pacman -Sy --noconfirm || {
-        echo "FluxLinux: pacman -Sy failed (repos/network)"
+        echo "Folio: pacman -Sy failed (repos/network)"
         exit 1
     }
 fi
 
-_flux_log "Installing base + XFCE packages (targeted — no xfce4 group first)..."
+_flux_log "Installing base packages..."
 if ! pacman -S --noconfirm --needed \
     shadow sudo git zsh python sed gzip \
     dbus-broker-units \
-    xfce4-session xfce4-panel xfce4-settings xfce4-terminal \
-    xfdesktop xfwm4 thunar \
     ttf-dejavu adwaita-icon-theme \
     mesa mesa-utils \
     fastfetch \
     dbus; then
-    echo "FluxLinux: XFCE install failed"
+    echo "Folio: base package install failed"
     exit 1
 fi
 
-# Fallback: full xfce4 group only if startxfce4 is still missing.
-if ! command -v startxfce4 >/dev/null 2>&1 && [ ! -e /usr/bin/startxfce4 ]; then
-    _flux_log "startxfce4 missing — falling back to xfce4 group"
-    pacman -S --noconfirm --needed xfce4 || true
+# Desktop gate: FLUX_DESKTOP (env mirror FLUX_DESKTOP_ENV) = xfce | kde | none.
+# Unset/empty → xfce (backward compat); xfce4 is normalized to xfce.
+DESKTOP_CHOICE="${FLUX_DESKTOP:-${FLUX_DESKTOP_ENV:-xfce}}"
+case "$DESKTOP_CHOICE" in
+    xfce4) DESKTOP_CHOICE=xfce ;;
+esac
+if [ "$DESKTOP_CHOICE" = "xfce" ]; then
+    _flux_log "Installing XFCE packages (targeted — no xfce4 group first)..."
+    if ! pacman -S --noconfirm --needed \
+        xfce4-session xfce4-panel xfce4-settings xfce4-terminal \
+        xfdesktop xfwm4 thunar; then
+        echo "Folio: XFCE install failed"
+        exit 1
+    fi
+
+    # Fallback: full xfce4 group only if startxfce4 is still missing.
+    if ! command -v startxfce4 >/dev/null 2>&1 && [ ! -e /usr/bin/startxfce4 ]; then
+        _flux_log "startxfce4 missing — falling back to xfce4 group"
+        pacman -S --noconfirm --needed xfce4 || true
+    fi
 fi
 
 _flux_ensure_dbus
 
 # zshrc + Proot/ChrootCommandBuilder export LANG=en_US.UTF-8.
 # Bootstrap ships locale.gen fully commented and no locale-archive, so
-# setlocale fails and agnosterzak dies: "prompt_segment:5: character not in range"
+# setlocale fails and the zsh prompt dies: "prompt_segment:5: character not in range"
 _flux_ensure_locale() {
     _flux_ensure_en_us_locale || return 1
 }
@@ -224,7 +238,9 @@ _flux_ensure_hostname() {
     hostname manjaro 2>/dev/null || true
 }
 
-_flux_require_startxfce4
+if [ "$DESKTOP_CHOICE" = "xfce" ]; then
+    _flux_require_startxfce4
+fi
 _flux_ensure_user
 _flux_ensure_sudo
 _flux_ensure_home
@@ -234,5 +250,5 @@ _flux_ensure_hostname
 _flux_write_gpu_mode virgl
 _flux_fix_pm_writable
 
-echo "FluxLinux: ${DISTRO_NAME} Manjaro setup complete!"
+echo "Folio: ${DISTRO_NAME} Manjaro setup complete!"
 exit 0

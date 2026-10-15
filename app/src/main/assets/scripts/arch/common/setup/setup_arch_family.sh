@@ -23,10 +23,10 @@ fi
 # HoldPkg stays pacman glibc. User alarm occupies uid 1000 — rename to flux.
 
 DISTRO_NAME="${1:-archlinux}"
-echo "FluxLinux: Configuring ${DISTRO_NAME} (Arch Family)..."
+echo "Folio: Configuring ${DISTRO_NAME} (Arch Family)..."
 
 if [ "$(id -u)" -ne 0 ]; then
-    echo "FluxLinux: ERROR: must run as root inside the guest (got uid=$(id -u))."
+    echo "Folio: ERROR: must run as root inside the guest (got uid=$(id -u))."
     exit 1
 fi
 
@@ -38,7 +38,7 @@ _flux_ensure_tmp
 _flux_ensure_dns
 
 if ! command -v pacman >/dev/null 2>&1; then
-    echo "FluxLinux: ERROR: pacman not found"
+    echo "Folio: ERROR: pacman not found"
     exit 1
 fi
 
@@ -156,26 +156,40 @@ _flux_ensure_groups
 
 _flux_log "pacman -Sy..."
 if ! pacman -Sy --noconfirm; then
-    echo "FluxLinux: pacman -Sy failed (repos/network)"
+    echo "Folio: pacman -Sy failed (repos/network)"
     exit 1
 fi
 
-_flux_log "Installing base + XFCE packages (targeted — no xfce4 group first)..."
+_flux_log "Installing base packages..."
 if ! pacman -S --noconfirm --needed \
     sudo \
     git zsh python sed gzip \
-    xfce4-session xfce4-panel xfce4-settings xfce4-terminal \
-    xfdesktop xfwm4 thunar \
     ttf-dejavu adwaita-icon-theme \
     mesa mesa-utils \
     dbus xz; then
-    echo "FluxLinux: XFCE install failed"
+    echo "Folio: base package install failed"
     exit 1
 fi
 
-if ! command -v startxfce4 >/dev/null 2>&1 && [ ! -e /usr/bin/startxfce4 ]; then
-    _flux_log "startxfce4 missing — falling back to xfce4 group"
-    pacman -S --noconfirm --needed xfce4 || true
+# Desktop gate: FLUX_DESKTOP (env mirror FLUX_DESKTOP_ENV) = xfce | kde | none.
+# Unset/empty → xfce (backward compat); xfce4 is normalized to xfce.
+DESKTOP_CHOICE="${FLUX_DESKTOP:-${FLUX_DESKTOP_ENV:-xfce}}"
+case "$DESKTOP_CHOICE" in
+    xfce4) DESKTOP_CHOICE=xfce ;;
+esac
+if [ "$DESKTOP_CHOICE" = "xfce" ]; then
+    _flux_log "Installing XFCE packages (targeted — no xfce4 group first)..."
+    if ! pacman -S --noconfirm --needed \
+        xfce4-session xfce4-panel xfce4-settings xfce4-terminal \
+        xfdesktop xfwm4 thunar; then
+        echo "Folio: XFCE install failed"
+        exit 1
+    fi
+
+    if ! command -v startxfce4 >/dev/null 2>&1 && [ ! -e /usr/bin/startxfce4 ]; then
+        _flux_log "startxfce4 missing — falling back to xfce4 group"
+        pacman -S --noconfirm --needed xfce4 || true
+    fi
 fi
 
 _flux_ensure_dbus
@@ -195,7 +209,9 @@ if id flux >/dev/null 2>&1 && ! id -u 1000 >/dev/null 2>&1; then
     usermod -u 1000 -d /home/flux flux 2>/dev/null || true
 fi
 
-_flux_require_startxfce4
+if [ "$DESKTOP_CHOICE" = "xfce" ]; then
+    _flux_require_startxfce4
+fi
 _flux_ensure_user
 echo "flux:flux" | chpasswd 2>/dev/null || true
 if command -v usermod >/dev/null 2>&1; then
@@ -208,5 +224,5 @@ _flux_ensure_en_us_locale || exit 1
 _flux_write_gpu_mode virgl
 _flux_fix_pm_writable
 
-echo "FluxLinux: ${DISTRO_NAME} Arch setup complete!"
+echo "Folio: ${DISTRO_NAME} Arch setup complete!"
 exit 0

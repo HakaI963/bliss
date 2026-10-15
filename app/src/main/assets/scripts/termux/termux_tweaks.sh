@@ -3,7 +3,7 @@
 # Enhance Termux with Oh My Zsh, themes, fonts, and fastfetch
 # Based on: https://github.com/abhay-byte/Linux_Setup
 
-echo "🎨 FluxLinux: Enhancing Termux Environment..."
+echo "🎨 Folio: Enhancing Termux Environment..."
 
 install_ohmyzsh() {
     echo "🐚 Installing Oh My Zsh..."
@@ -16,12 +16,24 @@ install_ohmyzsh() {
     git clone --depth 1 https://github.com/marlonrichert/zsh-autocomplete.git "$ZSH_CUSTOM/plugins/zsh-autocomplete"
 
     echo "⚙️ Configuring .zshrc..."
+    # Monochrome Folio prompt theme (local; replaces the old colorful default).
+    mkdir -p "$ZSH_CUSTOM/themes"
+    rm -f "$ZSH_CUSTOM/themes/agnosterzak.zsh-theme" 2>/dev/null || true
+    if [ ! -s "$ZSH_CUSTOM/themes/folio.zsh-theme" ]; then
+        cat > "$ZSH_CUSTOM/themes/folio.zsh-theme" <<'FOLIO_THEME_EOF'
+# folio.zsh-theme — Folio's minimal monochrome prompt.
+# White/gray on black only; ASCII-safe (no powerline glyphs, no ANSI colors 31-44).
+# Segments:  time  folio  working-dir  input-char
+PROMPT='%F{240}%D{%H:%M}%f %F{255}folio%f %F{250}%~%f %F{255}%#%f '
+PROMPT2='%F{240}> %f'
+FOLIO_THEME_EOF
+    fi
     if grep -q "plugins=" "$HOME/.zshrc" 2>/dev/null; then
         sed -i 's/plugins=(.*)/plugins=(git zsh-autosuggestions zsh-syntax-highlighting)/' "$HOME/.zshrc"
     else
         echo 'plugins=(git zsh-autosuggestions zsh-syntax-highlighting)' >> "$HOME/.zshrc"
     fi
-    sed -i 's/^ZSH_THEME=.*$/ZSH_THEME="random"/' "$HOME/.zshrc"
+    sed -i 's/^ZSH_THEME=.*$/ZSH_THEME="folio"/' "$HOME/.zshrc"
     echo "✅ Zsh configuration complete."
 }
 
@@ -157,16 +169,40 @@ configure_fastfetch() {
     rm -f "$PREFIX/etc/motd"
 
     echo "⚡ Configuring fastfetch..."
+    # Monochrome Folio preset written locally (no remote colorful download).
     mkdir -p ~/.local/share/fastfetch/presets
-    curl -fsSL https://raw.githubusercontent.com/abhay-byte/Linux_Setup/dev/config/termux.jsonc \
-        -o ~/.local/share/fastfetch/presets/termux.jsonc
+    cat > ~/.local/share/fastfetch/presets/termux.jsonc <<'FFEOF'
+{
+  "logo": null,
+  "display": { "separator": " ›  " },
+  "modules": [
+    { "type": "os", "key": "OS  " },
+    { "type": "kernel", "key": "KER " },
+    { "type": "cpu", "key": "CPU " },
+    { "type": "gpu", "key": "GPU " },
+    { "type": "packages", "key": "PKG " },
+    { "type": "shell", "key": "SH  " },
+    { "type": "terminal", "key": "TER " },
+    {
+      "type": "disk",
+      "key": "DSK ",
+      "folders": ["/"],
+      "showRemovable": false,
+      "showHidden": false,
+      "showSubvolumes": false
+    },
+    { "type": "memory", "key": "MEM " },
+    { "type": "swap", "key": "SWP " }
+  ]
+}
+FFEOF
 
     RCFILE="$HOME/.zshrc"
     [ -f "$RCFILE" ] || touch "$RCFILE"
 
-    # Add fastfetch at top if missing
-    if ! grep -q 'fastfetch --config termux' "$RCFILE"; then
-        sed -i '1ifastfetch --config termux' "$RCFILE"
+    # Add fastfetch at top if missing (prefers the local monochrome preset).
+    if ! grep -q 'fastfetch --config' "$RCFILE"; then
+        sed -i '1ifastfetch --config "$HOME/.local/share/fastfetch/presets/termux.jsonc" 2>/dev/null || fastfetch 2>/dev/null || true' "$RCFILE"
     fi
 
     echo "✅ Fastfetch configured."
@@ -181,7 +217,7 @@ install_nerd_font
 configure_fastfetch
 
 echo ""
-echo "🎉 FluxLinux: Termux enhancement complete!"
+echo "🎉 Folio: Termux enhancement complete!"
 echo "🔄 Restart Termux to see all changes."
 
 # Create marker file to track tweaks application

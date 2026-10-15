@@ -4,15 +4,59 @@
 # Mirrors what setup_debian_family.sh does, but installs KDE Plasma instead of XFCE4
 # Usage: setup_kde_debian.sh <distro_name> [uninstall]
 
-# KDE-specific packages. Shared system packages (xorg, xauth, dbus-x11,
-# tigervnc-standalone-server, sddm) and the 'flux' user are intentionally
-# excluded — they're used by XFCE and other components.
+# KDE applications on top of the base Plasma stack. Everything the session
+# actually needs is in BASE_PKGS below — this component is self-sufficient and
+# does NOT assume the XFCE component ran first (the user may pick KDE only).
+#
+# Package names are Debian trixie / Plasma 6 (verified against the trixie
+# arm64 index — both the `debian` proot and `debian13_chroot` cards ship
+# debian_13_rootfs.tar.xz):
+#   spectacle      → kde-spectacle   (renamed in Plasma 6)
+#   kwallet-pam    → libpam-kwallet5 (renamed in Plasma 6)
+# A wrong name makes `apt install` exit 100, which aborts the whole component.
 PKGS=(
     kde-standard
-    spectacle
-    kwallet-pam
+    kde-spectacle
+    libpam-kwallet5
     qt5ct
+    systemsettings
+    plasma-discover
+    kinfocenter
+    okular
+    gwenview
+    kcalc
+    kwrite
+    kfind
+    filelight
+    partitionmanager
+)
+
+# Shared system stack the KDE session needs just like XFCE does (X server, VNC,
+# D-Bus session bus, sudo for the flux user). Installed here too so a KDE-only
+# install works even when setup_debian_family.sh never ran.
+BASE_PKGS=(
+    sudo
+    xorg
+    xauth
+    dbus-x11
+    tigervnc-standalone-server
+    sddm
+)
+
+# Release-varying extras: installed best-effort so a package that only exists
+# on some Debian releases (qt5-style-plugins: bookworm, dropped in trixie)
+# can never fail the component.
+EXTRA_PKGS=(
     qt5-style-plugins
+)
+
+# Teardown removes the KDE/Plasma packages only. xorg / dbus-x11 /
+# tigervnc-standalone-server / sddm are shared with XFCE and stay installed.
+PURGE_PKGS=(
+    kde-standard
+    kde-spectacle
+    libpam-kwallet5
+    qt5ct
     systemsettings
     plasma-discover
     kinfocenter
@@ -31,17 +75,18 @@ if [ "$1" = "uninstall" ] || [ "$2" = "uninstall" ]; then
     DISTRO_NAME="${1:-debian}"
     [ "$1" = "uninstall" ] && DISTRO_NAME="debian"
 
-    echo "FluxLinux: Uninstalling KDE Plasma Environment..."
-
     export DEBIAN_FRONTEND=noninteractive
-    apt remove -y --purge "${PKGS[@]}" 2>/dev/null || true
+    echo "Folio: Uninstalling KDE Plasma Environment..."
+
+    apt remove -y --purge "${PURGE_PKGS[@]}" 2>/dev/null || true
     apt autoremove -y 2>/dev/null || true
 
-    # Remove KDE-specific marker and config
+    # Remove KDE-specific marker and runtime env helper only.
+    # Never remove /home/flux/.vnc — that file belongs to the XFCE component too.
     rm -f /home/flux/.fluxlinux/kde_installed
-    rm -rf /home/flux/.vnc  # KDE xstartup; vncserver will be re-created by xfce install if needed
+    rm -f /usr/local/lib/fluxlinux/flux_kde_env.sh
 
-    echo "FluxLinux: KDE Plasma Environment Uninstalled."
+    echo "Folio: KDE Plasma Environment Uninstalled."
     exit 0
 fi
 # ─── END UNINSTALL MODE ──────────────────────────────────────────────────
@@ -49,16 +94,20 @@ fi
 DISTRO_NAME="${1:-debian}"
 LOG_FILE="/tmp/fluxlinux_kde_install.log"
 
-echo "FluxLinux: Configuring ${DISTRO_NAME} with KDE Plasma..."
+# ── Error Handler ────────────────────────────────────────────────────────
+# Never block on stdin: component sessions (GuestSessionFactory) attach a pty,
+# so "[ -t 0 ]" is true and a bare `read` hangs the terminal tab forever and
+# the install never reports completion. Pauses are opt-in (FLUX_INTERACTIVE=1).
+_flux_pause() {
+    if [ "${FLUX_INTERACTIVE:-0}" = "1" ] && [ -t 0 ]; then
+        read -p "$1"
+    fi
+}
 
-# Redirect all output to log
-exec > >(tee -a "$LOG_FILE") 2>&1
-
-# ── Error Handler ──────────────────────────────────────────────────────────────
 handle_error() {
     local STEP="$1"
     echo ""
-    echo "❌ FluxLinux KDE Error: Script failed at step: $STEP"
+    echo "❌ Folio KDE Error: Script failed at step: $STEP"
     echo "──────────────────────────────────────────────────────"
     echo "Log saved to: $LOG_FILE"
     echo ""
@@ -66,63 +115,56 @@ handle_error() {
     echo "  Email: abhay02delhi@gmail.com"
     echo "  GitHub: https://github.com/abhay-byte/fluxlinux/issues"
     echo "──────────────────────────────────────────────────────"
-    read -p "Press Enter to acknowledge error and exit..."
-
-    # Notify FluxLinux app of failure
-    am start -a android.intent.action.VIEW \
-        -d "fluxlinux://callback?result=failure&name=kde_plasma_install_${DISTRO_NAME}" \
-        2>/dev/null || true
+    _flux_pause "Press Enter to acknowledge error and exit..."
 
     exit 1
 }
 
+# Setup scripts must run as root inside proot/chroot (apt/dpkg).
+if [ "$(id -u)" -ne 0 ]; then
+    echo "Folio: ERROR: must run as root inside the guest (got uid=$(id -u))."
+    echo "Folio: Component sessions should use --user root; re-run from Distro Settings."
+    handle_error "Not Root"
+fi
+
+echo "Folio: Configuring ${DISTRO_NAME} with KDE Plasma..."
+
+# Redirect all output to log
+exec > >(tee -a "$LOG_FILE") 2>&1
+
 export DEBIAN_FRONTEND=noninteractive
 
-# 1. Update and install KDE Plasma core + goodies
+# 1. Update and install KDE Plasma core + the shared base stack
 echo "[1/7] Updating package lists..."
 apt update -y || handle_error "apt update"
 
 echo "[2/7] Installing KDE Plasma desktop (full suite)..."
-# kde-standard: meta-package for complete KDE Plasma 6 suite on Debian Trixie
+# kde-standard: meta-package for the complete KDE Plasma 6 suite on Debian Trixie
 # Includes: plasmashell, kwin, systemsettings, dolphin, konsole, kate, ark,
-#           gwenview, okular, spectacle, kcalc, kscreen, kinfocenter, and more
-apt install -y \
-    kde-standard \
-    sddm \
-    dbus-x11 \
-    xorg \
-    xauth \
-    tigervnc-standalone-server || handle_error "KDE Plasma package installation"
+#           gwenview, okular, spectacle, kcalc, kscreen, kinfocenter, and more.
+# Recommends stay enabled — that is what makes the desktop actually usable.
+apt install -y "${PKGS[@]}" "${BASE_PKGS[@]}" || handle_error "KDE Plasma package installation"
 
 # 2. Install useful KDE apps + optional packages (non-critical, failures are tolerated)
-echo "[3/7] Installing KDE apps..."
-apt install -y --no-install-recommends \
-    spectacle \
-    kwallet-pam \
-    qt5ct \
-    qt5-style-plugins \
-    systemsettings \
-    plasma-discover \
-    kinfocenter \
-    okular \
-    gwenview \
-    kcalc \
-    kwrite \
-    kfind \
-    filelight \
-    partitionmanager 2>/dev/null || true
+echo "[3/7] Installing KDE extras..."
+apt install -y --no-install-recommends "${EXTRA_PKGS[@]}" 2>/dev/null || true
 
-# 3. Create user 'flux'
+# 3. Create user 'flux' (idempotent — setup_debian_family.sh may have made it)
 echo "[4/7] Creating user flux..."
 if ! id "flux" &>/dev/null; then
     useradd -m -s /bin/bash flux || handle_error "Create user flux"
     echo "flux:flux" | chpasswd
-    usermod -aG sudo flux
+    usermod -aG sudo flux 2>/dev/null || true
 fi
 
-# 4. Configure Sudo NOPASSWD
+# 4. Configure Sudo NOPASSWD (mkdir first — /etc/sudoers.d needs the sudo pkg,
+#    and a KDE-only install may not have created it yet). rm -f keeps re-runs of
+#    this component working (sudoers.d files are mode 0440 → unwritable).
 echo "[5/7] Configuring sudo..."
+mkdir -p /etc/sudoers.d || handle_error "Configure sudo"
+rm -f /etc/sudoers.d/flux 2>/dev/null || true
 echo "flux ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/flux || handle_error "Configure sudo"
+chmod 440 /etc/sudoers.d/flux 2>/dev/null || true
 
 # 5. Configure VNC for KDE (xstartup)
 echo "[6/7] Setting up KDE session launcher..."
@@ -163,10 +205,8 @@ touch /home/flux/.fluxlinux/kde_installed
 chown -R flux:flux /home/flux/.fluxlinux
 
 echo ""
-echo "✅ FluxLinux: KDE Plasma base setup for ${DISTRO_NAME} complete!"
+echo "✅ Folio: KDE Plasma base setup for ${DISTRO_NAME} complete!"
 echo "Log saved at: $LOG_FILE"
 
-# Notify FluxLinux app of success
-am start -a android.intent.action.VIEW \
-    -d "fluxlinux://callback?result=success&name=kde_plasma_install_${DISTRO_NAME}" \
-    2>/dev/null || true
+
+exit 0

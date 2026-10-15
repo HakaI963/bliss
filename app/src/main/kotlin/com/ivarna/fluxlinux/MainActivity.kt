@@ -10,43 +10,30 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.DesktopWindows
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.rememberPermissionState
-import com.google.accompanist.permissions.isGranted
 import com.ivarna.fluxlinux.ui.components.BottomTab
 import com.ivarna.fluxlinux.ui.components.GlassBottomNavigation
 import com.ivarna.fluxlinux.ui.components.GlassScaffold
 import com.ivarna.fluxlinux.ui.theme.FluxLinuxTheme
 import com.ivarna.fluxlinux.core.utils.StateManager
-import com.ivarna.fluxlinux.core.utils.ThemePreferences
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.hazeChild
@@ -82,20 +69,34 @@ class MainActivity : ComponentActivity() {
             // FGS notification tap → jump to in-app terminal (bottom-nav tab)
             setIntent(intent)
             lifecycleScope.launch { }
-            currentScreenRef?.value = Screen.HOME
-            currentTabRef?.value = BottomTab.TERMINAL
+            requestScreenFromIntent(Screen.HOME)
+            requestTabFromIntent(BottomTab.TERMINAL)
         } else if (intent.getStringExtra("EXTRA_TARGET_PAGE") == "home" || intent.getStringExtra("target_page") == "home") {
             setIntent(intent)
-            currentScreenRef?.value = Screen.HOME
-            currentTabRef?.value = BottomTab.HOME
+            requestScreenFromIntent(Screen.HOME)
+            requestTabFromIntent(BottomTab.HOME)
         }
     }
 
-    /** Screen state holder set by onCreate (used by FGS notification tap). */
-    private var currentScreenRef: kotlinx.coroutines.flow.MutableStateFlow<Screen>? = null
+    /**
+     * External intent requests (FGS notification tap, deep links) queue here and
+     * are drained once by the composition. One-shot request channels keep the
+     * write direction single: the request writes the queue, the composition
+     * reads it and updates the real snapshot state. Nothing mirrors state back
+     * out, so no recomposition loop can form.
+     */
+    private val pendingTabRequest = kotlinx.coroutines.flow.MutableSharedFlow<BottomTab>(replay = 1)
+    private val pendingScreenRequest = kotlinx.coroutines.flow.MutableSharedFlow<Screen>(replay = 1)
 
-    /** Bottom-tab holder so FGS / external intents can select Terminal. */
-    private var currentTabRef: kotlinx.coroutines.flow.MutableStateFlow<BottomTab>? = null
+    /** Queue a tab switch from outside Compose. */
+    private fun requestTabFromIntent(tab: BottomTab) {
+        pendingTabRequest.tryEmit(tab)
+    }
+
+    /** Queue a screen switch from outside Compose. */
+    private fun requestScreenFromIntent(screen: Screen) {
+        pendingScreenRequest.tryEmit(screen)
+    }
 
     private fun handleScriptCallback(intent: android.content.Intent) {
         android.util.Log.d("FluxLinux", "handleScriptCallback called with action: ${intent.action}, data: ${intent.data}")
@@ -268,21 +269,27 @@ class MainActivity : ComponentActivity() {
     ): Map<String, String> {
         val theme = extraEnv["FLUX_THEME"] ?: "dark"
         val merged = extraEnv.toMutableMap()
+        // KDE customization ships its own Breeze/Papirus theming and ignores the
+        // XFCE theme assets + FLUX_SKIP_THEME_ICONS, so staging them is pure
+        // waste (the Oh My Zsh stage below stays useful for both desktops).
+        val isKde = merged["FLUX_DESKTOP"] == "kde"
         val profile = com.ivarna.fluxlinux.core.install.DistroInstallProfile.forId(distroId)
         // Chroot cards stage into the chroot guest /tmp (root copy) and let the
         // guest extract. Never target the sibling proot container, and never
         // set FLUX_SKIP_THEME_ICONS for a chroot — the guest must extract.
         if (profile?.method == "chroot") {
-            val chrootPath = profile.chrootPath
-                ?: com.ivarna.fluxlinux.core.root.ChrootPaths.CHROOT_PATH
-            try {
-                com.ivarna.fluxlinux.core.install.ProotXfceAssetInstaller.installToChroot(
-                    activity, theme, chrootPath
-                ) { line ->
-                    android.util.Log.i("FluxLinux", "Chroot theme ($chrootPath): $line")
+            if (!isKde) {
+                val chrootPath = profile.chrootPath
+                    ?: com.ivarna.fluxlinux.core.root.ChrootPaths.CHROOT_PATH
+                try {
+                    com.ivarna.fluxlinux.core.install.ProotXfceAssetInstaller.installToChroot(
+                        activity, theme, chrootPath
+                    ) { line ->
+                        android.util.Log.i("FluxLinux", "Chroot theme ($chrootPath): $line")
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.w("FluxLinux", "Chroot theme stage failed", e)
                 }
-            } catch (e: Exception) {
-                android.util.Log.w("FluxLinux", "Chroot theme stage failed", e)
             }
             // OMZ + pokemon are guest-side for pure chroot (no host git).
             // Do not set FLUX_SKIP_OMZ / FLUX_SKIP_POKEMON — script defaults try.
@@ -290,15 +297,17 @@ class MainActivity : ComponentActivity() {
         }
         val prootName = profile?.prootName?.takeIf { it.isNotBlank() }
             ?: distroId.removeSuffix("_chroot").ifBlank { "debian" }
-        try {
-            val themeOk = com.ivarna.fluxlinux.core.install.ProotXfceAssetInstaller.install(
-                activity, theme, prootName
-            ) { line ->
-                android.util.Log.i("FluxLinux", "Host theme ($prootName): $line")
+        if (!isKde) {
+            try {
+                val themeOk = com.ivarna.fluxlinux.core.install.ProotXfceAssetInstaller.install(
+                    activity, theme, prootName
+                ) { line ->
+                    android.util.Log.i("FluxLinux", "Host theme ($prootName): $line")
+                }
+                if (themeOk) merged["FLUX_SKIP_THEME_ICONS"] = "1"
+            } catch (e: Exception) {
+                android.util.Log.w("FluxLinux", "Host theme stage failed", e)
             }
-            if (themeOk) merged["FLUX_SKIP_THEME_ICONS"] = "1"
-        } catch (e: Exception) {
-            android.util.Log.w("FluxLinux", "Host theme stage failed", e)
         }
         try {
             val omzOk = com.ivarna.fluxlinux.core.install.ProotZshBootstrap.install(
@@ -559,29 +568,30 @@ class MainActivity : ComponentActivity() {
                     permission = "com.termux.permission.RUN_COMMAND"
                 )
 
-                // Navigation state
-                var currentScreen by remember { 
-                    mutableStateOf(if (onboardingComplete) Screen.HOME else Screen.ONBOARDING) 
+                // ── Navigation state ──────────────────────────────────────────
+                // Compose snapshot state is the single source of truth for the
+                // tab. External requests (FGS notification tap, deep links) go
+                // through one-shot request channels (pendingTabRequest /
+                // pendingScreenRequest) that are drained exactly once below.
+                // Nothing ever mirrors tab state back out — the old
+                // ref.round-trip (write ref → collect → LaunchedEffect → write
+                // state) formed a feedback loop a tab swap could never settle
+                // out of, which crashed Home → any other tab.
+                var currentScreen by remember {
+                    mutableStateOf(if (onboardingComplete) Screen.HOME else Screen.ONBOARDING)
                 }
-                currentScreenRef = remember { kotlinx.coroutines.flow.MutableStateFlow(currentScreen) }
-                LaunchedEffect(currentScreen) { currentScreenRef?.value = currentScreen }
-                
                 var currentTab by remember { mutableStateOf(BottomTab.HOME) }
-                currentTabRef = remember { kotlinx.coroutines.flow.MutableStateFlow(currentTab) }
-                LaunchedEffect(currentTab) { currentTabRef?.value = currentTab }
-                // FGS / external intent may flip tab via currentTabRef
-                val externalTab by (currentTabRef ?: kotlinx.coroutines.flow.MutableStateFlow(BottomTab.HOME))
-                    .collectAsState()
-                LaunchedEffect(externalTab) {
-                    if (externalTab != currentTab) currentTab = externalTab
+
+                // Drain external intent requests (one-shot; request side never
+                // reads tab state back, so no loop can form).
+                LaunchedEffect(Unit) {
+                    pendingTabRequest.collect { tab -> if (tab != currentTab) currentTab = tab }
                 }
-                val externalScreen by (currentScreenRef
-                    ?: kotlinx.coroutines.flow.MutableStateFlow(Screen.HOME)).collectAsState()
-                LaunchedEffect(externalScreen) {
-                    if (externalScreen != currentScreen) currentScreen = externalScreen
+                LaunchedEffect(Unit) {
+                    pendingScreenRequest.collect { screen -> if (screen != currentScreen) currentScreen = screen }
                 }
 
-                /** Open the Terminal bottom-nav page (termux-lib style). */
+                /** Open the Terminal page (bottom-nav hidden, full height). */
                 val openTerminalTab: () -> Unit = {
                     currentScreen = Screen.HOME
                     currentTab = BottomTab.TERMINAL
@@ -609,6 +619,9 @@ class MainActivity : ComponentActivity() {
                     } else if (currentScreen == Screen.ONBOARDING || currentScreen == Screen.PREREQUISITES) {
                         finish()
                     } else if (currentScreen == Screen.HOME && currentTab != BottomTab.HOME) {
+                        if (currentTab == BottomTab.TERMINAL) {
+                            com.ivarna.fluxlinux.ui.terminal.hideIme(window.decorView)
+                        }
                         currentTab = BottomTab.HOME
                     } else {
                         finish()
@@ -893,30 +906,78 @@ class MainActivity : ComponentActivity() {
                             com.ivarna.fluxlinux.core.desktop.DesktopSessionQuery.current(this@MainActivity, desktopUi)
                         }
 
+                        // Upstream behaviour: the terminal owns the whole window.
+                        // Both chrome pieces get out of its way — the top bar
+                        // would otherwise steal status-bar padding (and with it
+                        // the IME+navigation-bars double padding the terminal
+                        // already applies), and the floating nav would sit on
+                        // top of ExtraKeys. This is why the tab bar must never
+                        // carry a Terminal item: it can't be selected from the
+                        // bar, and the bar can't reliably hide while mounted.
+                        val showChrome = currentTab != BottomTab.TERMINAL
+
+                        // Terminal hides the IME when we leave it, or it stays
+                        // up over the next tab's contents.
+                        LaunchedEffect(currentTab) {
+                            if (currentTab != BottomTab.TERMINAL) {
+                                com.ivarna.fluxlinux.ui.terminal.hideIme(window.decorView)
+                            }
+                        }
+
                         GlassScaffold(
                             hazeState = hazeState,
-                            blurContent = currentTab == BottomTab.HOME,
+                            blurContent = showChrome && currentTab == BottomTab.HOME,
                             topBar = {
-                                TopBar(
-                                    hazeState = hazeState,
-                                    onOpenDisplay = {
-                                        com.ivarna.fluxlinux.core.desktop.DesktopLauncher.reopenDisplay(this@MainActivity)
-                                    },
-                                    displayLive = session != null
-                                )
+                                if (showChrome) {
+                                    TopBar(
+                                        hazeState = hazeState,
+                                        onOpenDisplay = {
+                                            com.ivarna.fluxlinux.core.desktop.DesktopLauncher.reopenDisplay(this@MainActivity)
+                                        },
+                                        displayLive = session != null
+                                    )
+                                }
                             },
                             bottomBar = {
-                                GlassBottomNavigation(
-                                    selectedTab = currentTab,
-                                    onTabSelected = { currentTab = it },
+                                if (showChrome) {
+                                    GlassBottomNavigation(
+                                        selectedTab = currentTab,
+                                        onTabSelected = { currentTab = it },
+                                        hazeState = hazeState
+                                    )
+                                }
+                            }
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    // Overlap math. The floating nav is a
+                                    // 72dp pill with 24dp top padding inside a
+                                    // `navigationBarsPadding()` box, so its top
+                                    // edge sits at navBarInset + 96dp. The tab
+                                    // screens reserve 110dp of LazyColumn bottom
+                                    // padding, which only clears a 0dp inset.
+                                    // Consuming the navigation-bar inset here
+                                    // shifts the scrolling viewport up by that
+                                    // same amount, so 110dp always clears the
+                                    // nav (with ~14dp to spare) and the last item
+                                    // can always be scrolled above it.
+                                    // The Terminal tab is excluded: it owns its
+                                    // own ime∪navigationBars padding and must
+                                    // keep the full window height.
+                                    .then(
+                                        if (showChrome) {
+                                            Modifier.navigationBarsPadding()
+                                        } else {
+                                            Modifier
+                                        }
+                                    )
+                            ) {
+                                MainScreenContent(
+                                    tab = currentTab,
                                     hazeState = hazeState
                                 )
                             }
-                        ) {
-                            MainScreenContent(
-                                tab = currentTab,
-                                hazeState = hazeState
-                            )
                         }
                     }
                     Screen.SETTINGS -> {

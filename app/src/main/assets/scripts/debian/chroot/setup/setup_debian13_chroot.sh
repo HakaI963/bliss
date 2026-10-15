@@ -5,8 +5,24 @@
 # Based on LinuxDroidMaster/Termux-Desktops Guide
 
 # Global Variables
-DEBIANPATH="/data/local/tmp/chrootDebian13"
+DEBIANPATH="/data/local/folio/chroots/debian"
 USERNAME="flux"
+
+# Desktop contract: FLUX_DESKTOP (env mirror FLUX_DESKTOP_ENV) = xfce | kde | none.
+# Unset/empty → xfce (backward compat); xfce4 is normalized to xfce.
+DESKTOP_CHOICE="${FLUX_DESKTOP:-${FLUX_DESKTOP_ENV:-xfce}}"
+case "$DESKTOP_CHOICE" in
+    xfce4) DESKTOP_CHOICE=xfce ;;
+esac
+# Guest session command for generated launchers (xfce default; kde aware).
+DE_EXEC="startxfce4"
+if [ "$DESKTOP_CHOICE" = "kde" ]; then
+    DE_EXEC="startplasma-x11"
+fi
+
+# App prefix (embedded Termux-class host; both store flavors via env override)
+PKG="${TERMUX_APP__PACKAGE_NAME:-com.ivarna.fluxlinux}"
+APP_PREFIX="${TERMUX__PREFIX:-/data/data/${PKG}/files/usr}"
 
 # Function to show progress message
 progress() {
@@ -138,7 +154,7 @@ configure_debian_chroot() {
 
 # Mount Termux tmp to chroot tmp (for X11 sockets)
 mkdir -p \$DEBIANPATH/tmp
-\$BB mount --bind /data/data/com.termux/files/usr/tmp \$DEBIANPATH/tmp
+\$BB mount --bind $APP_PREFIX/tmp \$DEBIANPATH/tmp
     mkdir -p "$DEBIANPATH/sdcard"
     $BB mount --bind /sdcard "$DEBIANPATH/sdcard" || /system/bin/mount --bind /sdcard "$DEBIANPATH/sdcard" || goodbye
 
@@ -209,13 +225,17 @@ mkdir -p \$DEBIANPATH/tmp
     " || goodbye
 
     # --- DESKTOP INSTALL ---
-    progress "Installing XFCE4..."
-    $BB chroot "$DEBIANPATH" /bin/bash -c '
-        export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-        export TMPDIR=/tmp
-        export DEBIAN_FRONTEND=noninteractive
-        apt install -y xfce4 xfce4-terminal
-    ' || goodbye
+    if [ "$DESKTOP_CHOICE" = "xfce" ]; then
+        progress "Installing XFCE4..."
+        $BB chroot "$DEBIANPATH" /bin/bash -c '
+            export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+            export TMPDIR=/tmp
+            export DEBIAN_FRONTEND=noninteractive
+            apt install -y xfce4 xfce4-terminal
+        ' || goodbye
+    else
+        progress "Skipping XFCE4 install (FLUX_DESKTOP=$DESKTOP_CHOICE)"
+    fi
 
     # Mark configuration as complete to prevent re-runs
     touch "$DEBIANPATH/.flux_configured"
@@ -223,7 +243,7 @@ mkdir -p \$DEBIANPATH/tmp
     success "Debian Environment Configured!"
 
     # --- LAUNCH SCRIPT GENERATION ---
-    LAUNCH_SCRIPT="/data/local/tmp/start_debian13.sh"
+    LAUNCH_SCRIPT="/data/local/folio/helpers/start_debian13.sh"
     progress "Creating launch script at $LAUNCH_SCRIPT..."
     
     # Matches the guide's 'start_debian.sh' content
@@ -231,7 +251,7 @@ mkdir -p \$DEBIANPATH/tmp
 #!/bin/sh
 
 # Path of DEBIAN rootfs
-DEBIANPATH="/data/local/tmp/chrootDebian13"
+DEBIANPATH="/data/local/folio/chroots/debian"
 BB="$BB"
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH
 
@@ -251,17 +271,17 @@ mkdir -p \$DEBIANPATH/dev/shm
 
 # Mount Termux tmp to chroot tmp (for X11 sockets)
 mkdir -p \$DEBIANPATH/tmp
-\$BB mount --bind /data/data/com.termux/files/usr/tmp \$DEBIANPATH/tmp
+\$BB mount --bind $APP_PREFIX/tmp \$DEBIANPATH/tmp
 mkdir -p \$DEBIANPATH/sdcard
 \$BB mount --bind /sdcard \$DEBIANPATH/sdcard
 
 # Launch GUI as user
 # Guide line: busybox chroot \$DEBIANPATH /bin/su - droidmaster -c 'export DISPLAY=:0 ...'
 echo "Cleaning internal XFCE4 session..."
-\$BB chroot \$DEBIANPATH /bin/su - root -c "killall -9 xfce4-session xfwm4 xfdesktop xfce4-panel dbus-launch dbus-daemon" >/dev/null 2>&1
+\$BB chroot \$DEBIANPATH /bin/su - root -c "killall -9 xfce4-session xfwm4 xfdesktop xfce4-panel plasmashell kwin_x11 startplasma-x11 plasma_session ksmserver dbus-launch dbus-daemon" >/dev/null 2>&1
 
 echo "Starting Debian 13 Chroot GUI ($USERNAME)..."
-\$BB chroot \$DEBIANPATH /bin/su - $USERNAME -c 'export DISPLAY=:0 && export PULSE_SERVER=tcp:127.0.0.1 && export XDG_RUNTIME_DIR=/tmp && xfconf-query -c xfwm4 -p /general/use_compositing -s false 2>/dev/null; dbus-launch --exit-with-session startxfce4'
+\$BB chroot \$DEBIANPATH /bin/su - $USERNAME -c 'export DISPLAY=:0 && export PULSE_SERVER=tcp:127.0.0.1 && export XDG_RUNTIME_DIR=/tmp && xfconf-query -c xfwm4 -p /general/use_compositing -s false 2>/dev/null; dbus-launch --exit-with-session $DE_EXEC'
 EOF
     chmod +x "$LAUNCH_SCRIPT"
     success "Launch script created."
@@ -274,7 +294,7 @@ EOF
 # Main Execution Flow
 main() {
     # Fix environment for Termux binaries running as root
-    export LD_LIBRARY_PATH=/data/data/com.termux/files/usr/lib
+    export LD_LIBRARY_PATH=$APP_PREFIX/lib
     
     if [ "$(id -u)" != "0" ]; then
         error "This script must be run as root. Exiting."
@@ -286,7 +306,7 @@ _rr=""
 for _c in \
   "${FLUX_RESOLVE_BB:-}" \
   "$(dirname "$0")/resolve_bb.sh" \
-  /data/local/tmp/fluxlinux_resolve_bb.sh
+  /data/local/folio/helpers/fluxlinux_resolve_bb.sh
 do
   [ -n "$_c" ] && [ -f "$_c" ] && _rr="$_c" && break
 done
@@ -299,9 +319,9 @@ if [ -z "${BB:-}" ]; then
   # sidecar missing (desktop/uninstall/staged setup) — same B1 walk as resolve_bb
   if [ -n "${FLUX_BB:-}" ] && [ -x "$FLUX_BB" ] &&
      "$FLUX_BB" --list >/dev/null 2>&1; then BB="$FLUX_BB"; fi
-  if [ -z "${BB:-}" ] && [ -x /data/local/tmp/flux_busybox ] &&
-     /data/local/tmp/flux_busybox --list >/dev/null 2>&1; then
-    BB=/data/local/tmp/flux_busybox
+  if [ -z "${BB:-}" ] && [ -x /data/local/folio/busybox/flux_busybox ] &&
+     /data/local/folio/busybox/flux_busybox --list >/dev/null 2>&1; then
+    BB=/data/local/folio/busybox/flux_busybox
   fi
   if [ -z "${BB:-}" ]; then
     for path in \
@@ -320,7 +340,7 @@ if [ -z "${BB:-}" ]; then
   fi
 fi
 if [ -z "${BB:-}" ]; then
-  echo "FluxLinux: ERROR — root-capable busybox not found" >&2
+  echo "Folio: ERROR — root-capable busybox not found" >&2
   exit 1
 fi
 
@@ -332,8 +352,11 @@ fi
          progress "Using Root Busybox: $BB"
     fi
 
-    DEBIANPATH="/data/local/tmp/chrootDebian13"
-    
+    DEBIANPATH="/data/local/folio/chroots/debian"
+
+    # Root-staged launchers live in the Folio helpers dir (idempotent).
+    mkdir -p /data/local/folio/helpers
+
     # --- CHECK EXISTING INSTALLATION ---
     # Check for marker file indicating SUCCESSFUL configuration
     if [ -f "$DEBIANPATH/.flux_configured" ]; then
@@ -345,12 +368,12 @@ fi
         # Just creating the launch scripts again to be safe.
         
         # --- RE-GENERATE LAUNCH SCRIPT (Core) ---
-        LAUNCH_SCRIPT="/data/local/tmp/start_debian13.sh"
+        LAUNCH_SCRIPT="/data/local/folio/helpers/start_debian13.sh"
         cat <<EOF > "$LAUNCH_SCRIPT"
 #!/bin/sh
 
 # Path of DEBIAN rootfs
-DEBIANPATH="/data/local/tmp/chrootDebian13"
+DEBIANPATH="/data/local/folio/chroots/debian"
 BB="$BB"
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH
 
@@ -370,13 +393,13 @@ mkdir -p \$DEBIANPATH/dev/shm
 
 # Mount Termux tmp to chroot tmp (for X11 sockets)
 mkdir -p \$DEBIANPATH/tmp
-\$BB mount --bind /data/data/com.termux/files/usr/tmp \$DEBIANPATH/tmp
+\$BB mount --bind $APP_PREFIX/tmp \$DEBIANPATH/tmp
 mkdir -p \$DEBIANPATH/sdcard
 \$BB mount --bind /sdcard \$DEBIANPATH/sdcard
 
 # Launch GUI as user
 echo "Starting Debian 13 Chroot GUI ($USERNAME)..."
-\$BB chroot \$DEBIANPATH /bin/su - $USERNAME -c 'export DISPLAY=:0 && export PULSE_SERVER=tcp:127.0.0.1 && export XDG_RUNTIME_DIR=/tmp && xfconf-query -c xfwm4 -p /general/use_compositing -s false 2>/dev/null; dbus-launch --exit-with-session startxfce4'
+\$BB chroot \$DEBIANPATH /bin/su - $USERNAME -c 'export DISPLAY=:0 && export PULSE_SERVER=tcp:127.0.0.1 && export XDG_RUNTIME_DIR=/tmp && xfconf-query -c xfwm4 -p /general/use_compositing -s false 2>/dev/null; dbus-launch --exit-with-session $DE_EXEC'
 EOF
         chmod +x "$LAUNCH_SCRIPT"
         success "Core launch script updated: $LAUNCH_SCRIPT"
@@ -411,7 +434,7 @@ EOF
         configure_debian_chroot
 
         # --- LAUNCH SCRIPT GENERATION ---
-        LAUNCH_SCRIPT="/data/local/tmp/start_debian13.sh"
+        LAUNCH_SCRIPT="/data/local/folio/helpers/start_debian13.sh"
         progress "Creating launch script at $LAUNCH_SCRIPT..."
         
         # Matches the guide's 'start_debian.sh' content
@@ -419,7 +442,7 @@ EOF
 #!/bin/sh
 
 # Path of DEBIAN rootfs
-DEBIANPATH="/data/local/tmp/chrootDebian13"
+DEBIANPATH="/data/local/folio/chroots/debian"
 BB="$BB"
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH
 
@@ -439,39 +462,39 @@ mkdir -p \$DEBIANPATH/dev/shm
 
 # Mount Termux tmp to chroot tmp (for X11 sockets)
 mkdir -p \$DEBIANPATH/tmp
-\$BB mount --bind /data/data/com.termux/files/usr/tmp \$DEBIANPATH/tmp
+\$BB mount --bind $APP_PREFIX/tmp \$DEBIANPATH/tmp
 mkdir -p \$DEBIANPATH/sdcard
 \$BB mount --bind /sdcard \$DEBIANPATH/sdcard
 
 # Launch GUI as user
 # Guide line: busybox chroot \$DEBIANPATH /bin/su - droidmaster -c 'export DISPLAY=:0 ...'
 echo "Cleaning internal XFCE4 session..."
-\$BB chroot \$DEBIANPATH /bin/su - root -c "killall -9 xfce4-session xfwm4 xfdesktop xfce4-panel dbus-launch dbus-daemon" >/dev/null 2>&1
+\$BB chroot \$DEBIANPATH /bin/su - root -c "killall -9 xfce4-session xfwm4 xfdesktop xfce4-panel plasmashell kwin_x11 startplasma-x11 plasma_session ksmserver dbus-launch dbus-daemon" >/dev/null 2>&1
 
 echo "Starting Debian 13 Chroot GUI ($USERNAME)..."
-\$BB chroot \$DEBIANPATH /bin/su - $USERNAME -c 'export DISPLAY=:0 && export PULSE_SERVER=tcp:127.0.0.1 && export XDG_RUNTIME_DIR=/tmp && xfconf-query -c xfwm4 -p /general/use_compositing -s false 2>/dev/null; dbus-launch --exit-with-session startxfce4'
+\$BB chroot \$DEBIANPATH /bin/su - $USERNAME -c 'export DISPLAY=:0 && export PULSE_SERVER=tcp:127.0.0.1 && export XDG_RUNTIME_DIR=/tmp && xfconf-query -c xfwm4 -p /general/use_compositing -s false 2>/dev/null; dbus-launch --exit-with-session $DE_EXEC'
 EOF
         chmod +x "$LAUNCH_SCRIPT"
         success "Launch script created."
     fi
 
     # --- GENERATE GUI LAUNCHER (For X11 from Root) ---
-    GUI_LAUNCHER="/data/local/tmp/start_debian13_gui.sh"
+    GUI_LAUNCHER="/data/local/folio/helpers/start_debian13_gui.sh"
     progress "Creating X11 GUI Launcher at $GUI_LAUNCHER..."
     
-    TARGET_TERMUX_PREFIX="/data/data/com.termux/files/usr"
+    TARGET_TERMUX_PREFIX="$APP_PREFIX"
     
     cat <<EOFGUI > "$GUI_LAUNCHER"
 #!/bin/sh
 # HyperOS-Compatible X11 Launcher with Debug Logging
-# FluxLinux - Debian 13 Chroot GUI Starter
+# Folio - Debian 13 Chroot GUI Starter
 
 echo "========================================"
-echo "FluxLinux: Starting Debian 13 GUI"
+echo "Folio: Starting Debian 13 GUI"
 echo "HyperOS Compatibility Mode"
 echo "========================================"
 
-TARGET_TERMUX_PREFIX="/data/data/com.termux/files/usr"
+TARGET_TERMUX_PREFIX="\${TARGET_TERMUX_PREFIX:-$APP_PREFIX}"
 BB="\$BB"
 
 # Debug: Check SELinux
@@ -522,7 +545,7 @@ am start --user 0 -n com.termux.x11/com.termux.x11.MainActivity >/dev/null 2>&1
 
 # 5. Mount /tmp to chroot
 echo "[5/7] Mounting /tmp to chroot..."
-\$BB mount --bind \$TARGET_TERMUX_PREFIX/tmp /data/local/tmp/chrootDebian13/tmp 2>/dev/null
+\$BB mount --bind \$TARGET_TERMUX_PREFIX/tmp /data/local/folio/chroots/debian/tmp 2>/dev/null
 chmod -R 1777 \$TARGET_TERMUX_PREFIX/tmp
 
 # 6. Start X server with debug logging
@@ -576,18 +599,18 @@ if pgrep -f virgl_test_server >/dev/null; then
     ls -la \$TARGET_TERMUX_PREFIX/tmp/.virgl_test 2>/dev/null || echo "[WARN] VirGL socket not visible"
 else
     echo "[!] VirGL not running - GPU acceleration will NOT work"
-    echo "[!] Please restart the GUI from FluxLinux app"
+    echo "[!] Please restart the GUI from Folio app"
 fi
 
 echo ""
 echo "Entering chroot..."
-sh /data/local/tmp/start_debian13.sh
+sh /data/local/folio/helpers/start_debian13.sh
 EOFGUI
     chmod +x "$GUI_LAUNCHER"
     success "GUI Launcher created: $GUI_LAUNCHER"
     
     # --- GENERATE GUI STOP SCRIPT ---
-    STOP_LAUNCHER="/data/local/tmp/stop_debian13_gui.sh"
+    STOP_LAUNCHER="/data/local/folio/helpers/stop_debian13_gui.sh"
     progress "Creating GUI Stop Script at $STOP_LAUNCHER..."
     
     cat <<EOF > "$STOP_LAUNCHER"
@@ -595,16 +618,16 @@ EOFGUI
 # stop_debian13_gui.sh - Stop Debian 13 Chroot GUI
 
 echo "========================================"
-echo "FluxLinux: Stopping Debian 13 Chroot GUI"
+echo "Folio: Stopping Debian 13 Chroot GUI"
 echo "========================================"
 
-DEBIANPATH="/data/local/tmp/chrootDebian13"
-TARGET_TERMUX_PREFIX="/data/data/com.termux/files/usr"
+DEBIANPATH="/data/local/folio/chroots/debian"
+TARGET_TERMUX_PREFIX="\${TARGET_TERMUX_PREFIX:-$APP_PREFIX}"
 BB="$BB"
 
 # Step 1: Kill XFCE processes inside chroot
 echo "[1/4] Stopping XFCE4 processes in chroot..."
-\\$BB chroot \\$DEBIANPATH /bin/su - root -c "killall -9 xfce4-session xfwm4 xfdesktop xfce4-panel dbus-launch dbus-daemon" >/dev/null 2>&1
+\\$BB chroot \\$DEBIANPATH /bin/su - root -c "killall -9 xfce4-session xfwm4 xfdesktop xfce4-panel plasmashell kwin_x11 startplasma-x11 plasma_session ksmserver dbus-launch dbus-daemon" >/dev/null 2>&1
 
 # Step 2: Stop Termux X11
 echo "[2/4] Stopping Termux X11..."
@@ -637,14 +660,14 @@ EOF
     success "GUI Stop Script created: $STOP_LAUNCHER"
     
     # --- GENERATE ROOT COMMAND RUNNER (For App Scripts) ---
-    ROOT_RUNNER="/data/local/tmp/run_debian13_root.sh"
+    ROOT_RUNNER="/data/local/folio/helpers/run_debian13_root.sh"
     progress "Creating Root Runner at $ROOT_RUNNER..."
     
     cat <<EOF > "$ROOT_RUNNER"
 #!/bin/sh
 # Wrapper to run a command inside Chroot as Root (with mounts)
 
-DEBIANPATH="/data/local/tmp/chrootDebian13"
+DEBIANPATH="/data/local/folio/chroots/debian"
 BB="$BB"
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH
 
@@ -657,7 +680,7 @@ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH
 mkdir -p \$DEBIANPATH/dev/shm
 \$BB mount -t tmpfs -o size=512M tmpfs \$DEBIANPATH/dev/shm >/dev/null 2>&1
 mkdir -p \$DEBIANPATH/tmp
-\$BB mount --bind /data/data/com.termux/files/usr/tmp \$DEBIANPATH/tmp >/dev/null 2>&1
+\$BB mount --bind $APP_PREFIX/tmp \$DEBIANPATH/tmp >/dev/null 2>&1
 mkdir -p \$DEBIANPATH/sdcard
 \$BB mount --bind /sdcard \$DEBIANPATH/sdcard >/dev/null 2>&1
 
@@ -674,7 +697,7 @@ EOF
     success "Root runner created."
 
     # --- GENERATE CLI LAUNCHER (Shell Only) ---
-    CLI_SCRIPT="/data/local/tmp/enter_debian13.sh"
+    CLI_SCRIPT="/data/local/folio/helpers/enter_debian13.sh"
     progress "Creating CLI Launcher at $CLI_SCRIPT..."
     
     cat <<EOF > "$CLI_SCRIPT"
@@ -682,7 +705,7 @@ EOF
 # CLI Entry for Debian 13 Chroot
 
 # Path of DEBIAN rootfs
-DEBIANPATH="/data/local/tmp/chrootDebian13"
+DEBIANPATH="/data/local/folio/chroots/debian"
 BB="$BB"
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH
 
@@ -702,7 +725,7 @@ mkdir -p \$DEBIANPATH/dev/shm
 
 # Mount Termux tmp to chroot tmp (for X11 sockets)
 mkdir -p \$DEBIANPATH/tmp
-\$BB mount --bind /data/data/com.termux/files/usr/tmp \$DEBIANPATH/tmp
+\$BB mount --bind $APP_PREFIX/tmp \$DEBIANPATH/tmp
 mkdir -p \$DEBIANPATH/sdcard
 \$BB mount --bind /sdcard \$DEBIANPATH/sdcard
 
@@ -714,7 +737,7 @@ EOF
     success "CLI Launcher created: $CLI_SCRIPT"
     
     # --- GENERATE ROOT CLI LAUNCHER (Shell as Root) ---
-    ROOT_CLI_SCRIPT="/data/local/tmp/enter_debian13_root.sh"
+    ROOT_CLI_SCRIPT="/data/local/folio/helpers/enter_debian13_root.sh"
     progress "Creating Root CLI Launcher at $ROOT_CLI_SCRIPT..."
     
     cat <<EOF > "$ROOT_CLI_SCRIPT"
@@ -722,7 +745,7 @@ EOF
 # Root CLI Entry for Debian 13 Chroot
 
 # Path of DEBIAN rootfs
-DEBIANPATH="/data/local/tmp/chrootDebian13"
+DEBIANPATH="/data/local/folio/chroots/debian"
 BB="$BB"
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH
 
@@ -740,7 +763,7 @@ mkdir -p \$DEBIANPATH/dev/shm
 
 # Mount Termux tmp to chroot tmp (for X11 sockets)
 mkdir -p \$DEBIANPATH/tmp
-\$BB mount --bind /data/data/com.termux/files/usr/tmp \$DEBIANPATH/tmp 2>/dev/null
+\$BB mount --bind $APP_PREFIX/tmp \$DEBIANPATH/tmp 2>/dev/null
 mkdir -p \$DEBIANPATH/sdcard
 \$BB mount --bind /sdcard \$DEBIANPATH/sdcard 2>/dev/null
 
@@ -751,10 +774,10 @@ EOF
     chmod +x "$ROOT_CLI_SCRIPT"
     success "Root CLI Launcher created: $ROOT_CLI_SCRIPT"
     
-    echo "FluxLinux: Chroot Setup Complete!"
+    echo "Folio: Chroot Setup Complete!"
     
     # --- NOTIFY APP ---
-    progress "Notifying FluxLinux App..."
+    progress "Notifying Folio App..."
     am start -a android.intent.action.VIEW -d "fluxlinux://callback?result=success&name=distro_install_debian13_chroot" >/dev/null 2>&1
 }
 

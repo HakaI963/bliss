@@ -24,7 +24,10 @@ private val FolioDarkScheme = darkColorScheme(
     onSurface = TextPrimary,
     onSurfaceVariant = TextSecondary,
     surfaceVariant = FolioCard,
+    outline = TextMuted,
     outlineVariant = FrostHairline,
+    inverseSurface = TextPrimary,
+    inverseOnSurface = FolioBackground,
     error = FolioDanger,
     onError = TextPrimary,
     primaryContainer = FrostSurfaceElevated,
@@ -43,6 +46,8 @@ private val FolioLightScheme = lightColorScheme(
     onBackground = FolioBackground,
     surface = Color.White,
     onSurface = FolioBackground,
+    outline = Color(0xFFD4D4D8),
+    outlineVariant = Color(0x14000000),
 )
 
 @Composable

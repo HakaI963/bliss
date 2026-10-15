@@ -5,8 +5,15 @@
 # Based on LinuxDroidMaster/Termux-Desktops Guide
 
 # Global Variables
-DEBIANPATH="/data/local/tmp/chrootDebian13"
+DEBIANPATH="/data/local/folio/chroots/debian"
 USERNAME="flux"
+
+# Desktop contract: FLUX_DESKTOP (env mirror FLUX_DESKTOP_ENV) = xfce | kde | none.
+# Unset/empty → xfce (backward compat); xfce4 is normalized to xfce.
+DESKTOP_CHOICE="${FLUX_DESKTOP:-${FLUX_DESKTOP_ENV:-xfce}}"
+case "$DESKTOP_CHOICE" in
+    xfce4) DESKTOP_CHOICE=xfce ;;
+esac
 
 # Same pinned rootfs as proot path (app assets → deploy to $HOME)
 PKG="${TERMUX_APP__PACKAGE_NAME:-com.ivarna.fluxlinux}"
@@ -280,29 +287,42 @@ configure_debian_chroot() {
         chmod 0440 /etc/sudoers.d/$USERNAME
     " || goodbye
 
-    progress "Installing XFCE4..."
-    $BB chroot "$DEBIANPATH" /bin/bash -c '
-        export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-        export TMPDIR=/tmp
-        export DEBIAN_FRONTEND=noninteractive
-        chmod 1777 /tmp /var/tmp 2>/dev/null || true
-        apt-get install -y xfce4 xfce4-terminal
-    ' || goodbye
+    if [ "$DESKTOP_CHOICE" = "xfce" ]; then
+        progress "Installing XFCE4..."
+        $BB chroot "$DEBIANPATH" /bin/bash -c '
+            export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+            export TMPDIR=/tmp
+            export DEBIAN_FRONTEND=noninteractive
+            chmod 1777 /tmp /var/tmp 2>/dev/null || true
+            apt-get install -y xfce4 xfce4-terminal
+        ' || goodbye
+    else
+        progress "Skipping XFCE4 install (FLUX_DESKTOP=$DESKTOP_CHOICE)"
+    fi
 
     touch "$DEBIANPATH/.flux_configured"
     success "Debian Environment Configured!"
 
+    # Root-staged launchers live in the Folio helpers dir (idempotent).
+    mkdir -p /data/local/folio/helpers
+
     # --- GENERATE GUI LAUNCH SCRIPT (thin → SSOT GUI / helper) ---
-    LAUNCH_SCRIPT="/data/local/tmp/start_debian13.sh"
+    LAUNCH_SCRIPT="/data/local/folio/helpers/start_debian13.sh"
     progress "Creating thin GUI launch script at $LAUNCH_SCRIPT..."
 
-    # Expand APP_PREFIX / PKG at write time (unquoted EOF); keep runtime vars escaped.
+    # Select the guest session command at generation time (xfce default; kde aware).
+    DE_EXEC="startxfce4"
+    if [ "$DESKTOP_CHOICE" = "kde" ]; then
+        DE_EXEC="startplasma-x11"
+    fi
+
+    # Expand APP_PREFIX / PKG / DE_EXEC at write time (unquoted EOF); keep runtime vars escaped.
     cat <<EOF > "$LAUNCH_SCRIPT"
 #!/system/bin/sh
-# Compat one-shot GUI → prefer start_debian13_gui.sh (app SSOT) else helper mount --x11 + xfce
-GUI=/data/local/tmp/start_debian13_gui.sh
-HELPER=/data/local/tmp/fluxlinux_chroot.sh
-DEBIANPATH="\${DEBIANPATH:-/data/local/tmp/chrootDebian13}"
+# Compat one-shot GUI → prefer start_debian13_gui.sh (app SSOT) else helper mount --x11 + desktop session
+GUI=/data/local/folio/helpers/start_debian13_gui.sh
+HELPER=/data/local/folio/helpers/fluxlinux_chroot.sh
+DEBIANPATH="\${DEBIANPATH:-/data/local/folio/chroots/debian}"
 TARGET_PREFIX="\${TARGET_PREFIX:-$APP_PREFIX}"
 USERNAME="\${USERNAME:-flux}"
 export FLUX_PACKAGE="$PKG"
@@ -321,18 +341,18 @@ export FLUX_PREFIX="\$TARGET_PREFIX"
 export FLUX_HOST_TMP="\${TARGET_PREFIX}/tmp"
 sh "\$HELPER" mount --x11 || true
 sh "\$HELPER" sh --user root -- \\
-  "killall -9 xfce4-session xfwm4 xfdesktop xfce4-panel dbus-launch dbus-daemon 2>/dev/null; true" \\
+  "killall -9 xfce4-session xfwm4 xfdesktop xfce4-panel plasmashell kwin_x11 startplasma-x11 plasma_session ksmserver dbus-launch dbus-daemon 2>/dev/null; true" \\
   >/dev/null 2>&1 || true
 echo "Starting Debian 13 Chroot GUI (\$USERNAME) via SSOT helper..."
 echo "NOTE: Prefer app Settings START (start_gui_chroot.sh) for Pulse/X11 host stack."
 exec sh "\$HELPER" sh --user "\$USERNAME" -- \\
-  'export DISPLAY=:0 PULSE_SERVER=tcp:127.0.0.1 XDG_RUNTIME_DIR=/tmp VTEST_SOCKET_NAME=/mnt/host-tmp/.virgl_test; xfconf-query -c xfwm4 -p /general/use_compositing -s false 2>/dev/null; exec dbus-launch --exit-with-session startxfce4'
+  'export DISPLAY=:0 PULSE_SERVER=tcp:127.0.0.1 XDG_RUNTIME_DIR=/tmp VTEST_SOCKET_NAME=/mnt/host-tmp/.virgl_test; xfconf-query -c xfwm4 -p /general/use_compositing -s false 2>/dev/null; exec dbus-launch --exit-with-session $DE_EXEC'
 EOF
     chmod 755 "$LAUNCH_SCRIPT"
     success "GUI Launch script created (SSOT thin wrapper)."
 
     # Prefer asset SSOT stop when present under app home (redeployed by app)
-    STOP_LAUNCHER="/data/local/tmp/stop_debian13_gui.sh"
+    STOP_LAUNCHER="/data/local/folio/helpers/stop_debian13_gui.sh"
     progress "Creating GUI Stop Script at $STOP_LAUNCHER..."
     APP_STOP="$APP_HOME/stop_debian13_gui.sh"
     if [ -f "$APP_STOP" ]; then
@@ -342,13 +362,13 @@ EOF
     else
     cat <<EOF > "$STOP_LAUNCHER"
 #!/bin/sh
-DEBIANPATH="/data/local/tmp/chrootDebian13"
+DEBIANPATH="/data/local/folio/chroots/debian"
 BB="$BB"
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH
 TARGET_TERMUX_PREFIX="$APP_PREFIX"
 
 echo "Terminating Debian 13 Chroot GUI processes..."
-\$BB chroot \$DEBIANPATH /bin/su - root -c "killall -9 xfce4-session xfwm4 xfdesktop xfce4-panel dbus-launch dbus-daemon" >/dev/null 2>&1
+\$BB chroot \$DEBIANPATH /bin/su - root -c "killall -9 xfce4-session xfwm4 xfdesktop xfce4-panel plasmashell kwin_x11 startplasma-x11 plasma_session ksmserver dbus-launch dbus-daemon" >/dev/null 2>&1
 
 pkill -9 -f termux-x11 >/dev/null 2>&1
 pkill -9 -f "app_process.*termux-x11" >/dev/null 2>&1
@@ -362,13 +382,13 @@ EOF
     # Also stage full root GUI launcher from app home if present (Settings SSOT)
     APP_START_GUI="$APP_HOME/start_debian13_gui.sh"
     if [ -f "$APP_START_GUI" ]; then
-        cp -f "$APP_START_GUI" /data/local/tmp/start_debian13_gui.sh
-        chmod +x /data/local/tmp/start_debian13_gui.sh
+        cp -f "$APP_START_GUI" /data/local/folio/helpers/start_debian13_gui.sh
+        chmod +x /data/local/folio/helpers/start_debian13_gui.sh
         success "Staged start_debian13_gui.sh from app assets"
     fi
 
     # --- SSOT helper + thin compat wrappers ---
-    HELPER="/data/local/tmp/fluxlinux_chroot.sh"
+    HELPER="/data/local/folio/helpers/fluxlinux_chroot.sh"
     progress "Installing chroot SSOT helper at $HELPER..."
     HELPER_SRC=""
     for cand in \
@@ -389,12 +409,12 @@ EOF
         error "fluxlinux_chroot.sh not found in app home/staged — app ensureHelperScript will stage on first session"
     fi
 
-    ROOT_RUNNER="/data/local/tmp/run_debian13_root.sh"
+    ROOT_RUNNER="/data/local/folio/helpers/run_debian13_root.sh"
     progress "Creating thin root runner → SSOT at $ROOT_RUNNER..."
     cat <<'EOF' > "$ROOT_RUNNER"
 #!/system/bin/sh
 # Compat wrapper → fluxlinux_chroot.sh exec --user root
-HELPER=/data/local/tmp/fluxlinux_chroot.sh
+HELPER=/data/local/folio/helpers/fluxlinux_chroot.sh
 if [ ! -f "$HELPER" ]; then
   echo "fluxlinux_chroot.sh missing — open a chroot session once or re-run setup" >&2
   exit 127
@@ -408,12 +428,12 @@ EOF
     chmod 755 "$ROOT_RUNNER"
     success "Root runner created (SSOT wrapper)."
 
-    CLI_SCRIPT="/data/local/tmp/enter_debian13.sh"
+    CLI_SCRIPT="/data/local/folio/helpers/enter_debian13.sh"
     progress "Creating thin CLI launcher at $CLI_SCRIPT..."
     cat <<'EOF' > "$CLI_SCRIPT"
 #!/system/bin/sh
 # Compat → fluxlinux_chroot.sh login --user flux
-HELPER=/data/local/tmp/fluxlinux_chroot.sh
+HELPER=/data/local/folio/helpers/fluxlinux_chroot.sh
 [ -f "$HELPER" ] || { echo "fluxlinux_chroot.sh missing" >&2; exit 127; }
 echo "Entering Debian 13 Chroot (CLI)..."
 exec sh "$HELPER" login --user flux --shell zsh
@@ -421,12 +441,12 @@ EOF
     chmod 755 "$CLI_SCRIPT"
     success "CLI Launcher created: $CLI_SCRIPT"
 
-    ROOT_CLI_SCRIPT="/data/local/tmp/enter_debian13_root.sh"
+    ROOT_CLI_SCRIPT="/data/local/folio/helpers/enter_debian13_root.sh"
     progress "Creating thin root CLI launcher at $ROOT_CLI_SCRIPT..."
     cat <<'EOF' > "$ROOT_CLI_SCRIPT"
 #!/system/bin/sh
 # Compat → fluxlinux_chroot.sh login --user root
-HELPER=/data/local/tmp/fluxlinux_chroot.sh
+HELPER=/data/local/folio/helpers/fluxlinux_chroot.sh
 [ -f "$HELPER" ] || { echo "fluxlinux_chroot.sh missing" >&2; exit 127; }
 echo "Entering Debian 13 Chroot as ROOT..."
 exec sh "$HELPER" login --user root --shell bash
@@ -455,7 +475,7 @@ _rr=""
 for _c in \
   "${FLUX_RESOLVE_BB:-}" \
   "$(dirname "$0")/resolve_bb.sh" \
-  /data/local/tmp/fluxlinux_resolve_bb.sh
+  /data/local/folio/helpers/fluxlinux_resolve_bb.sh
 do
   [ -n "$_c" ] && [ -f "$_c" ] && _rr="$_c" && break
 done
@@ -468,9 +488,9 @@ if [ -z "${BB:-}" ]; then
   # sidecar missing (desktop/uninstall/staged setup) — same B1 walk as resolve_bb
   if [ -n "${FLUX_BB:-}" ] && [ -x "$FLUX_BB" ] &&
      "$FLUX_BB" --list >/dev/null 2>&1; then BB="$FLUX_BB"; fi
-  if [ -z "${BB:-}" ] && [ -x /data/local/tmp/flux_busybox ] &&
-     /data/local/tmp/flux_busybox --list >/dev/null 2>&1; then
-    BB=/data/local/tmp/flux_busybox
+  if [ -z "${BB:-}" ] && [ -x /data/local/folio/busybox/flux_busybox ] &&
+     /data/local/folio/busybox/flux_busybox --list >/dev/null 2>&1; then
+    BB=/data/local/folio/busybox/flux_busybox
   fi
   if [ -z "${BB:-}" ]; then
     for path in \
@@ -489,14 +509,14 @@ if [ -z "${BB:-}" ]; then
   fi
 fi
 if [ -z "${BB:-}" ]; then
-  echo "FluxLinux: ERROR — root-capable busybox not found" >&2
+  echo "Folio: ERROR — root-capable busybox not found" >&2
   exit 1
 fi
 
 
     progress "Using Root Busybox: $BB"
 
-    DEBIANPATH="/data/local/tmp/chrootDebian13"
+    DEBIANPATH="/data/local/folio/chroots/debian"
 
     # Already installed: marker and/or a real shell binary (app cannot always see this path).
     if [ -f "$DEBIANPATH/.flux_configured" ] || [ -e "$DEBIANPATH/bin/sh" ] || [ -e "$DEBIANPATH/usr/bin/bash" ]; then

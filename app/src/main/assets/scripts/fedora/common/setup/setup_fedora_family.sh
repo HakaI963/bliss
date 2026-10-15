@@ -21,10 +21,10 @@ fi
 # Common helpers may be prepended by BaseDesktopInstallPlan.
 
 DISTRO_NAME="${1:-fedora}"
-echo "FluxLinux: Configuring ${DISTRO_NAME} (Fedora Family)..."
+echo "Folio: Configuring ${DISTRO_NAME} (Fedora Family)..."
 
 if [ "$(id -u)" -ne 0 ]; then
-    echo "FluxLinux: ERROR: must run as root inside the guest (got uid=$(id -u))."
+    echo "Folio: ERROR: must run as root inside the guest (got uid=$(id -u))."
     exit 1
 fi
 
@@ -38,7 +38,7 @@ if command -v dnf5 >/dev/null 2>&1; then
     DNF="dnf5"
 fi
 if ! command -v "$DNF" >/dev/null 2>&1; then
-    echo "FluxLinux: ERROR: dnf/dnf5 not found"
+    echo "Folio: ERROR: dnf/dnf5 not found"
     exit 1
 fi
 
@@ -60,7 +60,7 @@ fi
 
 _flux_log "dnf makecache ($DNF)..."
 $DNF -y --setopt=install_weak_deps=False makecache || {
-    echo "FluxLinux: dnf makecache failed (network / repos)"
+    echo "Folio: dnf makecache failed (network / repos)"
     exit 1
 }
 
@@ -70,7 +70,7 @@ $DNF $DNF_OPTS install \
     gzip xz tzdata \
     dbus dbus-daemon \
     || {
-        echo "FluxLinux: base package install failed"
+        echo "Folio: base package install failed"
         exit 1
     }
 # dbus-x11 is optional on F44 (some images use dbus-daemon only)
@@ -78,17 +78,32 @@ $DNF $DNF_OPTS install dbus-x11 2>/dev/null || true
 
 _flux_ensure_dbus
 
-_flux_log "Installing XFCE4..."
+# Shared fonts, GTK schemas + Mesa — needed by any desktop.
 $DNF $DNF_OPTS install \
-    xfce4-session xfce4-panel xfce4-settings xfce4-terminal \
-    xfdesktop xfwm4 thunar \
     adwaita-icon-theme dejavu-sans-fonts \
     gsettings-desktop-schemas \
     mesa-dri-drivers mesa-libGL mesa-libEGL \
     || {
-        echo "FluxLinux: XFCE package install failed"
+        echo "Folio: base graphics package install failed"
         exit 1
     }
+
+# Desktop gate: FLUX_DESKTOP (env mirror FLUX_DESKTOP_ENV) = xfce | kde | none.
+# Unset/empty → xfce (backward compat); xfce4 is normalized to xfce.
+DESKTOP_CHOICE="${FLUX_DESKTOP:-${FLUX_DESKTOP_ENV:-xfce}}"
+case "$DESKTOP_CHOICE" in
+    xfce4) DESKTOP_CHOICE=xfce ;;
+esac
+if [ "$DESKTOP_CHOICE" = "xfce" ]; then
+    _flux_log "Installing XFCE4..."
+    $DNF $DNF_OPTS install \
+        xfce4-session xfce4-panel xfce4-settings xfce4-terminal \
+        xfdesktop xfwm4 thunar \
+        || {
+            echo "Folio: XFCE package install failed"
+            exit 1
+        }
+fi
 $DNF $DNF_OPTS install mesa-vulkan-drivers 2>/dev/null || true
 $DNF $DNF_OPTS install gdk-pixbuf2-modules librsvg2 2>/dev/null || true
 
@@ -105,7 +120,7 @@ if [ -x /usr/bin/bwrap ] && [ ! -e /usr/bin/bwrap.real ] && \
 fi
 cat > /usr/bin/bwrap <<'BWRAP_EOF'
 #!/bin/sh
-# FluxLinux: exec the real glycin loader, not an earlier --ro-bind source.
+# Folio: exec the real glycin loader, not an earlier --ro-bind source.
 while [ $# -gt 0 ]; do
   case "$1" in
     /usr/libexec/glycin-loaders/*|/usr/lib/glycin-loaders/*|/usr/bin/true|/bin/true)
@@ -135,7 +150,9 @@ if command -v _flux_ensure_en_us_locale >/dev/null 2>&1; then
     _flux_ensure_en_us_locale || exit 1
 fi
 
-_flux_require_startxfce4
+if [ "$DESKTOP_CHOICE" = "xfce" ]; then
+    _flux_require_startxfce4
+fi
 _flux_ensure_user
 _flux_ensure_sudo
 _flux_ensure_home
@@ -143,5 +160,5 @@ _flux_setup_pulse
 _flux_write_gpu_mode virgl
 _flux_fix_pm_writable
 
-echo "FluxLinux: ${DISTRO_NAME} Fedora setup complete!"
+echo "Folio: ${DISTRO_NAME} Fedora setup complete!"
 exit 0

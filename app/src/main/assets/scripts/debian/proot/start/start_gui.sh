@@ -30,7 +30,7 @@ export PULSE_RUNTIME_PATH="${HOME}/.pulse"
 mkdir -p "$PULSE_RUNTIME_PATH" 2>/dev/null
 
 # Kill stale host graphics services only — NEVER am force-stop own package
-# (that would kill FluxLinux itself if the package name matches).
+# (that would kill Folio itself if the package name matches).
 # Pulse is a host service: do not pkill it here (CLI audio stays up).
 pkill -f "virgl_test_server" 2>/dev/null || true
 pkill -f termux-x11 2>/dev/null || true
@@ -55,7 +55,7 @@ if [ -n "$_ctx" ] && command -v chcon >/dev/null 2>&1; then
   chcon -R "$_ctx" "$TMPDIR" 2>/dev/null || chcon "$_ctx" "$TMPDIR" 2>/dev/null || true
 fi
 
-# Host Pulse (app uid). Supervisor logs FluxLinux: [AUDIO] … and never blocks XFCE.
+# Host Pulse (app uid). Supervisor logs Folio: [AUDIO] … and never blocks XFCE.
 if [ -x "$TERMUX_HOME/start_pulse_host.sh" ]; then
   bash "$TERMUX_HOME/start_pulse_host.sh" || true
 elif command -v start_pulse_host.sh >/dev/null 2>&1; then
@@ -65,17 +65,17 @@ fi
 # VirGL is optional. Custom package builds currently omit it; XFCE runs
 # with software rendering until a compatible GPU bundle is available.
 if command -v virgl_test_server_android >/dev/null; then
-  echo "FluxLinux: Starting VirGL server..."
+  echo "Folio: Starting VirGL server..."
   virgl_test_server_android --socket-path "$TERMUX_PREFIX/tmp/.virgl_test" >/dev/null 2>&1 &
   sleep 2
-  test -S "${TMPDIR}/.virgl_test" && echo "FluxLinux: VirGL socket ready" || \
-    echo "FluxLinux: [WARN] VirGL socket not found"
+  test -S "${TMPDIR}/.virgl_test" && echo "Folio: VirGL socket ready" || \
+    echo "Folio: [WARN] VirGL socket not found"
 else
-  echo "FluxLinux: VirGL unavailable; using software rendering"
+  echo "Folio: VirGL unavailable; using software rendering"
 fi
 
 # Start X server via app_process (needs system context)
-echo "FluxLinux: Starting termux-x11 server..."
+echo "Folio: Starting termux-x11 server..."
 export XDG_RUNTIME_DIR="$TMPDIR"
 export DISPLAY=:0
 
@@ -99,7 +99,7 @@ if [ -z "$TERMUX_X11_APK_PATH" ] || [ ! -f "$TERMUX_X11_APK_PATH" ]; then
   TERMUX_X11_APK_PATH=$(/system/bin/find /data/app -name "base.apk" -path "*$PKG*" 2>/dev/null | head -1)
 fi
 export TERMUX_X11_APK_PATH
-echo "FluxLinux: APK path = $TERMUX_X11_APK_PATH"
+echo "Folio: APK path = $TERMUX_X11_APK_PATH"
 
 # Extract libXlorie.so from our APK to /data/data app lib dir
 # This is the only location app_process can dlopen without corrupting its linker namespace
@@ -107,7 +107,7 @@ APP_LIB_DIR="/data/data/$PKG/lib"
 mkdir -p "$APP_LIB_DIR" 2>/dev/null
 # Re-extract when the APK is newer, else an app update keeps running the old X server.
 if { [ ! -f "$APP_LIB_DIR/libXlorie.so" ] || [ "$TERMUX_X11_APK_PATH" -nt "$APP_LIB_DIR/libXlorie.so" ]; } && [ -n "$TERMUX_X11_APK_PATH" ]; then
-  echo "FluxLinux: Extracting libXlorie.so from APK..."
+  echo "Folio: Extracting libXlorie.so from APK..."
   # Try arm64 first, then armeabi-v7a
   ( cd "$APP_LIB_DIR" && \
     unzip -o "$TERMUX_X11_APK_PATH" 'lib/arm64-v8a/libXlorie.so' 2>/dev/null && \
@@ -117,8 +117,8 @@ if { [ ! -f "$APP_LIB_DIR/libXlorie.so" ] || [ "$TERMUX_X11_APK_PATH" -nt "$APP_
     mv -f lib/armeabi-v7a/libXlorie.so . && rm -rf lib )
   touch "$APP_LIB_DIR/libXlorie.so" 2>/dev/null # unzip keeps the 1981 entry mtime
   ls -la "$APP_LIB_DIR/libXlorie.so" 2>/dev/null && \
-    echo "FluxLinux: libXlorie.so ready in $APP_LIB_DIR" || \
-    echo "FluxLinux: [WARN] libXlorie.so extraction failed"
+    echo "Folio: libXlorie.so ready in $APP_LIB_DIR" || \
+    echo "Folio: [WARN] libXlorie.so extraction failed"
 fi
 
 # Launch the X server via app_process
@@ -139,13 +139,13 @@ while [ ! -S "$TMPDIR/.X11-unix/X0" ] && [ "$_i" -lt 30 ] && kill -0 "$XSERVER_P
   _i=$((_i + 1))
 done
 if [ ! -S "$TMPDIR/.X11-unix/X0" ] || ! kill -0 "$XSERVER_PID" 2>/dev/null; then
-  echo "FluxLinux: [ERROR] X server did not create $TMPDIR/.X11-unix/X0 within 15s (or exited)."
+  echo "Folio: [ERROR] X server did not create $TMPDIR/.X11-unix/X0 within 15s (or exited)."
   exit 1
 fi
-echo "FluxLinux: host X0 socket ready (X server PID=$XSERVER_PID)"
+echo "Folio: host X0 socket ready (X server PID=$XSERVER_PID)"
 
 # Open X11 display activity in our app
-echo "FluxLinux: Launching X11 display activity..."
+echo "Folio: Launching X11 display activity..."
 am start -n "$PKG/com.termux.x11.MainActivity" \
   --activity-single-top \
   --activity-clear-top 2>/dev/null || \
@@ -154,18 +154,29 @@ sleep 1
 
 # Verify guest setup
 ROOTFS="$TERMUX_PREFIX/var/lib/proot-distro/containers/$DISTRO/rootfs"
-# FLUX_DESKTOP (env from DesktopLauncher): xfce4 (default) | kde
+# FLUX_DESKTOP accepts every spelling the app uses:
+#   install (DesktopChoice.envValue) → xfce | kde | none
+#   runtime (DesktopLauncher.start)  → xfce4 | kde
+# Normalised here so the guest block below only ever sees "kde" / "xfce4".
 FLUX_DESKTOP="${FLUX_DESKTOP:-xfce4}"
 case "$FLUX_DESKTOP" in
-  kde) DE_CMD=startplasma-x11 ;;
-  *) FLUX_DESKTOP=xfce4; DE_CMD=startxfce4 ;;
+  kde|KDE)
+    DE_CMD=startplasma-x11; FLUX_DESKTOP=kde ;;
+  xfce|xfce4|XFCE)
+    DE_CMD=startxfce4; FLUX_DESKTOP=xfce4 ;;
+  none|NONE)
+    echo "Folio: terminal-only install (FLUX_DESKTOP=none) — no desktop to launch."
+    exit 1 ;;
+  *)
+    echo "Folio: unknown FLUX_DESKTOP='$FLUX_DESKTOP' — falling back to XFCE4"
+    DE_CMD=startxfce4; FLUX_DESKTOP=xfce4 ;;
 esac
 if [ ! -e "$ROOTFS/usr/bin/$DE_CMD" ] && [ ! -e "$ROOTFS/usr/sbin/$DE_CMD" ]; then
-  echo "FluxLinux: $FLUX_DESKTOP setup incomplete ($DE_CMD missing). Re-run environment setup."
+  echo "Folio: $FLUX_DESKTOP setup incomplete ($DE_CMD missing). Re-run environment setup."
   exit 1
 fi
 
-echo "FluxLinux: $DE_CMD=READY"
+echo "Folio: $DE_CMD=READY"
 
 # Guest GPU mode from setup_hw_accel_debian.sh (/etc/fluxlinux/gpu_mode)
 # turnip → Adreno/Zink; virgl → host virgl_test_server; else softpipe
@@ -179,7 +190,7 @@ case "$GPU_MODE" in
   turnip|virgl) ;;
   *) GPU_MODE=virgl ;;
 esac
-echo "FluxLinux: Guest GPU mode=$GPU_MODE"
+echo "Folio: Guest GPU mode=$GPU_MODE"
 
 # Launch XFCE in proot — propagate guest exit code (never force exit 0)
 GUEST_RC=0
@@ -284,7 +295,7 @@ else
           else
             export LIBGL_ALWAYS_SOFTWARE=1
             export GALLIUM_DRIVER=llvmpipe
-            echo "FluxLinux(guest): VirGL socket missing — llvmpipe fallback"
+            echo "Folio(guest): VirGL socket missing — llvmpipe fallback"
           fi
           ;;
         *)
@@ -294,7 +305,7 @@ else
       esac
       export GPU_MODE
     fi
-    echo "FluxLinux(guest): GPU mode=$GPU_MODE"
+    echo "Folio(guest): GPU mode=$GPU_MODE"
     # Fedora 43 / Tumbleweed GTK+glycin execs bwrap to load PNG/SVG.
     # Real bubblewrap needs user namespaces (missing under proot) and
     # "chmod a-x bwrap" becomes "Could not spawn bwrap: Permission denied"
@@ -305,7 +316,7 @@ else
       fi
       cat > /usr/bin/bwrap << "BWRAP_EOF"
 #!/bin/sh
-# FluxLinux: exec the real glycin loader, not an earlier --ro-bind source.
+# Folio: exec the real glycin loader, not an earlier --ro-bind source.
 while [ $# -gt 0 ]; do
   case "$1" in
     /usr/libexec/glycin-loaders/*|/usr/lib/glycin-loaders/*|/usr/bin/true|/bin/true)
@@ -332,6 +343,23 @@ BWRAP_EOF
 # Sourced after flux_gpu_apply_runtime. Plasma 6 kwin_x11: O2 = desktop OpenGL.
 # OPT-IN (touch /etc/fluxlinux/kde_gl): KWin O2 on zink shows a black screen on
 # PanVK (Xlorie, verified Poco X6 Pro); Turnip unverified. Default stays N.
+
+# ── Session hygiene (runs as flux, inside the dbus-run-session shell) ──────
+# Plasma rejects a shared /tmp (mode 1777) as XDG_RUNTIME_DIR and needs a
+# private 0700 dir for its session/kscreen/kdeglobals sockets.
+export XDG_RUNTIME_DIR="${HOME}/.cache/runtime"
+rm -rf "$XDG_RUNTIME_DIR" 2>/dev/null || true
+mkdir -p "$XDG_RUNTIME_DIR" 2>/dev/null || true
+chmod 700 "$XDG_RUNTIME_DIR" 2>/dev/null || true
+# Stale ksmserver session files left by a killed session make Plasma try to
+# restore a dead session (panel + applets disappear). Always start clean.
+rm -rf "$HOME/.cache/sessions" 2>/dev/null || true
+# ICE socket dir (some Plasma/KWin builds need it on a sticky /tmp).
+if [ ! -d /tmp/.ICE-unix ]; then
+  mkdir -p /tmp/.ICE-unix 2>/dev/null || true
+  chmod 1777 /tmp/.ICE-unix 2>/dev/null || true
+fi
+
 export QT_QPA_PLATFORMTHEME=kde KWIN_COMPOSE=N
 if [ -e /etc/fluxlinux/kde_gl ]; then case "$GPU_MODE" in turnip|panvk)
   export KWIN_COMPOSE=O2
@@ -341,9 +369,9 @@ if [ -e /etc/fluxlinux/kde_gl ]; then case "$GPU_MODE" in turnip|panvk)
     unset MESA_GL_VERSION_OVERRIDE MESA_GLES_VERSION_OVERRIDE
     _o=$(timeout -k 2 30 glxinfo -B 2>/dev/null) || _o=
     case "$_o" in
-      *zink*) echo "FluxLinux(guest): KDE GL = zink on Turnip" ;;
+      *zink*) echo "Folio(guest): KDE GL = zink on Turnip" ;;
       *)
-        echo "FluxLinux(guest): zink-on-Turnip probe failed - kgsl fallback"
+        echo "Folio(guest): zink-on-Turnip probe failed - kgsl fallback"
         unset GALLIUM_DRIVER VK_ICD_FILENAMES
         export MESA_LOADER_DRIVER_OVERRIDE=kgsl MESA_GL_VERSION_OVERRIDE=4.6 MESA_GLES_VERSION_OVERRIDE=3.2
         ;;
@@ -427,5 +455,5 @@ KDE_EOF
   GUEST_RC=$?
 fi
 
-echo "FluxLinux: XFCE session ended (exit $GUEST_RC)"
+echo "Folio: XFCE session ended (exit $GUEST_RC)"
 exit $GUEST_RC

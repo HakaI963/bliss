@@ -76,7 +76,10 @@ import com.ivarna.fluxlinux.core.utils.TerminalPreferences
 import com.ivarna.fluxlinux.ui.terminal.TerminalExtraKeys
 import com.ivarna.fluxlinux.ui.terminal.TerminalModifierState
 import com.ivarna.fluxlinux.ui.terminal.TerminalToolSelector
+import com.ivarna.fluxlinux.ui.theme.FrostHairline
+import com.ivarna.fluxlinux.ui.theme.FrostSurface
 import com.ivarna.fluxlinux.ui.theme.TextPrimary
+import com.ivarna.fluxlinux.ui.theme.TextSecondary
 import com.termux.view.TerminalView
 import com.termux.view.TerminalViewClient
 
@@ -232,7 +235,7 @@ fun TerminalScreen(
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onBackground,
-                modifier = Modifier.padding(start = if (onBack == null) 8.dp else 8.dp)
+                modifier = Modifier.padding(start = 8.dp)
             )
             Spacer(Modifier.weight(1f))
             IconButton(
@@ -287,13 +290,12 @@ fun TerminalScreen(
                                 .clip(RoundedCornerShape(10.dp))
                                 .background(
                                     if (selected) TextPrimary.copy(alpha = 0.14f)
-                                    else MaterialTheme.colorScheme.surfaceVariant
+                                    else FrostSurface
                                 )
                                 .border(
                                     BorderStroke(
-                                        if (selected) 1.5.dp else 1.dp,
-                                        if (selected) TextPrimary
-                                        else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                        if (selected) 1.5.dp else 0.75.dp,
+                                        if (selected) TextPrimary else FrostHairline
                                     ),
                                     RoundedCornerShape(10.dp)
                                 )
@@ -314,7 +316,7 @@ fun TerminalScreen(
                                     .clip(CircleShape)
                                     .background(MaterialTheme.colorScheme.surface)
                                     .border(
-                                        BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                                        BorderStroke(0.75.dp, FrostHairline),
                                         CircleShape
                                     )
                                     .clickable {
@@ -325,7 +327,7 @@ fun TerminalScreen(
                                 Icon(
                                     imageVector = Icons.Default.Close,
                                     contentDescription = "Close",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    tint = TextSecondary,
                                     modifier = Modifier.size(10.dp)
                                 )
                             }
