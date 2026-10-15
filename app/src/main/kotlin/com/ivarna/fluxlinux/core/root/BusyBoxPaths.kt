@@ -5,9 +5,9 @@ package com.ivarna.fluxlinux.core.root
  * Shell resolver walks the same list (plus FLUX_BB, PINNED, and `command -v`).
  */
 object BusyBoxPaths {
-    const val PINNED = "/data/local/tmp/flux_busybox"
+    const val PINNED = "${ChrootPaths.BUSYBOX_DIR}/flux_busybox"
     const val RESOLVER_ASSET = "scripts/chroot/resolve_bb.sh"
-    const val RESOLVER_ON_DEVICE = "/data/local/tmp/fluxlinux_resolve_bb.sh"
+    const val RESOLVER_ON_DEVICE = "${ChrootPaths.HELPERS_DIR}/fluxlinux_resolve_bb.sh"
     val CANDIDATES: List<String> = listOf(
         "/data/adb/ksu/bin/busybox",
         "/data/adb/ap/bin/busybox",

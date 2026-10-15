@@ -34,9 +34,9 @@ class BusyBoxPathsTest {
 
     @Test
     fun constants_exact() {
-        assertEquals("/data/local/tmp/flux_busybox", BusyBoxPaths.PINNED)
+        assertEquals("/data/local/folio/busybox/flux_busybox", BusyBoxPaths.PINNED)
         assertEquals("scripts/chroot/resolve_bb.sh", BusyBoxPaths.RESOLVER_ASSET)
-        assertEquals("/data/local/tmp/fluxlinux_resolve_bb.sh", BusyBoxPaths.RESOLVER_ON_DEVICE)
+        assertEquals("/data/local/folio/helpers/fluxlinux_resolve_bb.sh", BusyBoxPaths.RESOLVER_ON_DEVICE)
     }
 
     @Test
@@ -73,11 +73,11 @@ class BusyBoxPathsTest {
     }
 
     @Test
-    fun helper_version_is_v29() {
+    fun helper_version_is_v210() {
         val helper = readAsset("scripts/chroot/fluxlinux_chroot.sh")
-        assertTrue(helper.contains("fluxlinux-chroot v2.9"))
-        assertTrue(helper.contains("VERSION_STR=\"fluxlinux-chroot v2.9\""))
-        assertEquals("fluxlinux-chroot v2.9", ChrootPaths.CHROOT_HELPER_VERSION)
+        assertTrue(helper.contains("fluxlinux-chroot v2.10"))
+        assertTrue(helper.contains("VERSION_STR=\"fluxlinux-chroot v2.10\""))
+        assertEquals("fluxlinux-chroot v2.10", ChrootPaths.CHROOT_HELPER_VERSION)
     }
 
     @Test
@@ -147,7 +147,7 @@ class BusyBoxPathsTest {
             "scripts/debian/chroot/setup/uninstall_debian_chroot.sh",
         )
         val assignOnly = Regex(
-            """\[ -x /data/local/tmp/flux_busybox \][^\n]*\n\s*BB=/data/local/tmp/flux_busybox"""
+            """\[ -x /data/local/folio/busybox/flux_busybox \][^\n]*\n\s*BB=/data/local/folio/busybox/flux_busybox"""
         )
         for (rel in files) {
             val text = readAsset(rel)
@@ -161,8 +161,8 @@ class BusyBoxPathsTest {
             }
             assertTrue(
                 "$rel last-resort pin must exec-probe --list",
-                !text.contains("[ -x /data/local/tmp/flux_busybox ]; then") ||
-                    text.contains("/data/local/tmp/flux_busybox --list")
+                !text.contains("[ -x /data/local/folio/busybox/flux_busybox ]; then") ||
+                    text.contains("/data/local/folio/busybox/flux_busybox --list")
             )
         }
     }
@@ -171,11 +171,11 @@ class BusyBoxPathsTest {
     fun termuxIntentFactory_does_not_default_dead_pin() {
         val src = readRepoFile("app/src/main/kotlin/com/ivarna/fluxlinux/core/data/TermuxIntentFactory.kt")
         assertFalse(
-            src.contains("BB=\"\${FLUX_BB:-/data/local/tmp/flux_busybox}\"") ||
-                src.contains("BB=\"\${'$'}{FLUX_BB:-/data/local/tmp/flux_busybox}\"")
+            src.contains("BB=\"\${FLUX_BB:-/data/local/folio/busybox/flux_busybox}\"") ||
+                src.contains("BB=\"\${'$'}{FLUX_BB:-/data/local/folio/busybox/flux_busybox}\"")
         )
         assertTrue(src.contains("/data/adb/ksu/bin/busybox"))
-        assertTrue(src.contains("flux_busybox --list"))
+        assertTrue(src.contains("\${BusyBoxPaths.PINNED} --list"))
     }
 
     private fun readAsset(rel: String): String {

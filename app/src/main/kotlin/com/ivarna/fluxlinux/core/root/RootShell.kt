@@ -31,7 +31,7 @@ object RootShell {
     private val mainHandler: Handler by lazy { Handler(Looper.getMainLooper()) }
 
     /** Temp dir where asset scripts are staged before execution. */
-    private const val SCRIPTS_TMP = "/data/local/tmp/fluxlinux_scripts"
+    private const val SCRIPTS_TMP = "${ChrootPaths.STAGING_DIR}/scripts"
 
     /**
      * Working su argv prefix, e.g. `["/system/bin/su","-c"]` or `["/system/bin/sh","-c"]` with
@@ -241,7 +241,7 @@ object RootShell {
     }
 
     /**
-     * Copy an asset to /data/local/tmp/fluxlinux_scripts/, make it executable,
+     * Copy an asset to app-private staging, make it executable,
      * then run it as root.
      */
     fun executeScriptAsset(
@@ -382,14 +382,16 @@ object RootShell {
                     tmp.absolutePath
                 }
             var code = executeSync(
-                "cp -f '$staged' ${BusyBoxPaths.RESOLVER_ON_DEVICE} && " +
+                "mkdir -p ${ChrootPaths.HELPERS_DIR} && " +
+                    "cp -f '$staged' ${BusyBoxPaths.RESOLVER_ON_DEVICE} && " +
                     "chmod 755 ${BusyBoxPaths.RESOLVER_ON_DEVICE}"
             )
             if (code != 0) {
                 val bytes = ctx.assets.open(BusyBoxPaths.RESOLVER_ASSET).use { it.readBytes() }
                 val b64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
                 code = executeSync(
-                    "echo $b64 | base64 -d > ${BusyBoxPaths.RESOLVER_ON_DEVICE} && " +
+                    "mkdir -p ${ChrootPaths.HELPERS_DIR} && " +
+                        "echo $b64 | base64 -d > ${BusyBoxPaths.RESOLVER_ON_DEVICE} && " +
                         "chmod 755 ${BusyBoxPaths.RESOLVER_ON_DEVICE}"
                 )
             }
@@ -457,16 +459,18 @@ object RootShell {
                 }
 
             var code = executeSync(
-                "cp -f '$staged' ${ChrootPaths.CHROOT_HELPER} && " +
+                "mkdir -p ${ChrootPaths.HELPERS_DIR} && " +
+                    "cp -f '$staged' ${ChrootPaths.CHROOT_HELPER} && " +
                     "chmod 755 ${ChrootPaths.CHROOT_HELPER} && " +
                     "grep -q '${ChrootPaths.CHROOT_HELPER_VERSION}' ${ChrootPaths.CHROOT_HELPER}"
             )
             if (code != 0) {
-                // Last resort: base64 stream (app cannot write /data/local/tmp)
+                // Last resort: base64 stream (app cannot write the helpers dir)
                 val bytes = ctx.assets.open(ChrootPaths.CHROOT_HELPER_ASSET).use { it.readBytes() }
                 val b64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
                 code = executeSync(
-                    "echo $b64 | base64 -d > ${ChrootPaths.CHROOT_HELPER} && " +
+                    "mkdir -p ${ChrootPaths.HELPERS_DIR} && " +
+                        "echo $b64 | base64 -d > ${ChrootPaths.CHROOT_HELPER} && " +
                         "chmod 755 ${ChrootPaths.CHROOT_HELPER}"
                 )
             }
@@ -532,7 +536,7 @@ object RootShell {
     }
 
     /**
-     * Self-heal: if helper missing under /data/local/tmp, copy from app home/staged.
+     * Self-heal: if helper missing from the Folio helpers dir, copy from app home/staged.
      * Then `sh helper b64 …`.
      */
     private fun buildChrootHelperCmd(user: String, b64: String, chrootPath: String): String {
@@ -551,6 +555,7 @@ object RootShell {
         // semicolons so the if-list is a normal compound statement.
         return "${fluxBb}export FLUX_PACKAGE='$pkg' FLUX_PREFIX='$prefix' " +
             "FLUX_HOST_TMP='$hostTmp' FLUX_CHROOT='$chrootPath'; " +
+            "mkdir -p ${ChrootPaths.HELPERS_DIR}; " +
             "if [ ! -f $helper ]; then " +
             "for _s in " +
             "/data/data/$pkg/files/home/fluxlinux_chroot.sh " +

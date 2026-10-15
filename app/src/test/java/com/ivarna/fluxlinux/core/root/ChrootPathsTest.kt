@@ -9,8 +9,8 @@ import org.junit.Test
 class ChrootPathsTest {
 
     @Test
-    fun helper_version_is_v29() {
-        assertEquals("fluxlinux-chroot v2.9", ChrootPaths.CHROOT_HELPER_VERSION)
+    fun helper_version_is_v210() {
+        assertEquals("fluxlinux-chroot v2.10", ChrootPaths.CHROOT_HELPER_VERSION)
     }
 
     @Test
@@ -110,12 +110,12 @@ class ChrootPathsTest {
 
     @Test
     fun new_paths_match_plan_contract() {
-        assertEquals("/data/local/tmp/chrootDeepin", ChrootPaths.DEEPIN_CHROOT_PATH)
-        assertEquals("/data/local/tmp/chrootChimera", ChrootPaths.CHIMERA_CHROOT_PATH)
-        assertEquals("/data/local/tmp/chrootManjaro", ChrootPaths.MANJARO_CHROOT_PATH)
-        assertEquals("/data/local/tmp/chrootUbuntu", ChrootPaths.UBUNTU_CHROOT_PATH)
-        assertEquals("/data/local/tmp/chrootKali", ChrootPaths.KALI_CHROOT_PATH)
-        assertEquals("/data/local/tmp/chrootParrot", ChrootPaths.PARROT_CHROOT_PATH)
-        assertEquals("/data/local/tmp/chrootArch", ChrootPaths.ARCH_CHROOT_PATH)
+        assertEquals("/data/local/folio/chroots/deepin", ChrootPaths.DEEPIN_CHROOT_PATH)
+        assertEquals("/data/local/folio/chroots/chimera", ChrootPaths.CHIMERA_CHROOT_PATH)
+        assertEquals("/data/local/folio/chroots/manjaro", ChrootPaths.MANJARO_CHROOT_PATH)
+        assertEquals("/data/local/folio/chroots/ubuntu", ChrootPaths.UBUNTU_CHROOT_PATH)
+        assertEquals("/data/local/folio/chroots/kali", ChrootPaths.KALI_CHROOT_PATH)
+        assertEquals("/data/local/folio/chroots/parrot", ChrootPaths.PARROT_CHROOT_PATH)
+        assertEquals("/data/local/folio/chroots/archlinux", ChrootPaths.ARCH_CHROOT_PATH)
     }
 }
