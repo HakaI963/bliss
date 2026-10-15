@@ -1,0 +1,43 @@
+# Android/Gradle
+.gradle/
+build/
+app/build/
+.idea/
+*.iml
+local.properties
+.DS_Store
+.serena/
+
+# FluxLinux Specific
+tmp/
+scripts/generated/
+
+# Native Termux package builds:
+# - Track *.deb under native/output/<appId>/ so bootstrap can be assembled anywhere
+# - Ignore logs, assemble workdirs, and oversized bootstrap.tar (rebuild via scripts/)
+native/output/logs/
+native/bootstrap/**/root/
+native/bootstrap/**/bootstrap.tar
+native/bootstrap/**/bootstrap-*.tar
+native/loader/*.apk
+# native/termux-packages is a git submodule (pinned termux-packages).
+
+# Staged host assets (large; regenerate via scripts/package_host_assets.sh)
+app/src/*/assets/bootstrap.tar
+app/src/*/assets/rootfs/
+assets/rootfs/
+app/src/*/jniLibs/
+
+# Large NDK packages
+packages/android-ndk-r29-aarch64-linux-musl.tar.xz
+packages/android-ndk-r27d-aarch64-linux-musl.tar.xz
+
+# Module build outputs
+termux-x11/build/
+termux-x11/.cxx/
+stub/build/
+
+app/release
+.kotlin
+flux.jks
+keystore.properties
