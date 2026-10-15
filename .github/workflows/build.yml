@@ -28,18 +28,16 @@ jobs:
           java-version: "17"
           cache: gradle
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
       - name: Install Android SDK 36 + NDK 29.0.14206865
         run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+          ls "$ANDROID_HOME/cmdline-tools"
+          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
+          yes | sdkmanager --licenses || true
           sdkmanager --install "platforms;android-36" "build-tools;36.0.0" "platform-tools" "ndk;29.0.14206865"
-          echo "ANDROID_NDK_HOME=${ANDROID_HOME}/ndk/29.0.14206865" >> "$GITHUB_ENV"
-          echo "${ANDROID_HOME}/ndk/29.0.14206865" >> "$GITHUB_PATH"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/29.0.14206865" >> "$GITHUB_ENV"
           sdkmanager --list_installed
-
-      - name: Accept Android licenses
-        run: yes | sdkmanager --licenses || true
 
       - name: Assemble host bootstrap (com.ivarna.fluxlinux)
         run: python3 scripts/assemble_bootstrap.py --package-name com.ivarna.fluxlinux
