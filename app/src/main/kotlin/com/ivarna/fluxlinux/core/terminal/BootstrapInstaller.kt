@@ -1,6 +1,7 @@
 package com.ivarna.fluxlinux.core.terminal
 
 import android.content.Context
+import android.system.Os
 import android.util.Log
 import com.ivarna.fluxlinux.core.install.HostBootstrap
 import com.ivarna.fluxlinux.core.install.RootfsDownloader
@@ -37,7 +38,7 @@ object BootstrapInstaller {
     private const val TMP_DIR = ".bootstrap_extract_tmp"
 
     /** Bump when the extract/rewrite pipeline changes (invalidates old trees). */
-    const val EXTRACT_VERSION = 2
+    const val EXTRACT_VERSION = 3
 
     private const val MARKER_REL = "home/.fluxlinux/bootstrap.extracted"
 
@@ -148,6 +149,10 @@ object BootstrapInstaller {
             }
 
             val rewritten = TermuxHostPaths.applyPackageToExtractedPrefix(ctx.filesDir, ctx)
+            // W^X / mode safety net: re-assert owner-exec on every host tool dir
+            // with a REAL chmod (File.setExecutable is a no-op on some Android 16
+            // trees, and chmod 755 in setup alone did not heal on-device exit=126).
+            repairHostExecPermissions(ctx.filesDir)
             markExtracted(ctx)
             Log.i(TAG, "bootstrap extract done; rewrote $rewritten residual stock paths")
             true
@@ -325,8 +330,8 @@ object BootstrapInstaller {
                         val linkTarget = File(outFile.parentFile, linkName)
                         if (linkTarget.exists() && linkTarget.isFile) {
                             linkTarget.copyTo(outFile, overwrite = true)
-                            // Copies lose Unix modes — restore owner-exec.
-                            outFile.setExecutable(true, false)
+                            // Copies lose Unix modes — restore owner-exec (real chmod).
+                            applyTarMode(outFile, 0b111_000_000)
                         }
                     } catch (_: Exception) {}
                 }
@@ -351,16 +356,71 @@ object BootstrapInstaller {
                 }
                 val modeStr = parseString(100, 8).trim()
                 try {
-                    val mode = modeStr.toInt(8)
-                    if ((mode and 73) != 0) {
-                        outFile.setExecutable(true, false)
-                    }
+                    applyTarMode(outFile, modeStr.toInt(8))
                 } catch (_: Exception) {}
             } else {
                 val dataBlocks = Math.ceil(size.toDouble() / 512.0).toLong()
                 skipBytes(inputStream, dataBlocks * 512L)
             }
         }
+    }
+
+    /**
+     * Apply a tar header mode with a REAL chmod. [File.setExecutable] is a
+     * documented no-op on some Android 16 file trees (see HostScriptDeployer),
+     * which leaves extracted host tools mode 0600 -> execve fails with EACCES.
+     */
+    private fun applyTarMode(file: File, mode: Int) {
+        if (mode <= 0) return
+        try {
+            Os.chmod(file.absolutePath, mode and 0x1FF)
+        } catch (_: Throwable) {
+            file.setReadable(true, false)
+            file.setWritable(true, false)
+            if ((mode and 73) != 0) file.setExecutable(true, false)
+        }
+    }
+
+    /**
+     * W^X / retry safety net (runs once per extraction, after the package
+     * rewrite): owner-exec on every host tool dir. chmod follows file symlinks,
+     * so `cp -> coreutils` etc. are repaired through their targets. Containers
+     * (usr/var/lib/proot-distro) and usr/lib shared objects are never touched.
+     */
+    private fun repairHostExecPermissions(filesDir: File) {
+        val execDirs = listOf(
+            File(filesDir, "usr/bin"),
+            File(filesDir, "usr/libexec"),
+            File(filesDir, "usr/lib/apt/methods")
+        )
+        var fixed = 0
+        for (root in execDirs) {
+            if (!root.isDirectory) continue
+            runCatching {
+                root.walkTopDown().forEach { f ->
+                    runCatching {
+                        if (f.isDirectory) {
+                            applyTarMode(f, 0b111_101_101) // 0755
+                        } else if (f.isFile) {
+                            applyTarMode(f, 0b111_000_000) // 0700
+                            fixed++
+                        }
+                    }
+                }
+            }
+        }
+        val home = File(filesDir, "home")
+        if (home.isDirectory) {
+            runCatching {
+                home.walkTopDown().forEach { f ->
+                    runCatching {
+                        if (f.isDirectory) applyTarMode(f, 0b111_101_101)
+                        else if (f.isFile) applyTarMode(f, 0b111_000_000)
+                    }
+                }
+            }
+        }
+        Log.i(TAG, "host exec repair: chmod applied to $fixed entries")
     }
 
     private fun skipBytes(inputStream: InputStream, count: Long) {

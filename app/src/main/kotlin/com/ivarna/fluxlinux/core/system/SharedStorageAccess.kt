@@ -19,7 +19,10 @@ object SharedStorageAccess {
         }.getOrDefault(false)
 
     fun granted(): Boolean =
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && Environment.isExternalStorageManager()
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
+            // targetSdk 28 runs in legacy storage mode -> full /sdcard access
+            // without the All-files-access toggle, so legacy == granted.
+            (Environment.isExternalStorageManager() || Environment.isExternalStorageLegacy())
 
     fun openSettings(context: Context) {
         val pkg = Uri.parse("package:${context.packageName}")

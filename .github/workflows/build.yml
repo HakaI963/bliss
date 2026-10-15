@@ -60,6 +60,15 @@ jobs:
         env:
           ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_HOME }}
 
+      - name: Verify APK (targetSdk 28, bootstrap + jniLibs packaged)
+        run: |
+          APK=$(ls app/build/outputs/apk/folio/debug/*.apk | head -n 1)
+          AAPT=$(ls "$ANDROID_HOME"/build-tools/*/aapt | head -n 1)
+          echo "APK: $APK"
+          "$AAPT" dump badging "$APK" | grep -E "^package:|sdkVersion|targetSdkVersion"
+          unzip -l "$APK" | grep -E "bootstrap\.tar|libbash\.so|libproot\.so" | head -n 8
+          sha256sum "$APK"
+
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         continue-on-error: true

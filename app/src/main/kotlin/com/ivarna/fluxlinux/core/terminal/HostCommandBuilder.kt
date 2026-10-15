@@ -26,7 +26,9 @@ object HostCommandBuilder {
         if (base != null) env.putAll(base)
 
         env["PATH"] = "$nld:${TermuxHostPaths.BIN}:/system/bin"
-        // W^X (targetSdk 36): proot/bash/loader must run from nativeLibraryDir, not $PREFIX/bin.
+        // W^X stay-clear: proot/bash/loader run from nativeLibraryDir (jniLibs), not
+        // $PREFIX/bin — belt-and-braces on top of targetSdk 28 (which already allows
+        // app_data_file exec).
         // proot-distro must also pass PROOT_LOADER* through (see TermuxHostPaths.patchProotDistroLoaderPassThrough).
         env["PD_PROOT_BIN"] = TermuxHostPaths.libProot(ctx).absolutePath
         env["PROOT_LOADER"] = TermuxHostPaths.libLoader(ctx).absolutePath

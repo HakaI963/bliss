@@ -18,7 +18,13 @@ android {
     defaultConfig {
         applicationId = "com.ivarna.fluxlinux"
         minSdk = 26
-        targetSdk = 36
+        // W^X (Android 10+/API 29+): SELinux denies execve() on anything under
+        // /data/data/<pkg>/ (app_data_file) for targetSdk >= 29 — chmod 755 does
+        // NOT help; the kernel returns EACCES (exit=126). The embedded host execs
+        // $PREFIX/bin/* directly (setup_termux.sh -> dirname/cp/mkdir/...), so the
+        // app targets 28 like Termux. bash/proot/loader/pulse stay pinned to
+        // nativeLibraryDir (jniLibs) as belt-and-braces for future targetSdk bumps.
+        targetSdk = 28
         versionCode = 13
         versionName = "2.0.1"
 

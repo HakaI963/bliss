@@ -93,7 +93,7 @@ object TermuxHostPaths {
      * Generated from this object only — do not hand-edit on device.
      *
      * When [ctx] is provided, also pins W^X-safe `PD_PROOT_BIN` / `PROOT_LOADER{,_32}`
-     * to jniLibs under `nativeLibraryDir` (required on targetSdk 36).
+     * to jniLibs under `nativeLibraryDir` (W^X stay-clear on top of targetSdk 28).
      */
     fun writeHostEnvFile(filesDir: File, ctx: Context? = null): File {
         val f = hostEnvFile(filesDir)
@@ -154,7 +154,7 @@ object TermuxHostPaths {
      *
      * Stock only allows `PROOT_NO_SECCOMP` / `PROOT_VERBOSE`.
      * Without the loader env, proot falls back to `$PREFIX/libexec/proot/loader`
-     * which is not executable under targetSdk 36 W^X →
+     * which is not executable under W^X (targetSdk 29+ builds) →
      * `proot error: execve("/usr/bin/bash"): Permission denied`.
      * Without `PROOT_TMP_DIR`, glue/f2fs temp dirs go to an unwritable default →
      * `can't create temporary directory` / `can't create glue rootfs`.
