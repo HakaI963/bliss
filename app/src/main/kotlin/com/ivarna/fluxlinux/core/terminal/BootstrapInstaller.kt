@@ -79,7 +79,8 @@ object BootstrapInstaller {
     fun ensureExtracted(
         ctx: Context,
         force: Boolean = false,
-        onProgress: (done: Long, total: Long, phase: String) -> Unit = { _, _, _ -> }
+        onProgress: (done: Long, total: Long, phase: String) -> Unit = { _, _, _ -> },
+        onError: (String) -> Unit = {}
     ): Boolean {
         if (!force && isExtracted(ctx)) {
             // Happy path (proot-opt-01): the prefix is already extracted AND the
@@ -97,10 +98,16 @@ object BootstrapInstaller {
             File(tmpDir, "usr/etc").mkdirs()
             File(ctx.filesDir, "home").mkdirs()
 
-            val source = resolveBootstrapSource(ctx, onProgress) ?: throw IllegalStateException(
-                "host bootstrap missing — place ${HostBootstrap.forApplicationId(ctx.packageName).fileName} " +
-                    "in the app home directory or allow the GitHub download"
-            )
+            val source = resolveBootstrapSource(ctx, onProgress) ?: run {
+                onError(
+                    "host bootstrap missing — place ${HostBootstrap.forApplicationId(ctx.packageName).fileName} " +
+                        "in the app home directory or allow the GitHub download"
+                )
+                throw IllegalStateException(
+                    "host bootstrap missing — place ${HostBootstrap.forApplicationId(ctx.packageName).fileName} " +
+                        "in the app home directory or allow the GitHub download"
+                )
+            }
             onProgress(0L, source.totalBytes, "Extracting host bootstrap")
             source.stream.use { input ->
                 extractTarStream(
@@ -146,6 +153,7 @@ object BootstrapInstaller {
             true
         } catch (e: Exception) {
             Log.e(TAG, "bootstrap extract failed", e)
+            onError("Extract failed: ${e.message}")
             clearMarker(ctx)
             File(ctx.filesDir, TMP_DIR).deleteRecursively()
             false

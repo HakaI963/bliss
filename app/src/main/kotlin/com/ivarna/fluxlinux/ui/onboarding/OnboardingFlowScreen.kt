@@ -602,12 +602,14 @@ private fun HostSetupPage(onBack: () -> Unit, onNext: () -> Unit) {
     var failed by remember { mutableStateOf(false) }
     var progress by remember { mutableStateOf(0f) }
     var statusText by remember { mutableStateOf("") }
+    var errorDetail by remember { mutableStateOf<String?>(null) }
     val colors = MaterialTheme.colorScheme
 
     fun startInit() {
         if (initializing) return
         initializing = true
         failed = false
+        errorDetail = null
         statusText = "Extracting host bootstrap…"
         TerminalLauncher.prepareHost(
             context,
@@ -619,6 +621,7 @@ private fun HostSetupPage(onBack: () -> Unit, onNext: () -> Unit) {
                 initializing = false
                 bootstrapDone = TerminalLauncher.isHostSetupDone(context)
                 failed = !bootstrapDone
+                errorDetail = if (failed) TerminalLauncher.lastPrepareError else null
                 statusText = if (bootstrapDone) "Host environment ready."
                 else "Setup failed — check storage space and network, then retry."
             }
@@ -744,10 +747,22 @@ private fun HostSetupPage(onBack: () -> Unit, onNext: () -> Unit) {
                         }
                     } else if (!bootstrapDone) {
                         Text(
-                            text = "Tap below to extract the core userland files and start the embedded runtime.",
+                            text = if (failed) "Setup failed — check storage space and network, then retry."
+                            else "Tap below to extract the core userland files and start the embedded runtime.",
                             fontSize = 12.5.sp,
                             color = colors.onSurface.copy(alpha = 0.7f)
                         )
+                        if (failed && errorDetail != null) {
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                text = errorDetail!!,
+                                fontSize = 11.5.sp,
+                                lineHeight = 15.sp,
+                                color = colors.onSurface.copy(alpha = 0.55f),
+                                maxLines = 4,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
                         Spacer(Modifier.height(12.dp))
                         Button(
                             onClick = { startInit() },

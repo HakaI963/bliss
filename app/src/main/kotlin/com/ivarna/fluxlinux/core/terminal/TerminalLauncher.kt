@@ -30,6 +30,11 @@ object TerminalLauncher {
     internal val executor: ExecutorService = Executors.newSingleThreadExecutor()
     internal val mainHandler = Handler(Looper.getMainLooper())
 
+    /** Reason for the last [prepareHostBlocking] failure (read on the main thread in onDone). */
+    @Volatile
+    var lastPrepareError: String? = null
+        private set
+
     /** Marker written by setup_termux.sh; checked by host status cards. */
     fun isHostSetupDone(ctx: Context): Boolean =
         TermuxHostPaths.setupTermuxMarker(ctx).exists()
@@ -177,19 +182,29 @@ object TerminalLauncher {
         forceHostSetup: Boolean = false,
         progress: (done: Long, total: Long, phase: String) -> Unit = { _, _, _ -> }
     ): Boolean {
+        lastPrepareError = null
         // Fast path (proot-opt-01): host already set up + bootstrap extracted →
         // skip ensureExtracted / deployScripts / tree sweeps entirely and return
         // immediately (< 5ms). Pulse is started after a guest session opens
         // (FluxTerminalSessionManager) and by the desktop start_gui*.sh scripts.
         if (!forceHostSetup && isHostSetupDone(ctx) && BootstrapInstaller.isExtracted(ctx)) {
             // After an app update this refreshes host env + scripts (marker is stamped per install).
-            return HostScriptDeployer.deployScripts(ctx)
+            val ok = HostScriptDeployer.deployScripts(ctx)
+            if (!ok) lastPrepareError = "Script deploy failed — check app storage space."
+            return ok
         }
         // Corrupt/partial tree (no valid marker) → clean re-extract (containers preserved).
-        if (!BootstrapInstaller.ensureExtracted(ctx, onProgress = progress)) {
+        if (!BootstrapInstaller.ensureExtracted(
+                ctx,
+                onProgress = progress,
+                onError = { lastPrepareError = it }
+            )
+        ) {
+            if (lastPrepareError == null) lastPrepareError = "Bootstrap extract failed."
             return false
         }
         if (!HostScriptDeployer.deployScripts(ctx)) {
+            lastPrepareError = "Script deploy failed — check app storage space."
             return false
         }
         if (!forceHostSetup && isHostSetupDone(ctx)) return true
@@ -206,10 +221,12 @@ object TerminalLauncher {
             )
             Log.i(TAG, "setup_termux exit=$exit\n$out")
             if (exit == 0) return true
+            lastPrepareError = "setup_termux failed (exit=$exit): ${out.takeLast(300).trim()}"
             marker.delete()
             Log.w(TAG, "setup_termux failed — host NOT ready (no destructive recovery)")
         } catch (e: Exception) {
             Log.w(TAG, "setup_termux run failed", e)
+            lastPrepareError = "setup_termux crashed: ${e.message}"
             marker.delete()
         }
         return false
