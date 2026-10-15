@@ -28,6 +28,11 @@ jobs:
           java-version: "17"
           cache: gradle
 
+      - name: Install native build deps (Bison, patch)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bison patch python3
+
       - name: Install Android SDK 36 + NDK 29.0.14206865
         run: |
           echo "ANDROID_HOME=$ANDROID_HOME"
