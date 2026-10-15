@@ -40,10 +40,19 @@ export PREFIX="$TERMUX__PREFIX"
 export HOME="$TERMUX__HOME"
 export TMPDIR="${TMPDIR:-$PREFIX/tmp}"
 # Private glue dir — must not be the --shared-tmp bind ($PREFIX/tmp).
-export PROOT_TMP_DIR="${PROOT_TMP_DIR:-$(dirname "$PREFIX")/proot-tmp}"
+# NOTE: ${PREFIX%/*} == dirname (pure expansion; no fork+exec of $PREFIX/bin/*).
+export PROOT_TMP_DIR="${PROOT_TMP_DIR:-${PREFIX%/*}/proot-tmp}"
 export TERMUX_VERSION="${TERMUX_VERSION:-flux-host}"
 export PATH="$PREFIX/bin:$PREFIX/bin/applets:/system/bin:/system/xbin${PATH:+:$PATH}"
 export LD_LIBRARY_PATH="$PREFIX/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+
+# Early exec hardening (W^X / SELinux): the first external call below must not
+# depend on $PREFIX/bin being runnable yet. Re-assert owner-exec on the host
+# tool dirs with the SYSTEM chmod (always runnable), then avoid fork+exec where
+# a shell expansion gives the identical value.
+if [ -d "$PREFIX/bin" ] && [ -x /system/bin/chmod ]; then
+    /system/bin/chmod 700 "$PREFIX/bin/"* "$PREFIX/libexec/"* 2>/dev/null || true
+fi
 
 PREFIX_DEFAULT="$PREFIX"
 HOME_DEFAULT="$HOME"
@@ -60,7 +69,7 @@ if [ -r "$PREFIX/etc/profile" ]; then
     export PREFIX="$PREFIX_DEFAULT"
     export HOME="$HOME_DEFAULT"
     export TMPDIR="$PREFIX/tmp"
-    export PROOT_TMP_DIR="$(dirname "$PREFIX")/proot-tmp"
+    export PROOT_TMP_DIR="${PREFIX%/*}/proot-tmp"
     export PATH="$PREFIX/bin:$PREFIX/bin/applets:/system/bin:/system/xbin${PATH:+:$PATH}"
     export LD_LIBRARY_PATH="$PREFIX/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 fi
@@ -77,7 +86,8 @@ if [ "${FLUX_SETUP_FORCE:-0}" = "1" ]; then
 fi
 
 if [ -f "$MARKER_FILE" ]; then
-    prev="$(cat "$MARKER_FILE" 2>/dev/null || true)"
+    prev=""
+    IFS= read -r prev < "$MARKER_FILE" 2>/dev/null || true
     echo "FluxLinux: Prior marker v${prev:-?} — re-validating (checks never skipped)"
 fi
 
