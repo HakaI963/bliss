@@ -2,6 +2,7 @@ package com.ivarna.fluxlinux.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowBack
@@ -105,10 +106,11 @@ fun RootAccessScreen(
                         Spacer(modifier = Modifier.height(40.dp))
                         Button(
                             onClick = onEnableChroot,
-                            colors = ButtonDefaults.buttonColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.primary),
-                            modifier = Modifier.fillMaxWidth().height(50.dp)
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black),
+                            modifier = Modifier.fillMaxWidth().height(54.dp),
+                            shape = CircleShape
                         ) {
-                            Text("Enable Chroot Mode", color = androidx.compose.material3.MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold)
+                            Text("Enable Chroot Mode", color = Color.Black, fontWeight = FontWeight.Bold)
                         }
                     } else {
                         Text(
@@ -133,10 +135,11 @@ fun RootAccessScreen(
                         Spacer(modifier = Modifier.height(40.dp))
                         Button(
                             onClick = onBack,
-                            colors = ButtonDefaults.buttonColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.outline),
-                            modifier = Modifier.fillMaxWidth().height(50.dp)
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black),
+                            modifier = Modifier.fillMaxWidth().height(54.dp),
+                            shape = CircleShape
                         ) {
-                            Text("Return to Settings", color = androidx.compose.material3.MaterialTheme.colorScheme.onPrimary)
+                            Text("Return to Settings", color = Color.Black)
                         }
                     }
                 }

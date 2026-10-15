@@ -1,9 +1,7 @@
 package com.ivarna.fluxlinux.ui.screens
 
 import android.widget.Toast
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -11,19 +9,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -55,11 +47,18 @@ import com.ivarna.fluxlinux.core.chroot.ChrootSettingsModel
 import com.ivarna.fluxlinux.core.chroot.GuestStorageCatalog
 import com.ivarna.fluxlinux.core.data.DistroRepository
 import com.ivarna.fluxlinux.core.root.ChrootPaths
-import com.ivarna.fluxlinux.ui.components.GlassSettingCard
+import com.ivarna.fluxlinux.ui.components.FrostContainer
+import com.ivarna.fluxlinux.ui.components.FrostDivider
+import com.ivarna.fluxlinux.ui.components.FrostGroupTitle
+import com.ivarna.fluxlinux.ui.components.FrostPill
+import com.ivarna.fluxlinux.ui.screens.storage.DestructivePill
+import com.ivarna.fluxlinux.ui.screens.storage.FrostNote
 import com.ivarna.fluxlinux.ui.screens.storage.MetaRow
 import com.ivarna.fluxlinux.ui.screens.storage.StatusBadge
+import com.ivarna.fluxlinux.ui.theme.TextMuted
+import com.ivarna.fluxlinux.ui.theme.TextPrimary
+import com.ivarna.fluxlinux.ui.theme.TextSecondary
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -313,398 +312,324 @@ fun ChrootStorageDetailScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            val accent = MaterialTheme.colorScheme.secondary
-            val body = MaterialTheme.colorScheme.onBackground
-            val muted = MaterialTheme.colorScheme.onSurfaceVariant
-            val label = MaterialTheme.colorScheme.onSurfaceVariant
-
             Text(
                 pageSubtitle,
                 fontSize = 11.sp,
                 fontFamily = FontFamily.Monospace,
-                color = muted
+                color = TextMuted
             )
 
-            // ── Storage & auto-detect ─────────────────────────────────────
-            GlassSettingCard {
-                Column(Modifier.padding(18.dp).fillMaxWidth()) {
-                    Text(
-                        "Storage & manage",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = accent
+            FrostContainer {
+                FrostNote("Rootfs is not removed when you uninstall the app. Free space here.")
+            }
+
+            // ── Storage group ─────────────────────────────────────────────
+            FrostGroupTitle("Storage")
+            FrostContainer {
+                MetaRow("Status") {
+                    val installedCount = remember(sizeUi) {
+                        GuestStorageCatalog.installableChroots().count {
+                            ChrootInfoStore.cachedInstalled(context, it.id)
+                        }
+                    }
+                    val statusText = if (isUniversal) {
+                        "$installedCount INSTALLED"
+                    } else {
+                        ChrootSettingsModel.resolveStatus(
+                            installed = sizeUi.installed,
+                            dirExists = sizeUi.dirExists
+                        )
+                    }
+                    StatusBadge(
+                        text = statusText,
+                        ok = if (isUniversal) installedCount > 0 else sizeUi.installed
                     )
-                    Spacer(Modifier.height(8.dp))
-
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(
-                                Color(0x33FF9800),
-                                RoundedCornerShape(8.dp)
-                            )
-                            .padding(12.dp)
-                    ) {
-                        Text(
-                            "Rootfs is not removed when you uninstall the app. Free space here.",
-                            fontSize = 12.sp,
-                            color = Color(0xFFFFCC80)
-                        )
-                    }
-
-                    Spacer(Modifier.height(12.dp))
-                    MetaRow("Status") {
-                        val installedCount = remember(sizeUi) {
-                            GuestStorageCatalog.installableChroots().count {
-                                ChrootInfoStore.cachedInstalled(context, it.id)
-                            }
-                        }
-                        val statusText = if (isUniversal) {
-                            "$installedCount INSTALLED"
-                        } else {
-                            ChrootSettingsModel.resolveStatus(
-                                installed = sizeUi.installed,
-                                dirExists = sizeUi.dirExists
-                            )
-                        }
+                }
+                if (sizeUi.rootOk || sizeUi.measuring) {
+                    FrostDivider()
+                    MetaRow("Root access") {
                         StatusBadge(
-                            text = statusText,
-                            ok = if (isUniversal) installedCount > 0 else sizeUi.installed
+                            text = when {
+                                sizeUi.measuring -> "CHECKING"
+                                sizeUi.rootOk -> "GRANTED"
+                                else -> "DENIED"
+                            },
+                            ok = sizeUi.rootOk && !sizeUi.measuring
                         )
                     }
-                    Spacer(Modifier.height(8.dp))
-                    if (sizeUi.rootOk || sizeUi.measuring) {
-                        MetaRow("Root access") {
-                            StatusBadge(
-                                text = when {
-                                    sizeUi.measuring -> "CHECKING"
-                                    sizeUi.rootOk -> "GRANTED"
-                                    else -> "DENIED"
-                                },
-                                ok = sizeUi.rootOk && !sizeUi.measuring
-                            )
-                        }
-                        Spacer(Modifier.height(12.dp))
-                    }
+                }
 
-                    // Size panel
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(
-                                MaterialTheme.colorScheme.surface.copy(alpha = 0.55f),
-                                RoundedCornerShape(12.dp)
-                            )
-                            .padding(14.dp)
+                FrostDivider()
+                // Size block
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 18.dp, vertical = 12.dp)
+                ) {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                "LINUX STORAGE",
-                                fontSize = 11.sp,
-                                fontFamily = FontFamily.Monospace,
-                                fontWeight = FontWeight.SemiBold,
-                                color = label,
-                                modifier = Modifier.weight(1f)
-                            )
-                            IconButton(
-                                onClick = { refreshSizeOnly() },
-                                enabled = !busy
-                            ) {
-                                Icon(
-                                    Icons.Default.Refresh,
-                                    contentDescription = "Refresh size",
-                                    tint = accent
-                                )
-                            }
-                        }
-                        if (sizeUi.measuring || busy && sizeUi.bytes == null) {
-                            LinearProgressIndicator(
-                                modifier = Modifier.fillMaxWidth(),
-                                color = accent,
-                                trackColor = accent.copy(alpha = 0.2f)
-                            )
-                            Spacer(Modifier.height(8.dp))
-                        }
-                        val (v, u) = ChrootInfoStore.formatStorageBytes(sizeUi.bytes)
-                        Row(verticalAlignment = Alignment.Bottom) {
-                            Text(
-                                v,
-                                fontSize = 32.sp,
-                                fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace,
-                                color = accent,
-                                modifier = Modifier.alpha(if (sizeUi.dimmedCache) 0.85f else 1f)
-                            )
-                            if (u.isNotEmpty()) {
-                                Text(
-                                    " $u",
-                                    fontSize = 14.sp,
-                                    fontFamily = FontFamily.Monospace,
-                                    color = body,
-                                    modifier = Modifier.padding(bottom = 4.dp)
-                                )
-                            }
-                        }
                         Text(
-                            sizeUi.hint,
+                            "LINUX STORAGE",
                             fontSize = 11.sp,
                             fontFamily = FontFamily.Monospace,
-                            color = muted
+                            fontWeight = FontWeight.SemiBold,
+                            color = TextSecondary,
+                            modifier = Modifier.weight(1f)
+                        )
+                        IconButton(
+                            onClick = { refreshSizeOnly() },
+                            enabled = !busy
+                        ) {
+                            Icon(
+                                Icons.Default.Refresh,
+                                contentDescription = "Refresh size",
+                                tint = TextSecondary
+                            )
+                        }
+                    }
+                    if (sizeUi.measuring || busy && sizeUi.bytes == null) {
+                        LinearProgressIndicator(
+                            modifier = Modifier.fillMaxWidth(),
+                            color = TextSecondary,
+                            trackColor = TextSecondary.copy(alpha = 0.2f)
+                        )
+                        Spacer(Modifier.height(8.dp))
+                    }
+                    val (v, u) = ChrootInfoStore.formatStorageBytes(sizeUi.bytes)
+                    Row(verticalAlignment = Alignment.Bottom) {
+                        Text(
+                            v,
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            fontFamily = FontFamily.Monospace,
+                            color = TextPrimary,
+                            modifier = Modifier.alpha(if (sizeUi.dimmedCache) 0.7f else 1f)
+                        )
+                        if (u.isNotEmpty()) {
+                            Text(
+                                " $u",
+                                fontSize = 13.sp,
+                                fontFamily = FontFamily.Monospace,
+                                color = TextSecondary,
+                                modifier = Modifier.padding(bottom = 2.dp)
+                            )
+                        }
+                    }
+                    Text(
+                        sizeUi.hint,
+                        fontSize = 11.sp,
+                        fontFamily = FontFamily.Monospace,
+                        color = TextMuted
+                    )
+                }
+
+                FrostDivider()
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 18.dp, vertical = 12.dp)
+                ) {
+                    Text(
+                        if (isUniversal) "HOST PATHS" else "HOST PATH",
+                        fontSize = 10.sp,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.SemiBold,
+                        color = TextSecondary
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    if (isUniversal) {
+                        allPaths.forEach { p ->
+                            Text(
+                                "• $p",
+                                fontSize = 11.sp,
+                                fontFamily = FontFamily.Monospace,
+                                color = TextMuted
+                            )
+                        }
+                    } else {
+                        Text(
+                            path,
+                            fontSize = 12.sp,
+                            fontFamily = FontFamily.Monospace,
+                            color = TextSecondary
                         )
                     }
+                }
 
-                    Spacer(Modifier.height(12.dp))
-                    Column(
+                if (!isUniversal && !sizeUi.installed && onNavigateToInstall != null) {
+                    FrostDivider()
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(
-                                MaterialTheme.colorScheme.surface.copy(alpha = 0.45f),
-                                RoundedCornerShape(10.dp)
-                            )
-                            .padding(12.dp)
+                            .padding(horizontal = 18.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.Center
                     ) {
-                        Text(
-                            if (isUniversal) "HOST PATHS (12 KNOWN)" else "HOST PATH",
-                            fontSize = 10.sp,
-                            fontFamily = FontFamily.Monospace,
-                            fontWeight = FontWeight.SemiBold,
-                            color = label
-                        )
-                        if (isUniversal) {
-                            allPaths.forEach { p ->
-                                Text(
-                                    "• $p",
-                                    fontSize = 11.sp,
-                                    fontFamily = FontFamily.Monospace,
-                                    color = body
-                                )
-                            }
-                        } else {
-                            Text(
-                                path,
-                                fontSize = 12.sp,
-                                fontFamily = FontFamily.Monospace,
-                                color = body
-                            )
-                        }
-                    }
-
-                    if (!isUniversal && !sizeUi.installed && onNavigateToInstall != null) {
-                        Spacer(Modifier.height(12.dp))
-                        Button(
+                        FrostPill(
+                            text = "Install chroot",
                             onClick = { onNavigateToInstall() },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = accent,
-                                contentColor = MaterialTheme.colorScheme.onSecondary
-                            ),
-                            modifier = Modifier.fillMaxWidth().height(48.dp)
-                        ) {
-                            Text("Install chroot", fontWeight = FontWeight.Bold)
-                        }
+                            primary = true
+                        )
                     }
                 }
             }
 
-            // ── Processes / kill services ─────────────────────────────────
-            GlassSettingCard {
-                Column(Modifier.padding(18.dp).fillMaxWidth()) {
-                    Text(
-                        "Processes",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.error
-                    )
-                    Text(
-                        if (isUniversal) {
-                            "Orphans survive app close across all roots. Kill before uninstall if stuck."
-                        } else {
-                            "Orphans survive app close (unlike proot). Kill before uninstall if stuck."
-                        },
-                        fontSize = 12.sp,
-                        color = muted,
-                        modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
-                    )
+            // ── Processes group ───────────────────────────────────────────
+            FrostGroupTitle("Processes")
+            FrostContainer {
+                FrostNote(
+                    if (isUniversal) {
+                        "Orphans survive app close across all roots. Kill before uninstall if stuck."
+                    } else {
+                        "Orphans survive app close (unlike proot). Kill before uninstall if stuck."
+                    }
+                )
 
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(
-                                MaterialTheme.colorScheme.surface.copy(alpha = 0.55f),
-                                RoundedCornerShape(12.dp)
-                            )
-                            .padding(14.dp)
+                FrostDivider()
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 18.dp, vertical = 12.dp)
+                ) {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                "CHROOT PROCESSES",
-                                fontSize = 11.sp,
-                                fontFamily = FontFamily.Monospace,
-                                fontWeight = FontWeight.SemiBold,
-                                color = label,
-                                modifier = Modifier.weight(1f)
-                            )
-                            TextButton(onClick = { scanProcs() }, enabled = !busy) {
-                                Text("Scan", color = accent, fontWeight = FontWeight.SemiBold)
-                            }
-                        }
-                        if (procUi.scanning || procUi.killing) {
-                            LinearProgressIndicator(
-                                modifier = Modifier.fillMaxWidth(),
-                                color = MaterialTheme.colorScheme.error,
-                                trackColor = MaterialTheme.colorScheme.error.copy(alpha = 0.2f)
-                            )
-                            Spacer(Modifier.height(8.dp))
-                        }
-                        Row(verticalAlignment = Alignment.Bottom) {
-                            Text(
-                                if (procUi.count < 0) "—" else procUi.count.toString(),
-                                fontSize = 32.sp,
-                                fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace,
-                                color = if (procUi.count > 0) {
-                                    MaterialTheme.colorScheme.error
-                                } else {
-                                    accent
-                                }
-                            )
-                            Text(
-                                " running",
-                                fontSize = 14.sp,
-                                fontFamily = FontFamily.Monospace,
-                                color = body,
-                                modifier = Modifier.padding(bottom = 4.dp, start = 6.dp)
-                            )
-                        }
                         Text(
-                            if (isUniversal) "roots=12 known · scan all catalog paths" else "root=$path",
-                            fontSize = 10.sp,
-                            fontFamily = FontFamily.Monospace,
-                            color = muted
-                        )
-                        Text(
-                            procUi.hint,
+                            "CHROOT PROCESSES",
                             fontSize = 11.sp,
                             fontFamily = FontFamily.Monospace,
-                            color = muted,
-                            modifier = Modifier.padding(top = 4.dp)
+                            fontWeight = FontWeight.SemiBold,
+                            color = TextSecondary,
+                            modifier = Modifier.weight(1f)
                         )
-
-                        if (procUi.processes.isNotEmpty()) {
-                            Spacer(Modifier.height(8.dp))
-                            Text(
-                                "SAMPLE",
-                                fontSize = 10.sp,
-                                fontFamily = FontFamily.Monospace,
-                                fontWeight = FontWeight.SemiBold,
-                                color = label
-                            )
-                            procUi.processes.take(5).forEach { p ->
-                                Text(
-                                    "${p.pid}  ${p.comm}",
-                                    fontSize = 11.sp,
-                                    fontFamily = FontFamily.Monospace,
-                                    color = body
-                                )
-                            }
-                            val more = procUi.processes.size - 5
-                            if (more > 0) {
-                                Text(
-                                    "+$more more",
-                                    fontSize = 10.sp,
-                                    fontFamily = FontFamily.Monospace,
-                                    color = muted
-                                )
-                            }
+                        TextButton(onClick = { scanProcs() }, enabled = !busy) {
+                            Text("Scan", color = TextSecondary, fontWeight = FontWeight.SemiBold)
                         }
                     }
+                    if (procUi.scanning || procUi.killing) {
+                        LinearProgressIndicator(
+                            modifier = Modifier.fillMaxWidth(),
+                            color = TextSecondary,
+                            trackColor = TextSecondary.copy(alpha = 0.2f)
+                        )
+                        Spacer(Modifier.height(8.dp))
+                    }
+                    Row(verticalAlignment = Alignment.Bottom) {
+                        Text(
+                            if (procUi.count < 0) "—" else procUi.count.toString(),
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            fontFamily = FontFamily.Monospace,
+                            color = TextPrimary
+                        )
+                        Text(
+                            " running",
+                            fontSize = 13.sp,
+                            fontFamily = FontFamily.Monospace,
+                            color = TextSecondary,
+                            modifier = Modifier.padding(bottom = 2.dp, start = 6.dp)
+                        )
+                    }
+                    Text(
+                        if (isUniversal) "roots=${allPaths.size} known · scan all catalog paths" else "root=$path",
+                        fontSize = 10.sp,
+                        fontFamily = FontFamily.Monospace,
+                        color = TextMuted
+                    )
+                    Text(
+                        procUi.hint,
+                        fontSize = 11.sp,
+                        fontFamily = FontFamily.Monospace,
+                        color = TextMuted,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
 
-                    Spacer(Modifier.height(12.dp))
+                    if (procUi.processes.isNotEmpty()) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "SAMPLE",
+                            fontSize = 10.sp,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.SemiBold,
+                            color = TextSecondary
+                        )
+                        procUi.processes.take(5).forEach { p ->
+                            Text(
+                                "${p.pid}  ${p.comm}",
+                                fontSize = 11.sp,
+                                fontFamily = FontFamily.Monospace,
+                                color = TextSecondary
+                            )
+                        }
+                        val more = procUi.processes.size - 5
+                        if (more > 0) {
+                            Text(
+                                "+$more more",
+                                fontSize = 10.sp,
+                                fontFamily = FontFamily.Monospace,
+                                color = TextMuted
+                            )
+                        }
+                    }
+                }
+
+                FrostDivider()
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 18.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     val isOperationBusy = busy || killCoordinator.isBusy
                     val killEnabled = ChrootSettingsModel.isKillEnabled(
                         rootOk = procUi.rootOk,
                         busy = isOperationBusy
                     )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Button(
-                            onClick = { showKillConfirm = true },
-                            enabled = killEnabled,
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.error,
-                                contentColor = MaterialTheme.colorScheme.onError,
-                                disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                disabledContentColor = muted
-                            ),
-                            modifier = Modifier.weight(1f).height(48.dp)
-                        ) {
-                            if (procUi.killing) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(18.dp),
-                                    strokeWidth = 2.dp,
-                                    color = Color.White
-                                )
-                                Spacer(Modifier.width(8.dp))
-                            }
-                            val killText = if (killProgress != null) {
-                                "Killing (${killProgress!!.first}/${killProgress!!.second})…"
-                            } else if (isUniversal) {
-                                "Kill all across roots"
-                            } else {
-                                "Kill all chroot processes"
-                            }
-                            Text(killText, fontWeight = FontWeight.Bold)
-                        }
-
-                        if (procUi.killing && isUniversal) {
-                            val isCancelling = killCoordinator.state == ChrootKillCoordinator.State.CANCEL_REQUESTED
-                            Button(
-                                onClick = { cancelKill() },
-                                enabled = !isCancelling,
-                                colors = ButtonDefaults.outlinedButtonColors(
-                                    contentColor = MaterialTheme.colorScheme.error
-                                ),
-                                modifier = Modifier.height(48.dp)
-                            ) {
-                                Text(if (isCancelling) "Cancelling…" else "Cancel")
-                            }
-                        }
+                    val killText = if (killProgress != null) {
+                        "Killing (${killProgress!!.first}/${killProgress!!.second})…"
+                    } else if (procUi.killing) {
+                        "Killing…"
+                    } else if (isUniversal) {
+                        "Kill all across roots"
+                    } else {
+                        "Kill all chroot processes"
                     }
-
-                    procUi.statusLine?.let {
-                        Text(
-                            it,
-                            fontSize = 11.sp,
-                            fontFamily = FontFamily.Monospace,
-                            color = muted,
-                            modifier = Modifier.padding(top = 8.dp)
+                    DestructivePill(
+                        text = killText,
+                        onClick = { showKillConfirm = true },
+                        enabled = killEnabled
+                    )
+                    if (procUi.killing && isUniversal) {
+                        val isCancelling =
+                            killCoordinator.state == ChrootKillCoordinator.State.CANCEL_REQUESTED
+                        FrostPill(
+                            text = if (isCancelling) "Cancelling…" else "Cancel",
+                            onClick = { cancelKill() },
+                            modifier = Modifier.alpha(if (isCancelling) 0.5f else 1f)
                         )
                     }
                 }
+
+                procUi.statusLine?.let {
+                    FrostNote(it)
+                }
             }
 
-            Button(
-                onClick = { refreshAll(force = true) },
-                enabled = !busy,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = accent,
-                    contentColor = MaterialTheme.colorScheme.onSecondary,
-                    disabledContainerColor = com.ivarna.fluxlinux.ui.theme.FluxSwitchUncheckedTrack,
-                    disabledContentColor = com.ivarna.fluxlinux.ui.theme.FluxBodyMuted
-                ),
-                modifier = Modifier.fillMaxWidth().height(48.dp)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center
             ) {
-                Text("Refresh all", fontWeight = FontWeight.Bold)
+                FrostPill(
+                    text = if (busy) "Refreshing…" else "Refresh all",
+                    onClick = { refreshAll(force = true) },
+                    modifier = Modifier.alpha(if (busy) 0.5f else 1f)
+                )
             }
 
-            Spacer(Modifier.height(48.dp))
+            Spacer(Modifier.height(110.dp))
         }
     }
 }

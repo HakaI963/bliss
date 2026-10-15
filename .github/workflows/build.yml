@@ -1,0 +1,60 @@
+name: Build Folio APK
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Set up Python 3
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK 36 + NDK 29.0.14206865
+        run: |
+          sdkmanager --install "platforms;android-36" "build-tools;36.0.0" "platform-tools" "ndk;29.0.14206865"
+          echo "ANDROID_NDK_HOME=${ANDROID_HOME}/ndk/29.0.14206865" >> "$GITHUB_ENV"
+          echo "${ANDROID_HOME}/ndk/29.0.14206865" >> "$GITHUB_PATH"
+          sdkmanager --list_installed
+
+      - name: Accept Android licenses
+        run: yes | sdkmanager --licenses || true
+
+      - name: Assemble host bootstrap (com.ivarna.fluxlinux)
+        run: python3 scripts/assemble_bootstrap.py --package-name com.ivarna.fluxlinux
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build debug APK (ivarna flavor)
+        run: ./gradlew assembleIvarnaDebug --stacktrace
+        env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_HOME }}
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: folio-ivarna-debug-apk
+          path: app/build/outputs/apk/ivarna/debug/*.apk
+          if-no-files-found: error

@@ -277,7 +277,7 @@ private fun WelcomePage(onNext: () -> Unit) {
             ) {
                 Image(
                     painter = painterResource(id = R.drawable.ic_logo),
-                    contentDescription = "FluxLinux Logo",
+                    contentDescription = "Folio Logo",
                     modifier = Modifier.size(44.dp)
                 )
             }
@@ -285,7 +285,7 @@ private fun WelcomePage(onNext: () -> Unit) {
             Spacer(Modifier.height(14.dp))
 
             Text(
-                text = "FluxLinux",
+                text = "Folio",
                 fontSize = 32.sp,
                 fontWeight = FontWeight.ExtraBold,
                 color = colors.onBackground,
@@ -325,7 +325,7 @@ private fun WelcomePage(onNext: () -> Unit) {
                 icon = Icons.Filled.DesktopWindows,
                 iconTint = FluxAccentCyan,
                 title = "XFCE4 Desktop",
-                description = "Pre-configured desktop experience with Flux glass themes, icons, wallpapers, and fonts."
+                description = "Pre-configured desktop experience with Folio glass themes, icons, wallpapers, and fonts."
             )
 
             // Feature 3: Integrated Terminal & X11
@@ -372,7 +372,7 @@ private fun WelcomePage(onNext: () -> Unit) {
         Spacer(Modifier.height(16.dp))
 
         // Get Started CTA
-        FluxPrimaryButton(
+        FolioPrimaryButton(
             text = "Get Started",
             icon = Icons.Filled.ChevronRight,
             onClick = onNext
@@ -499,7 +499,7 @@ private fun ConsentPage(onBack: () -> Unit, onNext: () -> Unit) {
                     Spacer(Modifier.height(12.dp))
 
                     Text(
-                        text = "The F-Droid APK is intentionally lightweight and does not bundle large Linux OS archives. To provide a complete Linux environment, FluxLinux downloads the required system components directly from GitHub Releases upon continuation:",
+                        text = "The F-Droid APK is intentionally lightweight and does not bundle large Linux OS archives. To provide a complete Linux environment, Folio downloads the required system components directly from GitHub Releases upon continuation:",
                         color = colors.onSurface.copy(alpha = 0.75f),
                         fontSize = 13.5.sp,
                         lineHeight = 19.sp
@@ -543,13 +543,13 @@ private fun ConsentPage(onBack: () -> Unit, onNext: () -> Unit) {
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            FluxGhostButton(
+            FolioPrimaryButton(
                 text = "Back",
                 onClick = onBack,
                 modifier = Modifier.weight(0.7f)
             )
 
-            FluxPrimaryButton(
+            FolioPrimaryButton(
                 text = "Continue",
                 enabled = downloadConsent,
                 icon = Icons.AutoMirrored.Filled.ArrowForward,
@@ -749,17 +749,16 @@ private fun HostSetupPage(onBack: () -> Unit, onNext: () -> Unit) {
                             onClick = { startInit() },
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(46.dp),
+                                .height(54.dp),
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = FluxAccentMagenta.copy(alpha = 0.20f),
-                                contentColor = Color.White
+                                containerColor = Color.White,
+                                contentColor = Color.Black
                             ),
-                            border = BorderStroke(1.dp, FluxAccentMagenta.copy(alpha = 0.5f)),
-                            shape = RoundedCornerShape(12.dp)
+                            shape = CircleShape
                         ) {
                             Icon(Icons.Filled.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(8.dp))
-                            Text("Initialize Host", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                            Text("Initialize Host", fontWeight = FontWeight.Bold, fontSize = 15.sp)
                         }
                     } else {
                         Text(
@@ -780,13 +779,13 @@ private fun HostSetupPage(onBack: () -> Unit, onNext: () -> Unit) {
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            FluxGhostButton(
+            FolioPrimaryButton(
                 text = "Back",
                 onClick = onBack,
                 modifier = Modifier.weight(0.7f)
             )
 
-            FluxPrimaryButton(
+            FolioPrimaryButton(
                 text = if (bootstrapDone) "Continue" else "Initialize",
                 enabled = !initializing,
                 icon = Icons.AutoMirrored.Filled.ArrowForward,
@@ -896,7 +895,7 @@ private fun DistroPickPage(
                     Spacer(Modifier.width(10.dp))
                     Text(
                         text = if (probingRoot) "Checking superuser access…"
-                        else "Grant superuser to FluxLinux in Magisk/KernelSU, then tap Chroot again.",
+                        else "Grant superuser to Folio in Magisk/KernelSU, then tap Chroot again.",
                         color = colors.error,
                         fontSize = 12.5.sp,
                         lineHeight = 16.sp,
@@ -952,13 +951,13 @@ private fun DistroPickPage(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            FluxGhostButton(
+            FolioPrimaryButton(
                 text = "Back",
                 onClick = onBack,
                 modifier = Modifier.weight(0.7f)
             )
 
-            FluxPrimaryButton(
+            FolioPrimaryButton(
                 text = "Continue",
                 enabled = installable.any { it.id == selectedId },
                 icon = Icons.AutoMirrored.Filled.ArrowForward,
@@ -1104,7 +1103,7 @@ private fun OptionsPage(
                             color = colors.onSurface
                         )
                         Text(
-                            text = "Base XFCE4 desktop with Flux customizations",
+                            text = "Base XFCE4 desktop with Folio customizations",
                             fontSize = 12.sp,
                             color = colors.onSurface.copy(alpha = 0.65f)
                         )
@@ -1181,7 +1180,7 @@ private fun OptionsPage(
                         "XFCE4 lightweight desktop environment",
                         if (distroId.startsWith("fedora") || distroId.startsWith("void") || distroId.startsWith("opensuse"))
                             "Mesa / VirGL 3D hardware acceleration" else null,
-                        "Flux themes, wallpapers, and Nerd fonts",
+                        "Folio themes, wallpapers, and Nerd fonts",
                         "Embedded X11 display server + Zsh terminal"
                     ).filterNotNull()
 
@@ -1240,13 +1239,13 @@ private fun OptionsPage(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            FluxGhostButton(
+            FolioPrimaryButton(
                 text = "Back",
                 onClick = onBack,
                 modifier = Modifier.weight(0.7f)
             )
 
-            FluxPrimaryButton(
+            FolioPrimaryButton(
                 text = "Install Now",
                 enabled = downloadConsent,
                 icon = Icons.Filled.Download,
@@ -1443,10 +1442,10 @@ private fun DonePage(
                 .fillMaxWidth()
                 .height(54.dp),
             colors = ButtonDefaults.buttonColors(
-                containerColor = BrandCream,
-                contentColor = FluxDarkGrey
+                containerColor = Color.White,
+                contentColor = Color.Black
             ),
-            shape = RoundedCornerShape(14.dp)
+            shape = CircleShape
         ) {
             Icon(Icons.Filled.DesktopWindows, contentDescription = null, modifier = Modifier.size(20.dp))
             Spacer(Modifier.width(10.dp))
@@ -1460,13 +1459,12 @@ private fun DonePage(
             onClick = onTerminal,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(50.dp),
+                .height(54.dp),
             colors = ButtonDefaults.buttonColors(
-                containerColor = FluxAccentMagenta.copy(alpha = 0.20f),
-                contentColor = Color.White
+                containerColor = Color.White,
+                contentColor = Color.Black
             ),
-            border = BorderStroke(1.dp, FluxAccentMagenta.copy(alpha = 0.5f)),
-            shape = RoundedCornerShape(14.dp)
+            shape = CircleShape
         ) {
             Icon(Icons.Filled.Terminal, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(10.dp))
@@ -1480,13 +1478,12 @@ private fun DonePage(
             onClick = onHome,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(48.dp),
+                .height(54.dp),
             colors = ButtonDefaults.buttonColors(
-                containerColor = colors.surface.copy(alpha = 0.6f),
-                contentColor = colors.onSurface
+                containerColor = Color.White,
+                contentColor = Color.Black
             ),
-            border = BorderStroke(1.dp, FluxHairline),
-            shape = RoundedCornerShape(14.dp)
+            shape = CircleShape
         ) {
             Icon(Icons.Filled.Home, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(8.dp))
@@ -1594,13 +1591,13 @@ private fun StoragePage(onBack: () -> Unit, onNext: () -> Unit) {
 
         Spacer(Modifier.height(16.dp))
 
-        FluxPrimaryButton(
+        FolioPrimaryButton(
             text = if (granted) "Continue" else "Grant access",
             icon = if (granted) Icons.AutoMirrored.Filled.ArrowForward else null,
             onClick = if (granted) onNext else { { SharedStorageAccess.openSettings(context) } }
         )
         if (!granted) {
-            FluxGhostButton(text = "Skip for now", onClick = onNext, modifier = Modifier.fillMaxWidth())
+            FolioPrimaryButton(text = "Skip for now", onClick = onNext, modifier = Modifier.fillMaxWidth())
         }
     }
 }
@@ -1723,7 +1720,7 @@ private fun FluxConsentCheckboxCard(
 }
 
 @Composable
-private fun FluxPrimaryButton(
+private fun FolioPrimaryButton(
     text: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -1735,35 +1732,20 @@ private fun FluxPrimaryButton(
         enabled = enabled,
         modifier = modifier
             .fillMaxWidth()
-            .height(52.dp),
+            .height(54.dp),
         colors = ButtonDefaults.buttonColors(
-            containerColor = BrandCream,
-            contentColor = FluxDarkGrey,
-            disabledContainerColor = FluxSwitchUncheckedTrack,
-            disabledContentColor = FluxBodyMuted
+            containerColor = Color.White,
+            contentColor = Color.Black,
+            disabledContainerColor = Color.White.copy(alpha = 0.4f),
+            disabledContentColor = Color.Black.copy(alpha = 0.4f)
         ),
-        shape = RoundedCornerShape(14.dp)
+        shape = CircleShape
     ) {
         Text(text, fontWeight = FontWeight.Bold, fontSize = 16.sp)
         if (icon != null) {
             Spacer(Modifier.width(6.dp))
             Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp))
         }
-    }
-}
-
-@Composable
-private fun FluxGhostButton(
-    text: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    TextButton(
-        onClick = onClick,
-        modifier = modifier.height(52.dp),
-        colors = ButtonDefaults.textButtonColors(contentColor = BrandCream)
-    ) {
-        Text(text, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
     }
 }
 

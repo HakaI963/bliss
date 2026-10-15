@@ -76,7 +76,7 @@ import com.ivarna.fluxlinux.core.utils.TerminalPreferences
 import com.ivarna.fluxlinux.ui.terminal.TerminalExtraKeys
 import com.ivarna.fluxlinux.ui.terminal.TerminalModifierState
 import com.ivarna.fluxlinux.ui.terminal.TerminalToolSelector
-import com.ivarna.fluxlinux.ui.theme.FluxAccentMagenta
+import com.ivarna.fluxlinux.ui.theme.TextPrimary
 import com.termux.view.TerminalView
 import com.termux.view.TerminalViewClient
 
@@ -247,7 +247,7 @@ fun TerminalScreen(
                 Icon(
                     imageVector = if (showExtraKeys) Icons.Default.Keyboard else Icons.Default.KeyboardHide,
                     contentDescription = if (showExtraKeys) "Hide extra keys" else "Show extra keys",
-                    tint = if (showExtraKeys) FluxAccentMagenta
+                    tint = if (showExtraKeys) TextPrimary
                     else MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(20.dp)
                 )
@@ -259,7 +259,7 @@ fun TerminalScreen(
                 Icon(
                     imageVector = Icons.Default.Add,
                     contentDescription = "New session",
-                    tint = FluxAccentMagenta,
+                    tint = TextPrimary,
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -286,13 +286,13 @@ fun TerminalScreen(
                                 .size(36.dp)
                                 .clip(RoundedCornerShape(10.dp))
                                 .background(
-                                    if (selected) FluxAccentMagenta.copy(alpha = 0.22f)
+                                    if (selected) TextPrimary.copy(alpha = 0.14f)
                                     else MaterialTheme.colorScheme.surfaceVariant
                                 )
                                 .border(
                                     BorderStroke(
                                         if (selected) 1.5.dp else 1.dp,
-                                        if (selected) FluxAccentMagenta
+                                        if (selected) TextPrimary
                                         else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
                                     ),
                                     RoundedCornerShape(10.dp)

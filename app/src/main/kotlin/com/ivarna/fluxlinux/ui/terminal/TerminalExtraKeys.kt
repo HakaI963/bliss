@@ -39,7 +39,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ivarna.fluxlinux.R
-import com.ivarna.fluxlinux.ui.theme.FluxAccentMagenta
+import com.ivarna.fluxlinux.ui.theme.FolioBackground
+import com.ivarna.fluxlinux.ui.theme.TextPrimary
 import com.termux.view.TerminalView
 
 /**
@@ -287,13 +288,14 @@ private fun ModifierKey(
         modifier = modifier
             .fillMaxHeight()
             .background(
-                if (active) FluxAccentMagenta.copy(alpha = 0.85f)
+                if (active) TextPrimary.copy(alpha = 0.92f)
                 else MaterialTheme.colorScheme.surface
             )
             // R5: LOCKED (long-press) gets an outline ring + badge dot so it is
             // visually distinct from a one-shot active modifier.
+            // Frost: dark ring/dot on the white active pill.
             .then(
-                if (locked) Modifier.border(2.dp, MaterialTheme.colorScheme.onPrimary)
+                if (locked) Modifier.border(2.dp, FolioBackground)
                 else Modifier
             )
             .combinedClickable(onClick = onPress, onLongClick = onLongPress)
@@ -302,7 +304,7 @@ private fun ModifierKey(
             text = label,
             fontSize = 11.sp,
             fontWeight = FontWeight.Bold,
-            color = if (active) MaterialTheme.colorScheme.onPrimary
+            color = if (active) FolioBackground
             else MaterialTheme.colorScheme.onSurface
         )
         if (locked) {
@@ -311,7 +313,7 @@ private fun ModifierKey(
                     .align(Alignment.TopEnd)
                     .padding(3.dp)
                     .size(6.dp)
-                    .background(MaterialTheme.colorScheme.onPrimary, CircleShape)
+                    .background(FolioBackground, CircleShape)
             )
         }
     }
@@ -367,7 +369,7 @@ private fun TextKey(label: String, onClick: () -> Unit, width: Dp, active: Boole
             .width(width)
             .height(44.dp)
             .background(
-                if (active) FluxAccentMagenta.copy(alpha = 0.85f)
+                if (active) TextPrimary.copy(alpha = 0.92f)
                 else MaterialTheme.colorScheme.surface
             )
             .combinedClickable(onClick = onClick)
@@ -376,7 +378,7 @@ private fun TextKey(label: String, onClick: () -> Unit, width: Dp, active: Boole
             text = label,
             fontSize = 11.sp,
             fontWeight = FontWeight.Medium,
-            color = if (active) MaterialTheme.colorScheme.onPrimary
+            color = if (active) FolioBackground
             else MaterialTheme.colorScheme.onSurface
         )
     }

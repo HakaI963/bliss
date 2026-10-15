@@ -1,10 +1,14 @@
 package com.ivarna.fluxlinux.ui.components
 
-import com.ivarna.fluxlinux.core.data.Distro
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -16,113 +20,211 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.ivarna.fluxlinux.ui.theme.GlassBorder
+import com.ivarna.fluxlinux.core.data.Distro
+import com.ivarna.fluxlinux.core.terminal.TerminalLauncher
+import com.ivarna.fluxlinux.ui.theme.FolioFrostBorder
+import com.ivarna.fluxlinux.ui.theme.FrostSurface
+import com.ivarna.fluxlinux.ui.theme.StatusDot
+import com.ivarna.fluxlinux.ui.theme.TextPrimary
+import com.ivarna.fluxlinux.ui.theme.TextSecondary
 
-// Compact Distro Card for Coming Soon distros
+// Folio frost row — single-piece frosted glass, whole row navigates to install.
 @Composable
 fun CompactDistroCard(
-    distro: Distro
+    distro: Distro,
+    onNavigateToInstall: ((Distro) -> Unit)? = null,
+    showMethodBadge: Boolean = false
 ) {
-    Box(
+    val context = LocalContext.current
+    val installed = remember(distro.id) {
+        runCatching { TerminalLauncher.isDistroInstalledOnFs(context, distro.id) }
+            .getOrDefault(false)
+    }
+
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.98f else 1f,
+        animationSpec = spring(
+            stiffness = Spring.StiffnessMediumLow,
+            dampingRatio = Spring.DampingRatioMediumBouncy
+        ),
+        label = "compactPress"
+    )
+
+    val clickableMod = if (onNavigateToInstall != null) {
+        Modifier.clickable(
+            interactionSource = interaction,
+            indication = null,
+            role = Role.Button,
+            onClick = { onNavigateToInstall(distro) }
+        )
+    } else {
+        Modifier
+    }
+
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 4.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(androidx.compose.material3.MaterialTheme.colorScheme.surface.copy(alpha = 0.5f))
-            .border(BorderStroke(1.dp, androidx.compose.material3.MaterialTheme.colorScheme.outlineVariant), RoundedCornerShape(12.dp))
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .clip(RoundedCornerShape(16.dp))
+            .background(FrostSurface)
+            .border(1.dp, FolioFrostBorder, RoundedCornerShape(16.dp))
+            .then(clickableMod)
+            .padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
+        // Left distro logo — 40.dp frost squircle, White 6%
+        Box(
             modifier = Modifier
-                .padding(horizontal = 12.dp, vertical = 10.dp)
-                .fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
+                .size(40.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(Color.White.copy(alpha = 0.06f)),
+            contentAlignment = Alignment.Center
         ) {
-            // Distro Icon
             if (distro.iconRes != null) {
-                androidx.compose.foundation.Image(
-                    painter = androidx.compose.ui.res.painterResource(id = distro.iconRes),
+                Image(
+                    painter = painterResource(id = distro.iconRes),
                     contentDescription = "${distro.name} logo",
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clip(RoundedCornerShape(6.dp))
+                    modifier = Modifier.size(28.dp)
+                )
+            } else {
+                Text(
+                    text = distro.name.firstOrNull()?.uppercase() ?: "?",
+                    color = TextPrimary,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold
                 )
             }
-            
-            Spacer(modifier = Modifier.width(12.dp))
-            
-            // Distro Info
-            Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = distro.name,
-                        color = androidx.compose.material3.MaterialTheme.colorScheme.onSurface,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    
+        }
+
+        Spacer(modifier = Modifier.width(12.dp))
+
+        // Center: Name 15.sp Medium TextPrimary (line 1) + desc 13.sp TextSecondary (line 2)
+        Column(modifier = Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = distro.name,
+                    color = TextPrimary,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+                if (showMethodBadge) {
                     Spacer(modifier = Modifier.width(6.dp))
-                    
-                    // Coming Soon badge
-                    Box(
-                        modifier = Modifier
-                            .background(
-                                androidx.compose.material3.MaterialTheme.colorScheme.secondaryContainer,
-                                RoundedCornerShape(3.dp)
+                    if (distro.prootSupported) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(Color.White.copy(alpha = 0.08f))
+                                .padding(horizontal = 5.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = "P",
+                                color = TextSecondary,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold
                             )
-                            .padding(horizontal = 5.dp, vertical = 2.dp)
-                    ) {
-                        Text(
-                            text = "SOON",
-                            color = androidx.compose.material3.MaterialTheme.colorScheme.onSecondaryContainer,
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.Bold
-                        )
+                        }
+                    }
+                    if (distro.chrootSupported) {
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(Color.White.copy(alpha = 0.08f))
+                                .padding(horizontal = 5.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = "C",
+                                color = TextSecondary,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
                 }
             }
-            
-            // Compatibility badges
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                // PRoot Badge
+            Text(
+                text = distro.description,
+                color = TextSecondary,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Normal,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+
+        Spacer(modifier = Modifier.width(12.dp))
+
+        // Right: Installed pill or chevron › (Soon pill preserves coming-soon semantics)
+        when {
+            distro.comingSoon -> {
                 Box(
                     modifier = Modifier
-                        .background(
-                            if (distro.prootSupported) androidx.compose.material3.MaterialTheme.colorScheme.primaryContainer else androidx.compose.material3.MaterialTheme.colorScheme.surfaceVariant,
-                            RoundedCornerShape(3.dp)
-                        )
-                        .padding(horizontal = 6.dp, vertical = 3.dp)
+                        .clip(RoundedCornerShape(999.dp))
+                        .background(Color.White.copy(alpha = 0.08f))
+                        .padding(horizontal = 10.dp, vertical = 5.dp)
                 ) {
                     Text(
-                        text = "P",
-                        color = if (distro.prootSupported) androidx.compose.material3.MaterialTheme.colorScheme.onPrimaryContainer else androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold
+                        text = "Soon",
+                        color = TextSecondary,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium
                     )
                 }
-                
-                // Chroot Badge
-                Box(
+            }
+            installed -> {
+                Row(
                     modifier = Modifier
-                        .background(
-                            if (distro.chrootSupported) androidx.compose.material3.MaterialTheme.colorScheme.tertiaryContainer else androidx.compose.material3.MaterialTheme.colorScheme.surfaceVariant,
-                            RoundedCornerShape(3.dp)
-                        )
-                        .padding(horizontal = 6.dp, vertical = 3.dp)
+                        .clip(RoundedCornerShape(999.dp))
+                        .background(Color.White.copy(alpha = 0.08f))
+                        .padding(horizontal = 10.dp, vertical = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(StatusDot)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "C",
-                        color = if (distro.chrootSupported) androidx.compose.material3.MaterialTheme.colorScheme.onTertiaryContainer else androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold
+                        text = "Installed",
+                        color = TextPrimary,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1
                     )
                 }
+            }
+            else -> {
+                Text(
+                    text = "›",
+                    color = TextSecondary,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Normal
+                )
             }
         }
     }

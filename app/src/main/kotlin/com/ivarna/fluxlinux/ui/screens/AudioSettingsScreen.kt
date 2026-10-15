@@ -45,6 +45,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ivarna.fluxlinux.core.terminal.PulseHost
 import com.ivarna.fluxlinux.ui.components.GlassSettingCard
+import com.ivarna.fluxlinux.ui.theme.FolioBackground
+import com.ivarna.fluxlinux.ui.theme.TextPrimary
+import com.ivarna.fluxlinux.ui.theme.TextSecondary
 import com.ivarna.fluxlinux.ui.theme.fluxMutedText
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -53,6 +56,7 @@ import kotlinx.coroutines.withContext
 /**
  * Host PulseAudio status / start / restart / logs.
  * Guests stay clients (`PULSE_SERVER=tcp:127.0.0.1`).
+ * Monochrome frost: status + buttons in TextPrimary/TextSecondary greys only.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -114,10 +118,10 @@ fun AudioSettingsScreen(
     val running = status?.running == true
     val healthy = status?.healthy == true
     val statusColor = when {
-        status == null -> fluxMutedText()
-        healthy -> Color(0xFF69F0AE)
-        running -> MaterialTheme.colorScheme.secondary
-        else -> Color(0xFFFF8A80)
+        status == null -> TextSecondary
+        healthy -> TextPrimary
+        running -> TextSecondary
+        else -> TextSecondary.copy(alpha = 0.6f)
     }
 
     Scaffold(
@@ -166,7 +170,7 @@ fun AudioSettingsScreen(
                         "Host server",
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.secondary
+                        color = TextPrimary
                     )
                     Spacer(Modifier.height(12.dp))
                     Text(
@@ -192,7 +196,7 @@ fun AudioSettingsScreen(
                             enabled = !busy,
                             modifier = Modifier.weight(1f).height(48.dp),
                             colors = ButtonDefaults.outlinedButtonColors(
-                                contentColor = MaterialTheme.colorScheme.secondary
+                                contentColor = TextSecondary
                             )
                         ) {
                             Text("Refresh", fontWeight = FontWeight.Bold)
@@ -208,8 +212,8 @@ fun AudioSettingsScreen(
                             enabled = !busy,
                             modifier = Modifier.weight(1f).height(48.dp),
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.secondary,
-                                contentColor = MaterialTheme.colorScheme.onSecondary
+                                containerColor = TextPrimary,
+                                contentColor = FolioBackground
                             )
                         ) {
                             Text(
@@ -227,7 +231,7 @@ fun AudioSettingsScreen(
                         "Logs",
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.secondary
+                        color = TextPrimary
                     )
                     Spacer(Modifier.height(8.dp))
                     Text(
@@ -244,7 +248,7 @@ fun AudioSettingsScreen(
                             onClick = { showLogs = !showLogs },
                             modifier = Modifier.weight(1f).height(48.dp),
                             colors = ButtonDefaults.outlinedButtonColors(
-                                contentColor = MaterialTheme.colorScheme.secondary
+                                contentColor = TextSecondary
                             )
                         ) {
                             Text(if (showLogs) "Hide logs" else "View logs", fontWeight = FontWeight.Bold)
@@ -261,7 +265,7 @@ fun AudioSettingsScreen(
                             enabled = logText.isNotBlank(),
                             modifier = Modifier.weight(1f).height(48.dp),
                             colors = ButtonDefaults.outlinedButtonColors(
-                                contentColor = MaterialTheme.colorScheme.secondary
+                                contentColor = TextSecondary
                             )
                         ) {
                             Text("Copy", fontWeight = FontWeight.Bold)
@@ -273,7 +277,7 @@ fun AudioSettingsScreen(
                             text = logText.ifBlank { "(no log yet — tap Refresh or Start)" },
                             fontSize = 11.sp,
                             fontFamily = FontFamily.Monospace,
-                            color = Color(0xFFE8EAED),
+                            color = TextPrimary,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .heightIn(min = 160.dp, max = 360.dp)
@@ -290,7 +294,7 @@ fun AudioSettingsScreen(
                         "Guest clients",
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.secondary
+                        color = TextPrimary
                     )
                     Spacer(Modifier.height(8.dp))
                     Text(
@@ -309,7 +313,7 @@ fun AudioSettingsScreen(
                         enabled = !busy,
                         modifier = Modifier.fillMaxWidth().height(48.dp),
                         colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = MaterialTheme.colorScheme.secondary
+                            contentColor = TextSecondary
                         )
                     ) {
                         Text("Repair guests", fontWeight = FontWeight.Bold)
@@ -317,7 +321,7 @@ fun AudioSettingsScreen(
                 }
             }
 
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(110.dp))
         }
     }
 }

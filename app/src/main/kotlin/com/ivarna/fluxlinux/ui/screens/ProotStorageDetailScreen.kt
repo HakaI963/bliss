@@ -1,8 +1,6 @@
 package com.ivarna.fluxlinux.ui.screens
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -11,13 +9,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.rounded.ArrowBack
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -47,9 +42,16 @@ import com.ivarna.fluxlinux.core.chroot.GuestStorageCatalog
 import com.ivarna.fluxlinux.core.data.DistroRepository
 import com.ivarna.fluxlinux.core.proot.ProotInfoStore
 import com.ivarna.fluxlinux.core.proot.ProotSettingsModel
-import com.ivarna.fluxlinux.ui.components.GlassSettingCard
+import com.ivarna.fluxlinux.ui.components.FrostContainer
+import com.ivarna.fluxlinux.ui.components.FrostDivider
+import com.ivarna.fluxlinux.ui.components.FrostGroupTitle
+import com.ivarna.fluxlinux.ui.components.FrostPill
+import com.ivarna.fluxlinux.ui.screens.storage.FrostNote
 import com.ivarna.fluxlinux.ui.screens.storage.MetaRow
 import com.ivarna.fluxlinux.ui.screens.storage.StatusBadge
+import com.ivarna.fluxlinux.ui.theme.TextMuted
+import com.ivarna.fluxlinux.ui.theme.TextPrimary
+import com.ivarna.fluxlinux.ui.theme.TextSecondary
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -167,186 +169,149 @@ fun ProotStorageDetailScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            val accent = MaterialTheme.colorScheme.secondary
-            val body = MaterialTheme.colorScheme.onBackground
-            val muted = MaterialTheme.colorScheme.onSurfaceVariant
-            val label = MaterialTheme.colorScheme.onSurfaceVariant
-
             Text(
                 pageSubtitle,
                 fontSize = 11.sp,
                 fontFamily = FontFamily.Monospace,
-                color = muted
+                color = TextMuted
             )
 
-            // Info banner
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(
-                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                        RoundedCornerShape(8.dp)
-                    )
-                    .padding(12.dp)
-            ) {
-                Text(
-                    "PRoot lives in app storage (container + rootfs) and is removed if you uninstall the app.",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+            FrostContainer {
+                FrostNote("PRoot lives in app storage (container + rootfs) and is removed if you uninstall the app.")
             }
 
-            // Storage card
-            GlassSettingCard {
-                Column(Modifier.padding(18.dp).fillMaxWidth()) {
-                    Text(
-                        "Container storage",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = accent
-                    )
-                    Spacer(Modifier.height(12.dp))
-
-                    MetaRow("Status") {
-                        val statusText = when {
-                            isUniversal -> if (sizeUi.installed) "ACTIVE" else "READY"
-                            sizeUi.installed -> "INSTALLED"
-                            sizeUi.dirExists -> "PRESENT"
-                            else -> "NOT INSTALLED"
-                        }
-                        StatusBadge(
-                            text = statusText,
-                            ok = sizeUi.installed
-                        )
+            FrostGroupTitle("Container storage")
+            FrostContainer {
+                MetaRow("Status") {
+                    val statusText = when {
+                        isUniversal -> if (sizeUi.installed) "ACTIVE" else "READY"
+                        sizeUi.installed -> "INSTALLED"
+                        sizeUi.dirExists -> "PRESENT"
+                        else -> "NOT INSTALLED"
                     }
+                    StatusBadge(
+                        text = statusText,
+                        ok = sizeUi.installed
+                    )
+                }
 
-                    Spacer(Modifier.height(12.dp))
-
-                    // Size panel
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(
-                                MaterialTheme.colorScheme.surface.copy(alpha = 0.55f),
-                                RoundedCornerShape(12.dp)
-                            )
-                            .padding(14.dp)
+                FrostDivider()
+                // Size block
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 18.dp, vertical = 12.dp)
+                ) {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                "PROOT STORAGE",
-                                fontSize = 11.sp,
-                                fontFamily = FontFamily.Monospace,
-                                fontWeight = FontWeight.SemiBold,
-                                color = label,
-                                modifier = Modifier.weight(1f)
-                            )
-                            IconButton(
-                                onClick = { refreshSize() },
-                                enabled = !busy
-                            ) {
-                                Icon(
-                                    Icons.Default.Refresh,
-                                    contentDescription = "Refresh size",
-                                    tint = accent
-                                )
-                            }
-                        }
-                        if (sizeUi.measuring || busy && sizeUi.bytes == null) {
-                            LinearProgressIndicator(
-                                modifier = Modifier.fillMaxWidth(),
-                                color = accent,
-                                trackColor = accent.copy(alpha = 0.2f)
-                            )
-                            Spacer(Modifier.height(8.dp))
-                        }
-                        val (v, u) = ProotInfoStore.formatStorageBytes(sizeUi.bytes)
-                        Row(verticalAlignment = Alignment.Bottom) {
-                            Text(
-                                v,
-                                fontSize = 32.sp,
-                                fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace,
-                                color = accent,
-                                modifier = Modifier.alpha(if (sizeUi.dimmedCache) 0.85f else 1f)
-                            )
-                            if (u.isNotEmpty()) {
-                                Text(
-                                    " $u",
-                                    fontSize = 14.sp,
-                                    fontFamily = FontFamily.Monospace,
-                                    color = body,
-                                    modifier = Modifier.padding(bottom = 4.dp)
-                                )
-                            }
-                        }
                         Text(
-                            sizeUi.hint,
+                            "PROOT STORAGE",
                             fontSize = 11.sp,
                             fontFamily = FontFamily.Monospace,
-                            color = muted
+                            fontWeight = FontWeight.SemiBold,
+                            color = TextSecondary,
+                            modifier = Modifier.weight(1f)
                         )
+                        IconButton(
+                            onClick = { refreshSize() },
+                            enabled = !busy
+                        ) {
+                            Icon(
+                                Icons.Default.Refresh,
+                                contentDescription = "Refresh size",
+                                tint = TextSecondary
+                            )
+                        }
                     }
+                    if (sizeUi.measuring || busy && sizeUi.bytes == null) {
+                        LinearProgressIndicator(
+                            modifier = Modifier.fillMaxWidth(),
+                            color = TextSecondary,
+                            trackColor = TextSecondary.copy(alpha = 0.2f)
+                        )
+                        Spacer(Modifier.height(8.dp))
+                    }
+                    val (v, u) = ProotInfoStore.formatStorageBytes(sizeUi.bytes)
+                    Row(verticalAlignment = Alignment.Bottom) {
+                        Text(
+                            v,
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            fontFamily = FontFamily.Monospace,
+                            color = TextPrimary,
+                            modifier = Modifier.alpha(if (sizeUi.dimmedCache) 0.7f else 1f)
+                        )
+                        if (u.isNotEmpty()) {
+                            Text(
+                                " $u",
+                                fontSize = 13.sp,
+                                fontFamily = FontFamily.Monospace,
+                                color = TextSecondary,
+                                modifier = Modifier.padding(bottom = 2.dp)
+                            )
+                        }
+                    }
+                    Text(
+                        sizeUi.hint,
+                        fontSize = 11.sp,
+                        fontFamily = FontFamily.Monospace,
+                        color = TextMuted
+                    )
+                }
 
-                    Spacer(Modifier.height(12.dp))
-                    Column(
+                FrostDivider()
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 18.dp, vertical = 12.dp)
+                ) {
+                    Text(
+                        "CONTAINER PATH",
+                        fontSize = 10.sp,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.SemiBold,
+                        color = TextSecondary
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        containerPath ?: "",
+                        fontSize = 12.sp,
+                        fontFamily = FontFamily.Monospace,
+                        color = TextSecondary
+                    )
+                }
+
+                if (!isUniversal && !sizeUi.installed && onNavigateToInstall != null) {
+                    FrostDivider()
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(
-                                MaterialTheme.colorScheme.surface.copy(alpha = 0.45f),
-                                RoundedCornerShape(10.dp)
-                            )
-                            .padding(12.dp)
+                            .padding(horizontal = 18.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.Center
                     ) {
-                        Text(
-                            "CONTAINER PATH",
-                            fontSize = 10.sp,
-                            fontFamily = FontFamily.Monospace,
-                            fontWeight = FontWeight.SemiBold,
-                            color = label
-                        )
-                        Text(
-                            containerPath ?: "",
-                            fontSize = 12.sp,
-                            fontFamily = FontFamily.Monospace,
-                            color = body
-                        )
-                    }
-
-                    if (!isUniversal && !sizeUi.installed && onNavigateToInstall != null) {
-                        Spacer(Modifier.height(12.dp))
-                        Button(
+                        FrostPill(
+                            text = "Install PRoot distro",
                             onClick = { onNavigateToInstall() },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = accent,
-                                contentColor = MaterialTheme.colorScheme.onSecondary
-                            ),
-                            modifier = Modifier.fillMaxWidth().height(48.dp)
-                        ) {
-                            Text("Install PRoot distro", fontWeight = FontWeight.Bold)
-                        }
+                            primary = true
+                        )
                     }
                 }
             }
 
-            Button(
-                onClick = { refreshSize() },
-                enabled = !busy,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = accent,
-                    contentColor = MaterialTheme.colorScheme.onSecondary,
-                    disabledContainerColor = com.ivarna.fluxlinux.ui.theme.FluxSwitchUncheckedTrack,
-                    disabledContentColor = com.ivarna.fluxlinux.ui.theme.FluxBodyMuted
-                ),
-                modifier = Modifier.fillMaxWidth().height(48.dp)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center
             ) {
-                Text("Refresh size", fontWeight = FontWeight.Bold)
+                FrostPill(
+                    text = if (busy) "Refreshing…" else "Refresh size",
+                    onClick = { refreshSize() },
+                    modifier = Modifier.alpha(if (busy) 0.5f else 1f)
+                )
             }
 
-            Spacer(Modifier.height(48.dp))
+            Spacer(Modifier.height(110.dp))
         }
     }
 }

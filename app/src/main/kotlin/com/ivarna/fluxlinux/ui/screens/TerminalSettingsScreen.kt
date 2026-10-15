@@ -53,6 +53,7 @@ import com.ivarna.fluxlinux.ui.theme.fluxMutedText
 
 /**
  * Terminal font zoom + ExtraKeys toolbar + guest login shell (nativecode settings parity).
+ * Monochrome frost: no accent neon, greys only.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -242,7 +243,7 @@ fun TerminalSettingsScreen(
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(6.dp))
-                            .background(MaterialTheme.colorScheme.secondary.copy(alpha = 0.18f))
+                            .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.18f))
                             .padding(horizontal = 8.dp, vertical = 4.dp),
                         contentAlignment = Alignment.Center
                     ) {
@@ -250,7 +251,7 @@ fun TerminalSettingsScreen(
                             text = if (guestShellZsh) "zsh" else "bash",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.secondary
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                     Spacer(Modifier.width(8.dp))
@@ -307,7 +308,7 @@ fun TerminalSettingsScreen(
                 }
             }
 
-            Spacer(Modifier.height(40.dp))
+            Spacer(Modifier.height(110.dp))
         }
     }
 }

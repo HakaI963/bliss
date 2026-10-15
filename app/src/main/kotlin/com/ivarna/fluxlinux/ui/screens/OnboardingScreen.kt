@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Button
@@ -104,7 +105,7 @@ private fun PortraitLayout(
                 Spacer(modifier = Modifier.height(60.dp))
 
                 Text(
-                    text = "FluxLinux",
+                    text = "Folio",
                     color = androidx.compose.material3.MaterialTheme.colorScheme.onBackground,
                     fontSize = 32.sp,
                     fontWeight = FontWeight.Bold
@@ -155,7 +156,7 @@ private fun LandscapeLayout(
             Spacer(modifier = Modifier.height(40.dp))
 
             Text(
-                text = "FluxLinux",
+                text = "Folio",
                 color = androidx.compose.material3.MaterialTheme.colorScheme.onBackground,
                 fontSize = 32.sp,
                 fontWeight = FontWeight.Bold
@@ -214,16 +215,16 @@ private fun LandscapeLayout(
 private fun OnboardingGetStartedButton(onGetStarted: () -> Unit) {
     Button(
         onClick = onGetStarted,
-        colors = ButtonDefaults.buttonColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.primary),
+        colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black),
         modifier = Modifier
             .fillMaxWidth()
-            .height(56.dp),
-        shape = RoundedCornerShape(12.dp)
+            .height(54.dp),
+        shape = CircleShape
     ) {
         Text(
             "Get Started",
-            color = androidx.compose.material3.MaterialTheme.colorScheme.onPrimary,
-            fontSize = 18.sp,
+            color = Color.Black,
+            fontSize = 17.sp,
             fontWeight = FontWeight.Bold
         )
     }

@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.FluxLinux" parent="android:Theme.Material.Light.NoActionBar">
+    <style name="Theme.Folio" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:windowBackground">?android:colorBackground</item>
     </style>
+    <!-- Legacy alias — Manifest still references Theme.FluxLinux; keep for compat. -->
+    <style name="Theme.FluxLinux" parent="Theme.Folio" />
 </resources>

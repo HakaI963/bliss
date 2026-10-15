@@ -275,7 +275,7 @@ fun InstallProgressPanel(
 
             TextButton(
                 onClick = onToggleLog,
-                colors = ButtonDefaults.textButtonColors(contentColor = BrandCream)
+                colors = ButtonDefaults.textButtonColors(contentColor = Color.White)
             ) {
                 Text(
                     if (showLog) "Hide Console" else "Show Console",
@@ -322,12 +322,12 @@ fun InstallProgressPanel(
                     onClick = onRetry,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(52.dp),
+                        .height(54.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = BrandCream,
-                        contentColor = FluxDarkGrey
+                        containerColor = Color.White,
+                        contentColor = Color.Black
                     ),
-                    shape = RoundedCornerShape(14.dp)
+                    shape = CircleShape
                 ) {
                     Icon(
                         imageVector = Icons.Filled.Refresh,
@@ -340,12 +340,18 @@ fun InstallProgressPanel(
 
                 if (onBack != null) {
                     Spacer(Modifier.height(8.dp))
-                    TextButton(
+                    Button(
                         onClick = onBack,
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.textButtonColors(contentColor = BrandCream)
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(54.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color.White,
+                            contentColor = Color.Black
+                        ),
+                        shape = CircleShape
                     ) {
-                        Text("Back to Configuration", fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                        Text("Back to Configuration", fontWeight = FontWeight.Bold, fontSize = 15.sp)
                     }
                 }
             }
@@ -355,12 +361,12 @@ fun InstallProgressPanel(
                     onClick = onDone,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(52.dp),
+                        .height(54.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = BrandCream,
-                        contentColor = FluxDarkGrey
+                        containerColor = Color.White,
+                        contentColor = Color.Black
                     ),
-                    shape = RoundedCornerShape(14.dp)
+                    shape = CircleShape
                 ) {
                     Text("Continue", fontWeight = FontWeight.Bold, fontSize = 16.sp)
                 }

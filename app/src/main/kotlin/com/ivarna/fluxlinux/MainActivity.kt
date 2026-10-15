@@ -12,8 +12,11 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DesktopWindows
 import androidx.compose.material.icons.filled.Settings
@@ -566,11 +569,11 @@ class MainActivity : ComponentActivity() {
                     }
                     AlertDialog(
                         onDismissRequest = dismissV1Notice,
-                        title = { Text("Upgrading from FluxLinux 1.x?") },
+                        title = { Text("Upgrading from Folio 1.x?") },
                         text = {
                             Text(
                                 "Your v1.x distros live in the Termux app and were not removed by this update. " +
-                                    "FluxLinux 2 uses its own runtime; reinstall distros here.\n\n" +
+                                    "Folio 2 uses its own runtime; reinstall distros here.\n\n" +
                                     "Old data is still in Termux. Back up with `proot-distro backup <name>` " +
                                     "in Termux, or delete it in Settings -> Legacy Termux."
                             )
@@ -634,9 +637,6 @@ class MainActivity : ComponentActivity() {
                     } else if (currentScreen == Screen.ONBOARDING || currentScreen == Screen.PREREQUISITES) {
                         finish()
                     } else if (currentScreen == Screen.HOME && currentTab != BottomTab.HOME) {
-                        if (currentTab == BottomTab.TERMINAL) {
-                            com.ivarna.fluxlinux.ui.terminal.hideIme(window.decorView)
-                        }
                         currentTab = BottomTab.HOME
                     } else {
                         finish()
@@ -785,18 +785,36 @@ class MainActivity : ComponentActivity() {
                         BottomTab.TERMINAL -> {
                             com.ivarna.fluxlinux.ui.screens.TerminalScreen(
                                 onBack = { currentTab = BottomTab.HOME },
-                                embeddedInBottomNav = false
+                                embeddedInBottomNav = true
+                            )
+                        }
+                        BottomTab.SETTINGS -> {
+                            com.ivarna.fluxlinux.ui.screens.SettingsScreen(
+                                onBack = { currentTab = BottomTab.HOME },
+                                permissionState = permissionState,
+                                onStartService = onStartServiceStub,
+                                onStartActivity = onStartActivityStub,
+                                onNavigateToOnboarding = {
+                                    StateManager.setOnboardingComplete(this@MainActivity, false)
+                                    currentScreen = Screen.ONBOARDING
+                                },
+                                onNavigateToTroubleshooting = { currentScreen = Screen.TROUBLESHOOTING },
+                                onNavigateToRootCheck = { currentScreen = Screen.ROOT_ACCESS },
+                                onNavigateToTerminalSettings = { currentScreen = Screen.SETTINGS_TERMINAL },
+                                onNavigateToX11Settings = { currentScreen = Screen.SETTINGS_X11 },
+                                onNavigateToAudioSettings = { currentScreen = Screen.SETTINGS_AUDIO },
+                                onNavigateToChrootSettings = { currentScreen = Screen.SETTINGS_CHROOT },
+                                onNavigateToProotSettings = { currentScreen = Screen.SETTINGS_PROOT },
+                                onNavigateToLegacyTermuxSettings = { currentScreen = Screen.SETTINGS_LEGACY_TERMUX }
                             )
                         }
                     }
                 }
 
-                // Helper for Top Bar
+                // Helper for Top Bar — Folio: wordmark + frost status pill only.
                 @Composable
                 fun TopBar(
                     hazeState: HazeState,
-                    onSettingsClick: () -> Unit,
-                    onTerminalClick: () -> Unit,
                     onOpenDisplay: () -> Unit,
                     displayLive: Boolean,
                 ) {
@@ -820,63 +838,50 @@ class MainActivity : ComponentActivity() {
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
+                            Text(
+                                text = "Folio",
+                                style = com.ivarna.fluxlinux.ui.theme.FolioWordmarkStyle,
+                                color = MaterialTheme.colorScheme.onBackground
+                            )
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Image(
-                                    painter = painterResource(id = R.drawable.ic_logo),
-                                    contentDescription = "Logo",
-                                    modifier = Modifier.size(32.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = "FluxLinux",
-                                    color = MaterialTheme.colorScheme.onBackground,
-                                    fontSize = 20.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                            
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                if (!displayLive && com.ivarna.fluxlinux.core.terminal.TerminalLauncher.isBootstrapExtracted(LocalContext.current)) {
-                                   Text(
-                                       text = "Host: embedded",
-                                       style = MaterialTheme.typography.labelSmall,
-                                       color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
-                                       modifier = Modifier.padding(end = 4.dp)
-                                   )
-                                }
-
-                                IconButton(onClick = onOpenDisplay) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Icon(
-                                            imageVector = Icons.Default.DesktopWindows,
-                                            contentDescription = if (displayLive) "Open X11 display — desktop running" else "Open X11 display",
-                                            tint = MaterialTheme.colorScheme.onBackground
-                                        )
-                                        if (displayLive) {
+                                if (displayLive) {
+                                    androidx.compose.foundation.layout.Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(50))
+                                            .background(com.ivarna.fluxlinux.ui.theme.FrostSurface)
+                                            .border(1.dp, com.ivarna.fluxlinux.ui.theme.FolioFrostBorder, RoundedCornerShape(50))
+                                            .clickable(onClick = onOpenDisplay)
+                                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
                                             Box(
                                                 modifier = Modifier
-                                                    .size(8.dp)
-                                                    .align(Alignment.TopEnd)
+                                                    .size(6.dp)
                                                     .clip(CircleShape)
-                                                    .background(Color(0xFF69F0AE))
+                                                    .background(com.ivarna.fluxlinux.ui.theme.StatusDot)
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                text = "X11",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onBackground
                                             )
                                         }
                                     }
-                                }
-
-                                IconButton(onClick = onTerminalClick) {
-                                    Icon(
-                                        imageVector = Icons.Default.Terminal,
-                                        contentDescription = "Terminal",
-                                        tint = MaterialTheme.colorScheme.onBackground
-                                    )
-                                }
-                                IconButton(onClick = onSettingsClick) {
-                                    Icon(
-                                        imageVector = Icons.Default.Settings,
-                                        contentDescription = "Settings",
-                                        tint = MaterialTheme.colorScheme.onBackground
-                                    )
+                                } else {
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(50))
+                                            .background(com.ivarna.fluxlinux.ui.theme.FrostSurface)
+                                            .border(1.dp, com.ivarna.fluxlinux.ui.theme.FolioFrostBorder, RoundedCornerShape(50))
+                                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                                    ) {
+                                        Text(
+                                            text = "embedded",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = com.ivarna.fluxlinux.ui.theme.TextSecondary
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -910,43 +915,30 @@ class MainActivity : ComponentActivity() {
                     }
                     Screen.HOME -> {
                         val hazeState = remember { HazeState() }
-                        val showTopBar = currentTab != BottomTab.TERMINAL
                         val desktopUi by com.ivarna.fluxlinux.core.desktop.DesktopLauncher.uiState.collectAsState()
                         val stateRefresh by com.ivarna.fluxlinux.core.utils.StateManager.refreshTrigger.collectAsState()
                         val session = remember(desktopUi, stateRefresh) {
                             com.ivarna.fluxlinux.core.desktop.DesktopSessionQuery.current(this@MainActivity, desktopUi)
                         }
 
-                        LaunchedEffect(currentTab) {
-                            if (currentTab != BottomTab.TERMINAL) {
-                                com.ivarna.fluxlinux.ui.terminal.hideIme(window.decorView)
-                            }
-                        }
-
                         GlassScaffold(
                             hazeState = hazeState,
                             blurContent = currentTab == BottomTab.HOME,
                             topBar = {
-                                if (showTopBar) {
-                                    TopBar(
-                                        hazeState = hazeState,
-                                        onSettingsClick = { currentScreen = Screen.SETTINGS },
-                                        onTerminalClick = { currentTab = BottomTab.TERMINAL },
-                                        onOpenDisplay = {
-                                            com.ivarna.fluxlinux.core.desktop.DesktopLauncher.reopenDisplay(this@MainActivity)
-                                        },
-                                        displayLive = session != null
-                                    )
-                                }
+                                TopBar(
+                                    hazeState = hazeState,
+                                    onOpenDisplay = {
+                                        com.ivarna.fluxlinux.core.desktop.DesktopLauncher.reopenDisplay(this@MainActivity)
+                                    },
+                                    displayLive = session != null
+                                )
                             },
                             bottomBar = {
-                                if (currentTab != BottomTab.TERMINAL) {
-                                    GlassBottomNavigation(
-                                        selectedTab = currentTab,
-                                        onTabSelected = { currentTab = it },
-                                        hazeState = hazeState
-                                    )
-                                }
+                                GlassBottomNavigation(
+                                    selectedTab = currentTab,
+                                    onTabSelected = { currentTab = it },
+                                    hazeState = hazeState
+                                )
                             }
                         ) {
                             MainScreenContent(

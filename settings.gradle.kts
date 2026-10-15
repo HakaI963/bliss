@@ -20,7 +20,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "FluxLinux"
+rootProject.name = "Folio"
 include(":app")
 include(":termux-x11")
 include(":terminal-emulator")

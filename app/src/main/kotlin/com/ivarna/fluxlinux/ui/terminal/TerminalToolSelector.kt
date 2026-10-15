@@ -54,11 +54,16 @@ import com.ivarna.fluxlinux.core.terminal.TerminalShellCatalog
 import com.ivarna.fluxlinux.ui.components.MethodChip
 import com.ivarna.fluxlinux.ui.components.MethodTab
 import com.ivarna.fluxlinux.ui.components.MethodTabs
-import com.ivarna.fluxlinux.ui.theme.FluxAccentCyan
+import com.ivarna.fluxlinux.ui.theme.FolioBackground
+import com.ivarna.fluxlinux.ui.theme.FolioSwitchUncheckedTrack
+import com.ivarna.fluxlinux.ui.theme.FrostHairline
+import com.ivarna.fluxlinux.ui.theme.TextPrimary
+import com.ivarna.fluxlinux.ui.theme.TextSecondary
 
-private val MethodProot = Color(0xFF00B8D4)
-private val MethodChroot = Color(0xFFE040FB)
-private val MethodHost = Color(0xFFF5E6CA)
+// Monochrome frost method colors — no cyan/magenta/beige neon.
+private val MethodProot = TextSecondary
+private val MethodChroot = TextSecondary
+private val MethodHost = TextPrimary
 private val RowShape = RoundedCornerShape(14.dp)
 
 private data class TerminalMethodGroup(
@@ -130,7 +135,7 @@ fun TerminalToolSelector(
         )
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 110.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             if (activeGroup != null) {
@@ -260,7 +265,7 @@ private fun TerminalDistroRowCard(
             .border(
                 BorderStroke(
                     1.dp,
-                    if (enabled) methodColor.copy(alpha = 0.35f) else colors.outlineVariant
+                    if (enabled) FrostHairline else colors.outlineVariant
                 ),
                 RowShape
             )
@@ -326,8 +331,8 @@ private fun TerminalDistroRowCard(
                                 label = "User",
                                 icon = Icons.Default.Person,
                                 enabled = row.user.enabled,
-                                containerColor = FluxAccentCyan,
-                                contentColor = Color.Black,
+                                containerColor = TextPrimary,
+                                contentColor = FolioBackground,
                                 onClick = { openCard(row.user, onOpen) }
                             )
                         }
@@ -335,8 +340,8 @@ private fun TerminalDistroRowCard(
                             label = "Root",
                             icon = Icons.Default.AdminPanelSettings,
                             enabled = row.root.enabled,
-                            containerColor = Color(0xFFB71C1C),
-                            contentColor = Color.White,
+                            containerColor = FolioSwitchUncheckedTrack,
+                            contentColor = TextPrimary,
                             onClick = { openCard(row.root, onOpen) }
                         )
                     }
@@ -345,8 +350,8 @@ private fun TerminalDistroRowCard(
                         label = "Open",
                         icon = Icons.Default.Terminal,
                         enabled = row.user.enabled,
-                        containerColor = MethodHost,
-                        contentColor = Color(0xFF1A1C1E),
+                        containerColor = TextPrimary,
+                        contentColor = FolioBackground,
                         onClick = { openCard(row.user, onOpen) }
                     )
                 }
