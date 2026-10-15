@@ -28,10 +28,10 @@ jobs:
           java-version: "17"
           cache: gradle
 
-      - name: Install native build deps (Bison, patch)
+      - name: Install native build deps (Bison, patch, patchelf)
         run: |
           sudo apt-get update
-          sudo apt-get install -y bison patch python3
+          sudo apt-get install -y bison patch python3 patchelf
 
       - name: Install Android SDK 36 + NDK 29.0.14206865
         run: |
@@ -44,14 +44,19 @@ jobs:
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/29.0.14206865" >> "$GITHUB_ENV"
           sdkmanager --list_installed
 
-      - name: Assemble host bootstrap (com.ivarna.fluxlinux)
-        run: python3 scripts/assemble_bootstrap.py --package-name com.ivarna.fluxlinux
+      - name: Assemble host bootstrap (ivarna + repack folio separate app)
+        run: |
+          python3 scripts/assemble_bootstrap.py --package-name com.ivarna.fluxlinux
+          ./scripts/verify_bootstrap.sh com.ivarna.fluxlinux
+          chmod +x scripts/repack_bootstrap_for_appid.sh
+          ./scripts/repack_bootstrap_for_appid.sh com.ivarna.fluxlinux com.nopiece.folio
+          ./scripts/verify_bootstrap.sh com.nopiece.folio
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Build debug APK (ivarna flavor)
-        run: ./gradlew assembleIvarnaDebug --stacktrace
+      - name: Build debug APK (folio flavor, separate app com.nopiece.folio)
+        run: ./gradlew assembleFolioDebug --stacktrace
         env:
           ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_HOME }}
 
@@ -59,6 +64,6 @@ jobs:
         uses: actions/upload-artifact@v4
         continue-on-error: true
         with:
-          name: folio-ivarna-debug-apk
-          path: app/build/outputs/apk/ivarna/debug/*.apk
+          name: folio-debug-apk
+          path: app/build/outputs/apk/folio/debug/*.apk
           if-no-files-found: warn
