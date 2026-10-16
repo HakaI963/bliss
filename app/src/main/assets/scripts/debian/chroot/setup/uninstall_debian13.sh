@@ -139,7 +139,7 @@ done
 success "Uninstallation Complete!"
 
 # 4. Notify App
-progress "Notifying Folio App..."
+progress "Notifying Foila App..."
 echo "Running: am start -a android.intent.action.VIEW -d \"fluxlinux://callback?result=success&name=distro_uninstall_debian13_chroot\""
 am start -a android.intent.action.VIEW -d "fluxlinux://callback?result=success&name=distro_uninstall_debian13_chroot" >/dev/null 2>&1
 echo "Callback exit code: $?"

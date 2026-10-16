@@ -3,7 +3,7 @@
 # Run this inside Debian to check your GPU setup
 
 echo "=========================================="
-echo "  Folio GPU Acceleration Diagnostics"
+echo "  Foila GPU Acceleration Diagnostics"
 echo "=========================================="
 echo ""
 

@@ -21,7 +21,7 @@ REPAIR="${HOME}/setup_pulse_guest.sh"
 MODE="${1:-all}"
 
 if [ ! -f "$COMMON" ] || [ ! -f "$REPAIR" ]; then
-  echo "Folio: [AUDIO] FAIL guest repair scripts not deployed"
+  echo "Foila: [AUDIO] FAIL guest repair scripts not deployed"
   exit 0
 fi
 
@@ -33,7 +33,7 @@ chmod 755 "$TMPDIR/setup_pulse_guest.sh" 2>/dev/null || true
 repair_proot() {
   _pd="$PREFIX/var/lib/proot-distro"
   command -v proot-distro >/dev/null 2>&1 || {
-    echo "Folio: [AUDIO] skip proot repair (proot-distro missing)"
+    echo "Foila: [AUDIO] skip proot repair (proot-distro missing)"
     return 0
   }
   for _layout in containers installed-rootfs; do
@@ -47,7 +47,7 @@ repair_proot() {
       if [ ! -d "$_dir/rootfs/etc" ] && [ ! -d "$_dir/etc" ]; then
         continue
       fi
-      echo "Folio: [AUDIO] repair proot $_name"
+      echo "Foila: [AUDIO] repair proot $_name"
       # Same env -i as ProotCommandBuilder.guestLoginEnv — no host PATH/PREFIX.
       _gp="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
       proot-distro login "$_name" --shared-tmp --user root -- \
@@ -56,7 +56,7 @@ repair_proot() {
           TMPDIR=/tmp XDG_RUNTIME_DIR=/tmp PATH="$_gp" \
           PULSE_SERVER=tcp:127.0.0.1 \
           /bin/sh /tmp/setup_pulse_guest.sh \
-        || echo "Folio: [AUDIO] WARN repair failed proot $_name"
+        || echo "Foila: [AUDIO] WARN repair failed proot $_name"
     done
   done
 }
@@ -79,7 +79,7 @@ _CHROOT_PATHS="
 repair_chroot_as_root() {
   _helper=/data/local/folio/helpers/fluxlinux_chroot.sh
   if [ ! -f "$_helper" ]; then
-    echo "Folio: [AUDIO] skip chroot repair (helper missing)"
+    echo "Foila: [AUDIO] skip chroot repair (helper missing)"
     return 0
   fi
   for _path in $_CHROOT_PATHS; do
@@ -88,10 +88,10 @@ repair_chroot_as_root() {
     cp -f "$COMMON" "$_path/tmp/flux_guest_common.sh"
     cp -f "$REPAIR" "$_path/tmp/setup_pulse_guest.sh"
     chmod 755 "$_path/tmp/setup_pulse_guest.sh" 2>/dev/null || true
-    echo "Folio: [AUDIO] repair chroot $_path"
+    echo "Foila: [AUDIO] repair chroot $_path"
     FLUX_CHROOT="$_path" FLUX_PACKAGE="$PKG" \
       /system/bin/sh "$_helper" sh --user root -- '/bin/sh /tmp/setup_pulse_guest.sh' \
-      || echo "Folio: [AUDIO] WARN repair failed chroot $_path"
+      || echo "Foila: [AUDIO] WARN repair failed chroot $_path"
   done
 }
 
@@ -118,11 +118,11 @@ if [ -z "$_su" ] && command -v su >/dev/null 2>&1; then
 fi
 
 if [ -n "$_su" ]; then
-  echo "Folio: [AUDIO] chroot repair via su"
+  echo "Foila: [AUDIO] chroot repair via su"
   "$_su" -c "HOME='$HOME' PREFIX='$PREFIX' TERMUX__PREFIX='$PREFIX' TERMUX__HOME='$HOME' TERMUX_APP__PACKAGE_NAME='$PKG' /system/bin/sh '$0' chroot-only" \
-    || echo "Folio: [AUDIO] WARN chroot repair su failed"
+    || echo "Foila: [AUDIO] WARN chroot repair su failed"
 else
-  echo "Folio: [AUDIO] skip chroot repair (no su)"
+  echo "Foila: [AUDIO] skip chroot repair (no su)"
 fi
 
 exit 0

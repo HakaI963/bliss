@@ -20,10 +20,10 @@ fi
 # setup_void_family.sh — Void Linux glibc aarch64 XFCE (proot + chroot). xbps.
 
 DISTRO_NAME="${1:-void}"
-echo "Folio: Configuring ${DISTRO_NAME} (Void Family)..."
+echo "Foila: Configuring ${DISTRO_NAME} (Void Family)..."
 
 if [ "$(id -u)" -ne 0 ]; then
-    echo "Folio: ERROR: must run as root inside the guest (got uid=$(id -u))."
+    echo "Foila: ERROR: must run as root inside the guest (got uid=$(id -u))."
     exit 1
 fi
 
@@ -32,7 +32,7 @@ _flux_ensure_tmp
 _flux_ensure_dns
 
 if ! command -v xbps-install >/dev/null 2>&1; then
-    echo "Folio: ERROR: xbps-install not found"
+    echo "Foila: ERROR: xbps-install not found"
     exit 1
 fi
 
@@ -53,7 +53,7 @@ export SYSTEMD_OFFLINE=1
 
 _flux_log "xbps-install sync..."
 xbps-install -Sy || {
-    echo "Folio: xbps sync failed (network / repos)"
+    echo "Foila: xbps sync failed (network / repos)"
     exit 1
 }
 # Rolling Void often requires updating xbps itself before any other transaction.
@@ -88,13 +88,12 @@ if [ -z "${DESKTOPS##*xfce*}" ]; then
     # Minimal XFCE only — do NOT install the `xfce4` metapackage (pulls ffmpeg,
     # gstreamer plugins, parole, … hundreds of extras under proot/chroot).
     _flux_log "Installing XFCE4 (minimal session)..."
-    xbps-install -y \
+    if ! _flux_retry_pkg xbps-install -y \
         xfce4-session xfce4-panel xfce4-settings xfce4-terminal \
-        xfdesktop xfwm4 \
-        || {
-            echo "Folio: XFCE package install failed"
-            exit 1
-        }
+        xfdesktop xfwm4; then
+        echo "Foila: XFCE package install failed after 3 tries — check your network, then tap Retry Setup."
+        exit 1
+    fi
     xbps-install -y Thunar 2>/dev/null || xbps-install -y thunar 2>/dev/null || true
     # Phone niceties: Whisker panel menu + screenshot tool (best-effort).
     xbps-install -y xfce4-whiskermenu-plugin xfce4-screenshooter 2>/dev/null || true
@@ -130,5 +129,5 @@ if [ -z "${DESKTOPS##*xfce*}" ] && command -v _flux_xfce_compact_defaults >/dev/
     _flux_xfce_compact_defaults || true
 fi
 
-echo "Folio: ${DISTRO_NAME} Void setup complete!"
+echo "Foila: ${DISTRO_NAME} Void setup complete!"
 exit 0

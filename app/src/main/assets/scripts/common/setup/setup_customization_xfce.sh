@@ -1,6 +1,6 @@
 #!/bin/sh
 # setup_customization_xfce.sh
-# Folio XFCE branding for Fedora / Void / openSUSE / Deepin / Chimera / Manjaro.
+# Foila XFCE branding for Fedora / Void / openSUSE / Deepin / Chimera / Manjaro.
 # Same theme/icon/font/xfconf path as Alpine; package manager auto-detected.
 
 CUSTOM_USER="flux"
@@ -11,7 +11,7 @@ ICON_DIR="/usr/share/icons"
 
 handle_error() {
     echo ""
-    echo "Folio Error: Script failed at step: $1"
+    echo "Foila Error: Script failed at step: $1"
     echo "---------------------------------------------------"
     if [ -t 0 ]; then
         printf "Press Enter to acknowledge error and exit..."
@@ -21,10 +21,10 @@ handle_error() {
     exit 1
 }
 
-echo "Folio: Starting XFCE4 Customization..."
+echo "Foila: Starting XFCE4 Customization..."
 
 if [ "$(id -u)" -ne 0 ]; then
-    echo "Folio: ERROR: must run as root inside the guest (got uid=$(id -u))."
+    echo "Foila: ERROR: must run as root inside the guest (got uid=$(id -u))."
     handle_error "Not Root"
 fi
 
@@ -58,7 +58,7 @@ if command -v sudo >/dev/null 2>&1; then
         for _pam in /etc/pam.d/sudo /etc/pam.d/sudo-i; do
             cat > "$_pam" <<'PAM'
 #%PAM-1.0
-# Folio proot: pam_unix/audit cannot run → sudo asks for a password.
+# Foila proot: pam_unix/audit cannot run → sudo asks for a password.
 auth       sufficient pam_permit.so
 account    sufficient pam_permit.so
 password   sufficient pam_permit.so
@@ -132,7 +132,7 @@ _flux_fetch() {
     fi
 }
 
-echo "Folio: Installing customization packages..."
+echo "Foila: Installing customization packages..."
 # Never install `curl` on openSUSE — it replaces libcurl-mini and breaks zypper.
 if command -v zypper >/dev/null 2>&1; then
     _flux_pkg_add wget unzip fontconfig git zsh bash || handle_error "customization deps"
@@ -150,7 +150,7 @@ _flux_pkg_add fastfetch 2>/dev/null || _flux_pkg_add neofetch 2>/dev/null || tru
 # not shipped, so this is the only install path. Retry via the native PM
 # (Chimera apk v3 / Deepin apt / Manjaro pacman) before aborting.
 if ! command -v git >/dev/null 2>&1 || ! command -v zsh >/dev/null 2>&1; then
-    echo "Folio: git/zsh missing after first package pass — retrying"
+    echo "Foila: git/zsh missing after first package pass — retrying"
     if grep -q '^ID="chimera"' /usr/lib/os-release 2>/dev/null \
         || grep -q '^ID=chimera' /etc/os-release 2>/dev/null \
         || { [ -d /usr/lib/apk ] && [ ! -d /lib/apk ]; }; then
@@ -164,11 +164,11 @@ if ! command -v git >/dev/null 2>&1 || ! command -v zsh >/dev/null 2>&1; then
     fi
 fi
 command -v git >/dev/null 2>&1 || handle_error "git missing (required for Oh My Zsh / pokemon)"
-command -v zsh >/dev/null 2>&1 || handle_error "zsh missing (required for Folio shell)"
+command -v zsh >/dev/null 2>&1 || handle_error "zsh missing (required for Foila shell)"
 
 # pokemon-colorscripts install.sh needs a python interpreter.
 if ! command -v python3 >/dev/null 2>&1 && ! command -v python >/dev/null 2>&1; then
-    echo "Folio: Installing python for pokemon-colorscripts..."
+    echo "Foila: Installing python for pokemon-colorscripts..."
     _flux_pkg_add python3 2>/dev/null || _flux_pkg_add python 2>/dev/null || true
 fi
 
@@ -235,7 +235,7 @@ if [ -n "$_pick" ]; then
 else
   unset LC_ALL
   export LANG=C
-  echo "Folio: WARNING: no UTF-8 locale in locale -a; zsh staying LANG=C" >&2
+  echo "Foila: WARNING: no UTF-8 locale in locale -a; zsh staying LANG=C" >&2
 fi
 unset _have _c _pick
 EOF
@@ -243,7 +243,7 @@ EOF
     if locale -a 2>/dev/null | grep -qiE 'en_US\.(utf8|UTF-8)|C\.(utf8|UTF-8)'; then
         printf 'LANG=%s\n' "${LANG:-C.UTF-8}" > /etc/locale.conf
     else
-        echo "Folio: ERROR: no UTF-8 locale after generation (locale -a has neither en_US.utf8 nor C.utf8)"
+        echo "Foila: ERROR: no UTF-8 locale after generation (locale -a has neither en_US.utf8 nor C.utf8)"
         handle_error "UTF-8 locale"
     fi
 fi
@@ -318,7 +318,7 @@ download_if_needed() {
 }
 
 if [ -n "${FLUX_THEME:-}" ]; then
-    echo "Folio: Auto-applying Theme: $FLUX_THEME"
+    echo "Foila: Auto-applying Theme: $FLUX_THEME"
     if [ "$FLUX_THEME" = "light" ]; then
         THEME_CHOICE="2"
     else
@@ -365,29 +365,29 @@ papirus_xfce_ok() {
 }
 
 if [ "${FLUX_SKIP_THEME_ICONS:-0}" = "1" ]; then
-    echo "Folio: Themes/icons pre-installed on host — skip guest extract"
+    echo "Foila: Themes/icons pre-installed on host — skip guest extract"
 elif theme_is_installed "$SEL_THEME" && papirus_xfce_ok && cursor_is_installed "$SEL_CURSOR"; then
-    echo "Folio: Theme+icons+cursor already installed — skip extract"
+    echo "Foila: Theme+icons+cursor already installed — skip extract"
 else
     # Theme/icon/cursor failures must not abort before OMZ/pokemon.
     if ! theme_is_installed "$SEL_THEME"; then
-        echo "Folio: Installing theme $SEL_THEME..."
+        echo "Foila: Installing theme $SEL_THEME..."
         TFILE="$(find_asset "$THEME_TAR" || true)"
         if [ -z "$TFILE" ]; then
             if download_if_needed "$BASE_URL/theme.zip" "/tmp/theme.zip"; then
                 unzip -q -o /tmp/theme.zip -d /tmp/flux_theme_zip
                 TFILE="$(find /tmp/flux_theme_zip -name "$THEME_TAR" 2>/dev/null | head -1)"
             else
-                echo "Folio: WARNING: theme download failed — continuing"
+                echo "Foila: WARNING: theme download failed — continuing"
             fi
         fi
         if [ -n "$TFILE" ]; then
             extract_local_tar "$TFILE" "$THEME_DIR" \
-                || echo "Folio: WARNING: theme extract failed — continuing"
+                || echo "Foila: WARNING: theme extract failed — continuing"
         fi
     fi
     if ! papirus_xfce_ok; then
-        echo "Folio: Installing icons $SEL_ICON..."
+        echo "Foila: Installing icons $SEL_ICON..."
         IFILE="$(find_asset "$ICON_TAR" || find_asset "papirus-dark-only.tar.gz" || true)"
         if [ -z "$IFILE" ]; then
             if download_if_needed "$BASE_URL/icons.zip" "/tmp/icons.zip"; then
@@ -395,31 +395,31 @@ else
                 IFILE="$(find /tmp/flux_icons_zip -name "$ICON_TAR" 2>/dev/null | head -1)"
                 [ -n "$IFILE" ] || IFILE="$(find /tmp/flux_icons_zip -name "papirus-dark-only.tar.gz" 2>/dev/null | head -1)"
             else
-                echo "Folio: WARNING: icons download failed — continuing"
+                echo "Foila: WARNING: icons download failed — continuing"
             fi
         fi
         if [ -z "$IFILE" ]; then
-            echo "Folio: WARNING: Papirus archive missing — continuing (OMZ/pokemon still run)"
+            echo "Foila: WARNING: Papirus archive missing — continuing (OMZ/pokemon still run)"
         else
             extract_local_tar "$IFILE" "$ICON_DIR" "Papirus-Dark" 2>/dev/null || \
                 extract_local_tar "$IFILE" "$ICON_DIR" || \
-                echo "Folio: WARNING: icons extract failed — continuing"
+                echo "Foila: WARNING: icons extract failed — continuing"
         fi
     fi
     if ! cursor_is_installed "$SEL_CURSOR"; then
-        echo "Folio: Installing cursor $SEL_CURSOR..."
+        echo "Foila: Installing cursor $SEL_CURSOR..."
         CFILE="$(find_asset "$CURSOR_TAR" || true)"
         if [ -z "$CFILE" ]; then
             if download_if_needed "$BASE_URL/cursor.zip" "/tmp/cursor.zip"; then
                 unzip -q -o /tmp/cursor.zip -d /tmp/flux_cursor_zip
                 CFILE="$(find /tmp/flux_cursor_zip -name "$CURSOR_TAR" 2>/dev/null | head -1)"
             else
-                echo "Folio: WARNING: cursor download failed — continuing"
+                echo "Foila: WARNING: cursor download failed — continuing"
             fi
         fi
         if [ -n "$CFILE" ]; then
             extract_local_tar "$CFILE" "$ICON_DIR" \
-                || echo "Folio: WARNING: cursor extract failed — continuing"
+                || echo "Foila: WARNING: cursor extract failed — continuing"
         fi
     fi
 fi
@@ -470,7 +470,7 @@ _flux_rewrite_papirus_inherits() {
         { print }
         END { if (!done) print "Inherits=" inh }
     ' "$_idx" > "$_tmp" && mv "$_tmp" "$_idx"
-    echo "Folio: Papirus-Dark Inherits=$_inh"
+    echo "Foila: Papirus-Dark Inherits=$_inh"
 }
 
 _flux_find_category_icon() {
@@ -522,7 +522,7 @@ _flux_rewrite_papirus_inherits
 CATFILE="$(find_asset "papirus-xfce-categories.tar.xz" || true)"
 if [ -n "$CATFILE" ] && ! papirus_xfce_ok; then
     extract_local_tar "$CATFILE" "$ICON_DIR" \
-        || echo "Folio: WARNING: category extras extract failed — continuing"
+        || echo "Foila: WARNING: category extras extract failed — continuing"
 fi
 
 _flux_seed_papirus_categories
@@ -530,7 +530,7 @@ _flux_seed_papirus_categories
 # Offline extras/stub usually satisfy the gate. Only then try the huge
 # guest papirus-icon-theme package (Fedora ~100MiB).
 if ! papirus_xfce_ok; then
-    echo "Folio: category icons still missing — trying papirus-icon-theme"
+    echo "Foila: category icons still missing — trying papirus-icon-theme"
     _flux_pkg_add papirus-icon-theme 2>/dev/null \
         || _flux_pkg_add papirus-icon-theme-dark 2>/dev/null || true
     _flux_fix_papirus_dangling
@@ -560,9 +560,9 @@ fi
 
 if papirus_xfce_ok; then
     SEL_ICON="Papirus-Dark"
-    echo "Folio: Icon theme Papirus-Dark (category icons present)"
+    echo "Foila: Icon theme Papirus-Dark (category icons present)"
 else
-    echo "Folio: Papirus-Dark missing XFCE category icons — Adwaita fallback"
+    echo "Foila: Papirus-Dark missing XFCE category icons — Adwaita fallback"
     SEL_ICON="Adwaita"
     mkdir -p "$ICON_DIR/Adwaita/24x24/categories"
     for n in applications-internet applications-accessories applications-system; do
@@ -596,7 +596,7 @@ _flux_chown "$CUSTOM_USER:$CUSTOM_GROUP" "$WALLPAPER_DIR"/* 2>/dev/null || true
 
 FONT_DIR="/usr/share/fonts/jetbrains-mono-nerd"
 if ! fc-list 2>/dev/null | grep -qi "JetBrainsMono Nerd"; then
-    echo "Folio: Installing JetBrains Mono Nerd Font..."
+    echo "Foila: Installing JetBrains Mono Nerd Font..."
     mkdir -p "$FONT_DIR"
     TEMP_ZIP="/tmp/JetBrainsMono.zip"
     NERD_FONT_URL="https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.zip"
@@ -613,14 +613,14 @@ if fc-list 2>/dev/null | grep -qi "JetBrainsMono Nerd"; then
     _term_font="JetBrainsMono Nerd Font 10"
     _title_font="JetBrainsMono Nerd Font Bold 9"
 else
-    echo "Folio: JetBrainsMono Nerd not in fontconfig — VTE fallback DejaVu Sans Mono"
+    echo "Foila: JetBrainsMono Nerd not in fontconfig — VTE fallback DejaVu Sans Mono"
     _gtk_font="DejaVu Sans Mono 9"
     _mono_font="DejaVu Sans Mono 10"
     _term_font="DejaVu Sans Mono 10"
     _title_font="DejaVu Sans Bold 9"
 fi
 
-echo "Folio: Applying XFCE4 Settings..."
+echo "Foila: Applying XFCE4 Settings..."
 XFCONF_DIR="$USER_HOME/.config/xfce4/xfconf/xfce-perchannel-xml"
 mkdir -p "$XFCONF_DIR"
 WALLPAPER_PATH="$WALLPAPER_DIR/$SEL_WALLPAPER"
@@ -1147,7 +1147,7 @@ _flux_run() {
             sleep 1
             _i=$((_i + 1))
         done
-        echo "Folio: command timed out after ${_t}s"
+        echo "Foila: command timed out after ${_t}s"
         kill "$_cmd" 2>/dev/null || true
         sleep 1
         kill -9 "$_cmd" 2>/dev/null || true
@@ -1175,27 +1175,27 @@ _flux_git_clone() {
     _flux_run "$_secs" git clone --depth 1 --single-branch "$_url" "$_dest"
 }
 
-echo "Folio: Installing Oh My Zsh..."
+echo "Foila: Installing Oh My Zsh..."
 OMZ_OK=0
 if [ -f "$USER_HOME/.oh-my-zsh/oh-my-zsh.sh" ]; then
-    echo "Folio: Oh My Zsh already valid — skip install"
+    echo "Foila: Oh My Zsh already valid — skip install"
     OMZ_OK=1
 else
     if [ -e "$USER_HOME/.oh-my-zsh" ]; then
-        echo "Folio: Incomplete Oh My Zsh detected — removing (bounded)…"
+        echo "Foila: Incomplete Oh My Zsh detected — removing (bounded)…"
         _flux_safe_rm_tree "$USER_HOME/.oh-my-zsh"
     fi
     if [ "${FLUX_SKIP_OMZ:-0}" = "1" ]; then
-        echo "Folio: FLUX_SKIP_OMZ set but oh-my-zsh.sh missing — guest fallback"
+        echo "Foila: FLUX_SKIP_OMZ set but oh-my-zsh.sh missing — guest fallback"
     fi
     if command -v git >/dev/null 2>&1; then
-        echo "Folio: Shallow git clone Oh My Zsh (timeout 120s)…"
+        echo "Foila: Shallow git clone Oh My Zsh (timeout 120s)…"
         if _flux_git_clone "https://github.com/ohmyzsh/ohmyzsh.git" "$USER_HOME/.oh-my-zsh" 120 \
             && [ -f "$USER_HOME/.oh-my-zsh/oh-my-zsh.sh" ]; then
-            echo "Folio: Oh My Zsh installed"
+            echo "Foila: Oh My Zsh installed"
             OMZ_OK=1
         else
-            echo "Folio: WARNING: Oh My Zsh clone failed or timed out — not treating as success"
+            echo "Foila: WARNING: Oh My Zsh clone failed or timed out — not treating as success"
             # Never leave a half tree, but never rm a good oh-my-zsh.sh either.
             if [ ! -f "$USER_HOME/.oh-my-zsh/oh-my-zsh.sh" ]; then
                 _flux_safe_rm_tree "$USER_HOME/.oh-my-zsh"
@@ -1204,89 +1204,89 @@ else
             fi
         fi
     else
-        echo "Folio: WARNING: git unavailable — Oh My Zsh skipped"
+        echo "Foila: WARNING: git unavailable — Oh My Zsh skipped"
     fi
 fi
 
 if [ "$OMZ_OK" = "1" ]; then
     ZSH_CUSTOM="$USER_HOME/.oh-my-zsh/custom"
     mkdir -p "$ZSH_CUSTOM/plugins" "$ZSH_CUSTOM/themes" 2>/dev/null || true
-    echo "Folio: Installing Zsh plugins (if missing)…"
+    echo "Foila: Installing Zsh plugins (if missing)…"
     if [ ! -d "$ZSH_CUSTOM/plugins/zsh-autosuggestions/.git" ] \
         && [ ! -f "$ZSH_CUSTOM/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh" ]; then
-        echo "Folio: Shallow clone zsh-autosuggestions (timeout 60s)…"
+        echo "Foila: Shallow clone zsh-autosuggestions (timeout 60s)…"
         if ! _flux_git_clone "https://github.com/zsh-users/zsh-autosuggestions.git" \
             "$ZSH_CUSTOM/plugins/zsh-autosuggestions" 60 \
             || [ ! -f "$ZSH_CUSTOM/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh" ]; then
-            echo "Folio: WARNING: zsh-autosuggestions clone failed or timed out"
+            echo "Foila: WARNING: zsh-autosuggestions clone failed or timed out"
             [ -f "$ZSH_CUSTOM/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh" ] \
                 || _flux_safe_rm_tree "$ZSH_CUSTOM/plugins/zsh-autosuggestions"
         fi
     else
-        echo "Folio: zsh-autosuggestions already present — skip"
+        echo "Foila: zsh-autosuggestions already present — skip"
     fi
     if [ ! -d "$ZSH_CUSTOM/plugins/zsh-syntax-highlighting/.git" ] \
         && [ ! -f "$ZSH_CUSTOM/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh" ]; then
-        echo "Folio: Shallow clone zsh-syntax-highlighting (timeout 60s)…"
+        echo "Foila: Shallow clone zsh-syntax-highlighting (timeout 60s)…"
         if ! _flux_git_clone "https://github.com/zsh-users/zsh-syntax-highlighting.git" \
             "$ZSH_CUSTOM/plugins/zsh-syntax-highlighting" 60 \
             || [ ! -f "$ZSH_CUSTOM/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh" ]; then
-            echo "Folio: WARNING: zsh-syntax-highlighting clone failed or timed out"
+            echo "Foila: WARNING: zsh-syntax-highlighting clone failed or timed out"
             [ -f "$ZSH_CUSTOM/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh" ] \
                 || _flux_safe_rm_tree "$ZSH_CUSTOM/plugins/zsh-syntax-highlighting"
         fi
     else
-        echo "Folio: zsh-syntax-highlighting already present — skip"
+        echo "Foila: zsh-syntax-highlighting already present — skip"
     fi
     # Local monochrome prompt theme — no remote download (old colorful theme removed).
     rm -f "$ZSH_CUSTOM/themes/agnosterzak.zsh-theme" 2>/dev/null || true
     if [ ! -s "$ZSH_CUSTOM/themes/folio.zsh-theme" ]; then
-        echo "Folio: Installing folio prompt theme…"
+        echo "Foila: Installing folio prompt theme…"
         cat > "$ZSH_CUSTOM/themes/folio.zsh-theme" <<'FOLIO_THEME_EOF'
-# folio.zsh-theme — Folio's minimal monochrome prompt.
+# folio.zsh-theme — Foila's minimal monochrome prompt.
 # White/gray on black only; ASCII-safe (no powerline glyphs, no ANSI colors 31-44).
-# Segments:  time  folio  working-dir  input-char
-PROMPT='%F{240}%D{%H:%M}%f %F{255}folio%f %F{250}%~%f %F{255}%#%f '
+# Segments:  time  foila  working-dir  input-char
+PROMPT='%F{240}%D{%H:%M}%f %F{255}foila%f %F{250}%~%f %F{255}%#%f '
 PROMPT2='%F{240}> %f'
 FOLIO_THEME_EOF
         if [ ! -s "$ZSH_CUSTOM/themes/folio.zsh-theme" ]; then
-            echo "Folio: WARNING: folio prompt theme write failed — zsh keeps default prompt"
+            echo "Foila: WARNING: folio prompt theme write failed — zsh keeps default prompt"
         fi
     else
-        echo "Folio: folio prompt theme already present — skip"
+        echo "Foila: folio prompt theme already present — skip"
     fi
     _flux_chown_r "$CUSTOM_USER:$CUSTOM_GROUP" "$USER_HOME/.oh-my-zsh"
 else
-    echo "Folio: Skipping Zsh plugins (Oh My Zsh not installed)"
+    echo "Foila: Skipping Zsh plugins (Oh My Zsh not installed)"
 fi
 
 # pokemon-colorscripts: try by default (60s budget). Skip only if explicitly 1.
 if [ "${FLUX_SKIP_POKEMON:-0}" = "1" ]; then
-    echo "Folio: pokemon-colorscripts skip (FLUX_SKIP_POKEMON=1)"
+    echo "Foila: pokemon-colorscripts skip (FLUX_SKIP_POKEMON=1)"
 elif command -v pokemon-colorscripts >/dev/null 2>&1; then
-    echo "Folio: pokemon-colorscripts already present — skip"
+    echo "Foila: pokemon-colorscripts already present — skip"
 elif ! command -v git >/dev/null 2>&1; then
-    echo "Folio: pokemon-colorscripts skip (git missing)"
+    echo "Foila: pokemon-colorscripts skip (git missing)"
 else
-    echo "Folio: Installing pokemon-colorscripts (optional, 60s budget)…"
+    echo "Foila: Installing pokemon-colorscripts (optional, 60s budget)…"
     POKEMON_TEMP="/tmp/pokemon-colorscripts.$$"
     _flux_safe_rm_tree "$POKEMON_TEMP"
     if _flux_git_clone "https://gitlab.com/phoneybadger/pokemon-colorscripts.git" "$POKEMON_TEMP" 60 \
         && [ -f "$POKEMON_TEMP/install.sh" ]; then
         (cd "$POKEMON_TEMP" && _flux_run 30 sh ./install.sh) \
-            || echo "Folio: WARNING: pokemon-colorscripts install.sh failed"
+            || echo "Foila: WARNING: pokemon-colorscripts install.sh failed"
         if command -v pokemon-colorscripts >/dev/null 2>&1; then
-            echo "Folio: pokemon-colorscripts installed"
+            echo "Foila: pokemon-colorscripts installed"
         else
-            echo "Folio: WARNING: pokemon-colorscripts not on PATH after install.sh"
+            echo "Foila: WARNING: pokemon-colorscripts not on PATH after install.sh"
         fi
     else
-        echo "Folio: WARNING: pokemon-colorscripts skipped (clone timeout/fail)"
+        echo "Foila: WARNING: pokemon-colorscripts skipped (clone timeout/fail)"
     fi
     _flux_safe_rm_tree "$POKEMON_TEMP"
 fi
 
-echo "Folio: Configuring .zshrc..."
+echo "Foila: Configuring .zshrc..."
 ZSHRC="$USER_HOME/.zshrc"
 cat > "$ZSHRC" << 'ZSHEOF'
 # Guest PATH only — never inherit host PREFIX/bin (nested proot glue errors).
@@ -1305,7 +1305,7 @@ if [ -n "$_pick" ]; then
 else
   unset LC_ALL
   export LANG=C
-  echo "Folio: WARNING: no UTF-8 locale in locale -a; zsh staying LANG=C" >&2
+  echo "Foila: WARNING: no UTF-8 locale in locale -a; zsh staying LANG=C" >&2
 fi
 unset _have _c _pick
 export PYTHONIOENCODING=UTF-8
@@ -1358,7 +1358,7 @@ if command -v sudo >/dev/null 2>&1; then
     apk() { command sudo apk "$@"; }
   fi
 fi
-# ── Folio launch sticker (random colored anime banner; opt out FLUX_NO_BANNER=1)
+# ── Foila launch sticker (random colored anime banner; opt out FLUX_NO_BANNER=1)
 [ -r "$HOME/.config/folio/banner.sh" ] && . "$HOME/.config/folio/banner.sh"
 
 ZSHEOF
@@ -1370,7 +1370,7 @@ if [ ! -f "$ZPROFILE" ]; then
     _flux_chown "$CUSTOM_USER:$CUSTOM_GROUP" "$ZPROFILE"
 fi
 
-# ── Folio launch stickers: 8 colored anime ASCII designs (256-color) ────────
+# ── Foila launch stickers: 8 colored anime ASCII designs (256-color) ────────
 # Installs ~/.config/folio/banner/*.txt (random pick per shell open) and
 # ~/.config/folio/banner.sh (the folio-banner function sourced by .zshrc).
 # Offline, idempotent (`.banner-rev` refreshes existing installs).
@@ -1380,7 +1380,7 @@ _flux_write_folio_banner() {
     _owner="${2:-}"
     [ -n "$_home" ] || return 0
     _bdir="$_home/.config/folio/banner"
-    _brev="2"
+    _brev="3"
     _need=0
     if [ "$(cat "$_bdir/.banner-rev" 2>/dev/null || true)" != "$_brev" ]; then
         _need=1
@@ -1496,7 +1496,7 @@ FOLIO_BANNER_ALL
     printf '%s\n' "$_brev" > "$_bdir/.banner-rev" 2>/dev/null || true
 
     cat > "$_home/.config/folio/banner.sh" <<'FOLIO_BANNER_SH'
-# folio-banner.sh — Folio launch sticker. Colored 256-color ASCII art (no
+# folio-banner.sh — Foila launch sticker. Colored 256-color ASCII art (no
 # emoji), offline, random design per interactive shell. Opt out FLUX_NO_BANNER=1.
 folio-banner-art() {
   # Prints one randomly picked design from ~/.config/folio/banner/*.txt.
@@ -1516,13 +1516,19 @@ folio-banner() {
   [ "${FLUX_NO_BANNER:-0}" = "1" ] && return 0
   case $- in *i*) ;; *) return 0;; esac
   folio-banner-art
-  local _ff="$HOME/.local/share/fastfetch/presets/termux.jsonc"
-  if command -v fastfetch >/dev/null 2>&1 && [ -f "$_ff" ]; then
-    { fastfetch --config "$_ff" 2>/dev/null || true; } &!
-  else
-    printf '%s\n' "folio@localhost | $(sed -n 's/^PRETTY_NAME=//p' /etc/os-release 2>/dev/null | tr -d '"' | head -n 1) | $(date +%H:%M 2>/dev/null)"
+  # Header: exactly one line, "foila@<id>" (distro id only — no host,
+  # version or time). ID= from /etc/os-release; fallbacks: first word of
+  # PRETTY_NAME (lowercased), then "linux".
+  local _fid=""
+  if [ -r /etc/os-release ]; then
+    _fid="$(sed -n 's/^ID=//p' /etc/os-release 2>/dev/null | head -n 1 | tr -d '"' | tr '[:upper:]' '[:lower:]')"
+    if [ -z "$_fid" ]; then
+      _fid="$(sed -n 's/^PRETTY_NAME=//p' /etc/os-release 2>/dev/null | head -n 1 | tr -d '"' | awk '{print $1}' | tr '[:upper:]' '[:lower:]')"
+    fi
   fi
-  unset _ff
+  [ -n "$_fid" ] || _fid="linux"
+  printf '%s\n' "foila@$_fid"
+  unset _fid
 }
 folio-banner
 FOLIO_BANNER_SH
@@ -1533,49 +1539,9 @@ FOLIO_BANNER_SH
     return 0
 }
 
-_flux_write_fastfetch_preset() {
-    _home="$1"
-    _owner="${2:-}"
-    mkdir -p "$_home/.local/share/fastfetch/presets"
-    cat > "$_home/.local/share/fastfetch/presets/termux.jsonc" <<'FFEOF'
-{
-  "logo": null,
-  "display": { "separator": " ›  " },
-  "modules": [
-    { "type": "os", "key": "OS  " },
-    { "type": "kernel", "key": "KER " },
-    { "type": "cpu", "key": "CPU " },
-    { "type": "gpu", "key": "GPU " },
-    { "type": "packages", "key": "PKG " },
-    { "type": "shell", "key": "SH  " },
-    { "type": "terminal", "key": "TER " },
-    {
-      "type": "disk",
-      "key": "DSK ",
-      "folders": ["/"],
-      "showRemovable": false,
-      "showHidden": false,
-      "showSubvolumes": false
-    },
-    { "type": "memory", "key": "MEM " },
-    { "type": "swap", "key": "SWP " }
-  ]
-}
-FFEOF
-    if [ -n "$_owner" ]; then
-        _flux_chown "$_owner" "$_home/.local/share/fastfetch/presets/termux.jsonc" 2>/dev/null || true
-    fi
-}
-_flux_write_fastfetch_preset "$USER_HOME" "$CUSTOM_USER:$CUSTOM_GROUP"
-_flux_write_fastfetch_preset /root
 # Random colored anime launch sticker for the guest shell.
 _flux_write_folio_banner "$USER_HOME" "$CUSTOM_USER:$CUSTOM_GROUP"
 _flux_write_folio_banner /root
-mkdir -p /usr/share/fastfetch/presets
-if [ -f "$USER_HOME/.local/share/fastfetch/presets/termux.jsonc" ]; then
-    cp -f "$USER_HOME/.local/share/fastfetch/presets/termux.jsonc" \
-        /usr/share/fastfetch/presets/termux.jsonc 2>/dev/null || true
-fi
 
 if command -v zsh >/dev/null 2>&1; then
     ZSH_PATH="$(command -v zsh)"
@@ -1587,7 +1553,7 @@ fi
 
 _flux_chown_r "$CUSTOM_USER:$CUSTOM_GROUP" "$USER_HOME" 2>/dev/null || true
 
-# ── Folio Linux appearance (wallpaper/colors/terminal) ───────────────────────
+# ── Foila Linux appearance (wallpaper/colors/terminal) ───────────────────────
 # Re-apply the app-staged appearance config. Runs last (after the compact
 # defaults + theme setup) and forces one pass so a re-run always wins.
 if [ -r "$USER_HOME/.config/folio/appearance-apply.sh" ]; then
@@ -1609,5 +1575,5 @@ if [ -n "$_ref_u" ]; then
     done
 fi
 
-echo "Folio: XFCE4 Customization complete!"
+echo "Foila: XFCE4 Customization complete!"
 exit 0

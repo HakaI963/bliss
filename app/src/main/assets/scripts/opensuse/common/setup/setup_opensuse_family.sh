@@ -20,10 +20,10 @@ fi
 # setup_opensuse_family.sh — openSUSE Tumbleweed XFCE (proot + chroot). zypper.
 
 DISTRO_NAME="${1:-opensuse}"
-echo "Folio: Configuring ${DISTRO_NAME} (openSUSE Family)..."
+echo "Foila: Configuring ${DISTRO_NAME} (openSUSE Family)..."
 
 if [ "$(id -u)" -ne 0 ]; then
-    echo "Folio: ERROR: must run as root inside the guest (got uid=$(id -u))."
+    echo "Foila: ERROR: must run as root inside the guest (got uid=$(id -u))."
     exit 1
 fi
 
@@ -32,7 +32,7 @@ _flux_ensure_tmp
 _flux_ensure_dns
 
 if ! command -v zypper >/dev/null 2>&1; then
-    echo "Folio: ERROR: zypper not found"
+    echo "Foila: ERROR: zypper not found"
     exit 1
 fi
 
@@ -108,8 +108,8 @@ _flux_opensuse_protect_zypper
 _flux_opensuse_install_md2_stub
 
 if ! zypper --non-interactive --version >/dev/null 2>&1; then
-    echo "Folio: ERROR: zypper unusable (libcurl/libldap vs OpenSSL 3.5)."
-    echo "Folio: Reinstall the openSUSE rootfs (libcurl-mini must be restored)."
+    echo "Foila: ERROR: zypper unusable (libcurl/libldap vs OpenSSL 3.5)."
+    echo "Foila: Reinstall the openSUSE rootfs (libcurl-mini must be restored)."
     exit 1
 fi
 
@@ -125,7 +125,7 @@ fi
 
 _flux_log "zypper refresh..."
 zypper --non-interactive --gpg-auto-import-keys refresh || {
-    echo "Folio: zypper refresh failed (network / repos)"
+    echo "Foila: zypper refresh failed (network / repos)"
     exit 1
 }
 
@@ -134,7 +134,7 @@ zypper --non-interactive install --no-recommends --auto-agree-with-licenses \
     bash sudo shadow wget unzip tar \
     dbus-1 \
     || {
-        echo "Folio: base package install failed"
+        echo "Foila: base package install failed"
         exit 1
     }
 zypper --non-interactive install --no-recommends --auto-agree-with-licenses dbus-1-daemon 2>/dev/null || true
@@ -147,7 +147,7 @@ zypper --non-interactive install --no-recommends --auto-agree-with-licenses \
     adwaita-icon-theme \
     Mesa-dri Mesa-libGL1 \
     || {
-        echo "Folio: base graphics package install failed"
+        echo "Foila: base graphics package install failed"
         exit 1
     }
 zypper --non-interactive install --no-recommends --auto-agree-with-licenses \
@@ -170,13 +170,12 @@ DESKTOPS="$_norm"
 unset _norm
 if [ -z "${DESKTOPS##*xfce*}" ]; then
     _flux_log "Installing XFCE4..."
-    zypper --non-interactive install --no-recommends --auto-agree-with-licenses \
+    if ! _flux_retry_pkg zypper --non-interactive install --no-recommends --auto-agree-with-licenses \
         xfce4-session xfce4-panel xfce4-settings xfce4-terminal \
-        xfdesktop xfwm4 thunar \
-        || {
-            echo "Folio: XFCE package install failed"
-            exit 1
-        }
+        xfdesktop xfwm4 thunar; then
+        echo "Foila: XFCE package install failed after 3 tries — check your network, then tap Retry Setup."
+        exit 1
+    fi
     _flux_opensuse_protect_zypper
     # Phone niceties: Whisker panel menu + screenshot tool (best-effort).
     zypper --non-interactive install --no-recommends --auto-agree-with-licenses \
@@ -194,7 +193,7 @@ if [ -x /usr/bin/bwrap ] && [ ! -e /usr/bin/bwrap.real ] && \
 fi
 cat > /usr/bin/bwrap <<'BWRAP_EOF'
 #!/bin/sh
-# Folio: exec the real glycin loader, not an earlier --ro-bind source.
+# Foila: exec the real glycin loader, not an earlier --ro-bind source.
 while [ $# -gt 0 ]; do
   case "$1" in
     /usr/libexec/glycin-loaders/*|/usr/lib/glycin-loaders/*|/usr/bin/true|/bin/true)
@@ -240,5 +239,5 @@ if [ -z "${DESKTOPS##*xfce*}" ] && command -v _flux_xfce_compact_defaults >/dev/
     _flux_xfce_compact_defaults || true
 fi
 
-echo "Folio: ${DISTRO_NAME} openSUSE setup complete!"
+echo "Foila: ${DISTRO_NAME} openSUSE setup complete!"
 exit 0

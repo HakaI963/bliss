@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================
-# Folio — Stop Native Termux XFCE4 Desktop
+# Foila — Stop Native Termux XFCE4 Desktop
 # Location: termux/stop/stop_xfce4_termux.sh
 # Runs on: HOST Termux (native, no container)
 # Root required: no
@@ -8,19 +8,19 @@
 
 echo ""
 echo "══════════════════════════════════════════════"
-echo "  Folio — Stopping Native XFCE4 Desktop"
+echo "  Foila — Stopping Native XFCE4 Desktop"
 echo "══════════════════════════════════════════════"
 echo ""
 
 # ── Graceful XFCE4 shutdown ───────────────────────────────
-echo "Folio: Sending graceful shutdown to XFCE4..."
+echo "Foila: Sending graceful shutdown to XFCE4..."
 if command -v xfce4-session-logout >/dev/null 2>&1 && [ -n "$DISPLAY" ]; then
     xfce4-session-logout --logout 2>/dev/null || true
     sleep 2
 fi
 
 # ── Kill XFCE4 processes ──────────────────────────────────
-echo "Folio: Stopping XFCE4 session..."
+echo "Foila: Stopping XFCE4 session..."
 pkill -TERM -f "xfce4-session" 2>/dev/null || true
 sleep 1
 pkill -TERM -f "xfwm4" 2>/dev/null || true
@@ -36,7 +36,7 @@ pkill -KILL -f "xfwm4" 2>/dev/null || true
 echo " [✅] XFCE4 session stopped"
 
 # ── Kill X11 server ───────────────────────────────────────
-echo "Folio: Stopping Termux:X11..."
+echo "Foila: Stopping Termux:X11..."
 pkill -TERM -f "termux-x11" 2>/dev/null || true
 sleep 1
 pkill -KILL -f "Xwayland" 2>/dev/null || true
@@ -44,14 +44,14 @@ pkill -KILL -f "termux-x11" 2>/dev/null || true
 echo " [✅] X11 server stopped"
 
 # ── Kill VirGL server ─────────────────────────────────────
-echo "Folio: Stopping GPU server..."
+echo "Foila: Stopping GPU server..."
 pkill -TERM -f "virgl_test_server" 2>/dev/null || true
 sleep 1
 pkill -KILL -f "virgl_test_server" 2>/dev/null || true
 echo " [✅] VirGL server stopped"
 
 # ── Kill PulseAudio ───────────────────────────────────────
-echo "Folio: Stopping audio server..."
+echo "Foila: Stopping audio server..."
 pulseaudio --kill 2>/dev/null || \
 pkill -TERM -f "pulseaudio" 2>/dev/null || true
 echo " [✅] PulseAudio stopped"

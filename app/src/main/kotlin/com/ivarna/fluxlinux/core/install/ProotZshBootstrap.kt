@@ -29,10 +29,10 @@ object ProotZshBootstrap {
      * dependency for the prompt anymore.
      */
     private val FOLIO_THEME = """
-        # folio.zsh-theme — Folio's minimal monochrome prompt.
+        # folio.zsh-theme — Foila's minimal monochrome prompt.
         # White/gray on black only; ASCII-safe (no powerline glyphs, no ANSI colors 31-44).
-        # Segments:  time  folio  working-dir  input-char
-        PROMPT='%F{240}%D{%H:%M}%f %F{255}folio%f %F{250}%~%f %F{255}%#%f '
+        # Segments:  time  foila  working-dir  input-char
+        PROMPT='%F{240}%D{%H:%M}%f %F{255}foila%f %F{250}%~%f %F{255}%#%f '
         PROMPT2='%F{240}> %f'
     """.trimIndent() + "\n"
 

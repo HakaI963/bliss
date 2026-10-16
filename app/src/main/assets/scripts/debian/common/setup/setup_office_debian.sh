@@ -21,13 +21,13 @@ PKGS=(
 
 # ─── UNINSTALL MODE ──────────────────────────────────────────────────────
 if [ "$1" = "uninstall" ]; then
-    echo "Folio: Uninstalling Office Productivity Environment..."
+    echo "Foila: Uninstalling Office Productivity Environment..."
 
     export DEBIAN_FRONTEND=noninteractive
     apt remove -y --purge "${PKGS[@]}" 2>/dev/null || true
     apt autoremove -y 2>/dev/null || true
 
-    echo "Folio: Office Productivity Environment Uninstalled."
+    echo "Foila: Office Productivity Environment Uninstalled."
     exit 0
 fi
 # ─── END UNINSTALL MODE ──────────────────────────────────────────────────
@@ -35,7 +35,7 @@ fi
 # Error Handler
 handle_error() {
     echo ""
-    echo "❌ Folio Error: Script failed at step: $1"
+    echo "❌ Foila Error: Script failed at step: $1"
     echo "---------------------------------------------------"
     echo "Please check the error message above for details."
     echo "---------------------------------------------------"
@@ -43,11 +43,11 @@ handle_error() {
     exit 1
 }
 
-echo "Folio: Setting up Office Productivity Environment..."
+echo "Foila: Setting up Office Productivity Environment..."
 echo "Target: Debian 13 (Trixie) - ARM64"
 
 # 1. System Dependencies
-echo "Folio: Installing Dependencies..."
+echo "Foila: Installing Dependencies..."
 export DEBIAN_FRONTEND=noninteractive
 apt update -y
 
@@ -63,12 +63,12 @@ apt install -y \
 # If setup_webdev_debian.sh ran, nodejs includes npm.
 # If not, Debian split packages might need explicit npm.
 if ! command -v npm >/dev/null; then
-    echo "Folio: NPM not found (bundled), installing explicitly..."
+    echo "Foila: NPM not found (bundled), installing explicitly..."
     apt install -y npm || echo " [⚠️] NPM install warning (might be bundled)"
 fi
 
 # 2. LibreOffice Suite
-echo "Folio: Installing LibreOffice Suite..."
+echo "Foila: Installing LibreOffice Suite..."
 # Use --no-install-recommends to avoid large optional packages like fonts-noto-extra
 # which can fail in proot environments due to resource constraints
 apt install -y --no-install-recommends \
@@ -85,14 +85,14 @@ apt install -y --no-install-recommends \
     }
 
 # 3. Email & PIM
-echo "Folio: Installing Email & Organization Tools..."
+echo "Foila: Installing Email & Organization Tools..."
 # Thunderbird: Email client
 apt install -y --no-install-recommends \
     thunderbird \
     || handle_error "Thunderbird Installation"
 
 # 4. PDF Tools
-echo "Folio: Installing PDF Tools..."
+echo "Foila: Installing PDF Tools..."
 # Evince: Document Viewer
 # Xournal++: Note taking & PDF Annotation
 # Non-fatal: on Debian Trixie + backports, evince transitively pulls
@@ -113,13 +113,13 @@ apt install -y --no-install-recommends \
     }
 
 # 5. Optional: Try to install extra fonts (non-fatal if fails)
-echo "Folio: Installing additional fonts (optional)..."
+echo "Foila: Installing additional fonts (optional)..."
 apt install -y fonts-noto 2>/dev/null || echo " [⚠️] Optional fonts skipped (proot limitation)"
 
 # 6. Verification
 verify_installation() {
     echo ""
-    echo "🔎 Folio: Verifying Installations..."
+    echo "🔎 Foila: Verifying Installations..."
     echo "------------------------------------------------"
     
     if command -v libreoffice >/dev/null; then echo " [✅] LibreOffice"; else echo " [❌] LibreOffice Missing"; fi

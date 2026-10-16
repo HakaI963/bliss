@@ -54,7 +54,7 @@ object GuestSessionFactory {
     ): (() -> Boolean)? {
         if (!SessionRegistry.hasFreeTab()) return null
         // Patch guest .zshrc if it still hard-sources missing oh-my-zsh / pokemon,
-        // or create a missing Flux profile (Alpine installs that never wrote one).
+        // or create a missing Foila profile (Alpine installs that never wrote one).
         GuestZshrcRepair.repairIfNeeded(ctx, method, distroId)
         // Alpine proot: ensure apk db/lock is app-writable so `sudo apk` works.
         GuestApkDbRepair.repairIfNeeded(ctx, method, distroId)

@@ -1,5 +1,5 @@
 #!/system/bin/sh
-# Shared BusyBox resolver for Folio chroot.
+# Shared BusyBox resolver for Foila chroot.
 # Magisk / KernelSU / APatch built-in busybox is enough — NDK module not required.
 # Safe to source under set -u. No set -e.
 

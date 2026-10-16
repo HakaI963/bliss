@@ -1,9 +1,6 @@
 package com.ivarna.fluxlinux.ui.onboarding
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -113,12 +110,14 @@ import com.ivarna.fluxlinux.ui.theme.StatusDot
 import com.ivarna.fluxlinux.ui.theme.TextPrimary
 import com.ivarna.fluxlinux.ui.theme.TextSecondary
 
-private enum class OnboardStep { Welcome, Consent, HostSetup, DistroPick, Options, Storage, Running, Done }
+private enum class OnboardStep { Welcome, Consent, HostSetup, Ready, DistroPick, Options, Storage, Running, Done }
 
 /**
- * Redesigned full first-run onboarding:
- * Welcome → Disclosure/Consent → Host Setup → Distro Selection → Options → Progress → Complete.
- * Installs rootfs + XFCE + customization with unified glassmorphic styling and responsive layouts.
+ * Full first-run onboarding:
+ * Welcome → Disclosure/Consent → Host Setup → Ready, where the user either
+ * enters the optional install branch (Distro Selection → Options → Progress →
+ * Complete) or finishes with "Later" and installs from the Distros tab.
+ * Unified glassmorphic styling with responsive layouts.
  */
 @Composable
 fun OnboardingFlowScreen(
@@ -184,12 +183,17 @@ fun OnboardingFlowScreen(
             )
             OnboardStep.HostSetup -> HostSetupPage(
                 onBack = { step = OnboardStep.Consent },
-                onNext = { step = OnboardStep.DistroPick }
+                onNext = { step = OnboardStep.Ready }
+            )
+            OnboardStep.Ready -> ReadyPage(
+                onBack = { step = OnboardStep.HostSetup },
+                onInstallDistro = { step = OnboardStep.DistroPick },
+                onLater = onFinished
             )
             OnboardStep.DistroPick -> DistroPickPage(
                 selectedId = selectedDistroId,
                 onSelect = { selectedDistroId = it },
-                onBack = { step = OnboardStep.HostSetup },
+                onBack = { step = OnboardStep.Ready },
                 onNext = { step = OnboardStep.Options }
             )
             OnboardStep.Options -> OptionsPage(
@@ -248,6 +252,8 @@ private fun WelcomePage(onNext: () -> Unit) {
             .padding(horizontal = 24.dp, vertical = 16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        StepDots(current = 1, total = 4)
+
         // Top Hero Header
         Column(
             modifier = Modifier
@@ -273,7 +279,7 @@ private fun WelcomePage(onNext: () -> Unit) {
             ) {
                 Image(
                     painter = painterResource(id = R.drawable.ic_logo),
-                    contentDescription = "Folio Linux logo",
+                    contentDescription = "Foila Linux logo",
                     modifier = Modifier.size(44.dp)
                 )
             }
@@ -281,7 +287,7 @@ private fun WelcomePage(onNext: () -> Unit) {
             Spacer(Modifier.height(14.dp))
 
             Text(
-                text = "Folio Linux",
+                text = "Foila Linux",
                 fontSize = 32.sp,
                 fontWeight = FontWeight.ExtraBold,
                 color = colors.onBackground,
@@ -321,7 +327,7 @@ private fun WelcomePage(onNext: () -> Unit) {
                 icon = Icons.Filled.DesktopWindows,
                 iconTint = TextSecondary,
                 title = "XFCE4 Desktop",
-                description = "Pre-configured desktop experience with Folio Linux glass themes, icons, wallpapers, and fonts."
+                description = "Pre-configured desktop experience with Foila Linux glass themes, icons, wallpapers, and fonts."
             )
 
             // Feature 3: Integrated Terminal & X11
@@ -445,8 +451,8 @@ private fun ConsentPage(onBack: () -> Unit, onNext: () -> Unit) {
     ) {
         // Step Navigation Bar
         StepHeader(
-            currentStep = 1,
-            totalSteps = 5,
+            currentStep = 2,
+            totalSteps = 4,
             title = "External Downloads",
             onBack = onBack
         )
@@ -495,7 +501,7 @@ private fun ConsentPage(onBack: () -> Unit, onNext: () -> Unit) {
                     Spacer(Modifier.height(12.dp))
 
                     Text(
-                        text = "The F-Droid APK is intentionally lightweight and does not bundle large Linux OS archives. To provide a complete Linux environment, Folio Linux downloads the required system components directly from GitHub Releases upon continuation:",
+                        text = "The F-Droid APK is intentionally lightweight and does not bundle large Linux OS archives. To provide a complete Linux environment, Foila Linux downloads the required system components directly from GitHub Releases upon continuation:",
                         color = colors.onSurface.copy(alpha = 0.75f),
                         fontSize = 13.5.sp,
                         lineHeight = 19.sp
@@ -630,8 +636,8 @@ private fun HostSetupPage(onBack: () -> Unit, onNext: () -> Unit) {
             .padding(horizontal = 24.dp, vertical = 16.dp)
     ) {
         StepHeader(
-            currentStep = 2,
-            totalSteps = 5,
+            currentStep = 3,
+            totalSteps = 4,
             title = "Host Environment",
             onBack = onBack
         )
@@ -644,7 +650,7 @@ private fun HostSetupPage(onBack: () -> Unit, onNext: () -> Unit) {
                 .verticalScroll(rememberScrollState())
         ) {
             Text(
-                text = "Initialize the local embedded Linux prefix, PulseAudio server, and terminal toolchain before selecting your distribution.",
+                text = "Initialize the local embedded Linux prefix, PulseAudio server, and terminal toolchain. Nothing else is downloaded until you choose a distro.",
                 color = colors.onBackground.copy(alpha = 0.72f),
                 fontSize = 14.sp,
                 lineHeight = 19.sp
@@ -814,7 +820,113 @@ private fun HostSetupPage(onBack: () -> Unit, onNext: () -> Unit) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 4. DISTRO SELECTION PAGE
+// 4. READY PAGE (reactive flow ends here — distro install is optional)
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun ReadyPage(
+    onBack: () -> Unit,
+    onInstallDistro: () -> Unit,
+    onLater: () -> Unit
+) {
+    val colors = MaterialTheme.colorScheme
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 24.dp, vertical = 16.dp)
+    ) {
+        StepHeader(
+            currentStep = 4,
+            totalSteps = 4,
+            title = "All set",
+            onBack = onBack
+        )
+
+        Spacer(Modifier.height(16.dp))
+
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(84.dp)
+                    .clip(CircleShape)
+                    .background(StatusDot.copy(alpha = 0.15f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.CheckCircle,
+                    contentDescription = null,
+                    tint = StatusDot,
+                    modifier = Modifier.size(44.dp)
+                )
+            }
+
+            Text(
+                text = "Foila Linux is ready",
+                fontSize = 22.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = colors.onBackground,
+                textAlign = TextAlign.Center
+            )
+
+            Text(
+                text = "The host environment is set up. Install a distro now, or add one whenever you want from the Distros tab.",
+                color = colors.onSurface.copy(alpha = 0.75f),
+                fontSize = 13.5.sp,
+                lineHeight = 19.sp,
+                textAlign = TextAlign.Center
+            )
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(colors.surface.copy(alpha = 0.72f))
+                    .border(0.75.dp, FrostHairline, RoundedCornerShape(16.dp))
+                    .padding(16.dp)
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    ReadyHint(Icons.Filled.Memory, "Host environment is already initialized")
+                    ReadyHint(Icons.Filled.Download, "Distros download only when you choose to install one")
+                }
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        FolioPrimaryButton(
+            text = "Install a distro now",
+            icon = Icons.Filled.Download,
+            onClick = onInstallDistro
+        )
+
+        Spacer(Modifier.height(10.dp))
+
+        FolioSecondaryButton(
+            text = "Later",
+            onClick = onLater,
+            height = 50.dp
+        )
+    }
+}
+
+@Composable
+private fun ReadyHint(icon: ImageVector, text: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(icon, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(10.dp))
+        Text(text, color = MaterialTheme.colorScheme.onSurface, fontSize = 13.sp)
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 5. DISTRO SELECTION PAGE
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
@@ -865,8 +977,8 @@ private fun DistroPickPage(
             .padding(horizontal = 24.dp, vertical = 16.dp)
     ) {
         StepHeader(
-            currentStep = 3,
-            totalSteps = 5,
+            currentStep = 1,
+            totalSteps = 3,
             title = "Choose Distribution",
             onBack = onBack
         )
@@ -910,7 +1022,7 @@ private fun DistroPickPage(
                     Spacer(Modifier.width(10.dp))
                     Text(
                         text = if (probingRoot) "Checking superuser access…"
-                        else "Grant superuser to Folio Linux in Magisk/KernelSU, then tap Chroot again.",
+                        else "Grant superuser to Foila Linux in Magisk/KernelSU, then tap Chroot again.",
                         color = colors.error,
                         fontSize = 12.5.sp,
                         lineHeight = 16.sp,
@@ -1057,7 +1169,7 @@ private fun ModernSelectableDistroCard(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 5. OPTIONS PAGE
+// 6. OPTIONS PAGE
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
@@ -1078,8 +1190,8 @@ private fun OptionsPage(
             .padding(horizontal = 24.dp, vertical = 16.dp)
     ) {
         StepHeader(
-            currentStep = 4,
-            totalSteps = 5,
+            currentStep = 2,
+            totalSteps = 3,
             title = "Desktop Options",
             onBack = onBack
         )
@@ -1118,7 +1230,7 @@ private fun OptionsPage(
                             color = colors.onSurface
                         )
                         Text(
-                            text = "Base XFCE4 desktop with Folio Linux customizations",
+                            text = "Base XFCE4 desktop with Foila Linux customizations",
                             fontSize = 12.sp,
                             color = colors.onSurface.copy(alpha = 0.65f)
                         )
@@ -1195,7 +1307,7 @@ private fun OptionsPage(
                         "XFCE4 lightweight desktop environment",
                         if (distroId.startsWith("fedora") || distroId.startsWith("void") || distroId.startsWith("opensuse"))
                             "Mesa / VirGL 3D hardware acceleration" else null,
-                        "Folio Linux themes, wallpapers, and Nerd fonts",
+                        "Foila Linux themes, wallpapers, and Nerd fonts",
                         "Embedded X11 display server + Zsh terminal"
                     ).filterNotNull()
 
@@ -1345,7 +1457,7 @@ private fun ThemeOptionCard(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 6. DONE / COMPLETION PAGE
+// 7. DONE / COMPLETION PAGE
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
@@ -1500,7 +1612,7 @@ private fun StoragePage(onBack: () -> Unit, onNext: () -> Unit) {
             .fillMaxSize()
             .padding(horizontal = 24.dp, vertical = 16.dp)
     ) {
-        StepHeader(currentStep = 5, totalSteps = 5, title = "Access your files", onBack = onBack)
+        StepHeader(currentStep = 3, totalSteps = 3, title = "Access your files", onBack = onBack)
 
         Spacer(Modifier.height(16.dp))
 
@@ -1612,9 +1724,6 @@ private fun StepHeader(
     title: String,
     onBack: () -> Unit
 ) {
-    val colors = MaterialTheme.colorScheme
-    val progress = currentStep.toFloat() / totalSteps.toFloat()
-
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -1633,26 +1742,8 @@ private fun StepHeader(
                 )
             }
 
-            Text(
-                text = "Step $currentStep of $totalSteps",
-                fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = colors.onBackground.copy(alpha = 0.55f)
-            )
+            StepDots(current = currentStep, total = totalSteps)
         }
-
-        Spacer(Modifier.height(6.dp))
-
-        // Step Progress Bar
-        LinearProgressIndicator(
-            progress = { progress },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(4.dp)
-                .clip(RoundedCornerShape(2.dp)),
-            color = TextSecondary,
-            trackColor = colors.surfaceVariant.copy(alpha = 0.4f)
-        )
 
         Spacer(Modifier.height(14.dp))
 
@@ -1660,8 +1751,34 @@ private fun StepHeader(
             text = title,
             fontSize = 22.sp,
             fontWeight = FontWeight.Bold,
-            color = colors.onBackground
+            color = MaterialTheme.colorScheme.onBackground
         )
+    }
+}
+
+/**
+ * Progress dots instead of a textual "Step X of Y" counter: the reactive
+ * branch counts 4 (Welcome → Downloads → Host → Ready) and the optional
+ * install branch counts 3, without either inflating the other.
+ */
+@Composable
+private fun StepDots(current: Int, total: Int, modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        for (i in 1..total) {
+            Box(
+                modifier = Modifier
+                    .size(if (i == current) 8.dp else 6.dp)
+                    .clip(CircleShape)
+                    .background(
+                        if (i <= current) TextPrimary.copy(alpha = 0.9f)
+                        else TextPrimary.copy(alpha = 0.18f)
+                    )
+            )
+        }
     }
 }
 

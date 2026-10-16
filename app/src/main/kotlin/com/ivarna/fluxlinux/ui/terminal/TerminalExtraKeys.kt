@@ -224,7 +224,7 @@ data class ShortcutBarActions(
 )
 
 /**
- * Configurable special-keys toolbar, Folio frost edition.
+ * Configurable special-keys toolbar, Foila frost edition.
  *
  * Renders [ShortcutBarConfig.keys]: main keys flow into weighted rows (defaults
  * mirror the classic CTRL ALT SHIFT ESC TAB / arrows ENT ⌫ Fn layout), Fn-flagged
@@ -378,7 +378,7 @@ fun TerminalExtraKeys(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "Shortcut bar is empty — tap to edit",
+                        text = "No keys — tap to edit",
                         fontSize = 11.sp,
                         color = TextSecondary
                     )
@@ -493,7 +493,7 @@ private fun ShortcutBarKeyItem(
                 onMenuDismiss()
                 actions.onRemoveKey(key)
             }
-            ShortcutMenuEntry("Edit bar…", Icons.Default.Build) {
+            ShortcutMenuEntry("Edit keys", Icons.Default.Build) {
                 onMenuDismiss()
                 actions.onEditBar()
             }

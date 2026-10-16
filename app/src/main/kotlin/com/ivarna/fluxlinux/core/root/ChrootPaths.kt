@@ -7,7 +7,7 @@ package com.ivarna.fluxlinux.core.root
  * ChrootCommandBuilder — plan §2.5).
  */
 object ChrootPaths {
-    /** Folio-owned root tree on device (all root-requiring artifacts live here). */
+    /** Foila-owned root tree on device (all root-requiring artifacts live here). */
     const val FOLIO_ROOT = "/data/local/folio"
 
     /** Distro rootfs trees, one subdir per distro. */

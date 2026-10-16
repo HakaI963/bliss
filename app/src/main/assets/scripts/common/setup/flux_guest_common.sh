@@ -8,7 +8,7 @@ export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 unset LD_LIBRARY_PATH
 unset LD_PRELOAD
 
-_flux_log() { echo "Folio: $*"; }
+_flux_log() { echo "Foila: $*"; }
 
 # Portable stat: GNU coreutils uses `-c %u`, BSD userland (Chimera) uses `-f %u`.
 _flux_stat_u() { stat -c %u "$1" 2>/dev/null || stat -f %u "$1" 2>/dev/null || true; }
@@ -143,7 +143,7 @@ _flux_repair_sudo_pam() {
             for _pam in /etc/pam.d/sudo /etc/pam.d/sudo-i; do
                 cat > "$_pam" <<'PAM'
 #%PAM-1.0
-# Folio proot: pam_unix/audit cannot run → sudo asks for a password.
+# Foila proot: pam_unix/audit cannot run → sudo asks for a password.
 auth       sufficient pam_permit.so
 account    sufficient pam_permit.so
 password   sufficient pam_permit.so
@@ -180,12 +180,12 @@ _flux_ensure_sudo() {
         # 0400 root:root → "doas is not enabled, Permission denied" under proot.
         chmod 0644 /etc/doas.conf
         chown root:root /etc/doas.conf 2>/dev/null || true
-        # sudo shim so Flux wrappers (zshrc / scripts) keep working.
+        # sudo shim so Foila wrappers (zshrc / scripts) keep working.
         if ! command -v sudo >/dev/null 2>&1; then
             mkdir -p /usr/local/bin
             cat > /usr/local/bin/sudo <<'EOF'
 #!/bin/sh
-# Folio shim: sudo -> doas (nopass flux).
+# Foila shim: sudo -> doas (nopass flux).
 exec doas "$@"
 EOF
             chmod 755 /usr/local/bin/sudo
@@ -223,7 +223,7 @@ _flux_ensure_home() {
 #!/bin/sh
 export PULSE_SERVER=tcp:127.0.0.1
 [ -f "\$HOME/.Xresources" ] && xrdb "\$HOME/.Xresources"
-# Folio Linux appearance (wallpaper/colors/terminal; hash-guarded inside).
+# Foila Linux appearance (wallpaper/colors/terminal; hash-guarded inside).
 [ -r "\$HOME/.config/folio/appearance-apply.sh" ] && sh "\$HOME/.config/folio/appearance-apply.sh" >/dev/null 2>&1 || true
 exec $_xs_de
 EOF
@@ -269,7 +269,7 @@ _flux_require_startxfce4() {
     if [ ! -e /usr/bin/startxfce4 ] && [ ! -e /usr/sbin/startxfce4 ] \
         && [ ! -e /usr/local/bin/startxfce4 ] \
         && ! command -v startxfce4 >/dev/null 2>&1; then
-        echo "Folio: ERROR: startxfce4 missing after desktop install"
+        echo "Foila: ERROR: startxfce4 missing after desktop install"
         exit 1
     fi
 }
@@ -337,7 +337,7 @@ if [ -n "$_pick" ]; then
 else
   unset LC_ALL
   export LANG=C
-  echo "Folio: WARNING: no UTF-8 locale in locale -a; zsh staying LANG=C" >&2
+  echo "Foila: WARNING: no UTF-8 locale in locale -a; zsh staying LANG=C" >&2
 fi
 unset _have _c _pick
 EOF
@@ -524,6 +524,54 @@ _flux_mask_pipewire_pulse() {
     done
 }
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Required-package retry: flaky links abort a package transaction mid-download
+# (xbps/dnf/apt/pacman/zypper all do). `_flux_retry_pkg <cmd…>` runs the given
+# package command up to 3 tries, refreshing the metadata of whichever PM
+# exists between tries. Returns the last exit code (0 on success).
+# Optional/best-effort installs stay `|| true` — this is only for REQUIRED
+# desktop (XFCE/KDE) transactions that used to hard-exit on first failure.
+# ─────────────────────────────────────────────────────────────────────────────
+_flux_pm_refresh() {
+    if command -v xbps-install >/dev/null 2>&1; then
+        xbps-install -Sy
+    elif command -v apk >/dev/null 2>&1; then
+        apk update
+    elif command -v apt-get >/dev/null 2>&1; then
+        apt-get update
+    elif command -v dnf5 >/dev/null 2>&1; then
+        dnf5 -y makecache
+    elif command -v dnf >/dev/null 2>&1; then
+        dnf -y makecache
+    elif command -v zypper >/dev/null 2>&1; then
+        zypper --non-interactive --gpg-auto-import-keys refresh
+    elif command -v pacman >/dev/null 2>&1; then
+        pacman -Sy --noconfirm
+    else
+        return 1
+    fi
+}
+
+_flux_retry_pkg() {
+    _retry_tries=3
+    _retry_n=1
+    _retry_rc=0
+    while [ "$_retry_n" -le "$_retry_tries" ]; do
+        if "$@"; then
+            _retry_rc=0
+            break
+        else
+            _retry_rc=$?
+        fi
+        [ "$_retry_n" -lt "$_retry_tries" ] || break
+        _flux_log "Package download failed — retrying ($((_retry_n + 1))/$_retry_tries)…"
+        _flux_pm_refresh >/dev/null 2>&1 || true
+        _retry_n=$((_retry_n + 1))
+    done
+    unset _retry_tries _retry_n
+    return "$_retry_rc"
+}
+
 _flux_try_install() {
     # Best-effort named packages. Never handle_error the family if a plugin is missing.
     _flux_log "Installing Pulse client: $*"
@@ -613,7 +661,7 @@ _flux_setup_pulse() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Folio Linux appearance: apply the app-staged wallpaper/colors/terminal config
+# Foila Linux appearance: apply the app-staged wallpaper/colors/terminal config
 # (~/.config/folio/appearance.env + appearance-apply.sh, staged by the app).
 # No-op when the user never configured appearance. Forces ONE pass because
 # callers are install / script re-run paths that just rewrote the defaults.
@@ -1210,7 +1258,7 @@ EOF
     if [ -n "${_uid:-}" ]; then
         chown -R "$_uid:$_gid" "$_h/.config" 2>/dev/null || true
     fi
-    # Folio Linux appearance (staged by the app) — applied after the compact
+    # Foila Linux appearance (staged by the app) — applied after the compact
     # defaults so the user's wallpaper/colors win. No-op when unconfigured.
     if command -v _flux_apply_folio_appearance >/dev/null 2>&1; then
         _flux_apply_folio_appearance "$_h" || true

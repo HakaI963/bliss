@@ -25,10 +25,10 @@ fi
 #   - no bash/useradd/sudo in bootstrap — install shadow+bash BEFORE user creation
 
 DISTRO_NAME="${1:-chimera}"
-echo "Folio: Configuring ${DISTRO_NAME} (Chimera Family)..."
+echo "Foila: Configuring ${DISTRO_NAME} (Chimera Family)..."
 
 if [ "$(id -u)" -ne 0 ]; then
-    echo "Folio: ERROR: must run as root inside the guest (got uid=$(id -u))."
+    echo "Foila: ERROR: must run as root inside the guest (got uid=$(id -u))."
     exit 1
 fi
 
@@ -36,7 +36,7 @@ _flux_ensure_tmp
 _flux_ensure_dns
 
 if ! command -v apk >/dev/null 2>&1; then
-    echo "Folio: ERROR: apk not found"
+    echo "Foila: ERROR: apk not found"
     exit 1
 fi
 
@@ -47,7 +47,7 @@ printf 'cache-packages\n' > /etc/apk/config
 
 _flux_log "apk update..."
 apk update || {
-    echo "Folio: apk update failed (repos/network)"
+    echo "Foila: apk update failed (repos/network)"
     exit 1
 }
 
@@ -61,12 +61,12 @@ if ! apk add bash shadow opendoas ca-certificates curl wget2 unzip gtar xz \
         cmd:wget2 cmd:unzip cmd:gtar cmd:xz cmd:git cmd:zsh cmd:python \
         cmd:dbus-run-session \
         fonts-dejavu || {
-            echo "Folio: base package install failed"
+            echo "Foila: base package install failed"
             exit 1
         }
 fi
 
-# GNU tool aliases: Flux scripts call `wget` / `tar`. wget2 provides
+# GNU tool aliases: Foila scripts call `wget` / `tar`. wget2 provides
 # /usr/bin/wget2, gtar provides /usr/bin/gtar — link the conventional names.
 if [ ! -e /usr/local/bin/wget ] && command -v wget2 >/dev/null 2>&1; then
     mkdir -p /usr/local/bin
@@ -102,12 +102,12 @@ apk add mesa mesa-dri 2>/dev/null || true
 
 if [ -z "${DESKTOPS##*xfce*}" ]; then
     _flux_log "Installing XFCE4 (targeted — never the xfce4 metapackage)..."
-    if ! apk add xfce4-session xfce4-panel xfce4-settings xfce4-terminal \
+    if ! _flux_retry_pkg apk add xfce4-session xfce4-panel xfce4-settings xfce4-terminal \
             xfdesktop xfwm4 thunar; then
         _flux_log "XFCE pkg names differ — retrying via cmd: virtual providers"
-        apk add cmd:startxfce4 cmd:xfce4-panel cmd:xfce4-settings \
+        _flux_retry_pkg apk add cmd:startxfce4 cmd:xfce4-panel cmd:xfce4-settings \
             cmd:xfce4-terminal cmd:xfdesktop cmd:xfwm4 cmd:thunar || {
-                echo "Folio: XFCE install failed"
+                echo "Foila: XFCE install failed after 3 tries — check your network, then tap Retry Setup."
                 exit 1
             }
     fi
@@ -159,5 +159,5 @@ if [ -z "${DESKTOPS##*xfce*}" ] && command -v _flux_xfce_compact_defaults >/dev/
     _flux_xfce_compact_defaults || true
 fi
 
-echo "Folio: ${DISTRO_NAME} Chimera setup complete!"
+echo "Foila: ${DISTRO_NAME} Chimera setup complete!"
 exit 0

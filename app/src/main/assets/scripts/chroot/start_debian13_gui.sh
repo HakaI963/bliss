@@ -18,7 +18,7 @@ fi
 USERNAME="${USERNAME:-flux}"
 
 echo "========================================"
-echo "Folio: Chroot XFCE (root stage)"
+echo "Foila: Chroot XFCE (root stage)"
 echo "  rootfs=$DEBIANPATH"
 echo "========================================"
 
@@ -61,28 +61,28 @@ if [ -z "${BB:-}" ]; then
   fi
 fi
 if [ -z "${BB:-}" ]; then
-  echo "Folio: ERROR — root-capable busybox not found" >&2
+  echo "Foila: ERROR — root-capable busybox not found" >&2
   exit 1
 fi
 
-echo "Folio: busybox=$BB"
+echo "Foila: busybox=$BB"
 
 if [ ! -d "$DEBIANPATH" ]; then
-  echo "Folio: ERROR — chroot missing: $DEBIANPATH"
+  echo "Foila: ERROR — chroot missing: $DEBIANPATH"
   exit 1
 fi
 if [ ! -x "$DEBIANPATH/usr/bin/startxfce4" ] && [ ! -f "$DEBIANPATH/usr/bin/startxfce4" ]; then
-  echo "Folio: ERROR — startxfce4 missing. Re-run chroot environment setup."
+  echo "Foila: ERROR — startxfce4 missing. Re-run chroot environment setup."
   exit 1
 fi
 
 # Soft SELinux (HyperOS / enforcing) — flux pattern; fail soft
 if command -v getenforce >/dev/null 2>&1; then
   SELINUX_STATUS=$(getenforce 2>/dev/null || true)
-  echo "Folio: SELinux=$SELINUX_STATUS"
+  echo "Foila: SELinux=$SELINUX_STATUS"
   if [ "$SELINUX_STATUS" = "Enforcing" ]; then
-    setenforce 0 2>/dev/null && echo "Folio: SELinux → Permissive (until reboot)" \
-      || echo "Folio: [WARN] setenforce 0 failed"
+    setenforce 0 2>/dev/null && echo "Foila: SELinux → Permissive (until reboot)" \
+      || echo "Foila: [WARN] setenforce 0 failed"
   fi
 fi
 # PREFIX/tmp must stay app_data_file. Labeling it tmpfs:s0 makes termux-x11
@@ -103,14 +103,14 @@ chmod 1777 "$TARGET_PREFIX/tmp/.X11-unix" 2>/dev/null || true
 i=0
 while [ $i -lt 15 ]; do
   if [ -S "$TARGET_PREFIX/tmp/.X11-unix/X0" ]; then
-    echo "Folio: host X0 socket ready"
+    echo "Foila: host X0 socket ready"
     break
   fi
   i=$((i + 1))
   sleep 1
 done
 if [ ! -S "$TARGET_PREFIX/tmp/.X11-unix/X0" ]; then
-  echo "Folio: [WARN] host X0 not seen yet — continuing"
+  echo "Foila: [WARN] host X0 not seen yet — continuing"
 fi
 
 if [ -f "$HELPER" ]; then
@@ -182,9 +182,9 @@ if [ -e /etc/fluxlinux/kde_gl ]; then case "$GPU_MODE" in turnip|panvk)
     unset MESA_GL_VERSION_OVERRIDE MESA_GLES_VERSION_OVERRIDE
     _o=$(timeout -k 2 30 glxinfo -B 2>/dev/null) || _o=
     case "$_o" in
-      *zink*) echo "Folio(guest): KDE GL = zink on Turnip" ;;
+      *zink*) echo "Foila(guest): KDE GL = zink on Turnip" ;;
       *)
-        echo "Folio(guest): zink-on-Turnip probe failed - kgsl fallback"
+        echo "Foila(guest): zink-on-Turnip probe failed - kgsl fallback"
         unset GALLIUM_DRIVER VK_ICD_FILENAMES
         export MESA_LOADER_DRIVER_OVERRIDE=kgsl MESA_GL_VERSION_OVERRIDE=4.6 MESA_GLES_VERSION_OVERRIDE=3.2
         ;;
@@ -246,11 +246,11 @@ su - $USERNAME -c '
     else
       export LIBGL_ALWAYS_SOFTWARE=1
       export GALLIUM_DRIVER=llvmpipe
-      echo \"Folio(guest): software GL fallback\"
+      echo \"Foila(guest): software GL fallback\"
     fi
     export GPU_MODE
   fi
-  echo \"Folio(guest): GPU mode=\$GPU_MODE\"
+  echo \"Foila(guest): GPU mode=\$GPU_MODE\"
 
   xfconf-query -c xfwm4 -p /general/use_compositing -s false 2>/dev/null || true
   if [ x$FLUX_GPU_RUNTIME = xsoftware ]; then

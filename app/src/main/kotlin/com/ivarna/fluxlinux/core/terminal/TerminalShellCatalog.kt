@@ -7,7 +7,7 @@ import com.ivarna.fluxlinux.core.root.ChrootPaths
 /**
  * SSOT for Terminal page shell cards (nativecode `ToolLauncherCatalog` parity).
  *
- * Flux ships **system shells** per installed guest (Debian + Alpine, proot/chroot)
+ * Foila ships **system shells** per installed guest (Debian + Alpine, proot/chroot)
  * plus optional host. Each card carries explicit `method` + `distroId` so session
  * open never falls back to ambient method or wrong container/chroot path.
  */

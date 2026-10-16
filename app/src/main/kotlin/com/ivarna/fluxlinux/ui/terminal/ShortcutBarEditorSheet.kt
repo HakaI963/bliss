@@ -101,19 +101,19 @@ fun ShortcutBarEditorSheet(
                 .padding(bottom = 24.dp)
         ) {
             Text(
-                text = "Shortcut bar",
+                text = "Your keys",
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
                 color = TextPrimary
             )
             Text(
-                text = "Size, keys and order. Long-press a bar key for quick actions.",
+                text = "Long-press a bar key for quick actions.",
                 fontSize = 12.sp,
                 color = TextSecondary,
                 modifier = Modifier.padding(top = 2.dp)
             )
 
-            SectionLabel("BAR SIZE")
+            SectionLabel("Size")
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -127,7 +127,7 @@ fun ShortcutBarEditorSheet(
                 }
             }
 
-            SectionLabel("KEYS  ${config.keys.size}")
+            Spacer(Modifier.height(6.dp))
             config.keys.forEachIndexed { index, key ->
                 Row(
                     modifier = Modifier
@@ -189,7 +189,7 @@ fun ShortcutBarEditorSheet(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 EditorPill(
-                    label = "+ Add key",
+                    label = "Add key",
                     selected = true,
                     modifier = Modifier.weight(1f)
                 ) {
@@ -197,7 +197,7 @@ fun ShortcutBarEditorSheet(
                     showKeyEditor = true
                 }
                 EditorPill(
-                    label = "Reset to defaults",
+                    label = "Reset",
                     selected = false,
                     modifier = Modifier.weight(1f)
                 ) { confirmReset = true }
@@ -232,8 +232,8 @@ fun ShortcutBarEditorSheet(
             containerColor = MaterialTheme.colorScheme.surface,
             titleContentColor = TextPrimary,
             textContentColor = TextSecondary,
-            title = { Text("Reset shortcut bar?", fontSize = 16.sp, fontWeight = FontWeight.Bold) },
-            text = { Text("This restores the default keys and bar size.", fontSize = 13.sp, lineHeight = 19.sp) },
+            title = { Text("Reset keys?", fontSize = 16.sp, fontWeight = FontWeight.Bold) },
+            text = { Text("Restores the default keys and bar size.", fontSize = 13.sp, lineHeight = 19.sp) },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -327,12 +327,12 @@ fun ShortcutKeyEditorSheet(
             OutlinedTextField(
                 value = label,
                 onValueChange = { label = it.take(SHORTCUT_LABEL_MAX) },
-                label = { Text("Label · max $SHORTCUT_LABEL_MAX chars") },
+                label = { Text("Label (max $SHORTCUT_LABEL_MAX)") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
 
-            SectionLabel("KIND")
+            SectionLabel("Type")
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -354,7 +354,7 @@ fun ShortcutKeyEditorSheet(
 
             when (kind) {
                 TerminalShortcutKind.MODIFIER, TerminalShortcutKind.LOCK -> {
-                    SectionLabel("MODIFIER")
+                    SectionLabel("Modifier")
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -369,9 +369,9 @@ fun ShortcutKeyEditorSheet(
                     }
                     Text(
                         text = if (kind == TerminalShortcutKind.MODIFIER) {
-                            "Tap toggles one key; long-press locks it."
+                            "Tap to toggle. Long-press to lock."
                         } else {
-                            "Tap locks/unlocks until tapped again."
+                            "Stays on until tapped again."
                         },
                         fontSize = 11.sp,
                         color = TextMuted
@@ -379,7 +379,7 @@ fun ShortcutKeyEditorSheet(
                 }
 
                 TerminalShortcutKind.SPECIAL -> {
-                    SectionLabel("SPECIAL KEY")
+                    SectionLabel("Key")
                     TerminalKeyCodes.SPECIAL_KEY_CODES.keys.toList().chunked(5).forEach { chunk ->
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -398,12 +398,12 @@ fun ShortcutKeyEditorSheet(
                 }
 
                 TerminalShortcutKind.TEXT -> {
-                    SectionLabel("TEXT TO SEND")
+                    SectionLabel("Text")
                     OutlinedTextField(
                         value = payload,
                         onValueChange = { payload = it.take(256) },
-                        label = { Text("Sent to the session (pty)") },
-                        placeholder = { Text("e.g. sudo   ·   ls -la\\n   ·   | grep ") },
+                        label = { Text("Sent to the shell") },
+                        placeholder = { Text("e.g. ls -la") },
                         minLines = 1,
                         maxLines = 3,
                         modifier = Modifier.fillMaxWidth()
@@ -411,15 +411,15 @@ fun ShortcutKeyEditorSheet(
                 }
 
                 TerminalShortcutKind.COMBO -> {
-                    SectionLabel("KEY")
+                    SectionLabel("Key")
                     OutlinedTextField(
                         value = payload,
                         onValueChange = { payload = it.take(1) },
-                        label = { Text("Single character (or special name)") },
+                        label = { Text("One character or key name") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
-                    SectionLabel("MODIFIERS")
+                    SectionLabel("Modifiers")
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -431,7 +431,7 @@ fun ShortcutKeyEditorSheet(
                 }
             }
 
-            SectionLabel("SIZE")
+            SectionLabel("Size")
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -479,7 +479,7 @@ fun ShortcutKeyEditorSheet(
                     .height(44.dp)
             ) {
                 Text(
-                    text = if (initial == null) "Add key" else "Save key",
+                    text = if (initial == null) "Add key" else "Save",
                     fontWeight = FontWeight.Bold
                 )
             }
@@ -495,9 +495,10 @@ fun ShortcutKeyEditorSheet(
 }
 
 /**
- * "Add to shortcut bar" quick path from the tools sheet: label + a short sequence.
- * Auto-picks the lightest kind that fits: Ctrl+char → COMBO, special name → SPECIAL,
- * anything else → TEXT written to the pty (optional trailing Enter).
+ * Quick "one-line key" creator (kept for reuse by other surfaces; the tools
+ * palette now routes "Add key" to the full [ShortcutKeyEditorSheet]).
+ * Auto-picks the lightest kind that fits: Ctrl+char → COMBO, special name →
+ * SPECIAL, anything else → TEXT written to the pty (optional trailing Enter).
  */
 @Composable
 fun ShortcutQuickAddDialog(
@@ -517,21 +518,21 @@ fun ShortcutQuickAddDialog(
         containerColor = MaterialTheme.colorScheme.surface,
         titleContentColor = TextPrimary,
         textContentColor = TextSecondary,
-        title = { Text("Add to shortcut bar", fontSize = 16.sp, fontWeight = FontWeight.Bold) },
+        title = { Text("Add key", fontSize = 16.sp, fontWeight = FontWeight.Bold) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedTextField(
                     value = label,
                     onValueChange = { label = it.take(SHORTCUT_LABEL_MAX) },
-                    label = { Text("Label · max $SHORTCUT_LABEL_MAX chars") },
+                    label = { Text("Label (max $SHORTCUT_LABEL_MAX)") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
                 OutlinedTextField(
                     value = sequence,
                     onValueChange = { sequence = it.take(128) },
-                    label = { Text("Sequence (text, key name or one char)") },
-                    placeholder = { Text("e.g. ls -la   ·   ESC   ·   c") },
+                    label = { Text("Sequence") },
+                    placeholder = { Text("e.g. ls -la") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -541,8 +542,8 @@ fun ShortcutQuickAddDialog(
                     EditorPill("Fn row", selected = fnRow) { fnRow = !fnRow }
                 }
                 Text(
-                    text = "Single char + Ctrl becomes a combo; a key name (ESC, F5, …) "
-                        + "becomes a special key; anything else is written to the pty.",
+                    text = "One char + Ctrl = combo. A key name (Esc, F5) = special key. "
+                        + "Anything else is typed into the shell.",
                     fontSize = 11.sp,
                     color = TextMuted
                 )
@@ -605,7 +606,7 @@ private fun SectionLabel(text: String) {
         fontSize = 10.sp,
         fontWeight = FontWeight.Bold,
         color = TextMuted,
-        letterSpacing = 1.4.sp,
+        letterSpacing = 0.8.sp,
         modifier = Modifier.padding(top = 6.dp, bottom = 2.dp)
     )
 }

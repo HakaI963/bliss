@@ -32,7 +32,7 @@ object HostBootstrap {
         minBytes = 50L * 1024L * 1024L
     )
 
-    // Folio ships assets/bootstrap.tar like the other flavors; the release tag
+    // Foila ships assets/bootstrap.tar like the other flavors; the release tag
     // has no folio tar yet, so its repair fallback reuses the ivarna tar
     // (same usr/ payload; prefix is rewritten at extract time).
     val FOLIO = PinnedReleaseArchive(

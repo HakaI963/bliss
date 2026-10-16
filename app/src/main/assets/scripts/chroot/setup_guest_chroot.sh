@@ -207,7 +207,7 @@ configure_guest_chroot() {
     touch "$GUESTPATH/.flux_configured"
     success "$DISTRO_LABEL environment configured (rootfs + user; XFCE via family phase)!"
 
-    # Root-staged helper/launchers live in the Folio helpers dir (idempotent).
+    # Root-staged helper/launchers live in the Foila helpers dir (idempotent).
     mkdir -p /data/local/folio/helpers
 
     HELPER="/data/local/folio/helpers/fluxlinux_chroot.sh"
@@ -241,7 +241,7 @@ configure_guest_chroot() {
     done
 
     cleanup_mounts
-    success "Folio: $DISTRO_LABEL Chroot Setup Complete!"
+    success "Foila: $DISTRO_LABEL Chroot Setup Complete!"
 
     am start -a android.intent.action.VIEW \
         -d "fluxlinux://callback?result=success&name=distro_install_${DISTRO_LABEL}_chroot" \
@@ -296,7 +296,7 @@ if [ -z "${BB:-}" ]; then
   fi
 fi
 if [ -z "${BB:-}" ]; then
-  echo "Folio: ERROR — root-capable busybox not found" >&2
+  echo "Foila: ERROR — root-capable busybox not found" >&2
   exit 1
 fi
 

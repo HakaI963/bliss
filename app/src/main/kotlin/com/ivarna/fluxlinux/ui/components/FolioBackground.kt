@@ -24,7 +24,7 @@ private const val AmbientSideAlpha = 0.04f
 private const val AmbientBaseAlpha = 0.035f
 
 /**
- * Folio's ambient backdrop: a pure carbon [FolioBackground] canvas with three
+ * Foila's ambient backdrop: a pure carbon [FolioBackground] canvas with three
  * very faint white light pools drifting on long, staggered cycles.
  *
  * Purely decorative — it installs no pointer input of any kind, so it never

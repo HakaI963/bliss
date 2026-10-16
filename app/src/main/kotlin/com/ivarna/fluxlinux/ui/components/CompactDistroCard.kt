@@ -43,7 +43,7 @@ import com.ivarna.fluxlinux.ui.theme.StatusDot
 import com.ivarna.fluxlinux.ui.theme.TextPrimary
 import com.ivarna.fluxlinux.ui.theme.TextSecondary
 
-// Folio frost row — single-piece frosted glass, whole row navigates to install.
+// Foila frost row — single-piece frosted glass, whole row navigates to install.
 @Composable
 fun CompactDistroCard(
     distro: Distro,

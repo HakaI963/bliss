@@ -6,7 +6,7 @@
 # Error Handler
 handle_error() {
     echo ""
-    echo "❌ Folio Error: Script failed at step: $1"
+    echo "❌ Foila Error: Script failed at step: $1"
     echo "---------------------------------------------------"
     echo "Please check the error message above for details."
     echo "---------------------------------------------------"
@@ -14,13 +14,13 @@ handle_error() {
     exit 1
 }
 
-echo "Folio: Setting up Gaming & Emulation Environment..."
+echo "Foila: Setting up Gaming & Emulation Environment..."
 echo "Target: Debian 13 (Trixie) - ARM64"
 
 export DEBIAN_FRONTEND=noninteractive
 
 # 1. Install Dependencies
-echo "Folio: Installing Dependencies..."
+echo "Foila: Installing Dependencies..."
 apt update -y
 apt install -y \
     wget \
@@ -44,7 +44,7 @@ apt install -y \
 apt install -y debianutils || handle_error "Debian Utils"
 
 # 2. Install Box64 (Ryan Fortner Repo)
-echo "Folio: Installing Box64 (Ryan Fortner Repo)..."
+echo "Foila: Installing Box64 (Ryan Fortner Repo)..."
 # Add repo
 wget https://ryanfortner.github.io/box86-debs/box86.list -O /etc/apt/sources.list.d/box86.list
 wget -qO- https://ryanfortner.github.io/box86-debs/KEY.gpg | gpg --dearmor --yes -o /etc/apt/trusted.gpg.d/box86-debs-archive-keyring.gpg
@@ -61,7 +61,7 @@ apt-cache policy box64
 apt install -y box64 || handle_error "Box64 Installation"
 
 # 3. Install xow64-wine (Windows Emulation)
-echo "Folio: Setting up xow64-wine..."
+echo "Foila: Setting up xow64-wine..."
 # Cleanup old
 rm -rf ~/xow64
 # Download script
@@ -98,7 +98,7 @@ chown -R "$(whoami)" "$HOME/xow64_prefix" 2>/dev/null
 TMPDIR=/tmp ~/xow64 install || echo " [⚠️] xow64 install had issues (check logs)"
 
 # 4. Install Heroic Games Launcher (Native ARM64)
-echo "Folio: Installing Heroic Games Launcher..."
+echo "Foila: Installing Heroic Games Launcher..."
 
 # Robust URL Fetcher: API -> HTML Scraping -> Fallback
 # 1. Try GitHub API
@@ -145,7 +145,7 @@ else
 fi
 
 # 5. Install RetroArch & DOSBox
-echo "Folio: Installing RetroArch & DOSBox..."
+echo "Foila: Installing RetroArch & DOSBox..."
 apt install -y \
     retroarch \
     dosbox \
@@ -155,7 +155,7 @@ apt install -y \
 # 6. Verification
 verify_installation() {
     echo ""
-    echo "🔎 Folio: Verifying Installations..."
+    echo "🔎 Foila: Verifying Installations..."
     echo "------------------------------------------------"
     
     if command -v box64 >/dev/null; then echo " [✅] Box64"; else echo " [❌] Box64 Missing"; fi

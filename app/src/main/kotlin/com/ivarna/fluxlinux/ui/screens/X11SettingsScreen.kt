@@ -14,8 +14,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.foundation.layout.defaultMinSize
@@ -27,22 +30,29 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ivarna.fluxlinux.core.utils.TermuxX11Preferences
@@ -85,6 +95,62 @@ fun X11SettingsScreen(
     }
     var scancodeWorkaround by remember {
         mutableStateOf(TermuxX11Preferences.getScancodeWorkaround(context))
+    }
+
+    // Display size: the slider drives width, height follows the device aspect
+    // ratio, and the absolute "WxH" field overrides both. Seeded from the
+    // current effective resolution so it reflects scaled/custom/exact prefs.
+    val initialResolution = remember { TermuxX11Preferences.effectiveResolution(context) }
+    var resolutionWidth by remember { mutableFloatStateOf(initialResolution.first.toFloat()) }
+    var resolutionHeight by remember { mutableIntStateOf(initialResolution.second) }
+    var absoluteResolution by remember {
+        mutableStateOf("${initialResolution.first}x${initialResolution.second}")
+    }
+    var absoluteError by remember { mutableStateOf<String?>(null) }
+    var resolutionFieldTouched by remember { mutableStateOf(false) }
+
+    val deviceMetrics = remember { context.resources.displayMetrics }
+    val deviceAspect = if (deviceMetrics.widthPixels > 0) {
+        deviceMetrics.heightPixels.toFloat() / deviceMetrics.widthPixels.toFloat()
+    } else {
+        FALLBACK_DEVICE_ASPECT
+    }
+
+    /** LorieView floors the cvt mode width to a multiple of 8. */
+    fun snapWidth(value: Float): Int =
+        ((value.toInt() / 8) * 8).coerceIn(DISPLAY_WIDTH_MIN, DISPLAY_WIDTH_MAX)
+
+    fun derivedHeight(width: Int): Int =
+        (width * deviceAspect).toInt().coerceIn(
+            TermuxX11Preferences.RESOLUTION_MIN_HEIGHT,
+            TermuxX11Preferences.RESOLUTION_MAX_HEIGHT
+        )
+
+    fun showSize(width: Int, height: Int) {
+        resolutionWidth = width.toFloat()
+        resolutionHeight = height
+        absoluteResolution = "${width}x$height"
+        absoluteError = null
+    }
+
+    fun commitAbsoluteResolution() {
+        val parsed = TermuxX11Preferences.parseResolution(absoluteResolution)
+        if (parsed == null) {
+            absoluteError = "Enter WxH between " +
+                "${TermuxX11Preferences.RESOLUTION_MIN_WIDTH}x${TermuxX11Preferences.RESOLUTION_MIN_HEIGHT} and " +
+                "${TermuxX11Preferences.RESOLUTION_MAX_WIDTH}x${TermuxX11Preferences.RESOLUTION_MAX_HEIGHT}"
+            return
+        }
+        showSize(parsed.first, parsed.second)
+        TermuxX11Preferences.setCustomResolution(context, parsed.first, parsed.second)
+    }
+
+    fun matchDevice() {
+        // Reset to the default `scaled` mode: the X screen then follows the
+        // device view at the current display scale, like a fresh install.
+        TermuxX11Preferences.setResolutionMode(context, TermuxX11Preferences.RESOLUTION_MODE_SCALED)
+        val effective = TermuxX11Preferences.effectiveResolution(context)
+        showSize(effective.first, effective.second)
     }
 
     // Staggered card entrance (30ms steps) — visual only.
@@ -166,6 +232,126 @@ fun X11SettingsScreen(
                             activeTrackColor = TextPrimary,
                             inactiveTrackColor = FolioSwitchUncheckedTrack
                         )
+                    )
+
+                    PrefDivider()
+
+                    // ── Display size (custom WxH resolution) ─────────────────
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            "Display size",
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 15.sp
+                        )
+                        Text(
+                            "${resolutionWidth.toInt()} × $resolutionHeight",
+                            color = TextPrimary,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp
+                        )
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "X screen resolution in pixels. Slide the width; height follows the device aspect ratio.",
+                        color = fluxMutedText(),
+                        fontSize = 13.sp
+                    )
+                    Slider(
+                        value = resolutionWidth,
+                        onValueChange = { raw ->
+                            val snapped = snapWidth(raw)
+                            resolutionWidth = snapped.toFloat()
+                            resolutionHeight = derivedHeight(snapped)
+                            absoluteResolution = "${snapped}x$resolutionHeight"
+                            absoluteError = null
+                        },
+                        onValueChangeFinished = {
+                            TermuxX11Preferences.setCustomResolution(
+                                context, resolutionWidth.toInt(), resolutionHeight
+                            )
+                        },
+                        valueRange = DISPLAY_WIDTH_MIN.toFloat()..DISPLAY_WIDTH_MAX.toFloat(),
+                        colors = SliderDefaults.colors(
+                            thumbColor = TextPrimary,
+                            activeTrackColor = TextPrimary,
+                            inactiveTrackColor = FolioSwitchUncheckedTrack
+                        )
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = absoluteResolution,
+                        onValueChange = {
+                            absoluteResolution = it
+                            absoluteError = null
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .onFocusChanged { focus ->
+                                if (focus.isFocused) {
+                                    resolutionFieldTouched = true
+                                } else if (resolutionFieldTouched) {
+                                    // Leaving the field applies a valid value;
+                                    // garbage keeps the inline error visible.
+                                    commitAbsoluteResolution()
+                                }
+                            },
+                        singleLine = true,
+                        label = { Text("Exact resolution") },
+                        placeholder = { Text("1280x800") },
+                        isError = absoluteError != null,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Ascii,
+                            imeAction = ImeAction.Done
+                        ),
+                        keyboardActions = KeyboardActions(onDone = { commitAbsoluteResolution() }),
+                        trailingIcon = {
+                            IconButton(onClick = { commitAbsoluteResolution() }) {
+                                Icon(
+                                    Icons.Filled.Check,
+                                    contentDescription = "Apply resolution",
+                                    modifier = Modifier.size(20.dp),
+                                    tint = TextSecondary
+                                )
+                            }
+                        },
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                            unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                            cursorColor = TextPrimary,
+                            focusedBorderColor = TextSecondary,
+                            unfocusedBorderColor = FrostHairline,
+                            focusedLabelColor = TextSecondary,
+                            unfocusedLabelColor = fluxMutedText()
+                        )
+                    )
+                    absoluteError?.let { message ->
+                        Spacer(Modifier.height(6.dp))
+                        Text(message, color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
+                    }
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        TextButton(onClick = { matchDevice() }) {
+                            Text(
+                                "Match device",
+                                color = TextSecondary,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 13.sp
+                            )
+                        }
+                    }
+                    Text(
+                        "Takes effect when the desktop (re)opens.",
+                        color = fluxMutedText(),
+                        fontSize = 12.5.sp
                     )
 
                     PrefDivider()
@@ -355,3 +541,11 @@ private fun PrefSwitch(
         FluxSwitch(checked = checked, onCheckedChange = onChange)
     }
 }
+
+// Width slider bounds (px). Typed WxH values may go wider — these just keep
+// the drag usable on a phone screen.
+private const val DISPLAY_WIDTH_MIN = 480
+private const val DISPLAY_WIDTH_MAX = 2560
+
+/** Height/width ratio fallback when display metrics are unavailable. */
+private const val FALLBACK_DEVICE_ASPECT = 16f / 9f

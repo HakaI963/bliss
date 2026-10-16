@@ -187,7 +187,16 @@ configure_debian_chroot() {
         progress "Installing XFCE4..."
         $BB chroot "$DEBIANPATH" /bin/su - root -c '
             export DEBIAN_FRONTEND=noninteractive
-            apt install -y xfce4 xfce4-terminal
+            _xf=1
+            until apt install -y xfce4 xfce4-terminal; do
+                if [ "$_xf" -ge 3 ]; then
+                    echo "Foila: XFCE package install failed after 3 tries — check your network, then tap Retry Setup."
+                    exit 1
+                fi
+                echo "Foila: Package download failed — retrying ($((_xf + 1))/3)…"
+                apt-get update >/dev/null 2>&1 || true
+                _xf=$((_xf + 1))
+            done
             apt install -y --no-install-recommends xfce4-whiskermenu-plugin xfce4-screenshooter 2>/dev/null || true
         ' || goodbye
     else
@@ -287,7 +296,7 @@ if [ -z "${BB:-}" ]; then
   fi
 fi
 if [ -z "${BB:-}" ]; then
-  echo "Folio: ERROR — root-capable busybox not found" >&2
+  echo "Foila: ERROR — root-capable busybox not found" >&2
   exit 1
 fi
 
@@ -301,7 +310,7 @@ fi
 
     DEBIANPATH="/data/local/folio/chroots/debian"
 
-    # Root-staged launchers live in the Folio helpers dir (idempotent).
+    # Root-staged launchers live in the Foila helpers dir (idempotent).
     mkdir -p /data/local/folio/helpers
 
     # --- CHECK EXISTING INSTALLATION ---
@@ -504,10 +513,10 @@ EOF
     chmod +x "$CLI_SCRIPT"
     success "CLI Launcher created: $CLI_SCRIPT"
     
-    echo "Folio: Chroot Setup Complete!"
+    echo "Foila: Chroot Setup Complete!"
     
     # --- NOTIFY APP ---
-    progress "Notifying Folio App..."
+    progress "Notifying Foila App..."
     am start -a android.intent.action.VIEW -d "fluxlinux://callback?result=success&name=distro_install_debian_chroot" >/dev/null 2>&1
 }
 

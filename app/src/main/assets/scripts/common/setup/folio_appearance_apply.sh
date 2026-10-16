@@ -1,5 +1,5 @@
 #!/bin/sh
-# folio_appearance_apply.sh — Folio Linux guest appearance applier (v2).
+# folio_appearance_apply.sh — Foila Linux guest appearance applier (v2).
 #
 # Reads <home>/.config/folio/appearance.env and applies the user's saved
 # appearance choices inside the Linux guest:
@@ -82,7 +82,7 @@ if [ "${FOLIO_APPLY_FORCE:-0}" != "1" ]; then
 fi
 
 # ── helpers ──────────────────────────────────────────────────────────────────
-_fa_log() { echo "Folio Linux appearance: $*"; }
+_fa_log() { echo "Foila Linux appearance: $*"; }
 
 # On-disk path for a guest-absolute path (host-side chroot runs prefix the root).
 _fa_guest_path() {
@@ -347,7 +347,7 @@ _fa_apply_prompt() {
     _t="$_fa_home/.oh-my-zsh/custom/themes/folio.zsh-theme"
     [ -f "$_t" ] || return 0
     command -v awk >/dev/null 2>&1 || return 0
-    _line="PROMPT='%F{240}%D{%H:%M}%f %F{${FLUX_PROMPT_COLOR}}folio%f %F{250}%~%f %F{${FLUX_PROMPT_COLOR}}%#%f '"
+    _line="PROMPT='%F{240}%D{%H:%M}%f %F{${FLUX_PROMPT_COLOR}}foila%f %F{250}%~%f %F{${FLUX_PROMPT_COLOR}}%#%f '"
     awk -v l="$_line" '/^PROMPT=/ { print l; next } { print }' "$_t" \
         > "$_t.fa.$$" 2>/dev/null && mv "$_t.fa.$$" "$_t" 2>/dev/null \
         || rm -f "$_t.fa.$$"
@@ -462,9 +462,9 @@ _fa_apply_video() {
             printf '[Desktop Entry]\n'
             printf 'Type=Application\n'
             printf 'Version=1.0\n'
-            printf 'Name=Folio Linux video wallpaper (experimental)\n'
-            printf 'Comment=Loops a muted video as an overlay window (mpv); disable in Folio Linux appearance settings.\n'
-            printf 'Exec=mpv --loop-file --no-audio --no-osc --really-quiet --title=Folio-video-wallpaper "%s"\n' "$FLUX_VIDEO_WALLPAPER"
+            printf 'Name=Foila Linux video wallpaper (experimental)\n'
+            printf 'Comment=Loops a muted video as an overlay window (mpv); disable in Foila Linux appearance settings.\n'
+            printf 'Exec=mpv --loop-file --no-audio --no-osc --really-quiet --title=Foila-video-wallpaper "%s"\n' "$FLUX_VIDEO_WALLPAPER"
             printf 'Terminal=false\n'
             printf 'X-GNOME-Autostart-enabled=true\n'
         } > "$_df" 2>/dev/null || true
@@ -485,8 +485,8 @@ _fa_ensure_autostart() {
 [Desktop Entry]
 Type=Application
 Version=1.0
-Name=Folio Linux appearance
-Comment=Applies your Folio Linux wallpaper, colors and terminal settings at login.
+Name=Foila Linux appearance
+Comment=Applies your Foila Linux wallpaper, colors and terminal settings at login.
 Exec=sh $_fa_home/.config/folio/appearance-apply.sh
 Terminal=false
 StartupNotify=false

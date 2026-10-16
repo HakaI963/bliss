@@ -10,7 +10,7 @@ import java.io.File
 /**
  * One-shot repair for guest `~/.zshrc` that hard-sources missing oh-my-zsh,
  * invokes missing `pokemon-colorscripts`, still uses the old colorful
- * `agnosterzak` theme, or lacks the Folio launch sticker (random colored
+ * `agnosterzak` theme, or lacks the Foila launch sticker (random colored
  * anime ASCII banner). Keeps the same optimized profile shape as
  * `setup_customization_debian.sh` / Alpine customization, but guards every
  * optional tool.
@@ -22,7 +22,7 @@ import java.io.File
  * available, never fatal.
  *
  * Also **creates** a missing `.zshrc` when the home dir is writable (Alpine
- * installs that never wrote the Folio profile).
+ * installs that never wrote the Foila profile).
  */
 object GuestZshrcRepair {
 
@@ -34,11 +34,11 @@ object GuestZshrcRepair {
      * on existing installs even though the shared ZSHRC_VERSION is unchanged.
      * Bump when [DEFENSIVE_ZSHRC] / banner content changes again.
      */
-    private const val REPAIR_REVISION = 5
+    private const val REPAIR_REVISION = 6
 
     /** Launch-sticker art revision (`~/.config/folio/banner/.banner-rev`).
      *  Bump with the guest scripts when the designs change again. */
-    private const val BANNER_ART_REVISION = "2"
+    private const val BANNER_ART_REVISION = "3"
 
     /** Marker echoed by the root chroot repair payload on success. */
     private const val CHROOT_OK_MARKER = "FOLIO_ZSH_OK"
@@ -48,7 +48,7 @@ object GuestZshrcRepair {
 # Guest PATH only — never inherit host PREFIX/bin (nested proot glue errors).
 export PATH="${'$'}HOME/.local/bin:/opt/nodejs/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
-# Generate UTF-8 first so theme / fastfetch / pokemon always render.
+# Generate UTF-8 first so theme / pokemon always render.
 if [ -x /usr/local/sbin/flux-ensure-locale ] && command -v sudo >/dev/null 2>&1; then
   sudo /usr/local/sbin/flux-ensure-locale 2>/dev/null || true
 fi
@@ -62,7 +62,7 @@ if [ -n "${'$'}_pick" ]; then
 else
   unset LC_ALL
   export LANG=C
-  echo "Folio: WARNING: no UTF-8 locale in locale -a; zsh staying LANG=C" >&2
+  echo "Foila: WARNING: no UTF-8 locale in locale -a; zsh staying LANG=C" >&2
 fi
 unset _have _c _pick
 export PYTHONIOENCODING=UTF-8
@@ -78,7 +78,7 @@ export XDG_RUNTIME_DIR="${'$'}{XDG_RUNTIME_DIR:-/tmp}"
 # shell can get SIGTTIN-killed. Disable MONITOR (job control) for the guest.
 setopt no_monitor
 
-# Launch sticker + info block: ~/.config/folio/banner.sh (sourced at the end).
+# Launch sticker + `foila@<id>` header: ~/.config/folio/banner.sh (sourced at the end).
 # pokemon-colorscripts stays installed but no longer auto-prints (old style).
 
 export ZSH="${'$'}{ZSH:-${'$'}HOME/.oh-my-zsh}"
@@ -91,10 +91,10 @@ if [ -f "${'$'}ZSH/oh-my-zsh.sh" ]; then
   source "${'$'}ZSH/oh-my-zsh.sh"
 fi
 
-# Folio launch sticker (random colored anime banner; opt out FLUX_NO_BANNER=1)
+# Foila launch sticker (random colored anime banner; opt out FLUX_NO_BANNER=1)
 [ -r "${'$'}HOME/.config/folio/banner.sh" ] && . "${'$'}HOME/.config/folio/banner.sh"
 
-# Folio Linux appearance (wallpaper/colors/terminal; hash-guarded inside).
+# Foila Linux appearance (wallpaper/colors/terminal; hash-guarded inside).
 [ -r "${'$'}HOME/.config/folio/appearance-apply.sh" ] && sh "${'$'}HOME/.config/folio/appearance-apply.sh" >/dev/null 2>&1 || true
 """.trimStart()
 
@@ -144,10 +144,10 @@ fi
 
     /** folio.zsh-theme content (monochrome prompt; replaces agnosterzak). */
     internal val FOLIO_THEME = """
-# folio.zsh-theme — Folio's minimal monochrome prompt.
+# folio.zsh-theme — Foila's minimal monochrome prompt.
 # White/gray on black only; ASCII-safe (no powerline glyphs, no ANSI colors 31-44).
-# Segments:  time  folio  working-dir  input-char
-PROMPT='%F{240}%D{%H:%M}%f %F{255}folio%f %F{250}%~%f %F{255}%#%f '
+# Segments:  time  foila  working-dir  input-char
+PROMPT='%F{240}%D{%H:%M}%f %F{255}foila%f %F{250}%~%f %F{255}%#%f '
 PROMPT2='%F{240}> %f'
 """.trimStart()
 
@@ -262,9 +262,9 @@ PROMPT2='%F{240}> %f'
 """.trim('\n'),
     )
 
-    /** `~/.config/folio/banner.sh` — random sticker + compact info block. */
+    /** `~/.config/folio/banner.sh` — random sticker + minimal `foila@<id>` line. */
     internal val BANNER_SH = """
-# folio-banner.sh — Folio launch sticker. Colored 256-color ASCII art (no
+# folio-banner.sh — Foila launch sticker. Colored 256-color ASCII art (no
 # emoji), offline, random design per interactive shell. Opt out FLUX_NO_BANNER=1.
 folio-banner-art() {
   # Prints one randomly picked design from ~/.config/folio/banner/*.txt.
@@ -284,29 +284,35 @@ folio-banner() {
   [ "${'$'}{FLUX_NO_BANNER:-0}" = "1" ] && return 0
   case ${'$'}- in *i*) ;; *) return 0;; esac
   folio-banner-art
-  local _ff="${'$'}HOME/.local/share/fastfetch/presets/termux.jsonc"
-  if command -v fastfetch >/dev/null 2>&1 && [ -f "${'$'}_ff" ]; then
-    { fastfetch --config "${'$'}_ff" 2>/dev/null || true; } &!
-  else
-    printf '%s\n' "folio@localhost | ${'$'}(sed -n 's/^PRETTY_NAME=//p' /etc/os-release 2>/dev/null | tr -d '"' | head -n 1) | ${'$'}(date +%H:%M 2>/dev/null)"
+  # Header: exactly one line, "foila@<id>" (distro id only — no host,
+  # version or time). ID= from /etc/os-release; fallbacks: first word of
+  # PRETTY_NAME (lowercased), then "linux".
+  local _fid=""
+  if [ -r /etc/os-release ]; then
+    _fid="${'$'}(sed -n 's/^ID=//p' /etc/os-release 2>/dev/null | head -n 1 | tr -d '"' | tr '[:upper:]' '[:lower:]')"
+    if [ -z "${'$'}_fid" ]; then
+      _fid="${'$'}(sed -n 's/^PRETTY_NAME=//p' /etc/os-release 2>/dev/null | head -n 1 | tr -d '"' | awk '{print ${'$'}1}' | tr '[:upper:]' '[:lower:]')"
+    fi
   fi
-  unset _ff
+  [ -n "${'$'}_fid" ] || _fid="linux"
+  printf '%s\n' "foila@${'$'}_fid"
+  unset _fid
 }
 folio-banner
 """.trimStart()
 
     /** .zshrc tail that sources the sticker (idempotent append target). */
     internal val BANNER_SOURCE_BLOCK = """
-# Folio launch sticker (random colored anime banner; opt out FLUX_NO_BANNER=1)
+# Foila launch sticker (random colored anime banner; opt out FLUX_NO_BANNER=1)
 [ -r "${'$'}HOME/.config/folio/banner.sh" ] && . "${'$'}HOME/.config/folio/banner.sh"
 """.trimStart()
 
     /**
-     * .zshrc tail that applies the staged Folio Linux appearance (idempotent
+     * .zshrc tail that applies the staged Foila Linux appearance (idempotent
      * append target for existing profiles; the guest script hash-guards itself).
      */
     internal val APPEARANCE_SOURCE_BLOCK = """
-# Folio Linux appearance (wallpaper/colors/terminal; hash-guarded inside).
+# Foila Linux appearance (wallpaper/colors/terminal; hash-guarded inside).
 [ -r "${'$'}HOME/.config/folio/appearance-apply.sh" ] && sh "${'$'}HOME/.config/folio/appearance-apply.sh" >/dev/null 2>&1 || true
 """.trimStart()
 
@@ -368,7 +374,7 @@ folio-banner
                     zshrc.appendText("\n$GLIBC_PM_WRAPPER")
                     Log.i(TAG, "Appended glibc PM wrappers to ${zshrc.absolutePath}")
                 }
-                // Gentle path for otherwise-healthy profiles: append the Folio
+                // Gentle path for otherwise-healthy profiles: append the Foila
                 // Linux appearance trigger only (the guest script self-guards).
                 if (!needsRepair(text) && !text.contains("appearance-apply.sh") &&
                     zshrc.canWrite()
@@ -377,7 +383,7 @@ folio-banner
                     Log.i(TAG, "Appended appearance trigger to ${zshrc.absolutePath}")
                 }
             } else {
-                // Create missing Flux profile (Alpine used to never write .zshrc)
+                // Create missing Foila profile (Alpine used to never write .zshrc)
                 val home = zshrc.parentFile ?: return
                 if (!home.isDirectory) return
                 if (!home.canWrite() && !zshrc.canWrite()) {
@@ -400,7 +406,6 @@ folio-banner
                 writeLocaleProfile(rootfs)
                 writeEnsureLocaleScript(rootfs)
             }
-            writeFastfetchPresets(zshrc.parentFile, rootfs)
             // Cache only after a completed pass (exception above leaves it unset).
             prefs.edit().putBoolean(cacheKey, true).apply()
         } catch (e: Exception) {
@@ -409,7 +414,7 @@ folio-banner
     }
 
     /**
-     * Old colorful OMZ theme shipped by earlier Folio builds — remove the file
+     * Old colorful OMZ theme shipped by earlier Foila builds — remove the file
      * (the `.zshrc` rewrite/sed switches the reference to `folio`).
      */
     internal fun removeLegacyThemes(home: File?) {
@@ -511,7 +516,7 @@ folio-banner
         sb.append("H=/home/flux\n")
         sb.append("[ -d \"${D}H\" ] || { echo $CHROOT_OK_MARKER; exit 0; }\n")
         sb.append("_put() { printf '%s' \"${D}2\" | base64 -d > \"${D}1\" 2>/dev/null || true; }\n")
-        sb.append("mkdir -p \"${D}H/.config/folio/banner\" \"${D}H/.local/share/fastfetch/presets\" 2>/dev/null || true\n")
+        sb.append("mkdir -p \"${D}H/.config/folio/banner\" 2>/dev/null || true\n")
         sb.append("_put \"${D}H/.config/folio/banner.sh\" '").append(b64(BANNER_SH)).append("'\n")
         for ((name, art) in BANNER_FILES) {
             sb.append("_put \"${D}H/.config/folio/banner/$name\" '")
@@ -520,9 +525,6 @@ folio-banner
         }
         sb.append("printf '%s\\n' ").append(BANNER_ART_REVISION)
             .append(" > \"${D}H/.config/folio/banner/.banner-rev\" 2>/dev/null || true\n")
-        sb.append("[ -s \"${D}H/.local/share/fastfetch/presets/termux.jsonc\" ] || _put \"${D}H/.local/share/fastfetch/presets/termux.jsonc\" '")
-            .append(b64(TERMUX_JSONC))
-            .append("'\n")
         sb.append("if [ -d \"${D}H/.oh-my-zsh\" ]; then\n")
         sb.append("  mkdir -p \"${D}H/.oh-my-zsh/custom/themes\" 2>/dev/null || true\n")
         sb.append("  rm -f \"${D}H/.oh-my-zsh/custom/themes/agnosterzak.zsh-theme\" 2>/dev/null || true\n")
@@ -532,11 +534,11 @@ folio-banner
         sb.append("  grep -q 'ZSH_THEME=\"agnosterzak\"' \"${D}H/.zshrc\" 2>/dev/null && ")
             .append("sed -i 's|ZSH_THEME=\"agnosterzak\"|ZSH_THEME=\"folio\"|' \"${D}H/.zshrc\" 2>/dev/null || true\n")
         sb.append("  if ! grep -q 'folio/banner.sh' \"${D}H/.zshrc\" 2>/dev/null; then\n")
-        sb.append("    printf '\\n# Folio launch sticker (random colored anime banner; opt out FLUX_NO_BANNER=1)\\n'\n")
+        sb.append("    printf '\\n# Foila launch sticker (random colored anime banner; opt out FLUX_NO_BANNER=1)\\n'\n")
         sb.append("    printf '[ -r \"${D}HOME/.config/folio/banner.sh\" ] && . \"${D}HOME/.config/folio/banner.sh\"\\n'\n")
         sb.append("  fi >> \"${D}H/.zshrc\" 2>/dev/null || true\n")
         sb.append("  if ! grep -q 'appearance-apply.sh' \"${D}H/.zshrc\" 2>/dev/null; then\n")
-        sb.append("    printf '\\n# Folio Linux appearance (wallpaper/colors/terminal; hash-guarded inside).\\n'\n")
+        sb.append("    printf '\\n# Foila Linux appearance (wallpaper/colors/terminal; hash-guarded inside).\\n'\n")
         sb.append("    printf '[ -r \"${D}HOME/.config/folio/appearance-apply.sh\" ] && sh \"${D}HOME/.config/folio/appearance-apply.sh\" >/dev/null 2>&1 || true\\n'\n")
         sb.append("  fi >> \"${D}H/.zshrc\" 2>/dev/null || true\n")
         sb.append("fi\n")
@@ -556,7 +558,7 @@ if [ -n "${'$'}_pick" ]; then
 else
   unset LC_ALL
   export LANG=C
-  echo "Folio: WARNING: no UTF-8 locale in locale -a; zsh staying LANG=C" >&2
+  echo "Foila: WARNING: no UTF-8 locale in locale -a; zsh staying LANG=C" >&2
 fi
 unset _have _c _pick
 """.trimStart()
@@ -601,7 +603,7 @@ if locale -a 2>/dev/null | grep -qiE 'C\.(utf8|UTF-8)'; then
   printf 'LANG=C.UTF-8\n' > /etc/locale.conf
   exit 0
 fi
-echo "Folio: ERROR: no UTF-8 locale after generation (locale -a has neither en_US.utf8 nor C.utf8)" >&2
+echo "Foila: ERROR: no UTF-8 locale after generation (locale -a has neither en_US.utf8 nor C.utf8)" >&2
 exit 1
 """.trimStart()
 
@@ -628,54 +630,6 @@ exit 1
             Log.i(TAG, "Wrote locale profile at ${dest.absolutePath}")
         } catch (e: Exception) {
             Log.w(TAG, "locale profile write failed: ${e.message}")
-        }
-    }
-
-    /** Always overwrite the Flux fastfetch preset (disk=/ only, no pacman format). */
-    internal val TERMUX_JSONC = """
-{
-  "logo": null,
-  "display": { "separator": " ›  " },
-  "modules": [
-    { "type": "os", "key": "OS  " },
-    { "type": "kernel", "key": "KER " },
-    { "type": "cpu", "key": "CPU " },
-    { "type": "gpu", "key": "GPU " },
-    { "type": "packages", "key": "PKG " },
-    { "type": "shell", "key": "SH  " },
-    { "type": "terminal", "key": "TER " },
-    {
-      "type": "disk",
-      "key": "DSK ",
-      "folders": ["/"],
-      "showRemovable": false,
-      "showHidden": false,
-      "showSubvolumes": false
-    },
-    { "type": "memory", "key": "MEM " },
-    { "type": "swap", "key": "SWP " }
-  ]
-}
-""".trimStart()
-
-    internal fun writeFastfetchPresets(fluxHome: File?, rootfs: File?) {
-        val dests = mutableListOf<File>()
-        if (fluxHome != null) {
-            dests.add(File(fluxHome, ".local/share/fastfetch/presets/termux.jsonc"))
-        }
-        if (rootfs != null) {
-            dests.add(File(rootfs, "root/.local/share/fastfetch/presets/termux.jsonc"))
-            dests.add(File(rootfs, "usr/share/fastfetch/presets/termux.jsonc"))
-        }
-        for (dest in dests) {
-            try {
-                dest.parentFile?.mkdirs()
-                if (!dest.canWrite() && dest.isFile) continue
-                dest.writeText(TERMUX_JSONC)
-                Log.i(TAG, "Wrote fastfetch preset at ${dest.absolutePath}")
-            } catch (e: Exception) {
-                Log.w(TAG, "fastfetch preset write failed: ${e.message}")
-            }
         }
     }
 
@@ -809,7 +763,7 @@ exit 1
         // Theme / pokemon must not be gated on LC_ALL (user-visible shell).
         if (text.contains("ZSH_THEME=\"\"")) return true
         if (text.contains("[ -n \"\${LC_ALL:-}\" ] && command -v pokemon-colorscripts")) return true
-        // Colorful remote theme (pre-Folio builds) → switch to the mono theme.
+        // Colorful remote theme (pre-Foila builds) → switch to the mono theme.
         if (text.contains("ZSH_THEME=\"agnosterzak\"")) return true
         // Older profiles never print ZSH_THEME=folio after OMZ loads.
         if (!text.contains("ZSH_THEME=\"folio\"")) return true

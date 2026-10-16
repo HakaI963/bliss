@@ -76,7 +76,7 @@ if [ "$1" = "uninstall" ] || [ "$2" = "uninstall" ]; then
     [ "$1" = "uninstall" ] && DISTRO_NAME="debian"
 
     export DEBIAN_FRONTEND=noninteractive
-    echo "Folio: Uninstalling KDE Plasma Environment..."
+    echo "Foila: Uninstalling KDE Plasma Environment..."
 
     apt remove -y --purge "${PURGE_PKGS[@]}" 2>/dev/null || true
     apt autoremove -y 2>/dev/null || true
@@ -86,7 +86,7 @@ if [ "$1" = "uninstall" ] || [ "$2" = "uninstall" ]; then
     rm -f /home/flux/.fluxlinux/kde_installed
     rm -f /usr/local/lib/fluxlinux/flux_kde_env.sh
 
-    echo "Folio: KDE Plasma Environment Uninstalled."
+    echo "Foila: KDE Plasma Environment Uninstalled."
     exit 0
 fi
 # ─── END UNINSTALL MODE ──────────────────────────────────────────────────
@@ -107,7 +107,7 @@ _flux_pause() {
 handle_error() {
     local STEP="$1"
     echo ""
-    echo "❌ Folio KDE Error: Script failed at step: $STEP"
+    echo "❌ Foila KDE Error: Script failed at step: $STEP"
     echo "──────────────────────────────────────────────────────"
     echo "Log saved to: $LOG_FILE"
     echo ""
@@ -120,14 +120,60 @@ handle_error() {
     exit 1
 }
 
+# ── Required-package retry (flaky downloads abort xbps/dnf/apt mid-fetch) ──
+# The shared helpers (_flux_retry_pkg in flux_guest_common.sh) are not
+# prepended to this standalone component, so carry the same guarded helper.
+if ! command -v _flux_pm_refresh >/dev/null 2>&1; then
+    _flux_pm_refresh() {
+        if command -v xbps-install >/dev/null 2>&1; then
+            xbps-install -Sy
+        elif command -v apk >/dev/null 2>&1; then
+            apk update
+        elif command -v apt-get >/dev/null 2>&1; then
+            apt-get update
+        elif command -v dnf5 >/dev/null 2>&1; then
+            dnf5 -y makecache
+        elif command -v dnf >/dev/null 2>&1; then
+            dnf -y makecache
+        elif command -v zypper >/dev/null 2>&1; then
+            zypper --non-interactive --gpg-auto-import-keys refresh
+        elif command -v pacman >/dev/null 2>&1; then
+            pacman -Sy --noconfirm
+        else
+            return 1
+        fi
+    }
+fi
+if ! command -v _flux_retry_pkg >/dev/null 2>&1; then
+    _flux_retry_pkg() {
+        _retry_tries=3
+        _retry_n=1
+        _retry_rc=0
+        while [ "$_retry_n" -le "$_retry_tries" ]; do
+            if "$@"; then
+                _retry_rc=0
+                break
+            else
+                _retry_rc=$?
+            fi
+            [ "$_retry_n" -lt "$_retry_tries" ] || break
+            echo "Foila: Package download failed — retrying ($((_retry_n + 1))/$_retry_tries)…"
+            _flux_pm_refresh >/dev/null 2>&1 || true
+            _retry_n=$((_retry_n + 1))
+        done
+        unset _retry_tries _retry_n
+        return "$_retry_rc"
+    }
+fi
+
 # Setup scripts must run as root inside proot/chroot (apt/dpkg).
 if [ "$(id -u)" -ne 0 ]; then
-    echo "Folio: ERROR: must run as root inside the guest (got uid=$(id -u))."
-    echo "Folio: Component sessions should use --user root; re-run from Distro Settings."
+    echo "Foila: ERROR: must run as root inside the guest (got uid=$(id -u))."
+    echo "Foila: Component sessions should use --user root; re-run from Distro Settings."
     handle_error "Not Root"
 fi
 
-echo "Folio: Configuring ${DISTRO_NAME} with KDE Plasma..."
+echo "Foila: Configuring ${DISTRO_NAME} with KDE Plasma..."
 
 # Redirect all output to log
 exec > >(tee -a "$LOG_FILE") 2>&1
@@ -143,7 +189,10 @@ echo "[2/7] Installing KDE Plasma desktop (full suite)..."
 # Includes: plasmashell, kwin, systemsettings, dolphin, konsole, kate, ark,
 #           gwenview, okular, spectacle, kcalc, kscreen, kinfocenter, and more.
 # Recommends stay enabled — that is what makes the desktop actually usable.
-apt install -y "${PKGS[@]}" "${BASE_PKGS[@]}" || handle_error "KDE Plasma package installation"
+if ! _flux_retry_pkg apt install -y "${PKGS[@]}" "${BASE_PKGS[@]}"; then
+    echo "Foila: Package install failed after 3 tries — check your network, then tap Retry Setup."
+    handle_error "KDE Plasma package installation"
+fi
 
 # 2. Install useful KDE apps + optional packages (non-critical, failures are tolerated)
 echo "[3/7] Installing KDE extras..."
@@ -205,7 +254,7 @@ touch /home/flux/.fluxlinux/kde_installed
 chown -R flux:flux /home/flux/.fluxlinux
 
 echo ""
-echo "✅ Folio: KDE Plasma base setup for ${DISTRO_NAME} complete!"
+echo "✅ Foila: KDE Plasma base setup for ${DISTRO_NAME} complete!"
 echo "Log saved at: $LOG_FILE"
 
 

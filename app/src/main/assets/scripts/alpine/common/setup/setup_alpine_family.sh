@@ -3,12 +3,31 @@
 # Post-install base desktop for Alpine (proot + chroot). apk + musl.
 # Creates user flux, installs XFCE4. Must run as root inside the guest.
 
+# Helpers live in flux_guest_common.sh (prepended by flux_install /
+# familySetupPayload). Source it only when this file is run standalone.
+if ! command -v _flux_setup_pulse >/dev/null 2>&1; then
+    _here=$(CDPATH= cd -- "$(dirname -- "$0")" 2>/dev/null && pwd)
+    for _common in \
+        "${_here}/flux_guest_common.sh" \
+        "${HOME:-}/flux_guest_common.sh" \
+        /tmp/flux_guest_common.sh
+    do
+        if [ -f "$_common" ]; then
+            # shellcheck source=/dev/null
+            . "$_common"
+            break
+        fi
+    done
+fi
+# Degraded standalone run without the shared helpers: plain install (no retry).
+command -v _flux_retry_pkg >/dev/null 2>&1 || _flux_retry_pkg() { "$@"; }
+
 DISTRO_NAME="${1:-alpine}"
 
-echo "Folio: Configuring ${DISTRO_NAME} (Alpine Family)..."
+echo "Foila: Configuring ${DISTRO_NAME} (Alpine Family)..."
 
 if [ "$(id -u)" -ne 0 ]; then
-    echo "Folio: ERROR: must run as root inside the guest (got uid=$(id -u))."
+    echo "Foila: ERROR: must run as root inside the guest (got uid=$(id -u))."
     exit 1
 fi
 
@@ -22,7 +41,7 @@ export TMPDIR=/tmp
 
 # 1. DNS (minirootfs ships without resolv.conf; keep multi-NS for proot flakiness)
 if [ ! -s /etc/resolv.conf ] || ! grep -q nameserver /etc/resolv.conf 2>/dev/null; then
-    echo "Folio: Writing /etc/resolv.conf"
+    echo "Foila: Writing /etc/resolv.conf"
     printf 'nameserver 8.8.8.8\nnameserver 1.1.1.1\nnameserver 8.8.4.4\n' > /etc/resolv.conf
 fi
 
@@ -33,14 +52,14 @@ if [ -f /etc/apk/repositories ]; then
     fi
 fi
 
-echo "Folio: apk update..."
+echo "Foila: apk update..."
 apk update || {
-    echo "Folio: apk update failed (network / repos)"
+    echo "Foila: apk update failed (network / repos)"
     exit 1
 }
 
 # 3. Bootstrap tools (bash for later scripts; shadow for useradd; sudo)
-echo "Folio: Installing base packages..."
+echo "Foila: Installing base packages..."
 apk add --no-cache \
     bash \
     sudo \
@@ -55,7 +74,7 @@ apk add --no-cache \
     dbus \
     dbus-x11 \
     || {
-        echo "Folio: base package install failed"
+        echo "Foila: base package install failed"
         exit 1
     }
 
@@ -95,14 +114,14 @@ apk add --no-cache \
     mesa-dri-gallium \
     mesa-gl \
     || {
-        echo "Folio: base graphics package install failed"
+        echo "Foila: base graphics package install failed"
         exit 1
     }
 
 # XFCE desktop (always include xfce4-session for failsafe session name)
 if [ -z "${DESKTOPS##*xfce*}" ]; then
-    echo "Folio: Installing XFCE4..."
-    apk add --no-cache \
+    echo "Foila: Installing XFCE4..."
+    if ! _flux_retry_pkg apk add --no-cache \
         xfce4 \
         xfce4-session \
         xfce4-settings \
@@ -111,14 +130,13 @@ if [ -z "${DESKTOPS##*xfce*}" ]; then
         xfce4-screensaver \
         xfdesktop \
         xfwm4 \
-        thunar \
-        || {
-            echo "Folio: XFCE package install failed"
-            exit 1
-        }
+        thunar; then
+        echo "Foila: XFCE package install failed after 3 tries — check your network, then tap Retry Setup."
+        exit 1
+    fi
 
     if [ ! -e /usr/bin/startxfce4 ]; then
-        echo "Folio: ERROR: startxfce4 missing after apk install"
+        echo "Foila: ERROR: startxfce4 missing after apk install"
         exit 1
     fi
     # Phone niceties: Whisker panel menu + screenshot tool (best-effort).
@@ -136,7 +154,7 @@ fi
 
 # Glycin image loaders invoke bubblewrap; real bwrap fails under proot and aborts
 # GTK (exit 134). Install a shim that drops sandbox flags but keeps --dbus-fd.
-echo "Folio: Installing proot-safe bwrap shim for glycin loaders..."
+echo "Foila: Installing proot-safe bwrap shim for glycin loaders..."
 apk add --no-cache glycin-image-rs glycin-svg gdk-pixbuf 2>/dev/null || true
 if [ -x /usr/bin/bwrap ] && [ ! -e /usr/bin/bwrap.real ] && \
    ! grep -q 'FluxLinux proot' /usr/bin/bwrap 2>/dev/null; then
@@ -161,7 +179,7 @@ chmod 755 /usr/bin/bwrap
 
 # 5. User flux (prefer uid 1000 when free — matches common XFCE defaults)
 if ! id flux >/dev/null 2>&1; then
-    echo "Folio: Creating user flux..."
+    echo "Foila: Creating user flux..."
     if command -v useradd >/dev/null 2>&1; then
         if ! id -u 1000 >/dev/null 2>&1; then
             useradd -m -u 1000 -s /bin/bash flux 2>/dev/null \
@@ -265,12 +283,12 @@ _flux_fix_apk_writable() {
     touch /var/log/apk.log 2>/dev/null || true
     chmod 666 /var/log/apk.log 2>/dev/null || true
 }
-echo "Folio: Ensuring apk database is writable (proot-safe)…"
+echo "Foila: Ensuring apk database is writable (proot-safe)…"
 _flux_fix_apk_writable
 
 mkdir -p /etc/fluxlinux
 printf '%s\n' virgl > /etc/fluxlinux/gpu_mode
-echo "Folio: gpu_mode=virgl (first-paint; hw-accel may upgrade)"
+echo "Foila: gpu_mode=virgl (first-paint; hw-accel may upgrade)"
 
 # Phone-compact XFCE defaults (30px mono top panel, DPI 96, wallpaper,
 # Home-only desktop icons, shortcuts). Helper ships in flux_guest_common.sh;
@@ -279,5 +297,5 @@ if [ -z "${DESKTOPS##*xfce*}" ] && command -v _flux_xfce_compact_defaults >/dev/
     _flux_xfce_compact_defaults || true
 fi
 
-echo "Folio: ${DISTRO_NAME} Alpine setup complete!"
+echo "Foila: ${DISTRO_NAME} Alpine setup complete!"
 exit 0

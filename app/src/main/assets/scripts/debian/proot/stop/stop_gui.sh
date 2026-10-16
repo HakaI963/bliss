@@ -16,7 +16,7 @@ mkdir -p "$PROOT_TMP_DIR" 2>/dev/null || true
 PKG="$TERMUX_APP__PACKAGE_NAME"
 
 echo "========================================"
-echo "Folio: Stopping GUI for $DISTRO"
+echo "Foila: Stopping GUI for $DISTRO"
 echo "========================================"
 
 # Step 1: Kill the guest desktop (targeted login — does NOT pkill proot).

@@ -71,12 +71,12 @@ RESOLVER_SRC="$TERMUX_HOME/resolve_bb.sh"
 RESOLVER_TMP="/data/local/folio/helpers/fluxlinux_resolve_bb.sh"
 
 echo "========================================"
-echo "Folio: STOP XFCE (chroot mode)"
+echo "Foila: STOP XFCE (chroot mode)"
 echo "  distro=$DISTRO_HINT path=$CHROOT_PATH"
 echo "========================================"
 
 if [ ! -f "$ROOT_STOP_SCRIPT" ]; then
-  echo "Folio: [WARN] missing $ROOT_STOP_SCRIPT — best-effort kill only"
+  echo "Foila: [WARN] missing $ROOT_STOP_SCRIPT — best-effort kill only"
 else
   SU_BIN=su
   for s in /system/bin/su /system/xbin/su /sbin/su; do

@@ -18,7 +18,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
@@ -59,10 +58,10 @@ import com.ivarna.fluxlinux.ui.theme.TextMuted
 import com.ivarna.fluxlinux.ui.theme.TextPrimary
 import com.ivarna.fluxlinux.ui.theme.TextSecondary
 
-// Monochrome frost metrics shared by every tile — 48dp tall keeps >= 44dp touch targets.
-private val ToolTileShape = RoundedCornerShape(12.dp)
+// Compact frost chips — 40dp keeps a comfortable touch target for a quick palette.
+private val ToolTileShape = RoundedCornerShape(11.dp)
 private val ToolEdgeWidth = 0.75.dp
-private val ToolTileHeight = 48.dp
+private val ToolTileHeight = 40.dp
 
 /** Destructive actions that must ask before running (session processes are killed). */
 private enum class TerminalToolConfirm { SESSION, ALL }
@@ -71,11 +70,11 @@ private enum class TerminalToolConfirm { SESSION, ALL }
 private data class ToolKeySpec(val label: String, val key: String, val ctrl: Boolean = false)
 
 /**
- * Quality-of-life "tools" bottom sheet for the interactive terminal.
+ * Quick tool palette for the interactive terminal ("tools" button).
  *
- * Monochrome frost surface (FrostSurface tiles + hairline borders, no color);
- * every key action routes through the same [TerminalKeyInjector] path as the
- * ExtraKeys bar (TerminalScreen wires [onInjectKey] to it) — this composable is
+ * Small key grid (Ctrl+C/D/Z/L, Tab, Esc), clipboard actions and session actions.
+ * Every key action routes through the same [TerminalKeyInjector] path as the
+ * ExtraKeys bar (TerminalScreen wires [onInjectKey]) — this composable is
  * presentation + confirm dialogs only.
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -99,7 +98,6 @@ fun TerminalToolsSheet(
     onCloseSession: () -> Unit,
     onCloseAllSessions: () -> Unit,
     onAddCustomKey: () -> Unit,
-    onAddToShortcutBar: () -> Unit,
     onEditShortcutBar: () -> Unit
 ) {
     var confirm by remember { mutableStateOf<TerminalToolConfirm?>(null) }
@@ -112,109 +110,83 @@ fun TerminalToolsSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(max = 560.dp)
+                .heightIn(max = 480.dp)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp)
-                .padding(bottom = 24.dp)
+                .padding(horizontal = 14.dp)
+                .padding(bottom = 20.dp)
         ) {
             Text(
-                text = "Terminal tools",
-                fontSize = 16.sp,
+                text = "Tools",
+                fontSize = 15.sp,
                 fontWeight = FontWeight.Bold,
                 color = TextPrimary
             )
             Text(
-                text = sessionTitle?.takeIf { it.isNotBlank() }?.let { "Session · $it" }
-                    ?: "No active session",
-                fontSize = 12.sp,
+                text = sessionTitle?.takeIf { it.isNotBlank() } ?: "No session open",
+                fontSize = 11.sp,
                 color = TextSecondary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(top = 2.dp)
+                modifier = Modifier.padding(top = 1.dp)
             )
 
-            // ── Quick keys (same inject path as the ExtraKeys toolbar) ───────
-            ToolSectionLabel("QUICK KEYS")
+            // ── Keys: quick sends + keys-bar editing ─────────────────────────
+            ToolSectionLabel("Keys")
             ToolKeyGrid(
                 specs = listOf(
                     ToolKeySpec("Ctrl C", "c", ctrl = true),
                     ToolKeySpec("Ctrl D", "d", ctrl = true),
-                    ToolKeySpec("TAB", "TAB"),
-                    ToolKeySpec("ESC", "ESC")
-                ),
-                perRow = 4,
-                enabled = hasSession,
-                onInjectKey = onInjectKey
-            )
-
-            // ── Editing shortcuts: readline/shell editing + history + clear ──
-            ToolSectionLabel("EDITING")
-            ToolKeyGrid(
-                specs = listOf(
-                    ToolKeySpec("Ctrl A", "a", ctrl = true),
-                    ToolKeySpec("Ctrl E", "e", ctrl = true),
-                    ToolKeySpec("Ctrl K", "k", ctrl = true),
-                    ToolKeySpec("Ctrl U", "u", ctrl = true),
                     ToolKeySpec("Ctrl Z", "z", ctrl = true),
-                    ToolKeySpec("Ctrl W", "w", ctrl = true),
-                    ToolKeySpec("Ctrl R", "r", ctrl = true),
-                    ToolKeySpec("Ctrl L", "l", ctrl = true)
+                    ToolKeySpec("Ctrl L", "l", ctrl = true),
+                    ToolKeySpec("Tab", "TAB"),
+                    ToolKeySpec("Esc", "ESC")
                 ),
-                perRow = 4,
+                perRow = 3,
                 enabled = hasSession,
                 onInjectKey = onInjectKey
             )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                ToolTile(
+                    label = "Add key",
+                    icon = Icons.Default.Add,
+                    onClick = onAddCustomKey,
+                    modifier = Modifier.weight(1f)
+                )
+                ToolTile(
+                    label = "Edit keys",
+                    icon = Icons.Default.Tune,
+                    onClick = onEditShortcutBar,
+                    modifier = Modifier.weight(1f)
+                )
+            }
 
-            // ── Navigation: arrows + enter + cursor/paging ───────────────────
-            ToolSectionLabel("NAVIGATION")
-            ToolKeyGrid(
-                specs = listOf(
-                    ToolKeySpec("←", "LEFT"),
-                    ToolKeySpec("↑", "UP"),
-                    ToolKeySpec("↓", "DOWN"),
-                    ToolKeySpec("→", "RIGHT"),
-                    ToolKeySpec("ENT", "ENTER"),
-                    ToolKeySpec("Home", "HOME"),
-                    ToolKeySpec("End", "END"),
-                    ToolKeySpec("PgUp", "PGUP"),
-                    ToolKeySpec("PgDn", "PGDN")
-                ),
-                perRow = 5,
-                enabled = hasSession,
-                onInjectKey = onInjectKey
-            )
-
-            // ── Function keys F1–F12 ─────────────────────────────────────────
-            ToolSectionLabel("FUNCTION KEYS")
-            ToolKeyGrid(
-                specs = (1..12).map { ToolKeySpec("F$it", "F$it") },
-                perRow = 6,
-                enabled = hasSession,
-                onInjectKey = onInjectKey
-            )
-
-            // ── Clipboard + screen buffer ────────────────────────────────────
-            ToolSectionLabel("CLIPBOARD & SCREEN")
+            // ── Clipboard: paste, copy the transcript, clear the screen (Ctrl+L) ──
+            ToolSectionLabel("Clipboard")
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 ToolTile(
-                    "Paste",
+                    label = "Paste",
                     icon = Icons.Default.ContentPaste,
                     onClick = onPaste,
                     enabled = hasSession,
                     modifier = Modifier.weight(1f)
                 )
                 ToolTile(
-                    "Copy screen",
+                    label = "Copy",
                     icon = Icons.Default.ContentCopy,
                     onClick = onCopyScreen,
                     enabled = hasSession,
                     modifier = Modifier.weight(1f)
                 )
                 ToolTile(
-                    "Clear",
+                    label = "Clear",
                     icon = Icons.Default.Terminal,
                     onClick = { onInjectKey("l", true) },
                     enabled = hasSession,
@@ -222,70 +194,43 @@ fun TerminalToolsSheet(
                 )
             }
 
-            // ── Shortcut bar customization ───────────────────────────────────
-            ToolSectionLabel("SHORTCUT BAR")
+            // ── Session: restart, keys bar, font size, close ─────────────────
+            ToolSectionLabel("Session")
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 ToolTile(
-                    "Custom key",
-                    icon = Icons.Default.Add,
-                    onClick = onAddCustomKey,
-                    modifier = Modifier.weight(1f)
-                )
-                ToolTile(
-                    "Add to bar",
-                    icon = Icons.AutoMirrored.Filled.PlaylistAdd,
-                    onClick = onAddToShortcutBar,
-                    modifier = Modifier.weight(1f)
-                )
-                ToolTile(
-                    "Edit bar",
-                    icon = Icons.Default.Tune,
-                    onClick = onEditShortcutBar,
-                    modifier = Modifier.weight(1f)
-                )
-            }
-
-            // ── Session lifecycle ────────────────────────────────────────────
-            ToolSectionLabel("SESSION")
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                ToolTile(
-                    "Restart",
+                    label = "Restart",
                     icon = Icons.Default.Refresh,
                     onClick = onRestart,
-                    enabled = canRestart
+                    enabled = canRestart,
+                    modifier = Modifier.weight(1f)
                 )
                 ToolTile(
-                    if (extraKeysVisible) "Hide keys" else "Show keys",
+                    label = if (extraKeysVisible) "Hide keys" else "Show keys",
                     icon = if (extraKeysVisible) Icons.Default.KeyboardHide else Icons.Default.Keyboard,
                     onClick = onToggleExtraKeys,
                     active = extraKeysVisible,
                     modifier = Modifier.weight(1f)
                 )
             }
-
-            // Font zoom — same step/clamp/storage as TerminalSettingsScreen.
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 8.dp),
+                    .padding(top = 6.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 ToolTile(
-                    "A-",
+                    label = "Font −",
                     onClick = { onFontSizeChange(-2) },
                     enabled = fontSize > fontMin,
                     modifier = Modifier.weight(1f)
                 )
                 Box(
                     modifier = Modifier
-                        .weight(1.4f)
+                        .weight(1.2f)
                         .height(ToolTileHeight)
                         .clip(ToolTileShape)
                         .background(FrostSurface)
@@ -294,27 +239,26 @@ fun TerminalToolsSheet(
                 ) {
                     Text(
                         text = "$fontSize pt",
-                        fontSize = 12.sp,
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = TextSecondary
                     )
                 }
                 ToolTile(
-                    "A+",
+                    label = "Font +",
                     onClick = { onFontSizeChange(2) },
                     enabled = fontSize < fontMax,
                     modifier = Modifier.weight(1f)
                 )
             }
-
-            // ── Destructive (confirm dialogs below) ──────────────────────────
-            ToolSectionLabel("CLOSE")
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 6.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 ToolTile(
-                    "Close session",
+                    label = "Close",
                     icon = Icons.Default.Close,
                     onClick = { confirm = TerminalToolConfirm.SESSION },
                     enabled = hasSession,
@@ -322,7 +266,7 @@ fun TerminalToolsSheet(
                     modifier = Modifier.weight(1f)
                 )
                 ToolTile(
-                    "Close all",
+                    label = "Close all",
                     icon = Icons.Default.Delete,
                     onClick = { confirm = TerminalToolConfirm.ALL },
                     enabled = sessionCount > 0,
@@ -336,8 +280,7 @@ fun TerminalToolsSheet(
     when (confirm) {
         TerminalToolConfirm.SESSION -> TerminalConfirmDialog(
             title = "Close session?",
-            message = "This kills the running process in “" +
-                (sessionTitle?.takeIf { it.isNotBlank() } ?: "this session") + "”.",
+            message = "Its running process will stop.",
             confirmLabel = "Close",
             onConfirm = {
                 confirm = null
@@ -347,8 +290,7 @@ fun TerminalToolsSheet(
         )
         TerminalToolConfirm.ALL -> TerminalConfirmDialog(
             title = "Close all sessions?",
-            message = "This kills every running terminal process ($sessionCount tab" +
-                (if (sessionCount == 1) "" else "s") + ").",
+            message = "All running processes will stop.",
             confirmLabel = "Close all",
             onConfirm = {
                 confirm = null
@@ -360,7 +302,7 @@ fun TerminalToolsSheet(
     }
 }
 
-/** Compact key grid: chunks [specs] into rows of [perRow], tiles share width evenly. */
+/** Compact key grid: chunks [specs] into rows of [perRow], equal-width chips. */
 @Composable
 private fun ToolKeyGrid(
     specs: List<ToolKeySpec>,
@@ -370,7 +312,7 @@ private fun ToolKeyGrid(
 ) {
     Column(
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         specs.chunked(perRow).forEach { chunk ->
             Row(
@@ -379,7 +321,7 @@ private fun ToolKeyGrid(
             ) {
                 chunk.forEach { spec ->
                     ToolTile(
-                        spec.label,
+                        label = spec.label,
                         onClick = { onInjectKey(spec.key, spec.ctrl) },
                         enabled = enabled,
                         modifier = Modifier.weight(1f)
@@ -393,7 +335,7 @@ private fun ToolKeyGrid(
     }
 }
 
-/** Small caps section label — matches the monochrome frost grouping style. */
+/** Compact section label matching the monochrome frost grouping style. */
 @Composable
 private fun ToolSectionLabel(text: String) {
     Text(
@@ -401,13 +343,13 @@ private fun ToolSectionLabel(text: String) {
         fontSize = 10.sp,
         fontWeight = FontWeight.Bold,
         color = TextMuted,
-        letterSpacing = 1.4.sp,
-        modifier = Modifier.padding(start = 2.dp, top = 16.dp, bottom = 8.dp)
+        letterSpacing = 0.8.sp,
+        modifier = Modifier.padding(start = 2.dp, top = 12.dp, bottom = 6.dp)
     )
 }
 
 /**
- * Frost action tile: FrostSurface + hairline, white pill when active.
+ * Frost action chip: FrostSurface + hairline, white pill when active.
  * Disabled = muted text + dimmed fill; danger = FolioDanger text (still no color fill).
  */
 @Composable
@@ -439,7 +381,7 @@ private fun ToolTile(
             .background(background)
             .border(ToolEdgeWidth, FrostHairline, ToolTileShape)
             .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = 10.dp),
+            .padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center
     ) {

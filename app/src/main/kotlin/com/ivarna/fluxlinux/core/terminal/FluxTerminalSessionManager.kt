@@ -76,8 +76,10 @@ object FluxTerminalSessionManager {
         val distroId = managed.distroId
         val shellCmd = managed.shellCmd ?: "exec zsh"
         SessionRegistry.closeSession(ctx, index)
+        // Always reopen THIS tab: with duplicate shells now possible, reuse-matching
+        // would focus the other identical tab and the restart would vanish.
         if (type == "host") {
-            openHostShellAfterReady(ctx, title, onResult)
+            openHostShellAfterReady(ctx, title, reuseExisting = false, onResult = onResult)
         } else {
             openSessionAfterHost(
                 ctx = ctx,
@@ -86,6 +88,7 @@ object FluxTerminalSessionManager {
                 shellCmd = shellCmd,
                 method = method,
                 distroId = distroId,
+                reuseExisting = false,
                 onResult = onResult
             )
         }
@@ -128,6 +131,8 @@ object FluxTerminalSessionManager {
      * [method] MUST come from `terminalComponentFor(distroId).method` for card actions (plan §2.6).
      * [shellCmd] default `"exec zsh"` is the interactive sentinel — the guest binary
      * comes from `TerminalPreferences` (GuestSessionFactory injection point).
+     * [reuseExisting] = true (default) focuses a matching tab (Home "Shell"/"Open");
+     * false makes the "+" new-session panel always add a fresh tab, up to [MAX_TABS].
      * Reports a distinct [SessionOpenResult] so the UI can toast the right failure (R3).
      */
     fun openSessionAfterHost(
@@ -137,12 +142,15 @@ object FluxTerminalSessionManager {
         shellCmd: String = "exec zsh",
         method: String,
         distroId: String? = null,
+        reuseExisting: Boolean = true,
         onResult: (SessionOpenResult) -> Unit = {}
     ) {
         // R5: "Open Shell" twice = focus the previous tab, never a second session.
+        // The "+" panel opts out (reuseExisting = false) so several shells of the
+        // same distro can run side by side.
         // Before the tab-limit check and host prep: reuse spawns no process and
         // must not consume a tab slot (UI-thread function — synchronous is fine).
-        if (reuseExistingTab(type, shellCmd, distroId)) {
+        if (reuseExisting && reuseExistingTab(type, shellCmd, distroId)) {
             onResult(SessionOpenResult.OPENED)
             return
         }
@@ -189,17 +197,19 @@ object FluxTerminalSessionManager {
      * Interactive guest session (host already prepared).
      * [shellCmd] default `"exec zsh"` = interactive sentinel; guest binary comes
      * from `TerminalPreferences` (zsh default, bash opt-in).
+     * Same [reuseExisting] contract as [openSessionAfterHost].
      */
     fun openSession(
         ctx: Context,
         type: String,
         title: String = type,
         shellCmd: String = "exec zsh",
-        method: String
+        method: String,
+        reuseExisting: Boolean = true
     ): Boolean {
         // Mirror openSessionAfterHost: focus the existing tab when one matches
         // (this path never carries a distroId, so only distroId-less tabs reuse).
-        if (reuseExistingTab(type, shellCmd, null)) return true
+        if (reuseExisting && reuseExistingTab(type, shellCmd, null)) return true
         return GuestSessionFactory.openSession(ctx, type, title, shellCmd, method)
     }
 
@@ -214,16 +224,19 @@ object FluxTerminalSessionManager {
     /**
      * Interactive host shell after ensuring the embedded host is ready (async).
      * Probes libbash + bootstrap extraction; prepares the host when missing (R4).
+     * [reuseExisting] = true (default) focuses the existing host login tab;
+     * false (the "+" panel) always opens a fresh tab.
      */
     fun openHostShellAfterReady(
         ctx: Context,
         title: String = "Host Shell",
+        reuseExisting: Boolean = true,
         onResult: (SessionOpenResult) -> Unit = {}
     ) {
         // Same reuse rule for the HOST card: focus the existing host login shell
         // tab instead of stacking a second one (install/command host tabs keep
         // shellCmd = null and are never matched).
-        if (reuseExistingTab("host", GuestSessionFactory.HOST_SHELL_CMD, null)) {
+        if (reuseExisting && reuseExistingTab("host", GuestSessionFactory.HOST_SHELL_CMD, null)) {
             onResult(SessionOpenResult.OPENED)
             return
         }

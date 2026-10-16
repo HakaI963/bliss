@@ -6,13 +6,13 @@ Updated: 2026-10-16 · Repo: `HakaI963/folio` (branch `main`) · Local working c
 
 Folio is a rebranded, standalone Android build of the FluxLinux app (app id `com.nopiece.folio`, source package `com.ivarna.fluxlinux`, brand "Folio"). It boots Linux distros on-device via a bundled Termux-derived host bootstrap, proot containers, chroot distros, and termux-x11 GUI sessions.
 
-The host-boot failure (commit `10ef127`, release `folio-debug-10ef127`) is shipped. The **UI/UX + feature overhaul** (§4) shipped as release `folio-debug-33c97e9`; the **second user-feedback round** (§4b: crash hardening + logger, dock, session reuse, tools, XFCE overhaul, anime banner, appearance editor, Folio Linux rename) shipped as release **`folio-debug-77e2c0a`**. A **third feedback round** (two screen recordings, §4c) — install/download UX (redesigned distro page, XFCE/KDE install **toggles**, live **install task bar** that survives back navigation), terminal UX (fixed "+" panel showing **only installed distros**, pill session tabs, expanded tools, **fully customizable shortcut bar with custom keybinds**), XFCE **Android-phone-style** two-panel layout (status bar + floating dock) + **colorful multi-hue anime splash & terminal banner**, `flux@localhost` → `folio@localhost`, wallpaper **live-apply fix** + 7 new presets + panel/icon/dim/terminal-font options, and a **Settings remake + app-wide motion pass** (route/tab transitions, staggered entrances, press micro-interactions) — is implemented in the working tree, pending the CI compile + "Verify APK" run. See §2.8 for the full change summary.
+The host-boot failure (commit `10ef127`, release `folio-debug-10ef127`) is shipped. The **UI/UX + feature overhaul** (§4) shipped as release `folio-debug-33c97e9`; the **second user-feedback round** (§4b) shipped as `folio-debug-77e2c0a`; the **third** (§4c) shipped as `folio-debug-7b4b67a`. A **fourth feedback round** (recording + screenshot, §4d) — first-run onboarding **no longer forces a distro download** (optional "Install a distro now" / "Later"), **multiple shells of the same distro** from the "+" panel, **tools menu redesigned** (trimmed + plain human copy), shell banner reduced to exactly **`foila@<distro>`**, new **XFCE display-size** option (slider + exact WxH + match device), **Void XFCE install failure** fixed (metadata-refresh + 3-attempt retry across all package managers), and the **Folio → Foila** rename (brand confirmed by the user; app name **"Foila Linux"**) — is implemented in the working tree, pending the CI compile + "Verify APK" run. See §2.9.
 
 Quick facts:
 
 | Item | Value |
 |---|---|
-| App id / brand | `com.nopiece.folio` / "Folio Linux" |
+| App id / brand | `com.nopiece.folio` / "Foila Linux" (renamed from "Folio Linux" in round 4; functional ids keep `folio`/`flux` internals) |
 | Source package | `com.ivarna.fluxlinux` |
 | Branch | `main` |
 | Latest green CI | run `38887109342` (commit `7b4b67a`) |
@@ -107,6 +107,18 @@ Evidence base: two 1280×2772 screen recordings in `/emulated/` (`Screenrecorder
 - **Appearance fix + options (agent D)** — **root cause of the recorded wallpaper failure: no live-apply path existed at all** (staging wrote the guest files, but with the desktop already running nothing consumed them and "Open X11" merely re-opens the surface). NEW `core/theme/AppearanceLiveApply.kt`: when the distro's **XFCE session is running**, the staged applier is executed **inside the guest** (proot via the `proot-distro login` host pattern; chroot via `RootShell.captureInChroot`), then live xfconf values are set over the session D-Bus (discovered from `/proc/<pid>/environ`) + `xfdesktop --reload` (fallback `pkill -x xfdesktop`) + `xfce4-panel -r` — all fail-safe (75s watchdog; honest statuses "updated live" / "appears next start" / actionable hint). Also fixed: xfce4-terminal 0.9+ ignores legacy `terminalrc` only → the apply script now merges the **`xfce4-terminal` xfconf channel** too; single-line `<background-rgba>` alpha patch bug; autostart safety net `~/.config/autostart/folio-appearance.desktop`; subtitle refresh (no stale default). New options: **7 new wallpaper presets** (AMOLED/Mesh/Silk/Dither/Waves/Beams/Sakura, full-res + thumbs), **panel opacity** (Solid/Frosted/Glass), **icon size** S/M/L, **wallpaper dim** 0/25/50% (custom images, host-side pre-process), 2 new terminal schemes + **terminal font size** 10/12/14, live custom-image preview. Apply script sandbox-proven (60 assertions ×bash+dash; 20 e2e incl. the real compiled `AppearanceStore`).
 - **Settings remake + motion (agent E)** — NEW `ui/theme/Motion.kt` (`FolioMotion` tokens, `staggerIn`/`rememberStaggerEntrance`). `SettingsScreen` fully remade: hero frost card ("Folio Linux" + version chip + live root/storage status chips), restyled groups, icon-plate rows with 68dp dividers, staggered entrances, `animateContentSize`, press-scale rows — **every callback/route 1:1 preserved**. `MainActivity` transitions: route pushes/pops (slide+fade by depth; fade-only for TERMINAL/INSTALL_WIZARD AndroidView), tab crossfade+rise, top-bar status-pill crossfade — task bar/haze/BackHandler/chrome logic untouched. `Frost.kt`: `FrostRow`/`FrostPill` press-scale + animated fills + `FrostDivider(insets)`/`FrostGroupTitle` + generic `folioSpringAny()`; shared cards press-animated; light motion passes on Home/Distros/CrashLog/Troubleshooting/X11/Audio/TerminalSettings/RootAccess/LegacyTermux/storage. E also caught two latent CI breaks pre-push (`folioSpringAny` Color spec; invalid `stickyHeader` import in DistroScreen) with a real-version stub compile.
 
+### 2.9 Wave 6 — fourth user-feedback round (working tree)
+
+Evidence base: `Screenrecorder-2026-10-16-16-47-41-257.mp4` (first-run: forced 5-step onboarding → distro pick → install) + `Screenshot_2026-10-16-16-49-42-950_com.nopiece.folio.jpg` (Void install failed at XFCE package install).
+
+- **Onboarding de-forced (agent 1)** — `OnboardingFlowScreen` step graph is now `Welcome → Consent → HostSetup → Ready`; `ReadyPage` ("Foila Linux is ready") offers **"Install a distro now"** (enters the unchanged DistroPick→Options→Storage/Running sub-flow) or **"Later"** (finishes onboarding via the same marker and lands on Home). Step counter replaced with `StepDots` (4 reactive dots + a 3-dot optional install branch). MainActivity gating verified (auto-show only when incomplete; "Show onboarding" still opens it on demand).
+- **Multi-shell (agent 2)** — `FluxTerminalSessionManager.openSessionAfterHost/openHostShellAfterReady/openSession` gained `reuseExisting: Boolean = true`; **the "+" panel (and empty-state selector) pass `false`** so any number of shells of the same distro open as separate tabs (MAX_TABS guard + toast unchanged); Home "Shell"/notification paths keep focus-existing behavior; `restartSession` forces `false` so restarts never collapse into a sibling tab.
+- **Tools menu redesign (agent 2)** — sheet rewritten as a compact palette: title "Tools"; **Keys** (Ctrl C/D/Z, Ctrl L, Tab, Esc + `Add key` / `Edit keys`); **Clipboard** (Paste/Copy/Clear); **Session** (Restart, Hide/Show keys, Font −/size/Font +, Close/Close all). F1–F12 and redundant combos removed from the sheet (still available in the key editor's special-key list). Human copy pass across the session panel, selector (`Installed distros only` / `All distros`), bar editor/key creator ("Your keys", "Add key", "Size", "Reset", "Save") and confirms.
+- **Banner header minimal (agent 3)** — every banner writer (3 customization scripts, chroot helper, termux tweaks, KDE .zshrc block, `GuestZshrcRepair` constants) now prints the art + exactly one line **`foila@<id>`** (`ID` from `/etc/os-release`, lowercased; PRETTY_NAME fallback; `linux` last resort). No host/version/time/fastfetch. `.banner-rev` → 3, `BANNER_ART_REVISION` → 3, `REPAIR_REVISION` → 6 (existing installs self-fix on next shell open). Dead fastfetch-preset writers removed.
+- **Void XFCE install failure (agent 3)** — verdict: the single `xbps-install` transaction aborted mid-download on a flaky link and the block hard-exited with no retry (package names verified correct). NEW shared `_flux_pm_refresh()` + `_flux_retry_pkg()` (3 attempts, metadata refresh between, logs `Package download failed — retrying (2/3)…`, returns the last rc) in `flux_guest_common.sh`; used by all 12 families' XFCE blocks + Debian KDE + standalone chroot scripts (inline loops); final message `…failed after 3 tries — check your network, then tap Retry Setup.` Sandbox-tested under dash + busybox (success/flaky/hard-fail paths).
+- **XFCE display size (agent 1)** — `X11SettingsScreen` "Display size": width slider 480–2560 (8px snap, height from device aspect) writing `displayResolutionMode=custom` + `displayResolutionCustom="WxH"`; exact-field commits validated `WxH` (320–7680 × 200–4320); "Match device" restores adaptive `scaled`. Uses the vendored termux-x11's real keys (`LorieView` source of truth) with the same broadcast model as existing prefs; hint "takes effect when the desktop (re)opens".
+- **Folio → Foila rename (all)** — brand confirmed by the user: **"Foila Linux"**. App label (`strings.xml`), wordmark, onboarding/prereqs/legacy screens, notifications, install titles, component/screen copy, preset labels, splash text, and **85 script files** (echoes, hints, `.desktop` names, Konsole display name, theme/PROMPT label → `foila`) are all renamed; `ProotZshBootstrap` theme label fixed too. Functional identifiers intentionally kept: `FLUX_*` env vars, `flux` guest user + `/home/flux`, `/etc/fluxlinux`, `/data/local/folio`, `folio.zsh-theme`/`folio-banner`/`folio-*` ids, `FOLIO_*` payload vars, `FluxLinux`/`FluxApp`/`Folio*` Kotlin identifiers, `Theme.Folio`/`Theme.FluxLinux` style ids, Konsole `Folio.profile` file name, `wallpapers/Folio` path. Zero user-visible `flux`/`Folio` left (verified by repo-wide scans).
+
 ---
 
 ## 3. Standalone-host constraints (never regress these)
@@ -161,6 +173,16 @@ Legend: DONE / PARTIAL / TODO.
 31. **XFCE remake to feel Android-friendly** — **DONE** (§2.8): status bar + floating app dock, big touch targets, fixed icons, new wallpaper; applies on fresh installs + XFCE-customization re-run.
 32. **Shell tools: more features + custom keybinds + editable bottom shortcut menu (keys/position/size)** — **DONE** (§2.8): expanded tools, custom key creator, full bar editor (reorder/size/edit/duplicate/delete/reset, long-press menu).
 33. **Settings tab remake + new animations all over (A-to-Z re-animated)** — **DONE** (§2.8): Settings hero/rows remake, route push/pop + tab transitions, staggered entrances across screens, press micro-interactions, shared Motion tokens.
+
+### 4d. Fourth feedback round (2026-10-16 evening) — recording + screenshot
+
+34. **"Remove that opening setup screen — don't force a distro download at first; user can download later as he wants"** — **DONE** (§2.9): onboarding ends at a Ready step with optional install; "Later" completes onboarding and lands Home.
+35. **"Screenshot appears to be an error while downloading — investigate"** — **DONE** (§2.9): Void XFCE install died mid-download with no retry; added metadata-refresh + 3-attempt retry for every family + useful failure copy. Package names verified correct.
+36. **"Plus → same distro won't open a new shell — need multiple shells/terminals of the same distro"** — **DONE** (§2.9): "+" panel always opens a new tab (`reuseExisting=false`); Home buttons keep focus-existing.
+37. **"It writes folio@localhost and more more — totally unnecessary; only write foila@distro name"** — **DONE** (§2.9): banner = art + exactly `foila@<distro-id>`; fastfetch preset machinery removed; revisions bumped for existing installs.
+38. **"Redesign tools menu and its options — lots of unnecessary stuff; AI-written text — make it human, clean, compact"** — **DONE** (§2.9): trimmed tools sheet + full plain-copy pass.
+39. **"Add option to select XFCE display size (slider + absolute pixel value)"** — **DONE** (§2.9): X11 Display → Display size section.
+40. **"Replace flux with foila; Foila Linux app new name — every UI file, backend file"** — **DONE** (§2.9): brand "Foila Linux" everywhere user-visible incl. 85 script files; functional internals documented and kept.
 
 ---
 
@@ -243,17 +265,17 @@ The historical "verify before restarting" checklist is fully resolved: nav crash
 
 ## 10. Next steps (ordered)
 
-1. ~~Commit + push round 3~~ — **done** (`3958b42` code+docs, `1fbd805` splash-color fix, `7b4b67a` compile fixes).
-2. ~~CI compile + "Verify APK"~~ — **green** (run `38887109342`).
-3. ~~Release~~ — **done**: [`folio-debug-7b4b67a`](https://github.com/HakaI963/folio/releases/tag/folio-debug-7b4b67a).
+1. **Commit + push round 4** (changed files only; artifacts excluded).
+2. **CI compile + "Verify APK"** — fix anything that surfaces (main sourceset only).
+3. **Release** `folio-debug-<commit>`; update §0 quick facts.
 4. **On-device QA** (cannot be done in this environment):
-   - **Install flow**: pick a distro → toggle XFCE/KDE (any combo) → install; press back mid-install → task bar keeps showing live phase/percent; tap it → real progress; Cancel install → bar shows "Install cancelled".
-   - **Terminal**: "+" opens instantly, lists only installed guests (Show all reveals the rest); open two sessions → pill tabs switch/close; tools sheet new keys; create a custom key (text + combo), pin it, reorder/resize in the bar editor, long-press a key; reset.
-   - **XFCE**: fresh install / re-run "XFCE4 Customization" → top status bar + bottom floating dock, new wallpaper; notification icons fixed.
-   - **Appearance**: change wallpaper while the desktop is RUNNING → "Applied — desktop updated live" and the change appears without restarting; test again with the desktop stopped → "appears when the desktop next starts"; try AMOLED preset, panel opacity, icon size, wallpaper dim (custom image), terminal font size.
-   - **Anime**: splash is colorful/detailed; shell banner is colorful ASCII with `folio@localhost` (no flux@, no emoji blobs).
-   - **Motion**: tab switches + route pushes/pops animate; Settings is the new hero/rows layout; no jank on the terminal tab.
-   - **Crash**: unchanged from round 2 — Settings → Crash logs if anything still crashes.
+   - **First run**: fresh install → onboarding = Welcome → Downloads → Host → Ready; "Later" lands Home with nothing downloaded; "Show onboarding" from Settings still works; the Distros tab installs later as usual.
+   - **Void install**: install Void with XFCE on a slow connection → on a download failure it now retries up to 3× with "retrying (2/3)…" instead of dying; a hard failure shows "…after 3 tries — check your network, then tap Retry Setup."
+   - **Terminal**: open a shell → "+" → same distro again → a second tab opens (repeat up to 10; limit toast); Home "Shell" still focuses the existing tab; tools sheet is the compact Keys/Clipboard/Session palette; key editor unchanged capabilities.
+   - **Banner**: new shell shows art + exactly `foila@alpine`-style line (no host/version/time); existing installs update on next shell open.
+   - **Display size**: X11 → Display settings → move the slider / type `1280x2772` / Match device → reopen the desktop to see it.
+   - **Brand**: launcher label "Foila Linux", wordmark, notifications, onboarding/prereqs copy, presets ("Foila Linux …").
+   - Regressions to re-check from earlier rounds: task bar during install, wallpaper live-apply, appearance options, motion, crash logs.
 
 ---
 
@@ -262,6 +284,7 @@ The historical "verify before restarting" checklist is fully resolved: nav crash
 - Round 1: CI green with "Verify APK" passing — **done** (run `38776662519`); release `folio-debug-33c97e9` published.
 - Round 2: CI green + release — **done** (run `38854972100`, release `folio-debug-77e2c0a`).
 - Round 3: CI green + release — **done** (run `38887109342`, release `folio-debug-7b4b67a`; two pre-CI fixes: 10-digit splash colors, missing `collectAsState` import + stray string constant).
-- Every item in §4, §4b, §4c marked DONE — **done** (on-device confirmation is §10.4).
-- Branding: "Folio Linux" everywhere user-visible; residuals are functional identifiers / short `Folio:` guest prefixes only.
-- Working tree verified locally by: `bash -n` on all 89 scripts, import-resolution sweep + nested-comment-aware brace/paren scanner on all 176 `.kt`, byte-identical diff guard for `host/setup_termux.sh`, sandbox runs (XFCE two-panel XML idempotent + valid; appearance applier 60/60 bash+dash + 20/20 e2e), cross-file signature checks for every refactored API (`TerminalScreen`, `TerminalExtraKeys`/`ShortcutBarConfig`, `InstallTaskBar`/`InstallationQueueManager`, `OnboardingInstallRunner.start(desktops)`, `AppearanceStore`/`AppearanceLiveApply`, `Frost`/`Motion`).
+- Round 4 (this push): CI green + release `folio-debug-<commit>` — **pending §10.1–10.3**.
+- Every item in §4, §4b, §4c, §4d marked DONE — **done** (on-device confirmation is §10.4).
+- Branding: **"Foila Linux"** everywhere user-visible (Kotlin, XML, 85 script files); residuals are functional identifiers only (`FLUX_*`, `flux` user, `folio-*` ids, `Folio.profile`, `Folio*`/`FluxLinux` identifiers, `Theme.Folio`).
+- Working tree verified locally by: `bash -n` on all 89 scripts, import-resolution sweep + nested-comment-aware brace/paren scanner on all 176 `.kt`, res color-literal check (3/4/6/8 digits), byte-identical guard for `host/setup_termux.sh`, sandbox runs (XFCE two-panel XML idempotent + valid; appearance applier 60/60 bash+dash + 20/20 e2e; `_flux_retry_pkg` success/flaky/hard-fail under dash + busybox; banner header `foila@<id>` incl. fallbacks + opt-out), cross-file signature checks for every refactored API (`reuseExisting` on session openers, `X11SettingsScreen` display-size, `OnboardingFlowScreen` Ready/Later, `TermuxX11Preferences` custom resolution).

@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================
-# Folio — Native Termux KDE Plasma Desktop Setup
+# Foila — Native Termux KDE Plasma Desktop Setup
 # Location: termux/setup/setup_kde_termux.sh
 # Runs on: HOST Termux (native, no container)
 # Root required: no
@@ -12,7 +12,7 @@ CALLBACK_NAME="kde_plasma"
 
 handle_error() {
     echo ""
-    echo "❌ Folio Error: Script failed at step: $1"
+    echo "❌ Foila Error: Script failed at step: $1"
     echo "---------------------------------------------------"
     echo "Please check the error message above for details."
     echo "---------------------------------------------------"
@@ -24,31 +24,31 @@ handle_error() {
 # Reverse of install path above. Shared deps (x11-repo, termux-x11,
 # pulseaudio, dbus, etc.) intentionally kept.
 if [ "$1" = "uninstall" ]; then
-    echo "Folio: Uninstalling KDE Plasma Desktop..."
+    echo "Foila: Uninstalling KDE Plasma Desktop..."
 
     pkg uninstall -y plasma konsole dolphin || true
 
     rm -f "$HOME/.config/kwinrc"
     rm -f "$HOME/.config/kdeglobals"
 
-    echo "Folio: KDE Plasma Desktop Uninstalled."
+    echo "Foila: KDE Plasma Desktop Uninstalled."
     exit 0
 fi
 
 echo ""
 echo "══════════════════════════════════════════════"
-echo "  Folio — Native KDE Plasma Desktop Setup"
+echo "  Foila — Native KDE Plasma Desktop Setup"
 echo "  ⚠️  EXPERIMENTAL — See docs/termux/ for notes"
 echo "══════════════════════════════════════════════"
 echo ""
 
 # ── Step 1: Repositories ──────────────────────────────────
-echo "Folio: Enabling required repositories..."
+echo "Foila: Enabling required repositories..."
 pkg install x11-repo -y || handle_error "x11-repo install"
 pkg install tur-repo -y || handle_error "tur-repo install"
 
 # ── Step 2: Update ───────────────────────────────────────
-echo "Folio: Updating package lists..."
+echo "Foila: Updating package lists..."
 pkg update -y || handle_error "pkg update"
 
 # ── Step 3: KDE Plasma packages ──────────────────────────
@@ -122,7 +122,7 @@ echo " [✅] KDE defaults configured for Android screens"
 # ── Verification ─────────────────────────────────────────
 verify_installation() {
     echo ""
-    echo "🔎 Folio: Verifying KDE Plasma Installation..."
+    echo "🔎 Foila: Verifying KDE Plasma Installation..."
     echo "------------------------------------------------"
     MISSING=0
 

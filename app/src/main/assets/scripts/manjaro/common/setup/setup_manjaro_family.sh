@@ -22,10 +22,10 @@ fi
 # setup_arch_family.sh. Empty pacman keyring → pacman-key --init is mandatory.
 
 DISTRO_NAME="${1:-manjaro}"
-echo "Folio: Configuring ${DISTRO_NAME} (Manjaro Family)..."
+echo "Foila: Configuring ${DISTRO_NAME} (Manjaro Family)..."
 
 if [ "$(id -u)" -ne 0 ]; then
-    echo "Folio: ERROR: must run as root inside the guest (got uid=$(id -u))."
+    echo "Foila: ERROR: must run as root inside the guest (got uid=$(id -u))."
     exit 1
 fi
 
@@ -38,7 +38,7 @@ _flux_ensure_tmp
 _flux_ensure_dns
 
 if ! command -v pacman >/dev/null 2>&1; then
-    echo "Folio: ERROR: pacman not found"
+    echo "Foila: ERROR: pacman not found"
     exit 1
 fi
 
@@ -178,7 +178,7 @@ if ! pacman -Sy --noconfirm; then
         _flux_comment_community_repo
     fi
     pacman -Sy --noconfirm || {
-        echo "Folio: pacman -Sy failed (repos/network)"
+        echo "Foila: pacman -Sy failed (repos/network)"
         exit 1
     }
 fi
@@ -191,7 +191,7 @@ if ! pacman -S --noconfirm --needed \
     mesa mesa-utils \
     fastfetch \
     dbus; then
-    echo "Folio: base package install failed"
+    echo "Foila: base package install failed"
     exit 1
 fi
 
@@ -211,10 +211,10 @@ DESKTOPS="$_norm"
 unset _norm
 if [ -z "${DESKTOPS##*xfce*}" ]; then
     _flux_log "Installing XFCE packages (targeted — no xfce4 group first)..."
-    if ! pacman -S --noconfirm --needed \
+    if ! _flux_retry_pkg pacman -S --noconfirm --needed \
         xfce4-session xfce4-panel xfce4-settings xfce4-terminal \
         xfdesktop xfwm4 thunar; then
-        echo "Folio: XFCE install failed"
+        echo "Foila: XFCE install failed after 3 tries — check your network, then tap Retry Setup."
         exit 1
     fi
 
@@ -270,5 +270,5 @@ if [ -z "${DESKTOPS##*xfce*}" ] && command -v _flux_xfce_compact_defaults >/dev/
     _flux_xfce_compact_defaults || true
 fi
 
-echo "Folio: ${DISTRO_NAME} Manjaro setup complete!"
+echo "Foila: ${DISTRO_NAME} Manjaro setup complete!"
 exit 0

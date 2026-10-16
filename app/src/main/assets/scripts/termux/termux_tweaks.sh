@@ -3,7 +3,7 @@
 # Enhance Termux with Oh My Zsh, themes, fonts, and fastfetch
 # Based on: https://github.com/abhay-byte/Linux_Setup
 
-echo "🎨 Folio: Enhancing Termux Environment..."
+echo "🎨 Foila: Enhancing Termux Environment..."
 
 install_ohmyzsh() {
     echo "🐚 Installing Oh My Zsh..."
@@ -16,15 +16,15 @@ install_ohmyzsh() {
     git clone --depth 1 https://github.com/marlonrichert/zsh-autocomplete.git "$ZSH_CUSTOM/plugins/zsh-autocomplete"
 
     echo "⚙️ Configuring .zshrc..."
-    # Monochrome Folio prompt theme (local; replaces the old colorful default).
+    # Monochrome Foila prompt theme (local; replaces the old colorful default).
     mkdir -p "$ZSH_CUSTOM/themes"
     rm -f "$ZSH_CUSTOM/themes/agnosterzak.zsh-theme" 2>/dev/null || true
     if [ ! -s "$ZSH_CUSTOM/themes/folio.zsh-theme" ]; then
         cat > "$ZSH_CUSTOM/themes/folio.zsh-theme" <<'FOLIO_THEME_EOF'
-# folio.zsh-theme — Folio's minimal monochrome prompt.
+# folio.zsh-theme — Foila's minimal monochrome prompt.
 # White/gray on black only; ASCII-safe (no powerline glyphs, no ANSI colors 31-44).
-# Segments:  time  folio  working-dir  input-char
-PROMPT='%F{240}%D{%H:%M}%f %F{255}folio%f %F{250}%~%f %F{255}%#%f '
+# Segments:  time  foila  working-dir  input-char
+PROMPT='%F{240}%D{%H:%M}%f %F{255}foila%f %F{250}%~%f %F{255}%#%f '
 PROMPT2='%F{240}> %f'
 FOLIO_THEME_EOF
     fi
@@ -164,7 +164,7 @@ install_nerd_font() {
     termux-reload-settings
 }
 
-# ── Folio launch stickers: 8 colored anime ASCII designs (256-color) ────────
+# ── Foila launch stickers: 8 colored anime ASCII designs (256-color) ────────
 # Installs ~/.config/folio/banner/*.txt (random pick per shell open) and
 # ~/.config/folio/banner.sh (the folio-banner function sourced by .zshrc).
 # Offline, idempotent (`.banner-rev` refreshes existing installs).
@@ -174,7 +174,7 @@ _flux_write_folio_banner() {
     _owner="${2:-}"
     [ -n "$_home" ] || return 0
     _bdir="$_home/.config/folio/banner"
-    _brev="2"
+    _brev="3"
     _need=0
     if [ "$(cat "$_bdir/.banner-rev" 2>/dev/null || true)" != "$_brev" ]; then
         _need=1
@@ -290,7 +290,7 @@ FOLIO_BANNER_ALL
     printf '%s\n' "$_brev" > "$_bdir/.banner-rev" 2>/dev/null || true
 
     cat > "$_home/.config/folio/banner.sh" <<'FOLIO_BANNER_SH'
-# folio-banner.sh — Folio launch sticker. Colored 256-color ASCII art (no
+# folio-banner.sh — Foila launch sticker. Colored 256-color ASCII art (no
 # emoji), offline, random design per interactive shell. Opt out FLUX_NO_BANNER=1.
 folio-banner-art() {
   # Prints one randomly picked design from ~/.config/folio/banner/*.txt.
@@ -310,13 +310,19 @@ folio-banner() {
   [ "${FLUX_NO_BANNER:-0}" = "1" ] && return 0
   case $- in *i*) ;; *) return 0;; esac
   folio-banner-art
-  local _ff="$HOME/.local/share/fastfetch/presets/termux.jsonc"
-  if command -v fastfetch >/dev/null 2>&1 && [ -f "$_ff" ]; then
-    { fastfetch --config "$_ff" 2>/dev/null || true; } &!
-  else
-    printf '%s\n' "folio@localhost | $(sed -n 's/^PRETTY_NAME=//p' /etc/os-release 2>/dev/null | tr -d '"' | head -n 1) | $(date +%H:%M 2>/dev/null)"
+  # Header: exactly one line, "foila@<id>" (distro id only — no host,
+  # version or time). ID= from /etc/os-release; fallbacks: first word of
+  # PRETTY_NAME (lowercased), then "linux".
+  local _fid=""
+  if [ -r /etc/os-release ]; then
+    _fid="$(sed -n 's/^ID=//p' /etc/os-release 2>/dev/null | head -n 1 | tr -d '"' | tr '[:upper:]' '[:lower:]')"
+    if [ -z "$_fid" ]; then
+      _fid="$(sed -n 's/^PRETTY_NAME=//p' /etc/os-release 2>/dev/null | head -n 1 | tr -d '"' | awk '{print $1}' | tr '[:upper:]' '[:lower:]')"
+    fi
   fi
-  unset _ff
+  [ -n "$_fid" ] || _fid="linux"
+  printf '%s\n' "foila@$_fid"
+  unset _fid
 }
 folio-banner
 FOLIO_BANNER_SH
@@ -327,64 +333,36 @@ FOLIO_BANNER_SH
     return 0
 }
 
-configure_fastfetch() {
+configure_shell_banner() {
     echo > "$PREFIX/etc/motd"
     rm -f "$PREFIX/etc/motd"
 
-    echo "⚡ Configuring fastfetch..."
-    # Monochrome Folio preset written locally (no remote colorful download).
-    mkdir -p ~/.local/share/fastfetch/presets
-    cat > ~/.local/share/fastfetch/presets/termux.jsonc <<'FFEOF'
-{
-  "logo": null,
-  "display": { "separator": " ›  " },
-  "modules": [
-    { "type": "os", "key": "OS  " },
-    { "type": "kernel", "key": "KER " },
-    { "type": "cpu", "key": "CPU " },
-    { "type": "gpu", "key": "GPU " },
-    { "type": "packages", "key": "PKG " },
-    { "type": "shell", "key": "SH  " },
-    { "type": "terminal", "key": "TER " },
-    {
-      "type": "disk",
-      "key": "DSK ",
-      "folders": ["/"],
-      "showRemovable": false,
-      "showHidden": false,
-      "showSubvolumes": false
-    },
-    { "type": "memory", "key": "MEM " },
-    { "type": "swap", "key": "SWP " }
-  ]
-}
-FFEOF
-
-    # Random colored anime launch sticker (replaces the plain fastfetch line).
+    echo "⚡ Configuring shell banner..."
+    # Random colored anime launch sticker + minimal `foila@<id>` header.
     _flux_write_folio_banner "$HOME"
 
     RCFILE="$HOME/.zshrc"
     [ -f "$RCFILE" ] || touch "$RCFILE"
 
-    # Drop the plain auto-print fastfetch line from older runs; the banner runs
-    # fastfetch itself (info block) after printing the sticker.
+    # Drop the plain auto-print fastfetch line from older runs; the banner
+    # prints the sticker + one-line header itself.
     if grep -q 'fastfetch --config' "$RCFILE" 2>/dev/null; then
         grep -v '^fastfetch --config' "$RCFILE" > "${RCFILE}.folio.$$" 2>/dev/null \
             && mv -f "${RCFILE}.folio.$$" "$RCFILE" 2>/dev/null || rm -f "${RCFILE}.folio.$$"
     fi
     if ! grep -q 'folio/banner.sh' "$RCFILE" 2>/dev/null; then
         {
-            printf '\n# Folio launch sticker (random colored anime banner; opt out FLUX_NO_BANNER=1)\n'
+            printf '\n# Foila launch sticker (random colored anime banner; opt out FLUX_NO_BANNER=1)\n'
             printf '[ -r "$HOME/.config/folio/banner.sh" ] && . "$HOME/.config/folio/banner.sh"\n'
         } >> "$RCFILE"
     fi
 
-    echo "✅ Fastfetch configured."
+    echo "✅ Shell banner configured."
     echo "🐚 Setting Zsh as default shell..."
     chsh -s zsh
 }
 
-# ── Folio Linux appearance (host Termux side) ────────────────────────────────
+# ── Foila Linux appearance (host Termux side) ────────────────────────────────
 # Applies the terminal colors from ~/.config/folio/appearance.env when the app
 # staged one for the host bootstrap. No-op otherwise; never fatal.
 apply_host_appearance() {
@@ -409,11 +387,11 @@ apply_host_appearance() {
 install_ohmyzsh
 set_termux_colors
 install_nerd_font
-configure_fastfetch
+configure_shell_banner
 apply_host_appearance
 
 echo ""
-echo "🎉 Folio: Termux enhancement complete!"
+echo "🎉 Foila: Termux enhancement complete!"
 echo "🔄 Restart Termux to see all changes."
 
 # Create marker file to track tweaks application

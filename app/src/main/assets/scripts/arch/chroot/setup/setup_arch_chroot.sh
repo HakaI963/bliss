@@ -93,7 +93,7 @@ if [ -z "${BB:-}" ]; then
   fi
 fi
 if [ -z "${BB:-}" ]; then
-  echo "Folio: ERROR — root-capable busybox not found" >&2
+  echo "Foila: ERROR — root-capable busybox not found" >&2
   exit 1
 fi
 
@@ -274,13 +274,23 @@ fi
         
         # KDE PLASMA INSTALLATION
         echo "Installing KDE Plasma..."
-        # Installing minimal Plasma Desktop + tools requested
-        pacman -S --noconfirm plasma-desktop kwin-x11 kde-graphics kde-utilities konsole thunar dbus xorg-xinit
+        # Installing minimal Plasma Desktop + tools requested.
+        # Flaky downloads abort pacman mid-fetch -> retry up to 3 times.
+        _xf=1
+        until pacman -S --noconfirm plasma-desktop kwin-x11 kde-graphics kde-utilities konsole thunar dbus xorg-xinit; do
+            if [ "$_xf" -ge 3 ]; then
+                echo "Foila: KDE package install failed after 3 tries — check your network, then tap Retry Setup."
+                exit 1
+            fi
+            echo "Foila: Package download failed — retrying ($((_xf + 1))/3)…"
+            pacman -Sy --noconfirm >/dev/null 2>&1 || true
+            _xf=$((_xf + 1))
+        done
     ' || goodbye
     
     success "Arch Environment Configured!"
     
-    # Root-staged launchers live in the Folio helpers dir (idempotent).
+    # Root-staged launchers live in the Foila helpers dir (idempotent).
     mkdir -p /data/local/folio/helpers
     
     # --- LAUNCH SCRIPTS ---

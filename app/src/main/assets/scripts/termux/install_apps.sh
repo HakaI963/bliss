@@ -2,7 +2,7 @@
 # scripts/termux/install_apps.sh
 # Installs Firefox and VSCode (Code OSS) via tur-repo
 
-echo "Folio: Installing Utilities..."
+echo "Foila: Installing Utilities..."
 
 # Install tur-repo (Termux User Repository)
 pkg install -y tur-repo
@@ -15,4 +15,4 @@ pkg install -y firefox
 echo "Installing VS Code..."
 pkg install -y code-oss
 
-echo "Folio: Apps Installed Successfully!"
+echo "Foila: Apps Installed Successfully!"

@@ -17,7 +17,7 @@ else
     MODE="GENERIC"
 fi
 
-echo "Folio: GPU Mode detected: $MODE"
+echo "Foila: GPU Mode detected: $MODE"
 
 # Function to ensure server is running
 ensure_server() {

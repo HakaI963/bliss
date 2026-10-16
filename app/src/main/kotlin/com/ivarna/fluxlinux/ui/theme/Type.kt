@@ -30,7 +30,7 @@ val Typography = Typography(
     ),
 )
 
-// Folio wordmark: clean understated typography, tight tracking.
+// Foila wordmark: clean understated typography, tight tracking.
 val FolioWordmarkStyle = TextStyle(
     fontFamily = FontFamily.Default,
     fontWeight = FontWeight.SemiBold,

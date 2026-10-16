@@ -160,11 +160,11 @@ fun TerminalToolSelector(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = if (showAll) "ALL SHELLS" else "INSTALLED",
+                text = if (showAll) "All distros" else "Installed distros only",
                 fontSize = 10.sp,
                 fontWeight = FontWeight.Bold,
                 color = TextMuted,
-                letterSpacing = 1.4.sp
+                letterSpacing = 0.8.sp
             )
             Spacer(Modifier.weight(1f))
             ShowAllToggle(showAll = showAll) { showAll = !showAll }
@@ -244,11 +244,6 @@ fun TerminalNewSessionPanel(
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
                     color = TextPrimary
-                )
-                Text(
-                    text = "Pick an installed guest",
-                    fontSize = 11.sp,
-                    color = TextSecondary
                 )
             }
             IconButton(onClick = onDismiss, modifier = Modifier.size(36.dp)) {
@@ -356,7 +351,7 @@ private fun NoDistrosHint() {
         )
         Spacer(Modifier.height(4.dp))
         Text(
-            text = "Open the Distros tab to install Debian, Alpine and more — installed guests show up here.",
+            text = "Install one from the Distros tab.",
             fontSize = 11.sp,
             lineHeight = 16.sp,
             color = TextSecondary

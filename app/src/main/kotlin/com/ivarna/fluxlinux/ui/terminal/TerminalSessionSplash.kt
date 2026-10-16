@@ -192,7 +192,7 @@ fun TerminalSessionSplash(
             }
             Spacer(Modifier.height(20.dp))
             Text(
-                text = "Folio Linux",
+                text = "Foila Linux",
                 fontSize = 21.sp,
                 fontWeight = FontWeight.Bold,
                 color = TextPrimary,

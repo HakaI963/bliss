@@ -2,7 +2,7 @@
 # scripts/common/setup_gpu.sh
 # Installs Hardware Acceleration dependencies for Termux
 
-echo "Folio: Setting up GPU Acceleration..."
+echo "Foila: Setting up GPU Acceleration..."
 
 # 0. Enable required repositories (Critical for mesa-zink/drivers)
 pkg install -y x11-repo tur-repo
@@ -14,5 +14,5 @@ pkg update -y
 
 pkg install -y mesa-zink virglrenderer-mesa-zink virglrenderer-android
 
-echo "Folio: GPU Dependencies Installed."
+echo "Foila: GPU Dependencies Installed."
 echo "Use 'ha <command>' to launch with acceleration."

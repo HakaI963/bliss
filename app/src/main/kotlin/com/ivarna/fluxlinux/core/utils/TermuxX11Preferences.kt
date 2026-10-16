@@ -29,6 +29,8 @@ object TermuxX11Preferences {
     private const val KEY_PREFER_SCANCODES = "preferScancodes"
     private const val KEY_SCANCODE_WORKAROUND = "hardwareKbdScancodesWorkaround"
     private const val KEY_RESOLUTION_MODE = "displayResolutionMode"
+    private const val KEY_RESOLUTION_EXACT = "displayResolutionExact"
+    private const val KEY_RESOLUTION_CUSTOM = "displayResolutionCustom"
     private const val KEY_DISPLAY_STRETCH = "displayStretch"
     private const val KEY_CLIPBOARD_ENABLE = "clipboardEnable"
     private const val KEY_TOUCH_MODE = "touchMode"
@@ -53,6 +55,91 @@ object TermuxX11Preferences {
     fun setDisplayScale(context: Context, scale: Int) {
         prefs(context).edit().putInt(KEY_DISPLAY_SCALE, scale.coerceIn(30, 300)).apply()
         notifyChanged(context, KEY_DISPLAY_SCALE)
+    }
+
+    // ── Resolution (custom "WxH" mode) ───────────────────────────────────────
+
+    /**
+     * Lorie resolution modes: `native` (device px), `scaled` (view / display
+     * scale — the app default), `exact` (fixed list) and `custom` (free WxH).
+     * The UI offers `scaled` (Match device) and `custom` (slider / typed value).
+     */
+    const val RESOLUTION_MODE_SCALED = "scaled"
+    const val RESOLUTION_MODE_CUSTOM = "custom"
+    private val RESOLUTION_MODES = setOf("native", "scaled", "exact", "custom")
+
+    /**
+     * Bounds for the custom WxH field: wide enough for any real panel, tight
+     * enough to reject typos like `1x1` or `100000x999999`. LorieView also
+     * floors the cvt mode width to a multiple of 8.
+     */
+    const val RESOLUTION_MIN_WIDTH = 320
+    const val RESOLUTION_MAX_WIDTH = 7680
+    const val RESOLUTION_MIN_HEIGHT = 200
+    const val RESOLUTION_MAX_HEIGHT = 4320
+
+    fun getResolutionMode(context: Context): String =
+        prefs(context).getString(KEY_RESOLUTION_MODE, RESOLUTION_MODE_SCALED)
+            ?.takeIf { it in RESOLUTION_MODES } ?: RESOLUTION_MODE_SCALED
+
+    /** Stored custom "WxH" value (Lorie default until the user picks one). */
+    fun getCustomResolution(context: Context): String =
+        prefs(context).getString(KEY_RESOLUTION_CUSTOM, null) ?: "1280x1024"
+
+    /** Select a resolution mode; `scaled` restores the adaptive default. */
+    fun setResolutionMode(context: Context, mode: String) {
+        if (mode !in RESOLUTION_MODES) return
+        prefs(context).edit().putString(KEY_RESOLUTION_MODE, mode).apply()
+        notifyChanged(context, KEY_RESOLUTION_MODE)
+    }
+
+    /**
+     * Switch to `custom` mode with an explicit WxH. Only the resolution keys
+     * are written — the display scale key keeps its own behaviour.
+     */
+    fun setCustomResolution(context: Context, width: Int, height: Int) {
+        val w = width.coerceIn(RESOLUTION_MIN_WIDTH, RESOLUTION_MAX_WIDTH)
+        val h = height.coerceIn(RESOLUTION_MIN_HEIGHT, RESOLUTION_MAX_HEIGHT)
+        prefs(context).edit()
+            .putString(KEY_RESOLUTION_MODE, RESOLUTION_MODE_CUSTOM)
+            .putString(KEY_RESOLUTION_CUSTOM, "${w}x$h")
+            .apply()
+        notifyChanged(context, KEY_RESOLUTION_CUSTOM)
+    }
+
+    /** Parse "WxH" (digits x digits inside the sane bounds); null otherwise. */
+    fun parseResolution(value: String): Pair<Int, Int>? {
+        val parts = value.trim().split("x", "X")
+        if (parts.size != 2) return null
+        val w = parts[0].trim().toIntOrNull() ?: return null
+        val h = parts[1].trim().toIntOrNull() ?: return null
+        if (w !in RESOLUTION_MIN_WIDTH..RESOLUTION_MAX_WIDTH) return null
+        if (h !in RESOLUTION_MIN_HEIGHT..RESOLUTION_MAX_HEIGHT) return null
+        return w to h
+    }
+
+    /**
+     * Effective X screen size in px, mirroring LorieView.getDimensionsFromSettings:
+     * `scaled` = device px / scale percent, `exact`/`custom` = stored WxH,
+     * anything else = device px. Seeds the Display-size controls.
+     */
+    fun effectiveResolution(context: Context): Pair<Int, Int> {
+        val dm = context.resources.displayMetrics
+        val deviceW = dm.widthPixels.coerceAtLeast(1)
+        val deviceH = dm.heightPixels.coerceAtLeast(1)
+        val stored = when (getResolutionMode(context)) {
+            "exact" -> prefs(context).getString(KEY_RESOLUTION_EXACT, null)
+            RESOLUTION_MODE_CUSTOM -> getCustomResolution(context)
+            else -> null
+        }
+        if (stored != null) parseResolution(stored)?.let { return it }
+        return if (getResolutionMode(context) == RESOLUTION_MODE_SCALED) {
+            val scale = getDisplayScale(context).coerceAtLeast(1)
+            (deviceW * 100 / scale).coerceIn(RESOLUTION_MIN_WIDTH, RESOLUTION_MAX_WIDTH) to
+                (deviceH * 100 / scale).coerceIn(RESOLUTION_MIN_HEIGHT, RESOLUTION_MAX_HEIGHT)
+        } else {
+            deviceW to deviceH
+        }
     }
 
     /**

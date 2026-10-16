@@ -302,7 +302,16 @@ configure_debian_chroot() {
             export TMPDIR=/tmp
             export DEBIAN_FRONTEND=noninteractive
             chmod 1777 /tmp /var/tmp 2>/dev/null || true
-            apt-get install -y xfce4 xfce4-terminal
+            _xf=1
+            until apt-get install -y xfce4 xfce4-terminal; do
+                if [ "$_xf" -ge 3 ]; then
+                    echo "Foila: XFCE package install failed after 3 tries — check your network, then tap Retry Setup."
+                    exit 1
+                fi
+                echo "Foila: Package download failed — retrying ($((_xf + 1))/3)…"
+                apt-get update >/dev/null 2>&1 || true
+                _xf=$((_xf + 1))
+            done
             apt-get install -y --no-install-recommends xfce4-whiskermenu-plugin xfce4-screenshooter 2>/dev/null || true
         ' || goodbye
     else
@@ -312,7 +321,7 @@ configure_debian_chroot() {
     touch "$DEBIANPATH/.flux_configured"
     success "Debian Environment Configured!"
 
-    # Root-staged launchers live in the Folio helpers dir (idempotent).
+    # Root-staged launchers live in the Foila helpers dir (idempotent).
     mkdir -p /data/local/folio/helpers
 
     # --- GENERATE GUI LAUNCH SCRIPT (thin → SSOT GUI / helper) ---
@@ -518,7 +527,7 @@ if [ -z "${BB:-}" ]; then
   fi
 fi
 if [ -z "${BB:-}" ]; then
-  echo "Folio: ERROR — root-capable busybox not found" >&2
+  echo "Foila: ERROR — root-capable busybox not found" >&2
   exit 1
 fi
 

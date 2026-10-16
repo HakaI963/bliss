@@ -823,7 +823,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                // Helper for Top Bar — Folio: wordmark + frost status pill only.
+                // Helper for Top Bar — Foila: wordmark + frost status pill only.
                 @Composable
                 fun TopBar(
                     hazeState: HazeState,
@@ -851,7 +851,7 @@ class MainActivity : ComponentActivity() {
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "Folio Linux",
+                                text = "Foila Linux",
                                 style = com.ivarna.fluxlinux.ui.theme.FolioWordmarkStyle,
                                 color = MaterialTheme.colorScheme.onBackground
                             )
@@ -1254,7 +1254,7 @@ class MainActivity : ComponentActivity() {
                                            currentScreen = Screen.INSTALL_WIZARD
                                        },
                                      onUninstallDistro = {
-                                         // Embedded uninstall: proot → proot-distro remove in Flux
+                                         // Embedded uninstall: proot → proot-distro remove in Foila
                                          // Terminal; chroot → uninstall_debian13_chroot.sh in Root Shell.
                                          val distro = selectedDistro ?: return@DistroSettingsScreen
                                          com.ivarna.fluxlinux.core.terminal.TerminalLauncher.prepareHost(
@@ -1320,7 +1320,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-// ── Folio navigation motion ─────────────────────────────────────────────────
+// ── Foila navigation motion ─────────────────────────────────────────────────
 // Depth model: root routes (onboarding/home tabs) = 0, settings hubs = 1,
 // their detail pages + desktop/install/terminal full-screen flows = 2. Push
 // enters from the right, pop from the left (15% width + fade, 240ms); same-depth

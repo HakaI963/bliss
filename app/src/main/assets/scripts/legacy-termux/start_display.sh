@@ -15,16 +15,16 @@ sleep 1
 pulseaudio --start --load="module-native-protocol-tcp auth-ip-acl=127.0.0.1 auth-anonymous=1" --exit-idle-time=-1
 
 # Start VirGL server (required for GPU acceleration inside PRoot)
-echo "Folio: Starting VirGL server..."
+echo "Foila: Starting VirGL server..."
 virgl_test_server_android &
 VIRGL_PID=$!
 sleep 2
 
 # Verify VirGL socket appeared (--shared-tmp exposes Termux $TMPDIR as /tmp inside proot)
 if [ -S "${TMPDIR}/.virgl_test" ]; then
-    echo "Folio: VirGL socket ready at /tmp/.virgl_test"
+    echo "Foila: VirGL socket ready at /tmp/.virgl_test"
 else
-    echo "Folio: [WARN] VirGL socket not found — GPU acceleration may not work"
+    echo "Foila: [WARN] VirGL socket not found — GPU acceleration may not work"
 fi
 
 # Prepare termux-x11 session

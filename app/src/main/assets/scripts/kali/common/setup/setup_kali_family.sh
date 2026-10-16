@@ -19,13 +19,13 @@ fi
 
 # setup_kali_family.sh — Kali Rolling (NetHunter-minimal rootfs treated as Kali).
 # Keep kali-rolling. Never add Debian. Never install kali-desktop-* / kali-tools-* /
-# kali-linux-default / kali-linux-large. Flux is uid 1000; leave user kali (uid 100000).
+# kali-linux-default / kali-linux-large. the flux guest user is uid 1000; leave user kali (uid 100000).
 
 DISTRO_NAME="${1:-kali}"
-echo "Folio: Configuring ${DISTRO_NAME} (Kali Family)..."
+echo "Foila: Configuring ${DISTRO_NAME} (Kali Family)..."
 
 if [ "$(id -u)" -ne 0 ]; then
-    echo "Folio: ERROR: must run as root inside the guest (got uid=$(id -u))."
+    echo "Foila: ERROR: must run as root inside the guest (got uid=$(id -u))."
     exit 1
 fi
 
@@ -38,7 +38,7 @@ _flux_disable_guest_selinux
 _flux_apt_prep
 
 if ! command -v apt-get >/dev/null 2>&1; then
-    echo "Folio: ERROR: apt-get not found"
+    echo "Foila: ERROR: apt-get not found"
     exit 1
 fi
 
@@ -46,7 +46,7 @@ _flux_log "apt-get update (kali-rolling only)..."
 if ! apt-get update; then
     _flux_log "apt-get update failed once — retrying"
     apt-get update || {
-        echo "Folio: apt-get update failed (repos/network)"
+        echo "Foila: apt-get update failed (repos/network)"
         exit 1
     }
 fi
@@ -56,7 +56,7 @@ apt-get install -y --no-install-recommends \
     bash sudo passwd adduser ca-certificates curl wget unzip tar xz-utils \
     git zsh python3 locales \
     dbus dbus-x11 || {
-        echo "Folio: base package install failed"
+        echo "Foila: base package install failed"
         exit 1
     }
 
@@ -78,14 +78,14 @@ DESKTOPS="$_norm"
 unset _norm
 if [ -z "${DESKTOPS##*xfce*}" ]; then
     _flux_log "Installing XFCE4 (targeted — never kali-desktop-xfce)..."
-    if ! apt-get install -y --no-install-recommends \
+    if ! _flux_retry_pkg apt-get install -y --no-install-recommends \
         xfce4-session xfce4-panel xfce4-settings xfce4-terminal \
         xfdesktop4 xfwm4 thunar \
         adwaita-icon-theme fonts-dejavu-core \
         libgl1-mesa-dri libegl1 mesa-utils; then
         _flux_log "targeted XFCE install failed — falling back to xfce4 metapackage"
-        apt-get install -y --no-install-recommends xfce4 || {
-            echo "Folio: XFCE install failed"
+        _flux_retry_pkg apt-get install -y --no-install-recommends xfce4 || {
+            echo "Foila: XFCE install failed after 3 tries — check your network, then tap Retry Setup."
             exit 1
         }
     fi
@@ -128,5 +128,5 @@ if [ -z "${DESKTOPS##*xfce*}" ] && command -v _flux_xfce_compact_defaults >/dev/
     _flux_xfce_compact_defaults || true
 fi
 
-echo "Folio: ${DISTRO_NAME} Kali setup complete!"
+echo "Foila: ${DISTRO_NAME} Kali setup complete!"
 exit 0

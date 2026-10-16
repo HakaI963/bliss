@@ -12,7 +12,7 @@ import com.ivarna.fluxlinux.core.terminal.TermuxHostPaths
 import java.util.concurrent.atomic.AtomicReference
 
 /**
- * Live application of the staged Folio Linux appearance to a *running* desktop.
+ * Live application of the staged Foila Linux appearance to a *running* desktop.
  *
  * The guest applier (`~/.config/folio/appearance-apply.sh`) writes the XML/rc
  * files; this object additionally pokes the running session so the change is

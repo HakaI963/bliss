@@ -1,6 +1,6 @@
 #!/bin/bash
 # setup_customization_kde_debian.sh
-# Applies "Folio" branding and customization to Debian KDE Plasma Desktop
+# Applies "Foila" branding and customization to Debian KDE Plasma Desktop
 # Mirrors setup_customization_debian.sh structure exactly, adapted for KDE
 # Works for both Chroot and Proot environments (run as root, switches to user 'flux')
 
@@ -22,7 +22,7 @@ _flux_pause() {
 
 handle_error() {
     echo ""
-    echo "❌ Folio KDE Customization Error: Script failed at step: $1"
+    echo "❌ Foila KDE Customization Error: Script failed at step: $1"
     echo "─────────────────────────────────────────────────────────────"
     echo "Log saved to: $LOG_FILE"
     echo ""
@@ -35,12 +35,12 @@ handle_error() {
     exit 1
 }
 
-echo "Folio: Starting KDE Plasma Customization..."
+echo "Foila: Starting KDE Plasma Customization..."
 
 # Setup scripts must run as root inside proot/chroot (apt/dpkg).
 if [ "$(id -u)" -ne 0 ]; then
-    echo "Folio: ERROR: must run as root inside the guest (got uid=$(id -u))."
-    echo "Folio: Component sessions should use --user root; re-run from Distro Settings."
+    echo "Foila: ERROR: must run as root inside the guest (got uid=$(id -u))."
+    echo "Foila: Component sessions should use --user root; re-run from Distro Settings."
     handle_error "Not Root"
 fi
 
@@ -52,14 +52,14 @@ _flux_chown_r() { chown -R "$@" 2>/dev/null || true; }
 exec > >(tee -a "$LOG_FILE") 2>&1
 
 # 1. Install Dependencies
-echo "Folio: Installing customization tools..."
+echo "Foila: Installing customization tools..."
 export DEBIAN_FRONTEND=noninteractive
 apt update -y
 apt install -y curl fastfetch wget unzip fontconfig locales breeze breeze-gtk-theme \
-    || echo "Folio: [WARN] some customization tools unavailable — continuing"
+    || echo "Foila: [WARN] some customization tools unavailable — continuing"
 
 # Setup Locales for proper font rendering in ZSH/Terminal
-echo "Folio: Setting up locales..."
+echo "Foila: Setting up locales..."
 echo "en_US.UTF-8 UTF-8" > /etc/locale.gen
 locale-gen
 update-locale LANG=en_US.UTF-8
@@ -72,7 +72,7 @@ ASSET_REPO="abhay-byte/fluxlinux"
 ASSET_TAG="debian-v1"
 BASE_URL="https://github.com/$ASSET_REPO/releases/download/$ASSET_TAG"
 
-echo "Folio: Downloading assets from $BASE_URL..."
+echo "Foila: Downloading assets from $BASE_URL..."
 
 # Helper to extract all contents
 extract_all_assets() {
@@ -97,7 +97,7 @@ extract_all_assets() {
 # Prompts need FLUX_INTERACTIVE=1: the install pipeline gives the script a pty,
 # so "[ -t 0 ]" alone would block a terminal-only install on stdin.
 if [ -n "$FLUX_THEME" ]; then
-    echo "Folio: Auto-applying Theme: $FLUX_THEME"
+    echo "Foila: Auto-applying Theme: $FLUX_THEME"
     if [ "$FLUX_THEME" == "light" ]; then
         THEME_CHOICE="2"
     else
@@ -111,7 +111,7 @@ elif [ "${FLUX_INTERACTIVE:-0}" = "1" ] && [ -t 0 ]; then
     read -r -p "Enter choice [1-2]: " THEME_CHOICE
     echo "------------------------------------------------"
 else
-    echo "Folio: No TTY / FLUX_THEME — defaulting to dark"
+    echo "Foila: No TTY / FLUX_THEME — defaulting to dark"
     THEME_CHOICE="1"
 fi
 
@@ -119,14 +119,14 @@ fi
 SEL_ICON="Papirus-Dark"
 
 if [ "$THEME_CHOICE" == "2" ]; then
-    echo "Folio: Light Mode Selected (icons: Papirus-Dark only)."
+    echo "Foila: Light Mode Selected (icons: Papirus-Dark only)."
     SEL_GTK_THEME="Space-light"
     SEL_CURSOR="Vimix-cursors"
     SEL_WALLPAPER="fluxlinux-light.png"
     KDE_COLOR_SCHEME="BreezeLight"
     KWIN_THEME="Breeze"
 else
-    echo "Folio: Dark Mode Selected (icons: Papirus-Dark only)."
+    echo "Foila: Dark Mode Selected (icons: Papirus-Dark only)."
     SEL_GTK_THEME="Space-transparency"
     SEL_CURSOR="Vimix-white-cursors"
     SEL_WALLPAPER="fluxlinux-dark.png"
@@ -135,17 +135,17 @@ else
 fi
 
 # Install GTK Themes (same as XFCE — KDE apps use GTK theme via qt5-style-plugins)
-echo "Folio: Installing Themes..."
+echo "Foila: Installing Themes..."
 mkdir -p "$THEME_DIR"
 extract_all_assets "$BASE_URL/theme.zip" "$THEME_DIR"
 
 # Install Icons (Papirus works perfectly in KDE)
-echo "Folio: Installing Icons..."
+echo "Foila: Installing Icons..."
 mkdir -p "$ICON_DIR"
 extract_all_assets "$BASE_URL/icons.zip" "$ICON_DIR"
 
 # Install Cursors
-echo "Folio: Installing Cursors..."
+echo "Foila: Installing Cursors..."
 extract_all_assets "$BASE_URL/cursor.zip" "$ICON_DIR"
 
 # Wallpaper Setup
@@ -153,7 +153,7 @@ WALLPAPER_DIR="$USER_HOME/Pictures/Wallpapers"
 mkdir -p "$WALLPAPER_DIR"
 _flux_chown_r "$CUSTOM_USER:$CUSTOM_GROUP" "$USER_HOME/Pictures"
 
-echo "Folio: Downloading Wallpaper..."
+echo "Foila: Downloading Wallpaper..."
 TEMP_WP_ZIP="/tmp/wallpaper.zip"
 wget -q --show-progress "$BASE_URL/wallpaper.zip" -O "$TEMP_WP_ZIP"
 unzip -o -j "$TEMP_WP_ZIP" -d "$WALLPAPER_DIR"
@@ -169,18 +169,18 @@ FONT_DIR="/usr/share/fonts/truetype/jetbrains-mono-nerd"
 FONT_INSTALLED=false
 
 if fc-list | grep -qi "JetBrainsMono Nerd"; then
-    echo "Folio: JetBrains Mono Nerd Font already installed."
+    echo "Foila: JetBrains Mono Nerd Font already installed."
     FONT_INSTALLED=true
 fi
 
 if [ "$FONT_INSTALLED" = false ]; then
-    echo "Folio: Installing JetBrains Mono Nerd Font..."
+    echo "Foila: Installing JetBrains Mono Nerd Font..."
     mkdir -p "$FONT_DIR"
     NERD_FONT_URL="https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.zip"
     TEMP_ZIP="/tmp/JetBrainsMono.zip"
     echo " - Downloading JetBrains Mono Nerd Font..."
     wget -q --show-progress "$NERD_FONT_URL" -O "$TEMP_ZIP" || {
-        echo "Folio: Direct download failed, trying from release..."
+        echo "Foila: Direct download failed, trying from release..."
         wget -q --show-progress "$BASE_URL/font.zip" -O "$TEMP_ZIP" || handle_error "Font Download"
     }
     echo " - Extracting font files..."
@@ -194,21 +194,21 @@ if [ "$FONT_INSTALLED" = false ]; then
     fc-cache -fv "$FONT_DIR"
     su -s /bin/bash - "$CUSTOM_USER" -c "fc-cache -f" 2>/dev/null
     if fc-list | grep -qi "JetBrainsMono Nerd"; then
-        echo "Folio: ✓ JetBrains Mono Nerd Font installed successfully!"
+        echo "Foila: ✓ JetBrains Mono Nerd Font installed successfully!"
     else
-        echo "Folio: ⚠ Font may not be properly registered."
+        echo "Foila: ⚠ Font may not be properly registered."
         ls -la "$FONT_DIR"
     fi
 fi
 
 # 4. Apply KDE Settings via config files
-echo "Folio: Applying KDE Plasma Settings..."
+echo "Foila: Applying KDE Plasma Settings..."
 
 KDE_CONFIG="$USER_HOME/.config"
 mkdir -p "$KDE_CONFIG"
 
 # ── kdeglobals: global KDE theme, icons, fonts, cursor ──────────────────────
-echo "Folio: Writing kdeglobals..."
+echo "Foila: Writing kdeglobals..."
 cat > "$KDE_CONFIG/kdeglobals" << EOF
 [General]
 ColorScheme=$KDE_COLOR_SCHEME
@@ -235,7 +235,7 @@ activeFont=JetBrainsMonoNerdFont,10,-1,5,700,0,0,0,0,0
 EOF
 
 # ── kcminputrc: cursor theme ─────────────────────────────────────────────────
-echo "Folio: Writing kcminputrc (cursor)..."
+echo "Foila: Writing kcminputrc (cursor)..."
 cat > "$KDE_CONFIG/kcminputrc" << EOF
 [Mouse]
 cursorSize=24
@@ -243,7 +243,7 @@ cursorTheme=$SEL_CURSOR
 EOF
 
 # ── kwinrc: window manager (Breeze), compositing, tiling ────────────────────
-echo "Folio: Writing kwinrc..."
+echo "Foila: Writing kwinrc..."
 cat > "$KDE_CONFIG/kwinrc" << EOF
 [Compositing]
 Backend=QPainter
@@ -271,14 +271,14 @@ theme=Breeze
 EOF
 
 # ── plasmarc: Plasma shell theme ─────────────────────────────────────────────
-echo "Folio: Writing plasmarc..."
+echo "Foila: Writing plasmarc..."
 cat > "$KDE_CONFIG/plasmarc" << EOF
 [Theme]
 name=breeze-dark
 EOF
 
 # ── plasma-org.kde.plasma.desktop-appletsrc: wallpaper + panel layout ────────
-echo "Folio: Writing Plasma desktop config (wallpaper + panel)..."
+echo "Foila: Writing Plasma desktop config (wallpaper + panel)..."
 cat > "$KDE_CONFIG/plasma-org.kde.plasma.desktop-appletsrc" << EOF
 [Containments][1]
 ItemGeometriesHorizontal=
@@ -331,7 +331,7 @@ AppletOrder=3;4;5;6;7
 EOF
 
 # ── kglobalshortcutsrc: keyboard shortcuts (KDE equivalent) ─────────────────
-echo "Folio: Writing keyboard shortcuts (kglobalshortcutsrc)..."
+echo "Foila: Writing keyboard shortcuts (kglobalshortcutsrc)..."
 cat > "$KDE_CONFIG/kglobalshortcutsrc" << 'EOF'
 [kwin]
 Show Desktop=Meta+D,Meta+D,Show Desktop
@@ -353,14 +353,14 @@ _launch=none,none,KDE Plasma Desktop
 EOF
 
 # ── kcmfonts: DPI / font scaling (2x for mobile displays) ───────────────────
-echo "Folio: Writing font DPI config..."
+echo "Foila: Writing font DPI config..."
 cat > "$KDE_CONFIG/kcmfonts" << EOF
 [General]
 forceFontDPI=192
 EOF
 
 # ── Konsole profile: replaces xfce4-terminal config ─────────────────────────
-echo "Folio: Configuring Konsole..."
+echo "Foila: Configuring Konsole..."
 KONSOLE_DIR="$USER_HOME/.local/share/konsole"
 mkdir -p "$KONSOLE_DIR"
 
@@ -372,7 +372,7 @@ antialias=true
 
 [General]
 Command=/bin/zsh
-Name=Folio
+Name=Foila
 Parent=FALLBACK/
 
 [Interaction Options]
@@ -407,21 +407,21 @@ _flux_chown_r "$CUSTOM_USER:$CUSTOM_GROUP" "$KONSOLE_DIR" "$KONSOLE_CONFIG_DIR/k
 
 # Fix ownership on all KDE configs
 _flux_chown_r "$CUSTOM_USER:$CUSTOM_GROUP" "$KDE_CONFIG"
-echo "Folio: KDE settings applied successfully!"
+echo "Foila: KDE settings applied successfully!"
 
 # 5. Configure Zsh and Terminal (identical to XFCE4 customization)
-echo "Folio: Configuring Zsh and Terminal..."
+echo "Foila: Configuring Zsh and Terminal..."
 
 # Install zsh
-echo "Folio: Installing zsh..."
+echo "Foila: Installing zsh..."
 apt-get install -y zsh 2>/dev/null
 
 # Install Oh My Zsh for flux user
-echo "Folio: Installing Oh My Zsh..."
+echo "Foila: Installing Oh My Zsh..."
 
 # Check for corrupt installation
 if [ -d "$USER_HOME/.oh-my-zsh" ] && [ ! -f "$USER_HOME/.oh-my-zsh/oh-my-zsh.sh" ]; then
-    echo "Folio: Detected corrupt Oh My Zsh installation. Removing..."
+    echo "Foila: Detected corrupt Oh My Zsh installation. Removing..."
     rm -rf "$USER_HOME/.oh-my-zsh"
 fi
 
@@ -431,18 +431,18 @@ if [ ! -d "$USER_HOME/.oh-my-zsh" ] || [ ! -f "$USER_HOME/.oh-my-zsh/oh-my-zsh.s
     su -s /bin/bash - "$CUSTOM_USER" -c 'RUNZSH=no CHSH=no sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"' 2>/dev/null || true
 fi
 if [ ! -f "$USER_HOME/.oh-my-zsh/oh-my-zsh.sh" ]; then
-    echo "Folio: Oh My Zsh installer failed — trying git clone fallback..."
+    echo "Foila: Oh My Zsh installer failed — trying git clone fallback..."
     rm -rf "$USER_HOME/.oh-my-zsh"
     su -s /bin/bash - "$CUSTOM_USER" -c "git clone --depth 1 https://github.com/ohmyzsh/ohmyzsh.git '$USER_HOME/.oh-my-zsh'" 2>/dev/null || true
 fi
 if [ ! -f "$USER_HOME/.oh-my-zsh/oh-my-zsh.sh" ]; then
-    echo "Folio: WARNING: Oh My Zsh not installed — .zshrc will skip source (no hard fail)"
+    echo "Foila: WARNING: Oh My Zsh not installed — .zshrc will skip source (no hard fail)"
 fi
 
 ZSH_CUSTOM="$USER_HOME/.oh-my-zsh/custom"
 
 # Install Zsh plugins
-echo "Folio: Installing Zsh plugins..."
+echo "Foila: Installing Zsh plugins..."
 su -s /bin/bash - "$CUSTOM_USER" -c "git clone https://github.com/zsh-users/zsh-autosuggestions '$ZSH_CUSTOM/plugins/zsh-autosuggestions'" 2>/dev/null
 su -s /bin/bash - "$CUSTOM_USER" -c "git clone https://github.com/zsh-users/zsh-syntax-highlighting '$ZSH_CUSTOM/plugins/zsh-syntax-highlighting'" 2>/dev/null
 su -s /bin/bash - "$CUSTOM_USER" -c "git clone --depth 1 https://github.com/marlonrichert/zsh-autocomplete.git '$ZSH_CUSTOM/plugins/zsh-autocomplete'" 2>/dev/null
@@ -450,24 +450,24 @@ su -s /bin/bash - "$CUSTOM_USER" -c "git clone --depth 1 https://github.com/marl
 # Local monochrome prompt theme — no remote download (old colorful theme removed).
 rm -f "$ZSH_CUSTOM/themes/agnosterzak.zsh-theme" 2>/dev/null || true
 if [ ! -s "$ZSH_CUSTOM/themes/folio.zsh-theme" ]; then
-    echo "Folio: Installing folio prompt theme..."
+    echo "Foila: Installing folio prompt theme..."
     mkdir -p "$ZSH_CUSTOM/themes"
     cat > "$ZSH_CUSTOM/themes/folio.zsh-theme" <<'FOLIO_THEME_EOF'
-# folio.zsh-theme — Folio's minimal monochrome prompt.
+# folio.zsh-theme — Foila's minimal monochrome prompt.
 # White/gray on black only; ASCII-safe (no powerline glyphs, no ANSI colors 31-44).
-# Segments:  time  folio  working-dir  input-char
-PROMPT='%F{240}%D{%H:%M}%f %F{255}folio%f %F{250}%~%f %F{255}%#%f '
+# Segments:  time  foila  working-dir  input-char
+PROMPT='%F{240}%D{%H:%M}%f %F{255}foila%f %F{250}%~%f %F{255}%#%f '
 PROMPT2='%F{240}> %f'
 FOLIO_THEME_EOF
     if [ ! -s "$ZSH_CUSTOM/themes/folio.zsh-theme" ]; then
-        echo "Folio: WARNING: folio prompt theme write failed — zsh keeps default prompt"
+        echo "Foila: WARNING: folio prompt theme write failed — zsh keeps default prompt"
     fi
 else
-    echo "Folio: folio prompt theme already present — skip"
+    echo "Foila: folio prompt theme already present — skip"
 fi
 
 # Install pokemon-colorscripts
-echo "Folio: Installing pokemon-colorscripts..."
+echo "Foila: Installing pokemon-colorscripts..."
 POKEMON_TEMP="/tmp/pokemon-colorscripts"
 rm -rf "$POKEMON_TEMP"
 git clone https://gitlab.com/phoneybadger/pokemon-colorscripts.git "$POKEMON_TEMP" 2>/dev/null
@@ -476,7 +476,7 @@ cd - > /dev/null
 rm -rf "$POKEMON_TEMP"
 
 # Configure .zshrc
-echo "Folio: Configuring .zshrc..."
+echo "Foila: Configuring .zshrc..."
 ZSHRC="$USER_HOME/.zshrc"
 
 # Write complete optimized .zshrc (performance fixes from screenshot)
@@ -484,7 +484,7 @@ ZSHRC="$USER_HOME/.zshrc"
 # - Backgrounded visuals with &! (async, don't block shell startup)
 # - DISABLE_AUTO_UPDATE / DISABLE_UPDATE_PROMPT (no prompts on launch)
 # - ZSH_DISABLE_COMPFIX (no compaudit, faster init)
-echo "Folio: Writing optimized .zshrc..."
+echo "Foila: Writing optimized .zshrc..."
 # Defensive: never hard-fail on missing oh-my-zsh / pokemon (network installs often skip).
 cat > "$ZSHRC" << 'ZSHEOF'
 # PATH setup - local bin, npm global modules
@@ -499,14 +499,19 @@ export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp}"
 
 # Background visuals - don't block shell startup; skip missing tools (no error spam)
 {
-  if command -v fastfetch >/dev/null 2>&1; then
-    _ff="$HOME/.local/share/fastfetch/presets/termux.jsonc"
-    if [ -f "$_ff" ]; then
-      fastfetch --config "$_ff" 2>/dev/null || true
-    else
-      printf '%s\n' "folio@localhost | $(sed -n 's/^PRETTY_NAME=//p' /etc/os-release 2>/dev/null | tr -d '"' | head -n 1) | $(date +%H:%M 2>/dev/null)"
+  # Header: exactly one line, "foila@<id>" (distro id only — no host,
+  # version or time). ID= from /etc/os-release; fallbacks: first word of
+  # PRETTY_NAME (lowercased), then "linux".
+  _fid=""
+  if [ -r /etc/os-release ]; then
+    _fid="$(sed -n 's/^ID=//p' /etc/os-release 2>/dev/null | head -n 1 | tr -d '"' | tr '[:upper:]' '[:lower:]')"
+    if [ -z "$_fid" ]; then
+      _fid="$(sed -n 's/^PRETTY_NAME=//p' /etc/os-release 2>/dev/null | head -n 1 | tr -d '"' | awk '{print $1}' | tr '[:upper:]' '[:lower:]')"
     fi
   fi
+  [ -n "$_fid" ] || _fid="linux"
+  printf '%s\n' "foila@$_fid"
+  unset _fid
   if command -v pokemon-colorscripts >/dev/null 2>&1; then
     pokemon-colorscripts --no-title -r 1,2,3 2>/dev/null || true
   fi
@@ -526,61 +531,19 @@ fi
 ZSHEOF
 _flux_chown "$CUSTOM_USER:$CUSTOM_GROUP" "$ZSHRC"
 
-# Local monochrome fastfetch preset — no remote download.
-_flux_write_fastfetch_preset() {
-    _home="$1"
-    _owner="${2:-}"
-    mkdir -p "$_home/.local/share/fastfetch/presets"
-    cat > "$_home/.local/share/fastfetch/presets/termux.jsonc" <<'FFEOF'
-{
-  "logo": null,
-  "display": { "separator": " ›  " },
-  "modules": [
-    { "type": "os", "key": "OS  " },
-    { "type": "kernel", "key": "KER " },
-    { "type": "cpu", "key": "CPU " },
-    { "type": "gpu", "key": "GPU " },
-    { "type": "packages", "key": "PKG " },
-    { "type": "shell", "key": "SH  " },
-    { "type": "terminal", "key": "TER " },
-    {
-      "type": "disk",
-      "key": "DSK ",
-      "folders": ["/"],
-      "showRemovable": false,
-      "showHidden": false,
-      "showSubvolumes": false
-    },
-    { "type": "memory", "key": "MEM " },
-    { "type": "swap", "key": "SWP " }
-  ]
-}
-FFEOF
-    if [ -n "$_owner" ]; then
-        _flux_chown "$_owner" "$_home/.local/share/fastfetch/presets/termux.jsonc" 2>/dev/null || true
-    fi
-}
-_flux_write_fastfetch_preset "$USER_HOME" "$CUSTOM_USER:$CUSTOM_GROUP"
-_flux_write_fastfetch_preset /root
-mkdir -p /usr/share/fastfetch/presets
-if [ -f "$USER_HOME/.local/share/fastfetch/presets/termux.jsonc" ]; then
-    cp -f "$USER_HOME/.local/share/fastfetch/presets/termux.jsonc" \
-        /usr/share/fastfetch/presets/termux.jsonc 2>/dev/null || true
-fi
-
-# Fastfetch and pokemon are already included in the optimized .zshrc above (backgrounded)
+# Pokemon is already included in the optimized .zshrc above (backgrounded)
 
 # Set zsh as default shell for flux user
 chsh -s /bin/zsh "$CUSTOM_USER" 2>/dev/null
 
 _flux_chown_r "$CUSTOM_USER:$CUSTOM_GROUP" "$USER_HOME/.oh-my-zsh" "$USER_HOME/.zshrc" "$USER_HOME/.local"
 
-echo "Folio: Zsh configuration complete!"
+echo "Foila: Zsh configuration complete!"
 
 # 6. Reload KDE Shell — only if a Plasma session is actually running
 # (installing from the terminal tab / onboarding must never spawn stray
 # plasmashell/kwin processes or block on a missing X server).
-echo "Folio: Reloading KDE Plasma Shell (if running)..."
+echo "Foila: Reloading KDE Plasma Shell (if running)..."
 if pgrep -x plasmashell >/dev/null 2>&1 || pgrep -x kwin_x11 >/dev/null 2>&1; then
     su -s /bin/bash - "$CUSTOM_USER" -c "
         export DISPLAY=\${DISPLAY:-:0}
@@ -597,10 +560,10 @@ if pgrep -x plasmashell >/dev/null 2>&1 || pgrep -x kwin_x11 >/dev/null 2>&1; th
         kwin_x11 --replace > /dev/null 2>&1 &
     " 2>/dev/null || true
 else
-    echo "Folio: No KDE session running — skip shell reload"
+    echo "Foila: No KDE session running — skip shell reload"
 fi
 
-echo "Folio: KDE Customization Complete!"
+echo "Foila: KDE Customization Complete!"
 echo "Log saved at: $LOG_FILE"
 echo "------------------------------------------------"
 # Interactive pause only on request (FLUX_INTERACTIVE=1). The install pipeline

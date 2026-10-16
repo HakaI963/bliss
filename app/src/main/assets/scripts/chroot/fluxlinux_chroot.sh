@@ -421,7 +421,7 @@ resolve_login_shell() {
   printf '%s' "sh"
 }
 
-# Seed Flux zsh profile when customization never wrote one (Alpine chroot).
+# Seed Foila zsh profile when customization never wrote one (Alpine chroot).
 ensure_flux_zsh_profile() {
   [ "$USER_NAME" = "flux" ] || return 0
   _home="$FLUX_CHROOT/home/flux"
@@ -463,20 +463,20 @@ if command -v apk >/dev/null 2>&1 && command -v sudo >/dev/null 2>&1; then
   apk() { command sudo apk "$@"; }
 fi
 
-# Folio launch sticker (random colored anime banner; opt out FLUX_NO_BANNER=1)
+# Foila launch sticker (random colored anime banner; opt out FLUX_NO_BANNER=1)
 [ -r "$HOME/.config/folio/banner.sh" ] && . "$HOME/.config/folio/banner.sh"
 ZSHRC
   fi
-  # Monochrome Folio prompt theme (replaces the removed agnosterzak theme).
+  # Monochrome Foila prompt theme (replaces the removed agnosterzak theme).
   if [ -d "$_home/.oh-my-zsh" ]; then
     mkdir -p "$_home/.oh-my-zsh/custom/themes" 2>/dev/null || true
     rm -f "$_home/.oh-my-zsh/custom/themes/agnosterzak.zsh-theme" 2>/dev/null || true
     if [ ! -s "$_home/.oh-my-zsh/custom/themes/folio.zsh-theme" ]; then
       cat > "$_home/.oh-my-zsh/custom/themes/folio.zsh-theme" <<'FOLIO_THEME_EOF'
-# folio.zsh-theme — Folio's minimal monochrome prompt.
+# folio.zsh-theme — Foila's minimal monochrome prompt.
 # White/gray on black only; ASCII-safe (no powerline glyphs, no ANSI colors 31-44).
-# Segments:  time  folio  working-dir  input-char
-PROMPT='%F{240}%D{%H:%M}%f %F{255}folio%f %F{250}%~%f %F{255}%#%f '
+# Segments:  time  foila  working-dir  input-char
+PROMPT='%F{240}%D{%H:%M}%f %F{255}foila%f %F{250}%~%f %F{255}%#%f '
 PROMPT2='%F{240}> %f'
 FOLIO_THEME_EOF
     fi
@@ -485,42 +485,13 @@ FOLIO_THEME_EOF
   if [ -f "$_home/.zshrc" ] && grep -q 'ZSH_THEME="agnosterzak"' "$_home/.zshrc" 2>/dev/null; then
     sed -i 's|ZSH_THEME="agnosterzak"|ZSH_THEME="folio"|' "$_home/.zshrc" 2>/dev/null || true
   fi
-  # Monochrome Folio fastfetch preset (local; replaces the remote colorful one).
-  if [ ! -s "$_home/.local/share/fastfetch/presets/termux.jsonc" ]; then
-    mkdir -p "$_home/.local/share/fastfetch/presets" 2>/dev/null || true
-    cat > "$_home/.local/share/fastfetch/presets/termux.jsonc" <<'FFEOF'
-{
-  "logo": null,
-  "display": { "separator": " ›  " },
-  "modules": [
-    { "type": "os", "key": "OS  " },
-    { "type": "kernel", "key": "KER " },
-    { "type": "cpu", "key": "CPU " },
-    { "type": "gpu", "key": "GPU " },
-    { "type": "packages", "key": "PKG " },
-    { "type": "shell", "key": "SH  " },
-    { "type": "terminal", "key": "TER " },
-    {
-      "type": "disk",
-      "key": "DSK ",
-      "folders": ["/"],
-      "showRemovable": false,
-      "showHidden": false,
-      "showSubvolumes": false
-    },
-    { "type": "memory", "key": "MEM " },
-    { "type": "swap", "key": "SWP " }
-  ]
-}
-FFEOF
-  fi
-  # ── Folio launch sticker: 8 colored anime ASCII designs (256-color) + ------
+  # ── Foila launch sticker: 8 colored anime ASCII designs (256-color) + ------
   # banner.sh. Random one per interactive shell; opt out with FLUX_NO_BANNER=1.
   # Host-side write (root owns the chroot tree); guards keep it non-fatal.
   # `.banner-rev` refreshes existing installs on the next customization re-run.
   _fbdir="$_home/.config/folio/banner"
   mkdir -p "$_fbdir" "$_home/.config/folio" 2>/dev/null || true
-  _fbrev="2"
+  _fbrev="3"
   _fneed=0
   if [ "$(cat "$_fbdir/.banner-rev" 2>/dev/null || true)" != "$_fbrev" ]; then
     _fneed=1
@@ -633,7 +604,7 @@ FOLIO_BANNER_ALL
     rm -f "$_fbdir/.folio-banners.$$" 2>/dev/null || true
     printf '%s\n' "$_fbrev" > "$_fbdir/.banner-rev" 2>/dev/null || true
     cat > "$_home/.config/folio/banner.sh" <<'FB_SH'
-# folio-banner.sh — Folio launch sticker. Colored 256-color ASCII art (no
+# folio-banner.sh — Foila launch sticker. Colored 256-color ASCII art (no
 # emoji), offline, random design per interactive shell. Opt out FLUX_NO_BANNER=1.
 folio-banner-art() {
   # Prints one randomly picked design from ~/.config/folio/banner/*.txt.
@@ -653,13 +624,19 @@ folio-banner() {
   [ "${FLUX_NO_BANNER:-0}" = "1" ] && return 0
   case $- in *i*) ;; *) return 0;; esac
   folio-banner-art
-  local _ff="$HOME/.local/share/fastfetch/presets/termux.jsonc"
-  if command -v fastfetch >/dev/null 2>&1 && [ -f "$_ff" ]; then
-    { fastfetch --config "$_ff" 2>/dev/null || true; } &!
-  else
-    printf '%s\n' "folio@localhost | $(sed -n 's/^PRETTY_NAME=//p' /etc/os-release 2>/dev/null | tr -d '"' | head -n 1) | $(date +%H:%M 2>/dev/null)"
+  # Header: exactly one line, "foila@<id>" (distro id only — no host,
+  # version or time). ID= from /etc/os-release; fallbacks: first word of
+  # PRETTY_NAME (lowercased), then "linux".
+  local _fid=""
+  if [ -r /etc/os-release ]; then
+    _fid="$(sed -n 's/^ID=//p' /etc/os-release 2>/dev/null | head -n 1 | tr -d '"' | tr '[:upper:]' '[:lower:]')"
+    if [ -z "$_fid" ]; then
+      _fid="$(sed -n 's/^PRETTY_NAME=//p' /etc/os-release 2>/dev/null | head -n 1 | tr -d '"' | awk '{print $1}' | tr '[:upper:]' '[:lower:]')"
+    fi
   fi
-  unset _ff
+  [ -n "$_fid" ] || _fid="linux"
+  printf '%s\n' "foila@$_fid"
+  unset _fid
 }
 folio-banner
 FB_SH
@@ -669,7 +646,7 @@ FB_SH
   # Existing .zshrc: source the sticker when missing (idempotent, cheap grep).
   if [ -f "$_home/.zshrc" ] && ! grep -q "folio/banner.sh" "$_home/.zshrc" 2>/dev/null; then
     {
-      printf '\n# Folio launch sticker (random colored anime banner; opt out FLUX_NO_BANNER=1)\n'
+      printf '\n# Foila launch sticker (random colored anime banner; opt out FLUX_NO_BANNER=1)\n'
       printf '[ -r "$HOME/.config/folio/banner.sh" ] && . "$HOME/.config/folio/banner.sh"\n'
     } >> "$_home/.zshrc" 2>/dev/null || true
   fi
@@ -684,12 +661,11 @@ FB_SH
       "$FLUX_CHROOT/etc/passwd" 2>/dev/null || true
   fi
   chown --reference="$_home" "$_home/.zshrc" "$_home/.zprofile" \
-    "$_home/.oh-my-zsh/custom/themes/folio.zsh-theme" \
-    "$_home/.local/share/fastfetch/presets/termux.jsonc" 2>/dev/null || true
+    "$_home/.oh-my-zsh/custom/themes/folio.zsh-theme" 2>/dev/null || true
   if [ -d "$_home/.config/folio" ]; then
     chown -R --reference="$_home" "$_home/.config/folio" 2>/dev/null || true
   fi
-  # Folio Linux appearance: re-apply the app-staged config when it changed.
+  # Foila Linux appearance: re-apply the app-staged config when it changed.
   # Runs inside the chroot (guest tools + guest paths); the script is
   # hash-guarded, so repeated logins are cheap no-ops when nothing changed.
   if [ -r "$_home/.config/folio/appearance-apply.sh" ]; then

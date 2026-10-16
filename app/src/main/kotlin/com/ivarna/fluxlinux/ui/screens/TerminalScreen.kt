@@ -90,7 +90,6 @@ import com.ivarna.fluxlinux.ui.terminal.ShortcutBarConfig
 import com.ivarna.fluxlinux.ui.terminal.ShortcutBarEditorSheet
 import com.ivarna.fluxlinux.ui.terminal.ShortcutBarStore
 import com.ivarna.fluxlinux.ui.terminal.ShortcutKeyEditorSheet
-import com.ivarna.fluxlinux.ui.terminal.ShortcutQuickAddDialog
 import com.ivarna.fluxlinux.ui.terminal.TerminalExtraKeys
 import com.ivarna.fluxlinux.ui.terminal.TerminalKeyInjector
 import com.ivarna.fluxlinux.ui.terminal.TerminalModifierState
@@ -144,7 +143,6 @@ fun TerminalScreen(
     var showShortcutEditor by remember { mutableStateOf(false) }
     var showShortcutKeyEditor by remember { mutableStateOf(false) }
     var editingShortcutKey by remember { mutableStateOf<TerminalShortcutKey?>(null) }
-    var showQuickAddKey by remember { mutableStateOf(false) }
     // Launch-sticker splash: shown when the screen opens with a live session and
     // whenever a NEW session lands — not on plain switches between existing tabs.
     var splashArtRes by remember { mutableIntStateOf(0) }
@@ -205,9 +203,14 @@ fun TerminalScreen(
         distroId: String? = null,
         onOpened: (() -> Unit)? = null
     ) {
+        // The "+" panel and the empty-state selector always create a NEW tab
+        // (reuseExisting = false) — multiple shells of one distro are allowed.
+        // The Home "Shell"/"Open" paths keep the default reuse behavior instead.
         if (method == "host") {
             // R4: gate on host ready — prepare when missing, toast "Host not ready".
-            FluxTerminalSessionManager.openHostShellAfterReady(context, title) { result ->
+            FluxTerminalSessionManager.openHostShellAfterReady(
+                context, title, reuseExisting = false
+            ) { result ->
                 when (result) {
                     SessionOpenResult.OPENED -> onOpened?.invoke()
                     SessionOpenResult.MAX_TABS -> toast("Tab limit reached (${FluxTerminalSessionManager.MAX_TABS})")
@@ -223,6 +226,7 @@ fun TerminalScreen(
             title = title,
             method = method,
             distroId = distroId,
+            reuseExisting = false,
             onResult = { result ->
                 when (result) {
                     SessionOpenResult.OPENED -> onOpened?.invoke()
@@ -300,7 +304,7 @@ fun TerminalScreen(
         try {
             val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
             cm?.setPrimaryClip(ClipData.newPlainText("terminal", text.take(200_000)))
-            toast("Screen copied")
+            toast("Copied")
         } catch (_: Exception) {
             toast("Copy failed")
         }
@@ -442,7 +446,6 @@ fun TerminalScreen(
                 ) { i ->
                     val managed = sessions[i]
                     TerminalSessionTab(
-                        title = managed.title,
                         label = compactSessionLabel(managed.title, managed.type, managed.method),
                         iconRes = managed.iconRes ?: R.drawable.ic_terminal,
                         selected = i == activeIndex,
@@ -657,10 +660,6 @@ fun TerminalScreen(
                 editingShortcutKey = null
                 showShortcutKeyEditor = true
             },
-            onAddToShortcutBar = {
-                showToolsSheet = false
-                showQuickAddKey = true
-            },
             onEditShortcutBar = {
                 showToolsSheet = false
                 showShortcutEditor = true
@@ -698,17 +697,6 @@ fun TerminalScreen(
             }
         )
     }
-
-    // Quick "Add to shortcut bar" (label + sequence) from the tools sheet.
-    if (showQuickAddKey) {
-        ShortcutQuickAddDialog(
-            onAdd = { key ->
-                updateShortcutConfig(shortcutConfig.copy(keys = shortcutConfig.keys + key))
-                showQuickAddKey = false
-            },
-            onDismiss = { showQuickAddKey = false }
-        )
-    }
 }
 
 /**
@@ -717,7 +705,6 @@ fun TerminalScreen(
  */
 @Composable
 private fun TerminalSessionTab(
-    title: String,
     label: String,
     iconRes: Int,
     selected: Boolean,
@@ -783,7 +770,7 @@ private fun TerminalSessionTab(
         ) {
             Icon(
                 imageVector = Icons.Default.Close,
-                contentDescription = "Close $title",
+                contentDescription = "Close $label",
                 tint = foreground,
                 modifier = Modifier.size(14.dp)
             )

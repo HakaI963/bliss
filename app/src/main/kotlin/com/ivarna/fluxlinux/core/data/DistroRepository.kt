@@ -38,7 +38,7 @@ object DistroRepository {
         DistroComponent(
             id = "customization",
             name = "XFCE4 Customization",
-            description = "Folio Linux theme, wallpapers, fonts, and 2x scaling for XFCE4.",
+            description = "Foila Linux theme, wallpapers, fonts, and 2x scaling for XFCE4.",
             scriptName = "debian/common/setup/setup_customization_debian.sh",
             sizeEstimate = "200 MB"
         ),
@@ -52,7 +52,7 @@ object DistroRepository {
         DistroComponent(
             id = "kde_customization",
             name = "KDE Desktop Customization",
-            description = "Folio Linux theme, Papirus icons, wallpapers & Zsh for KDE Plasma.",
+            description = "Foila Linux theme, Papirus icons, wallpapers & Zsh for KDE Plasma.",
             scriptName = "debian/common/setup/setup_customization_kde_debian.sh",
             sizeEstimate = "250 MB"
         ),
@@ -171,7 +171,7 @@ object DistroRepository {
         DistroComponent(
             id = "customization",
             name = "XFCE4 Customization",
-            description = "Folio Linux theme, wallpapers, fonts, and Zsh for Alpine.",
+            description = "Foila Linux theme, wallpapers, fonts, and Zsh for Alpine.",
             scriptName = "alpine/common/setup/setup_customization_alpine.sh",
             sizeEstimate = "150 MB"
         )
@@ -197,7 +197,7 @@ object DistroRepository {
         DistroComponent(
             id = "customization",
             name = "XFCE4 Customization",
-            description = "Folio Linux theme, Papirus icons, Nerd Font, and Zsh.",
+            description = "Foila Linux theme, Papirus icons, Nerd Font, and Zsh.",
             scriptName = "common/setup/setup_customization_xfce.sh",
             sizeEstimate = "150 MB"
         )

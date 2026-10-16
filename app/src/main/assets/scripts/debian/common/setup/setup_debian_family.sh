@@ -2,9 +2,28 @@
 # setup_debian_family.sh
 # Generic Post-install configuration for Debian-based Distros (Debian, Ubuntu, Kali, etc.)
 
+# Helpers live in flux_guest_common.sh (prepended by flux_install /
+# familySetupPayload). Source it only when this file is run standalone.
+if ! command -v _flux_setup_pulse >/dev/null 2>&1; then
+    _here=$(CDPATH= cd -- "$(dirname -- "$0")" 2>/dev/null && pwd)
+    for _common in \
+        "${_here}/flux_guest_common.sh" \
+        "${HOME:-}/flux_guest_common.sh" \
+        /tmp/flux_guest_common.sh
+    do
+        if [ -f "$_common" ]; then
+            # shellcheck source=/dev/null
+            . "$_common"
+            break
+        fi
+    done
+fi
+# Degraded standalone run without the shared helpers: plain install (no retry).
+command -v _flux_retry_pkg >/dev/null 2>&1 || _flux_retry_pkg() { "$@"; }
+
 DISTRO_NAME="${1:-debian}"
 
-echo "Folio: Configuring ${DISTRO_NAME} (Debian Family)..."
+echo "Foila: Configuring ${DISTRO_NAME} (Debian Family)..."
 
 # 1. Update and Install Core Packages
 export DEBIAN_FRONTEND=noninteractive
@@ -25,7 +44,10 @@ case " $DESKTOPS " in *" kde "*) _norm="${_norm}${_norm:+ }kde" ;; esac
 DESKTOPS="$_norm"
 unset _norm
 if [ -z "${DESKTOPS##*xfce*}" ]; then
-    apt install -y xfce4 xfce4-goodies || exit 1
+    if ! _flux_retry_pkg apt install -y xfce4 xfce4-goodies; then
+        echo "Foila: XFCE package install failed after 3 tries — check your network, then tap Retry Setup."
+        exit 1
+    fi
     # Phone niceties: Whisker panel menu + screenshot tool (best-effort).
     DEBIAN_FRONTEND=noninteractive apt install -y --no-install-recommends \
         xfce4-whiskermenu-plugin xfce4-screenshooter 2>/dev/null || true
@@ -50,7 +72,7 @@ DEBIAN_FRONTEND=noninteractive apt install -y --no-install-recommends \
     || true
 mkdir -p /etc/fluxlinux
 printf '%s\n' virgl > /etc/fluxlinux/gpu_mode
-echo "Folio: gpu_mode=virgl (first-paint; hw-accel may upgrade)"
+echo "Foila: gpu_mode=virgl (first-paint; hw-accel may upgrade)"
 
 # 2. Create User 'flux'
 if ! id "flux" &>/dev/null; then
@@ -118,4 +140,4 @@ if [ -z "${DESKTOPS##*xfce*}" ] && command -v _flux_xfce_compact_defaults >/dev/
     _flux_xfce_compact_defaults || true
 fi
 
-echo "Folio: ${DISTRO_NAME} Setup Complete!"
+echo "Foila: ${DISTRO_NAME} Setup Complete!"
