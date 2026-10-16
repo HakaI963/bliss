@@ -407,7 +407,7 @@ folio-banner
         }
     }
 
-    /** Install the launch sticker: `banner/*.txt` designs + `banner.sh`. */
+    /** Install the launch sticker: the banner text designs + `banner.sh`. */
     internal fun writeBannerFiles(home: File?) {
         if (home == null || !home.isDirectory) return
         val dir = File(home, ".config/folio/banner")
