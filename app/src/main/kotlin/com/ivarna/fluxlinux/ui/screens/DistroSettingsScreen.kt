@@ -131,13 +131,11 @@ fun DistroSettingsScreen(
 
     // Local appearance-editor flag: this file owns the whole flow (no routes).
     var showAppearanceEditor by remember { mutableStateOf(false) }
-    // Bumped when the editor closes so the row summary re-reads the saved picks.
-    var appearanceRefresh by remember { mutableStateOf(0) }
 
-    // Summary of the saved Folio Linux appearance for this distro.
-    val appearanceSummary = remember(distro.id, refreshKey, appearanceRefresh) {
-        AppearanceStore.summary(context, distro.id)
-    }
+    // Summary of the saved Folio Linux appearance for this distro. Computed on
+    // every recomposition (cheap prefs read) so returning from the editor can
+    // never show a stale/default preset.
+    val appearanceSummary = AppearanceStore.summary(context, distro.id)
 
     var selectedTheme by remember { mutableStateOf("dark") }
     var selectedGpu by remember { mutableStateOf("auto") }
@@ -182,10 +180,7 @@ fun DistroSettingsScreen(
         DistroAppearanceScreen(
             distro = distro,
             hazeState = hazeState,
-            onBack = {
-                showAppearanceEditor = false
-                appearanceRefresh++
-            }
+            onBack = { showAppearanceEditor = false }
         )
         return
     }

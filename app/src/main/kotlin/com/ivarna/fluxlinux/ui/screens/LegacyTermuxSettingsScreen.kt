@@ -8,6 +8,7 @@ import android.net.Uri
 import android.util.Base64
 import android.util.Log
 import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -84,6 +85,8 @@ import com.ivarna.fluxlinux.ui.screens.storage.FrostNote
 import com.ivarna.fluxlinux.ui.theme.TextMuted
 import com.ivarna.fluxlinux.ui.theme.TextPrimary
 import com.ivarna.fluxlinux.ui.theme.TextSecondary
+import com.ivarna.fluxlinux.ui.theme.rememberStaggerEntrance
+import com.ivarna.fluxlinux.ui.theme.staggerIn
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.Locale
@@ -153,6 +156,9 @@ fun LegacyTermuxSettingsScreen(
 
     val isBusy = pageState == LegacyPageState.SCANNING || pageState == LegacyPageState.UNINSTALLING
     val canInteract = termuxInstalled && termuxVersionOk && runCommandGranted && !isBusy
+
+    // Staggered entrance for the header/prereq blocks (30ms steps).
+    val entrance = rememberStaggerEntrance()
 
     fun triggerScan() {
         if (!termuxInstalled || !termuxVersionOk || !runCommandGranted || isBusy) return
@@ -406,7 +412,11 @@ fun LegacyTermuxSettingsScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // Header note
-            Column(modifier = Modifier.padding(horizontal = 4.dp)) {
+            Column(
+                modifier = Modifier
+                    .padding(horizontal = 4.dp)
+                    .staggerIn(0, entrance)
+            ) {
                 Text(
                     "Leftovers live in com.termux — not app storage",
                     fontSize = 14.sp,
@@ -422,8 +432,8 @@ fun LegacyTermuxSettingsScreen(
             }
 
             // Prerequisites group
-            FrostGroupTitle("Prerequisites")
-            FrostContainer {
+            FrostGroupTitle("Prerequisites", Modifier.staggerIn(1, entrance))
+            FrostContainer(modifier = Modifier.staggerIn(2, entrance)) {
                 // Row 1: Termux App + Version
                 PrereqRow(
                     title = "Termux App",
@@ -493,48 +503,52 @@ fun LegacyTermuxSettingsScreen(
                 )
 
                 // Fix note if not configured or if timed out
-                if (!isConfigured || pageState == LegacyPageState.TIMED_OUT) {
-                    FrostDivider()
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 18.dp, vertical = 12.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            "Fix: allow-external-apps = true",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = TextSecondary
-                        )
-                        Text(
-                            FIX_COMMAND,
-                            color = TextMuted,
-                            fontSize = 11.sp,
-                            fontFamily = FontFamily.Monospace
-                        )
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
-                            verticalAlignment = Alignment.CenterVertically
+                AnimatedVisibility(
+                    visible = !isConfigured || pageState == LegacyPageState.TIMED_OUT
+                ) {
+                    Column(Modifier.fillMaxWidth()) {
+                        FrostDivider()
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 18.dp, vertical = 12.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            FrostPill(
-                                text = "Copy & Open Termux",
-                                onClick = { copyAndOpenTermux() },
-                                primary = true
+                            Text(
+                                "Fix: allow-external-apps = true",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = TextSecondary
                             )
-                            FrostPill(
-                                text = "Ping",
-                                onClick = { triggerPing() },
-                                modifier = Modifier.alpha(if (canInteract) 1f else 0.4f)
+                            Text(
+                                FIX_COMMAND,
+                                color = TextMuted,
+                                fontSize = 11.sp,
+                                fontFamily = FontFamily.Monospace
                             )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                FrostPill(
+                                    text = "Copy & Open Termux",
+                                    onClick = { copyAndOpenTermux() },
+                                    primary = true
+                                )
+                                FrostPill(
+                                    text = "Ping",
+                                    onClick = { triggerPing() },
+                                    modifier = Modifier.alpha(if (canInteract) 1f else 0.4f)
+                                )
+                            }
                         }
                     }
                 }
             }
 
             // Timed out note
-            if (pageState == LegacyPageState.TIMED_OUT) {
+            AnimatedVisibility(visible = pageState == LegacyPageState.TIMED_OUT) {
                 FrostContainer {
                     FrostNote(
                         if (lastTimeoutType == LegacyTimeoutType.UNINSTALL) {
@@ -547,9 +561,9 @@ fun LegacyTermuxSettingsScreen(
             }
 
             // Status / error message
-            if (scan.error != null) {
+            AnimatedVisibility(visible = scan.error != null) {
                 FrostContainer {
-                    FrostNote(scan.error)
+                    FrostNote(scan.error ?: "")
                 }
             }
 

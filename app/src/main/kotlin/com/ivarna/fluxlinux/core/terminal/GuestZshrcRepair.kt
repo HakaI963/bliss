@@ -10,7 +10,7 @@ import java.io.File
 /**
  * One-shot repair for guest `~/.zshrc` that hard-sources missing oh-my-zsh,
  * invokes missing `pokemon-colorscripts`, still uses the old colorful
- * `agnosterzak` theme, or lacks the Folio launch sticker (random monochrome
+ * `agnosterzak` theme, or lacks the Folio launch sticker (random colored
  * anime ASCII banner). Keeps the same optimized profile shape as
  * `setup_customization_debian.sh` / Alpine customization, but guards every
  * optional tool.
@@ -34,7 +34,11 @@ object GuestZshrcRepair {
      * on existing installs even though the shared ZSHRC_VERSION is unchanged.
      * Bump when [DEFENSIVE_ZSHRC] / banner content changes again.
      */
-    private const val REPAIR_REVISION = 4
+    private const val REPAIR_REVISION = 5
+
+    /** Launch-sticker art revision (`~/.config/folio/banner/.banner-rev`).
+     *  Bump with the guest scripts when the designs change again. */
+    private const val BANNER_ART_REVISION = "2"
 
     /** Marker echoed by the root chroot repair payload on success. */
     private const val CHROOT_OK_MARKER = "FOLIO_ZSH_OK"
@@ -87,7 +91,7 @@ if [ -f "${'$'}ZSH/oh-my-zsh.sh" ]; then
   source "${'$'}ZSH/oh-my-zsh.sh"
 fi
 
-# Folio launch sticker (random monochrome anime banner; opt out FLUX_NO_BANNER=1)
+# Folio launch sticker (random colored anime banner; opt out FLUX_NO_BANNER=1)
 [ -r "${'$'}HOME/.config/folio/banner.sh" ] && . "${'$'}HOME/.config/folio/banner.sh"
 
 # Folio Linux appearance (wallpaper/colors/terminal; hash-guarded inside).
@@ -148,128 +152,152 @@ PROMPT2='%F{240}> %f'
 """.trimStart()
 
     /**
-     * Launch-sticker designs (monochrome, original/generic anime-ish ASCII).
+     * Launch-sticker designs (256-color, original/generic anime-ish ASCII;
+     * no emoji/astral chars).
      * Installed at `~/.config/folio/banner/<name>.txt`; one is picked at random
      * per interactive shell open by [BANNER_SH].
      */
     internal val BANNER_FILES: List<Pair<String, String>> = listOf(
         "01-catgirl.txt" to """
-      /\   /\
-     /  \_/  \        nyah~
-    |  o     o  |
-    |     ^     |
-     \  \___/  /
-      \_______/
-       /|   |\
-      / |   | \
-        |___|
+\033[38;5;225m       ╱╲              ╱╲\033[0m
+\033[38;5;218m      ╱  ╲▄▄▄▄▄▄▄▄▄▄▄╱  ╲         nyah~\033[0m
+\033[38;5;212m     ╭╯ ░░░░░░░░░░░░░░░ ╰╮\033[0m
+\033[38;5;211m     │  ▄███▀▀   ▀▀███▄  │\033[0m
+\033[38;5;207m     │ ▐█████▌   ▐█████▌ │\033[0m
+\033[38;5;206m     │  ▀▀▀▀▀     ▀▀▀▀▀  │\033[0m
+\033[38;5;205m     │       ╭─────╮       │   =^.^=\033[0m
+\033[38;5;200m      ╲      ╰─────╯      ╱\033[0m
+\033[38;5;199m       ╰──────╮ ╭──────╯\033[0m
+\033[38;5;164m        ╰─────╯ ╰─────╯\033[0m
+\033[38;5;163m         ║▀▀▀▀▀▀▀▀▀║\033[0m
+\033[38;5;225m         ╰─────────╯\033[0m
 """.trim('\n'),
         "02-mecha.txt" to """
-     __________________
-    |  [=]  [=]  [=]  |
-    |   ___________   |
-    |  |  M E C H |   |
-    |  |___________|  |
-    |_________________|
-      /|           |\
-     / |           | \
-       |___|_|_|___|
+\033[38;5;159m         _|_\033[0m
+\033[38;5;123m        ╱   ╲                UNIT-07\033[0m
+\033[38;5;117m    ╔═══╧═╤═╧═══╗\033[0m
+\033[38;5;111m    ║ ▄▄▄▄▄▄▄▄▄▄▄ ║\033[0m
+\033[38;5;75m    ║ █▀▀▀▀▀▀▀▀▀█ ║   ▐▌ ▐▌\033[0m
+\033[38;5;69m    ║ █ ▀▀▀▀▀▀▀ █ ║   ▐▌ ▐▌\033[0m
+\033[38;5;63m    ╚═╦═══════╦═╝\033[0m
+\033[38;5;39m       ║ ▒▒▒▒▒▒▒ ║\033[0m
+\033[38;5;33m      ╔╩═══════╩╗\033[0m
+\033[38;5;27m      ║  ▄▄▄▄▄  ║\033[0m
+\033[38;5;159m      ╚═════════╝\033[0m
 """.trim('\n'),
         "03-kitsune.txt" to """
-         /\     /\
-        /  \___/  \
-       |  o     o  |
-       |     ^     |
-       |  \  U  /  |
-        \  \___/  /
-         \_______/
-        kitsune mask
+\033[38;5;223m         ╱╲          ╱╲\033[0m
+\033[38;5;222m        ╱  ╲________╱  ╲      kon!\033[0m
+\033[38;5;221m       ╭╯▄▄▄▄▄▄▄▄▄▄▄▄▄╰╮\033[0m
+\033[38;5;220m       │ ▄▀▀▀▀▀▀▀▀▀▀▀▄ │\033[0m
+\033[38;5;215m       │ ███▄   ▄███ │    . o O\033[0m
+\033[38;5;214m       │ ██▀     ▀██ │\033[0m
+\033[38;5;208m       │  ▀▄▄ ▄ ▄▄▀  │\033[0m
+\033[38;5;202m        ╲    ╰───╯    ╱\033[0m
+\033[38;5;166m         ╰──╮     ╭──╯\033[0m
+\033[38;5;223m     (((     ╰───╯     )))\033[0m
 """.trim('\n'),
         "04-shonen.txt" to """
-        ,--.
-       / o  \__
-      |  |\   |    FIGHT!
-      |  | \  |
-       \_|  \_|
-        / \   \
-      _/   \   \_
-     (__)  (__)
+\033[38;5;33m        ╱▔▔▔▔▔▔▔▔▔╲         FIGHT!\033[0m
+\033[38;5;39m      ╱▔▔▔▔▔▔▔▔▔▔▔▔▔╲\033[0m
+\033[38;5;45m     │  ╱╲ ╱╲ ╱╲ ╱╲  │       /!\033[0m
+\033[38;5;75m     │  ████   ████  │\033[0m
+\033[38;5;111m     │  ██▒█   █▒██  │      o O\033[0m
+\033[38;5;117m     │   ▀▀     ▀▀   │\033[0m
+\033[38;5;153m     │     ╭───╮     │\033[0m
+\033[38;5;159m      ╲    ╰───╯    ╱\033[0m
+\033[38;5;195m       ╰─────╮╭─────╯\033[0m
+\033[38;5;231m        ╰────╯╰────╯\033[0m
+\033[38;5;33m       ╔═╗        ╔═╗\033[0m
+\033[38;5;39m       ╚═╝        ╚═╝\033[0m
 """.trim('\n'),
         "05-chibi-star.txt" to """
-    .    *    .    *
-      .-=====-.
-   * /  o   o  \ .
-    |     ^     |
-     \  '---'  /
-   .  '-.___.-'  *
-      *    .    .
+\033[38;5;157m       *        .        *\033[0m
+\033[38;5;121m          ╭───────╮\033[0m
+\033[38;5;86m     .   ╱ ▄▄▄▄▄▄▄ ╲   .\033[0m
+\033[38;5;85m        │  ██   ██  │        *\033[0m
+\033[38;5;84m     *  │  ██   ██  │\033[0m
+\033[38;5;79m        │   ╰───╯   │   .\033[0m
+\033[38;5;78m     .   ╲  ╰───╯  ╱\033[0m
+\033[38;5;45m          ╰───────╯        *\033[0m
+\033[38;5;51m       *       .       *\033[0m
 """.trim('\n'),
         "06-robot-kitty.txt" to """
-     /\_____/\
-    | o     o |     beep
-    | [=====] |     boop
-     \_=====_/
-      /|   |\
-     / |   | \
-       |_| |_|
+\033[38;5;252m        ╱▔▔╲____╱▔▔╲\033[0m
+\033[38;5;249m       │ ▓▓│    │▓▓ │        beep\033[0m
+\033[38;5;245m       ╰──╯▄▄▄▄╰──╯\033[0m
+\033[38;5;117m      ╭───╮ ▀▀ ╭───╮        boop\033[0m
+\033[38;5;111m      │  ▄▄▄▄▄▄▄▄▄▄▄  │\033[0m
+\033[38;5;75m      │ ██▀▀     ▀▀██ │\033[0m
+\033[38;5;74m      │ ▀▀         ▀▀ │\033[0m
+\033[38;5;68m      │   ▄▄▄▄▄▄▄▄▄   │\033[0m
+\033[38;5;37m      ╰─╮ ▒▒▒▒▒▒▒ ╭─╯\033[0m
+\033[38;5;252m        ╰─────────╯\033[0m
 """.trim('\n'),
         "07-magical.txt" to """
-         \ | /
-      .-=======-.
-     /  *     *  \
-    |  o       o  |   HENSHIN!
-     \    ___    /
-      '-..___..-'
-         (o_o)[*]
+\033[38;5;183m    *       ╱╲        *      *\033[0m
+\033[38;5;177m         ╭──╯  ╰──╮\033[0m
+\033[38;5;141m    *    │ ░░░░░░░ │      *\033[0m
+\033[38;5;135m         │ ██▀ ▀██ │   HENSHIN!\033[0m
+\033[38;5;171m         │ ▀   ▀  │\033[0m
+\033[38;5;207m         │  ╰───╯  │   *\033[0m
+\033[38;5;213m    *     ╲ ▄▄▄▄▄ ╱      *\033[0m
+\033[38;5;219m           ╰─────╯    ╱╲\033[0m
+\033[38;5;183m     *        ╱─────╱  ╲   *\033[0m
+\033[38;5;177m              ╲─────╲  ╱\033[0m
+\033[38;5;141m                 ╰───╯\033[0m
 """.trim('\n'),
         "08-samurai.txt" to """
-         ___
-        /o o\___
-       |   >    _>
-        \_ _ _/
-         |___|
-         /| |\
-        / | | \
-          |_|
-      kabuto mask
-""".trim('\n')
+\033[38;5;17m          ╱╲╱╲\033[0m
+\033[38;5;18m         ╱  ╰╯  ╲           kabuto\033[0m
+\033[38;5;19m        ╭╯▄▄▄▄▄▄▄▄▄╰╮\033[0m
+\033[38;5;61m        │ ▄▄▄▄▄▄▄▄▄ │\033[0m
+\033[38;5;67m       ╭╯ ██▄ ▄██ ╰╮\033[0m
+\033[38;5;104m       │  ███ ███  │        -  -\033[0m
+\033[38;5;146m       │   ▀   ▀   │\033[0m
+\033[38;5;195m       │  ╭─────╮  │\033[0m
+\033[38;5;231m        ╲ ╰─────╯ ╱\033[0m
+\033[38;5;17m         ╰───────╯\033[0m
+\033[38;5;18m          ││   ││\033[0m
+""".trim('\n'),
     )
 
     /** `~/.config/folio/banner.sh` — random sticker + compact info block. */
     internal val BANNER_SH = """
-# folio-banner.sh — Folio launch sticker. Monochrome, offline, random per shell.
-# Opt out with FLUX_NO_BANNER=1. Sourced at the end of ~/.zshrc.
-folio-banner() {
-  [ "${'$'}{FLUX_NO_BANNER:-0}" = "1" ] && return 0
-  case $- in *i*) ;; *) return 0;; esac
-  setopt localoptions nullglob
+# folio-banner.sh — Folio launch sticker. Colored 256-color ASCII art (no
+# emoji), offline, random design per interactive shell. Opt out FLUX_NO_BANNER=1.
+folio-banner-art() {
+  # Prints one randomly picked design from ~/.config/folio/banner/*.txt.
+  # The designs carry literal \033 256-color escapes -> rendered with printf %b.
+  setopt localoptions nullglob 2>/dev/null || true
   local -a _bans
   _bans=( "${'$'}HOME"/.config/folio/banner/*.txt )
-  if [[ -f "${'$'}{_bans[1]}" ]]; then
-    local _bi=${'$'}(( RANDOM % ${'$'}{#_bans} + 1 ))
-    cat "${'$'}{_bans[${'$'}_bi]}" 2>/dev/null || true
-  fi
+  [[ -f "${'$'}{_bans[1]}" ]] || return 0
+  local _bi=${'$'}(( RANDOM % ${'$'}{#_bans} + 1 ))
+  case "${'$'}(cat "${'$'}{_bans[${'$'}_bi]}" 2>/dev/null || true)" in
+    *'\033'*) printf '%b\n' "${'$'}(cat "${'$'}{_bans[${'$'}_bi]}")" ;;
+    *)         cat "${'$'}{_bans[${'$'}_bi]}" 2>/dev/null || true ;;
+  esac
   unset _bans _bi
-  if command -v fastfetch >/dev/null 2>&1; then
-    local _ff="${'$'}HOME/.local/share/fastfetch/presets/termux.jsonc"
-    if [ -f "${'$'}_ff" ]; then
-      { fastfetch --config "${'$'}_ff" 2>/dev/null || true; } &!
-    else
-      { fastfetch --config termux 2>/dev/null || true; } &!
-    fi
-    unset _ff
+}
+folio-banner() {
+  [ "${'$'}{FLUX_NO_BANNER:-0}" = "1" ] && return 0
+  case ${'$'}- in *i*) ;; *) return 0;; esac
+  folio-banner-art
+  local _ff="${'$'}HOME/.local/share/fastfetch/presets/termux.jsonc"
+  if command -v fastfetch >/dev/null 2>&1 && [ -f "${'$'}_ff" ]; then
+    { fastfetch --config "${'$'}_ff" 2>/dev/null || true; } &!
   else
-    printf '%s@%s | %s | %s\n' "${'$'}{USER:-flux}" "${'$'}(hostname 2>/dev/null || echo folio)" \
-      "${'$'}(sed -n 's/^PRETTY_NAME=//p' /etc/os-release 2>/dev/null | tr -d '\"' | head -n 1)" \
-      "${'$'}(date +%H:%M 2>/dev/null)"
+    printf '%s\n' "folio@localhost | ${'$'}(sed -n 's/^PRETTY_NAME=//p' /etc/os-release 2>/dev/null | tr -d '"' | head -n 1) | ${'$'}(date +%H:%M 2>/dev/null)"
   fi
+  unset _ff
 }
 folio-banner
 """.trimStart()
 
     /** .zshrc tail that sources the sticker (idempotent append target). */
     internal val BANNER_SOURCE_BLOCK = """
-# Folio launch sticker (random monochrome anime banner; opt out FLUX_NO_BANNER=1)
+# Folio launch sticker (random colored anime banner; opt out FLUX_NO_BANNER=1)
 [ -r "${'$'}HOME/.config/folio/banner.sh" ] && . "${'$'}HOME/.config/folio/banner.sh"
 """.trimStart()
 
@@ -416,13 +444,18 @@ folio-banner
             if (!dir.isDirectory) return
             for ((name, art) in BANNER_FILES) {
                 val f = File(dir, name)
-                if (f.isFile && f.length() > 0L) continue
                 if (f.isFile && !f.canWrite()) continue
-                f.writeText(art + "\n")
+                val want = art + "\n"
+                if (f.isFile && f.readText() == want) continue
+                f.writeText(want)
+            }
+            val revMark = File(dir, ".banner-rev")
+            if (!revMark.isFile || revMark.readText().trim() != BANNER_ART_REVISION) {
+                revMark.writeText(BANNER_ART_REVISION + "\n")
             }
             val sh = File(home, ".config/folio/banner.sh")
-            if (!sh.isFile || sh.canWrite()) {
-                sh.writeText(BANNER_SH)
+            if (!sh.isFile || (sh.canWrite() && sh.readText() != BANNER_SH)) {
+                if (!sh.isFile || sh.canWrite()) sh.writeText(BANNER_SH)
             }
             Log.i(TAG, "Banner assets ready at ${dir.absolutePath}")
         } catch (e: Exception) {
@@ -481,10 +514,12 @@ folio-banner
         sb.append("mkdir -p \"${D}H/.config/folio/banner\" \"${D}H/.local/share/fastfetch/presets\" 2>/dev/null || true\n")
         sb.append("_put \"${D}H/.config/folio/banner.sh\" '").append(b64(BANNER_SH)).append("'\n")
         for ((name, art) in BANNER_FILES) {
-            sb.append("[ -s \"${D}H/.config/folio/banner/$name\" ] || _put \"${D}H/.config/folio/banner/$name\" '")
+            sb.append("_put \"${D}H/.config/folio/banner/$name\" '")
                 .append(b64(art + "\n"))
                 .append("'\n")
         }
+        sb.append("printf '%s\\n' ").append(BANNER_ART_REVISION)
+            .append(" > \"${D}H/.config/folio/banner/.banner-rev\" 2>/dev/null || true\n")
         sb.append("[ -s \"${D}H/.local/share/fastfetch/presets/termux.jsonc\" ] || _put \"${D}H/.local/share/fastfetch/presets/termux.jsonc\" '")
             .append(b64(TERMUX_JSONC))
             .append("'\n")
@@ -497,7 +532,7 @@ folio-banner
         sb.append("  grep -q 'ZSH_THEME=\"agnosterzak\"' \"${D}H/.zshrc\" 2>/dev/null && ")
             .append("sed -i 's|ZSH_THEME=\"agnosterzak\"|ZSH_THEME=\"folio\"|' \"${D}H/.zshrc\" 2>/dev/null || true\n")
         sb.append("  if ! grep -q 'folio/banner.sh' \"${D}H/.zshrc\" 2>/dev/null; then\n")
-        sb.append("    printf '\\n# Folio launch sticker (random monochrome anime banner; opt out FLUX_NO_BANNER=1)\\n'\n")
+        sb.append("    printf '\\n# Folio launch sticker (random colored anime banner; opt out FLUX_NO_BANNER=1)\\n'\n")
         sb.append("    printf '[ -r \"${D}HOME/.config/folio/banner.sh\" ] && . \"${D}HOME/.config/folio/banner.sh\"\\n'\n")
         sb.append("  fi >> \"${D}H/.zshrc\" 2>/dev/null || true\n")
         sb.append("  if ! grep -q 'appearance-apply.sh' \"${D}H/.zshrc\" 2>/dev/null; then\n")

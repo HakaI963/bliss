@@ -28,7 +28,13 @@ data class InstallationState(
     val progressCurrent: Int = 0,
     val progressTotal: Int = 0,
     val currentDistroId: String? = null,
-    val cancelledByUser: Boolean = false
+    val cancelledByUser: Boolean = false,
+    // Live runner progress (InstallTaskBar). -1 = unknown/indeterminate.
+    val phaseLabel: String = "",
+    val overallPercent: Int = -1,
+    val detail: String = "",
+    val failed: Boolean = false,
+    val done: Boolean = false
 )
 
 object InstallationQueueManager {
@@ -84,12 +90,51 @@ object InstallationQueueManager {
             cancelledByUser = true,
             currentTaskName = "",
             progressCurrent = 0,
-            progressTotal = 0
+            progressTotal = 0,
+            phaseLabel = "Cancelled",
+            detail = "Install cancelled by user",
+            failed = false,
+            done = false
         )
         queue.clear()
         currentTask = null
         activeDistroId = null
     }
-    
+
+    /**
+     * Live progress from the embedded base-install runner
+     * ([com.ivarna.fluxlinux.core.install.OnboardingInstallRunner]).
+     *
+     * Queue semantics (enqueue/next/clear/cancelledByUser) are untouched: this is
+     * a separate write path used by the task bar + the live install screen.
+     */
+    fun updateActiveInstall(
+        taskName: String,
+        phaseLabel: String,
+        overallPercent: Int,
+        detail: String,
+        distroId: String? = null,
+        failed: Boolean = false,
+        done: Boolean = false
+    ) {
+        _installState.value = _installState.value.copy(
+            isInstalling = !failed && !done,
+            currentTaskName = taskName,
+            currentDistroId = distroId ?: _installState.value.currentDistroId,
+            phaseLabel = phaseLabel,
+            overallPercent = overallPercent,
+            detail = detail,
+            failed = failed,
+            done = done,
+            cancelledByUser = false
+        )
+    }
+
+    /** Dismiss a terminal (cancelled / failed / done) task-bar snapshot. */
+    fun dismissTerminalState() {
+        if (_installState.value.isInstalling) return
+        _installState.value = InstallationState()
+    }
+
     fun peek(): InstallTask? = queue.firstOrNull()
 }

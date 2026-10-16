@@ -10,6 +10,19 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -21,12 +34,14 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.rememberPermissionState
 import com.ivarna.fluxlinux.ui.components.BottomTab
 import com.ivarna.fluxlinux.ui.components.GlassBottomNavigation
 import com.ivarna.fluxlinux.ui.components.GlassScaffold
+import com.ivarna.fluxlinux.ui.components.InstallTaskBar
 import com.ivarna.fluxlinux.ui.theme.FluxLinuxTheme
 import com.ivarna.fluxlinux.core.utils.StateManager
 import androidx.lifecycle.Lifecycle
@@ -745,56 +760,65 @@ class MainActivity : ComponentActivity() {
                     tab: BottomTab,
                     hazeState: HazeState
                 ) {
-                    when (tab) {
-                        BottomTab.HOME -> {
-                            com.ivarna.fluxlinux.ui.screens.HomeScreen(
-                                permissionState = permissionState,
-                                hazeState = hazeState,
-                                scriptRefreshTrigger = refreshKey + lifecycleRefreshKey,
-                                onStartService = onStartServiceStub,
-                                onStartActivity = onStartActivityStub,
-                                // Pass navigation callbacks
-                                onNavigateToInstall = onNavigateToInstall,
-                                onNavigateToSettings = onNavigateToDistroSettings,
-                                onOpenTerminal = onOpenTerminal,
-                                onShowTerminal = openTerminalTab
-                            )
-                        }
-                        BottomTab.DISTROS -> {
-                            com.ivarna.fluxlinux.ui.screens.DistroScreen(
-                                permissionState = permissionState,
-                                hazeState = hazeState,
-                                onStartService = onStartServiceStub,
-                                onStartActivity = onStartActivityStub,
-                                onNavigateToInstall = onNavigateToInstall
-                            )
-                        }
-                        BottomTab.TERMINAL -> {
-                            com.ivarna.fluxlinux.ui.screens.TerminalScreen(
-                                onBack = { currentTab = BottomTab.HOME },
-                                embeddedInBottomNav = true
-                            )
-                        }
-                        BottomTab.SETTINGS -> {
-                            com.ivarna.fluxlinux.ui.screens.SettingsScreen(
-                                onBack = { currentTab = BottomTab.HOME },
-                                permissionState = permissionState,
-                                onStartService = onStartServiceStub,
-                                onStartActivity = onStartActivityStub,
-                                onNavigateToOnboarding = {
-                                    StateManager.setOnboardingComplete(this@MainActivity, false)
-                                    currentScreen = Screen.ONBOARDING
-                                },
-                                onNavigateToTroubleshooting = { currentScreen = Screen.TROUBLESHOOTING },
-                                onNavigateToRootCheck = { currentScreen = Screen.ROOT_ACCESS },
-                                onNavigateToCrashLogs = { currentScreen = Screen.CRASH_LOGS },
-                                onNavigateToTerminalSettings = { currentScreen = Screen.SETTINGS_TERMINAL },
-                                onNavigateToX11Settings = { currentScreen = Screen.SETTINGS_X11 },
-                                onNavigateToAudioSettings = { currentScreen = Screen.SETTINGS_AUDIO },
-                                onNavigateToChrootSettings = { currentScreen = Screen.SETTINGS_CHROOT },
-                                onNavigateToProotSettings = { currentScreen = Screen.SETTINGS_PROOT },
-                                onNavigateToLegacyTermuxSettings = { currentScreen = Screen.SETTINGS_LEGACY_TERMUX }
-                            )
+                    // Tab motion: crossfade + subtle upward rise; the Terminal tab is
+                    // a fade-only AndroidView surface. The dock springs on its own.
+                    AnimatedContent(
+                        targetState = tab,
+                        transitionSpec = { folioTabTransition() },
+                        label = "folioTab",
+                        modifier = Modifier.fillMaxSize()
+                    ) { activeTab ->
+                        when (activeTab) {
+                            BottomTab.HOME -> {
+                                com.ivarna.fluxlinux.ui.screens.HomeScreen(
+                                    permissionState = permissionState,
+                                    hazeState = hazeState,
+                                    scriptRefreshTrigger = refreshKey + lifecycleRefreshKey,
+                                    onStartService = onStartServiceStub,
+                                    onStartActivity = onStartActivityStub,
+                                    // Pass navigation callbacks
+                                    onNavigateToInstall = onNavigateToInstall,
+                                    onNavigateToSettings = onNavigateToDistroSettings,
+                                    onOpenTerminal = onOpenTerminal,
+                                    onShowTerminal = openTerminalTab
+                                )
+                            }
+                            BottomTab.DISTROS -> {
+                                com.ivarna.fluxlinux.ui.screens.DistroScreen(
+                                    permissionState = permissionState,
+                                    hazeState = hazeState,
+                                    onStartService = onStartServiceStub,
+                                    onStartActivity = onStartActivityStub,
+                                    onNavigateToInstall = onNavigateToInstall
+                                )
+                            }
+                            BottomTab.TERMINAL -> {
+                                com.ivarna.fluxlinux.ui.screens.TerminalScreen(
+                                    onBack = { currentTab = BottomTab.HOME },
+                                    embeddedInBottomNav = true
+                                )
+                            }
+                            BottomTab.SETTINGS -> {
+                                com.ivarna.fluxlinux.ui.screens.SettingsScreen(
+                                    onBack = { currentTab = BottomTab.HOME },
+                                    permissionState = permissionState,
+                                    onStartService = onStartServiceStub,
+                                    onStartActivity = onStartActivityStub,
+                                    onNavigateToOnboarding = {
+                                        StateManager.setOnboardingComplete(this@MainActivity, false)
+                                        currentScreen = Screen.ONBOARDING
+                                    },
+                                    onNavigateToTroubleshooting = { currentScreen = Screen.TROUBLESHOOTING },
+                                    onNavigateToRootCheck = { currentScreen = Screen.ROOT_ACCESS },
+                                    onNavigateToCrashLogs = { currentScreen = Screen.CRASH_LOGS },
+                                    onNavigateToTerminalSettings = { currentScreen = Screen.SETTINGS_TERMINAL },
+                                    onNavigateToX11Settings = { currentScreen = Screen.SETTINGS_X11 },
+                                    onNavigateToAudioSettings = { currentScreen = Screen.SETTINGS_AUDIO },
+                                    onNavigateToChrootSettings = { currentScreen = Screen.SETTINGS_CHROOT },
+                                    onNavigateToProotSettings = { currentScreen = Screen.SETTINGS_PROOT },
+                                    onNavigateToLegacyTermuxSettings = { currentScreen = Screen.SETTINGS_LEGACY_TERMUX }
+                                )
+                            }
                         }
                     }
                 }
@@ -832,43 +856,51 @@ class MainActivity : ComponentActivity() {
                                 color = MaterialTheme.colorScheme.onBackground
                             )
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                if (displayLive) {
-                                    androidx.compose.foundation.layout.Box(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(50))
-                                            .background(com.ivarna.fluxlinux.ui.theme.FrostSurface)
-                                            .border(1.dp, com.ivarna.fluxlinux.ui.theme.FolioFrostBorder, RoundedCornerShape(50))
-                                            .clickable(onClick = onOpenDisplay)
-                                            .padding(horizontal = 12.dp, vertical = 6.dp)
-                                    ) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(6.dp)
-                                                    .clip(CircleShape)
-                                                    .background(com.ivarna.fluxlinux.ui.theme.StatusDot)
-                                            )
-                                            Spacer(modifier = Modifier.width(6.dp))
+                                // One pill shell; the live/embedded content crossfades
+                                // so the status swap animates instead of popping.
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(50))
+                                        .background(com.ivarna.fluxlinux.ui.theme.FrostSurface)
+                                        .border(1.dp, com.ivarna.fluxlinux.ui.theme.FolioFrostBorder, RoundedCornerShape(50))
+                                        .then(
+                                            if (displayLive) {
+                                                Modifier.clickable(onClick = onOpenDisplay)
+                                            } else {
+                                                Modifier
+                                            }
+                                        )
+                                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                                ) {
+                                    AnimatedContent(
+                                        targetState = displayLive,
+                                        transitionSpec = {
+                                            fadeIn(tween(180)) togetherWith fadeOut(tween(120))
+                                        },
+                                        label = "displayPill"
+                                    ) { live ->
+                                        if (live) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(6.dp)
+                                                        .clip(CircleShape)
+                                                        .background(com.ivarna.fluxlinux.ui.theme.StatusDot)
+                                                )
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text(
+                                                    text = "X11",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.onBackground
+                                                )
+                                            }
+                                        } else {
                                             Text(
-                                                text = "X11",
+                                                text = "embedded",
                                                 style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.onBackground
+                                                color = com.ivarna.fluxlinux.ui.theme.TextSecondary
                                             )
                                         }
-                                    }
-                                } else {
-                                    Box(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(50))
-                                            .background(com.ivarna.fluxlinux.ui.theme.FrostSurface)
-                                            .border(1.dp, com.ivarna.fluxlinux.ui.theme.FolioFrostBorder, RoundedCornerShape(50))
-                                            .padding(horizontal = 12.dp, vertical = 6.dp)
-                                    ) {
-                                        Text(
-                                            text = "embedded",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = com.ivarna.fluxlinux.ui.theme.TextSecondary
-                                        )
                                     }
                                 }
                             }
@@ -877,375 +909,469 @@ class MainActivity : ComponentActivity() {
                 }
                 
                 // Show appropriate screen based on state
-                when (currentScreen) {
-                    Screen.ONBOARDING -> {
-                        com.ivarna.fluxlinux.ui.onboarding.OnboardingFlowScreen(
-                            onFinished = {
-                                StateManager.setOnboardingComplete(this@MainActivity, true)
-                                currentScreen = Screen.HOME
-                                currentTab = BottomTab.HOME
-                            },
-                            onOpenTerminal = {
-                                StateManager.setOnboardingComplete(this@MainActivity, true)
-                                currentScreen = Screen.HOME
-                                currentTab = BottomTab.TERMINAL
-                            },
-                            onStartDesktop = { distroId ->
-                                StateManager.setOnboardingComplete(this@MainActivity, true)
-                                currentScreen = Screen.HOME
-                                currentTab = BottomTab.HOME
-                                // GUI flags owned by DesktopLauncher
-                                com.ivarna.fluxlinux.core.desktop.DesktopLauncher.start(
-                                    this@MainActivity, distroId
-                                )
-                            }
-                        )
-                    }
-                    Screen.HOME -> {
-                        val hazeState = remember { HazeState() }
-                        val desktopUi by com.ivarna.fluxlinux.core.desktop.DesktopLauncher.uiState.collectAsState()
-                        val stateRefresh by com.ivarna.fluxlinux.core.utils.StateManager.refreshTrigger.collectAsState()
-                        val session = remember(desktopUi, stateRefresh) {
-                            com.ivarna.fluxlinux.core.desktop.DesktopSessionQuery.current(this@MainActivity, desktopUi)
-                        }
-
-                        // Upstream behaviour: the terminal owns the whole window.
-                        // Both chrome pieces get out of its way — the top bar
-                        // would otherwise steal status-bar padding (and with it
-                        // the IME+navigation-bars double padding the terminal
-                        // already applies), and the floating nav would sit on
-                        // top of ExtraKeys. This is why the tab bar must never
-                        // carry a Terminal item: it can't be selected from the
-                        // bar, and the bar can't reliably hide while mounted.
-                        val showChrome = currentTab != BottomTab.TERMINAL
-
-                        // Terminal hides the IME when we leave it, or it stays
-                        // up over the next tab's contents.
-                        LaunchedEffect(currentTab) {
-                            if (currentTab != BottomTab.TERMINAL) {
-                                com.ivarna.fluxlinux.ui.terminal.hideIme(window.decorView)
-                            }
-                        }
-
-                        GlassScaffold(
-                            hazeState = hazeState,
-                            // No per-tab blur toggle: the haze source must stay
-                            // mounted while the TopBar/dock hazeChild nodes are up
-                            // (see GlassScaffold) — leaving HOME used to unmount it
-                            // mid-session, which is the tab-switch crash class.
-                            topBar = {
-                                if (showChrome) {
-                                    TopBar(
-                                        hazeState = hazeState,
-                                        onOpenDisplay = {
-                                            com.ivarna.fluxlinux.core.desktop.DesktopLauncher.reopenDisplay(this@MainActivity)
-                                        },
-                                        displayLive = session != null
+                AnimatedContent(
+                    targetState = currentScreen,
+                    transitionSpec = { folioRouteTransition() },
+                    label = "folioRoute",
+                    modifier = Modifier.fillMaxSize()
+                ) { screen ->
+                    when (screen) {
+                        Screen.ONBOARDING -> {
+                            com.ivarna.fluxlinux.ui.onboarding.OnboardingFlowScreen(
+                                onFinished = {
+                                    StateManager.setOnboardingComplete(this@MainActivity, true)
+                                    currentScreen = Screen.HOME
+                                    currentTab = BottomTab.HOME
+                                },
+                                onOpenTerminal = {
+                                    StateManager.setOnboardingComplete(this@MainActivity, true)
+                                    currentScreen = Screen.HOME
+                                    currentTab = BottomTab.TERMINAL
+                                },
+                                onStartDesktop = { distroId ->
+                                    StateManager.setOnboardingComplete(this@MainActivity, true)
+                                    currentScreen = Screen.HOME
+                                    currentTab = BottomTab.HOME
+                                    // GUI flags owned by DesktopLauncher
+                                    com.ivarna.fluxlinux.core.desktop.DesktopLauncher.start(
+                                        this@MainActivity, distroId
                                     )
                                 }
-                            },
-                            bottomBar = {
-                                if (showChrome) {
-                                    GlassBottomNavigation(
-                                        selectedTab = currentTab,
-                                        onTabSelected = { currentTab = it },
+                            )
+                        }
+                        Screen.HOME -> {
+                            val hazeState = remember { HazeState() }
+                            val desktopUi by com.ivarna.fluxlinux.core.desktop.DesktopLauncher.uiState.collectAsState()
+                            val stateRefresh by com.ivarna.fluxlinux.core.utils.StateManager.refreshTrigger.collectAsState()
+                            val session = remember(desktopUi, stateRefresh) {
+                                com.ivarna.fluxlinux.core.desktop.DesktopSessionQuery.current(this@MainActivity, desktopUi)
+                            }
+
+                            // Upstream behaviour: the terminal owns the whole window.
+                            // Both chrome pieces get out of its way — the top bar
+                            // would otherwise steal status-bar padding (and with it
+                            // the IME+navigation-bars double padding the terminal
+                            // already applies), and the floating nav would sit on
+                            // top of ExtraKeys. This is why the tab bar must never
+                            // carry a Terminal item: it can't be selected from the
+                            // bar, and the bar can't reliably hide while mounted.
+                            val showChrome = currentTab != BottomTab.TERMINAL
+
+                            // Terminal hides the IME when we leave it, or it stays
+                            // up over the next tab's contents.
+                            LaunchedEffect(currentTab) {
+                                if (currentTab != BottomTab.TERMINAL) {
+                                    com.ivarna.fluxlinux.ui.terminal.hideIme(window.decorView)
+                                }
+                            }
+
+                            GlassScaffold(
+                                hazeState = hazeState,
+                                // No per-tab blur toggle: the haze source must stay
+                                // mounted while the TopBar/dock hazeChild nodes are up
+                                // (see GlassScaffold) — leaving HOME used to unmount it
+                                // mid-session, which is the tab-switch crash class.
+                                topBar = {
+                                    if (showChrome) {
+                                        Column {
+                                            TopBar(
+                                                hazeState = hazeState,
+                                                onOpenDisplay = {
+                                                    com.ivarna.fluxlinux.core.desktop.DesktopLauncher.reopenDisplay(this@MainActivity)
+                                                },
+                                                displayLive = session != null
+                                            )
+                                            // Live install strip (all tabs while chrome is
+                                            // up): keeps downloads observable after the
+                                            // user leaves the install screen. Hidden with
+                                            // the rest of the chrome (terminal tab).
+                                            InstallTaskBar(
+                                                onOpenProgress = { distroId ->
+                                                    val target = com.ivarna.fluxlinux.core.data.DistroRepository
+                                                        .supportedDistros
+                                                        .firstOrNull { it.id == distroId }
+                                                    if (target != null) {
+                                                        selectedDistro = target
+                                                        currentScreen = Screen.INSTALL_WIZARD
+                                                    } else {
+                                                        currentScreen = Screen.TROUBLESHOOTING
+                                                    }
+                                                },
+                                                onOpenTroubleshooting = {
+                                                    currentScreen = Screen.TROUBLESHOOTING
+                                                },
+                                                onDismiss = {
+                                                    com.ivarna.fluxlinux.core.utils.InstallationQueueManager
+                                                        .dismissTerminalState()
+                                                }
+                                            )
+                                        }
+                                    }
+                                },
+                                bottomBar = {
+                                    if (showChrome) {
+                                        GlassBottomNavigation(
+                                            selectedTab = currentTab,
+                                            onTabSelected = { currentTab = it },
+                                            hazeState = hazeState
+                                        )
+                                    }
+                                }
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        // Overlap math. The floating nav is a
+                                        // 64dp pill with 16dp top padding inside a
+                                        // `navigationBarsPadding()` box, so its top
+                                        // edge sits at navBarInset + 80dp over a
+                                        // full-window coordinate space. The tab
+                                        // screens reserve 110dp of bottom content
+                                        // padding. Consuming the navigation-bar
+                                        // inset here shifts the scrolling viewport
+                                        // up by that same amount, so 110dp always
+                                        // clears the nav (with ~30dp to spare) and
+                                        // the last item can always be scrolled
+                                        // above it.
+                                        // The Terminal tab is excluded: it owns its
+                                        // own ime∪navigationBars padding and must
+                                        // keep the full window height.
+                                        .then(
+                                            if (showChrome) {
+                                                Modifier.navigationBarsPadding()
+                                            } else {
+                                                Modifier
+                                            }
+                                        )
+                                ) {
+                                    MainScreenContent(
+                                        tab = currentTab,
                                         hazeState = hazeState
                                     )
                                 }
                             }
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    // Overlap math. The floating nav is a
-                                    // 64dp pill with 16dp top padding inside a
-                                    // `navigationBarsPadding()` box, so its top
-                                    // edge sits at navBarInset + 80dp over a
-                                    // full-window coordinate space. The tab
-                                    // screens reserve 110dp of bottom content
-                                    // padding. Consuming the navigation-bar
-                                    // inset here shifts the scrolling viewport
-                                    // up by that same amount, so 110dp always
-                                    // clears the nav (with ~30dp to spare) and
-                                    // the last item can always be scrolled
-                                    // above it.
-                                    // The Terminal tab is excluded: it owns its
-                                    // own ime∪navigationBars padding and must
-                                    // keep the full window height.
-                                    .then(
-                                        if (showChrome) {
-                                            Modifier.navigationBarsPadding()
+                        }
+                        Screen.SETTINGS -> {
+                            com.ivarna.fluxlinux.ui.screens.SettingsScreen(
+                                onBack = { currentScreen = Screen.HOME },
+                                permissionState = permissionState,
+                                onStartService = onStartServiceStub,
+                                onStartActivity = onStartActivityStub,
+                                onNavigateToOnboarding = {
+                                    StateManager.setOnboardingComplete(this@MainActivity, false)
+                                    currentScreen = Screen.ONBOARDING
+                                },
+                                onNavigateToTroubleshooting = { currentScreen = Screen.TROUBLESHOOTING },
+                                onNavigateToRootCheck = { currentScreen = Screen.ROOT_ACCESS },
+                                onNavigateToCrashLogs = { currentScreen = Screen.CRASH_LOGS },
+                                onNavigateToTerminalSettings = {
+                                    currentScreen = Screen.SETTINGS_TERMINAL
+                                },
+                                onNavigateToX11Settings = {
+                                    currentScreen = Screen.SETTINGS_X11
+                                },
+                                onNavigateToAudioSettings = {
+                                    currentScreen = Screen.SETTINGS_AUDIO
+                                },
+                                onNavigateToChrootSettings = {
+                                    currentScreen = Screen.SETTINGS_CHROOT
+                                },
+                                onNavigateToProotSettings = {
+                                    currentScreen = Screen.SETTINGS_PROOT
+                                },
+                                onNavigateToLegacyTermuxSettings = {
+                                    currentScreen = Screen.SETTINGS_LEGACY_TERMUX
+                                }
+                            )
+                        }
+                        Screen.SETTINGS_TERMINAL -> {
+                            com.ivarna.fluxlinux.ui.screens.TerminalSettingsScreen(
+                                onBack = { currentScreen = Screen.SETTINGS }
+                            )
+                        }
+                        Screen.SETTINGS_X11 -> {
+                            com.ivarna.fluxlinux.ui.screens.X11SettingsScreen(
+                                onBack = { currentScreen = Screen.SETTINGS }
+                            )
+                        }
+                        Screen.SETTINGS_AUDIO -> {
+                            com.ivarna.fluxlinux.ui.screens.AudioSettingsScreen(
+                                onBack = { currentScreen = Screen.SETTINGS }
+                            )
+                        }
+                        Screen.SETTINGS_CHROOT -> {
+                            com.ivarna.fluxlinux.ui.screens.ChrootStorageListScreen(
+                                onBack = { currentScreen = Screen.SETTINGS },
+                                onSelectDistro = { id ->
+                                    storageTargetId = id
+                                    currentScreen = Screen.SETTINGS_CHROOT_DETAIL
+                                },
+                                onNavigateToDistros = {
+                                    currentScreen = Screen.HOME
+                                    currentTab = BottomTab.DISTROS
+                                }
+                            )
+                        }
+                        Screen.SETTINGS_CHROOT_DETAIL -> {
+                            val targetId = storageTargetId
+                            if (targetId == null) {
+                                LaunchedEffect(Unit) {
+                                    currentScreen = Screen.SETTINGS_CHROOT
+                                }
+                            } else {
+                                com.ivarna.fluxlinux.ui.screens.ChrootStorageDetailScreen(
+                                    distroId = targetId,
+                                    onBack = { currentScreen = Screen.SETTINGS_CHROOT },
+                                    onNavigateToInstall = {
+                                        selectedDistro = com.ivarna.fluxlinux.core.data.DistroRepository
+                                            .supportedDistros
+                                            .firstOrNull { it.id == targetId }
+                                        currentScreen = if (selectedDistro != null) {
+                                            Screen.INSTALL_WIZARD
                                         } else {
-                                            Modifier
+                                            Screen.SETTINGS_CHROOT
                                         }
-                                    )
-                            ) {
-                                MainScreenContent(
-                                    tab = currentTab,
-                                    hazeState = hazeState
+                                    }
                                 )
                             }
                         }
-                    }
-                    Screen.SETTINGS -> {
-                        com.ivarna.fluxlinux.ui.screens.SettingsScreen(
-                            onBack = { currentScreen = Screen.HOME },
-                            permissionState = permissionState,
-                            onStartService = onStartServiceStub,
-                            onStartActivity = onStartActivityStub,
-                            onNavigateToOnboarding = {
-                                StateManager.setOnboardingComplete(this@MainActivity, false)
-                                currentScreen = Screen.ONBOARDING
-                            },
-                            onNavigateToTroubleshooting = { currentScreen = Screen.TROUBLESHOOTING },
-                            onNavigateToRootCheck = { currentScreen = Screen.ROOT_ACCESS },
-                            onNavigateToCrashLogs = { currentScreen = Screen.CRASH_LOGS },
-                            onNavigateToTerminalSettings = {
-                                currentScreen = Screen.SETTINGS_TERMINAL
-                            },
-                            onNavigateToX11Settings = {
-                                currentScreen = Screen.SETTINGS_X11
-                            },
-                            onNavigateToAudioSettings = {
-                                currentScreen = Screen.SETTINGS_AUDIO
-                            },
-                            onNavigateToChrootSettings = {
-                                currentScreen = Screen.SETTINGS_CHROOT
-                            },
-                            onNavigateToProotSettings = {
-                                currentScreen = Screen.SETTINGS_PROOT
-                            },
-                            onNavigateToLegacyTermuxSettings = {
-                                currentScreen = Screen.SETTINGS_LEGACY_TERMUX
-                            }
-                        )
-                    }
-                    Screen.SETTINGS_TERMINAL -> {
-                        com.ivarna.fluxlinux.ui.screens.TerminalSettingsScreen(
-                            onBack = { currentScreen = Screen.SETTINGS }
-                        )
-                    }
-                    Screen.SETTINGS_X11 -> {
-                        com.ivarna.fluxlinux.ui.screens.X11SettingsScreen(
-                            onBack = { currentScreen = Screen.SETTINGS }
-                        )
-                    }
-                    Screen.SETTINGS_AUDIO -> {
-                        com.ivarna.fluxlinux.ui.screens.AudioSettingsScreen(
-                            onBack = { currentScreen = Screen.SETTINGS }
-                        )
-                    }
-                    Screen.SETTINGS_CHROOT -> {
-                        com.ivarna.fluxlinux.ui.screens.ChrootStorageListScreen(
-                            onBack = { currentScreen = Screen.SETTINGS },
-                            onSelectDistro = { id ->
-                                storageTargetId = id
-                                currentScreen = Screen.SETTINGS_CHROOT_DETAIL
-                            },
-                            onNavigateToDistros = {
-                                currentScreen = Screen.HOME
-                                currentTab = BottomTab.DISTROS
-                            }
-                        )
-                    }
-                    Screen.SETTINGS_CHROOT_DETAIL -> {
-                        val targetId = storageTargetId
-                        if (targetId == null) {
-                            LaunchedEffect(Unit) {
-                                currentScreen = Screen.SETTINGS_CHROOT
-                            }
-                        } else {
-                            com.ivarna.fluxlinux.ui.screens.ChrootStorageDetailScreen(
-                                distroId = targetId,
-                                onBack = { currentScreen = Screen.SETTINGS_CHROOT },
-                                onNavigateToInstall = {
-                                    selectedDistro = com.ivarna.fluxlinux.core.data.DistroRepository
-                                        .supportedDistros
-                                        .firstOrNull { it.id == targetId }
-                                    currentScreen = if (selectedDistro != null) {
-                                        Screen.INSTALL_WIZARD
-                                    } else {
-                                        Screen.SETTINGS_CHROOT
-                                    }
+                        Screen.SETTINGS_PROOT -> {
+                            com.ivarna.fluxlinux.ui.screens.ProotStorageListScreen(
+                                onBack = { currentScreen = Screen.SETTINGS },
+                                onSelectDistro = { id ->
+                                    storageTargetId = id
+                                    currentScreen = Screen.SETTINGS_PROOT_DETAIL
+                                },
+                                onNavigateToDistros = {
+                                    currentScreen = Screen.HOME
+                                    currentTab = BottomTab.DISTROS
                                 }
                             )
                         }
-                    }
-                    Screen.SETTINGS_PROOT -> {
-                        com.ivarna.fluxlinux.ui.screens.ProotStorageListScreen(
-                            onBack = { currentScreen = Screen.SETTINGS },
-                            onSelectDistro = { id ->
-                                storageTargetId = id
-                                currentScreen = Screen.SETTINGS_PROOT_DETAIL
-                            },
-                            onNavigateToDistros = {
-                                currentScreen = Screen.HOME
-                                currentTab = BottomTab.DISTROS
-                            }
-                        )
-                    }
-                    Screen.SETTINGS_PROOT_DETAIL -> {
-                        val targetId = storageTargetId
-                        if (targetId == null) {
-                            LaunchedEffect(Unit) {
-                                currentScreen = Screen.SETTINGS_PROOT
-                            }
-                        } else {
-                            com.ivarna.fluxlinux.ui.screens.ProotStorageDetailScreen(
-                                distroId = targetId,
-                                onBack = { currentScreen = Screen.SETTINGS_PROOT },
-                                onNavigateToInstall = {
-                                    selectedDistro = com.ivarna.fluxlinux.core.data.DistroRepository
-                                        .supportedDistros
-                                        .firstOrNull { it.id == targetId }
-                                    currentScreen = if (selectedDistro != null) {
-                                        Screen.INSTALL_WIZARD
-                                    } else {
-                                        Screen.SETTINGS_PROOT
+                        Screen.SETTINGS_PROOT_DETAIL -> {
+                            val targetId = storageTargetId
+                            if (targetId == null) {
+                                LaunchedEffect(Unit) {
+                                    currentScreen = Screen.SETTINGS_PROOT
+                                }
+                            } else {
+                                com.ivarna.fluxlinux.ui.screens.ProotStorageDetailScreen(
+                                    distroId = targetId,
+                                    onBack = { currentScreen = Screen.SETTINGS_PROOT },
+                                    onNavigateToInstall = {
+                                        selectedDistro = com.ivarna.fluxlinux.core.data.DistroRepository
+                                            .supportedDistros
+                                            .firstOrNull { it.id == targetId }
+                                        currentScreen = if (selectedDistro != null) {
+                                            Screen.INSTALL_WIZARD
+                                        } else {
+                                            Screen.SETTINGS_PROOT
+                                        }
                                     }
+                                )
+                            }
+                        }
+                        Screen.SETTINGS_LEGACY_TERMUX -> {
+                            com.ivarna.fluxlinux.ui.screens.LegacyTermuxSettingsScreen(
+                                onBack = { currentScreen = Screen.SETTINGS },
+                                permissionState = permissionState
+                            )
+                        }
+                        Screen.TROUBLESHOOTING -> {
+                            com.ivarna.fluxlinux.ui.screens.TroubleshootingScreen(
+                                onBack = { currentScreen = Screen.SETTINGS }
+                            )
+                        }
+                        Screen.TERMINAL -> {
+                            // Legacy full-screen route — redirect to bottom-nav Terminal tab.
+                            LaunchedEffect(Unit) {
+                                currentScreen = Screen.HOME
+                                currentTab = BottomTab.TERMINAL
+                            }
+                        }
+                        Screen.PREREQUISITES -> {
+                            // Legacy redirect route: bounce to Home without a
+                            // during-composition state write (kept as an effect so
+                            // AnimatedContent never sees a mid-frame target change).
+                            LaunchedEffect(Unit) { currentScreen = Screen.HOME }
+                        }
+                        Screen.ROOT_ACCESS -> {
+                            com.ivarna.fluxlinux.ui.screens.RootAccessScreen(
+                                onBack = { currentScreen = Screen.SETTINGS },
+                                onEnableChroot = {
+                                    android.widget.Toast.makeText(this@MainActivity, "Chroot Mode Enabled", android.widget.Toast.LENGTH_SHORT).show()
+                                    currentScreen = Screen.SETTINGS
                                 }
                             )
                         }
-                    }
-                    Screen.SETTINGS_LEGACY_TERMUX -> {
-                        com.ivarna.fluxlinux.ui.screens.LegacyTermuxSettingsScreen(
-                            onBack = { currentScreen = Screen.SETTINGS },
-                            permissionState = permissionState
-                        )
-                    }
-                    Screen.TROUBLESHOOTING -> {
-                        com.ivarna.fluxlinux.ui.screens.TroubleshootingScreen(
-                            onBack = { currentScreen = Screen.SETTINGS }
-                        )
-                    }
-                    Screen.TERMINAL -> {
-                        // Legacy full-screen route — redirect to bottom-nav Terminal tab.
-                        LaunchedEffect(Unit) {
-                            currentScreen = Screen.HOME
-                            currentTab = BottomTab.TERMINAL
+                        Screen.CRASH_LOGS -> {
+                            com.ivarna.fluxlinux.ui.screens.CrashLogScreen(
+                                onBack = { currentScreen = Screen.SETTINGS }
+                            )
                         }
-                    }
-                    Screen.PREREQUISITES -> { currentScreen = Screen.HOME }
-                    Screen.ROOT_ACCESS -> {
-                        com.ivarna.fluxlinux.ui.screens.RootAccessScreen(
-                            onBack = { currentScreen = Screen.SETTINGS },
-                            onEnableChroot = {
-                                android.widget.Toast.makeText(this@MainActivity, "Chroot Mode Enabled", android.widget.Toast.LENGTH_SHORT).show()
-                                currentScreen = Screen.SETTINGS
-                            }
-                        )
-                    }
-                    Screen.CRASH_LOGS -> {
-                        com.ivarna.fluxlinux.ui.screens.CrashLogScreen(
-                            onBack = { currentScreen = Screen.SETTINGS }
-                        )
-                    }
-                    Screen.INSTALL_WIZARD -> {
-                         val hazeState = remember { HazeState() }
-                         if (selectedDistro != null) {
-                             // Shared runner with onboarding: rootfs + XFCE + customization
-                             // for both proot and chroot (no feature modules).
-                             com.ivarna.fluxlinux.ui.screens.InstallConfigScreen(
-                                 distro = selectedDistro!!,
-                                 onBack = { currentScreen = Screen.HOME },
-                                 hazeState = hazeState,
-                                 onInstallComplete = {
-                                     currentScreen = Screen.HOME
-                                     currentTab = BottomTab.HOME
-                                 }
-                             )
-                         } else {
-                             currentScreen = Screen.HOME
-                         }
-                    }
-                    Screen.DISTRO_SETTINGS -> {
-                         val hazeState = remember { HazeState() }
-                         if (selectedDistro != null) {
-                              com.ivarna.fluxlinux.ui.screens.DistroSettingsScreen(
-                                  distro = selectedDistro!!,
-                                  onBack = { currentScreen = Screen.HOME },
-                                  hazeState = hazeState,
-                                   onInstallComponent = { component, extraEnv ->
-                                       // Embedded: run component script inside the guest via
-                                       // the same terminal component as the parent distro.
-                                       runEmbeddedComponent(
-                                           this@MainActivity, selectedDistro!!, component, extraEnv,
-                                           isUninstall = false, onOpenTerminalScreen = openTerminalTab
-                                       )
-                                   },
-                                   onUninstallComponent = { component ->
-                                       runEmbeddedComponent(
-                                           this@MainActivity, selectedDistro!!, component, emptyMap(),
-                                           isUninstall = true, onOpenTerminalScreen = openTerminalTab
-                                       )
-                                   },
-                                   onReinstallDistro = {
-                                       // Full base reinstall (rootfs + XFCE + customization)
-                                       // via InstallConfig / OnboardingInstallRunner — not rootfs-only.
-                                       currentScreen = Screen.INSTALL_WIZARD
-                                   },
-                                 onUninstallDistro = {
-                                     // Embedded uninstall: proot → proot-distro remove in Flux
-                                     // Terminal; chroot → uninstall_debian13_chroot.sh in Root Shell.
-                                     val distro = selectedDistro ?: return@DistroSettingsScreen
-                                     com.ivarna.fluxlinux.core.terminal.TerminalLauncher.prepareHost(
-                                         this@MainActivity,
-                                         onDone = { ok ->
-                                             if (!ok) return@prepareHost
-                                             val opened = com.ivarna.fluxlinux.core.terminal.FluxTerminalSessionManager
-                                                 .openUninstallSession(this@MainActivity, distro)
-                                             if (opened) {
-                                                 openTerminalTab()
+                        Screen.INSTALL_WIZARD -> {
+                             val hazeState = remember { HazeState() }
+                             if (selectedDistro != null) {
+                                 // Shared runner with onboarding: rootfs + XFCE + customization
+                                 // for both proot and chroot (no feature modules).
+                                 com.ivarna.fluxlinux.ui.screens.InstallConfigScreen(
+                                     distro = selectedDistro!!,
+                                     onBack = { currentScreen = Screen.HOME },
+                                     hazeState = hazeState,
+                                     onInstallComplete = {
+                                         currentScreen = Screen.HOME
+                                         currentTab = BottomTab.HOME
+                                     }
+                                 )
+                             } else {
+                                 currentScreen = Screen.HOME
+                             }
+                        }
+                        Screen.DISTRO_SETTINGS -> {
+                             val hazeState = remember { HazeState() }
+                             if (selectedDistro != null) {
+                                  com.ivarna.fluxlinux.ui.screens.DistroSettingsScreen(
+                                      distro = selectedDistro!!,
+                                      onBack = { currentScreen = Screen.HOME },
+                                      hazeState = hazeState,
+                                       onInstallComponent = { component, extraEnv ->
+                                           // Embedded: run component script inside the guest via
+                                           // the same terminal component as the parent distro.
+                                           runEmbeddedComponent(
+                                               this@MainActivity, selectedDistro!!, component, extraEnv,
+                                               isUninstall = false, onOpenTerminalScreen = openTerminalTab
+                                           )
+                                       },
+                                       onUninstallComponent = { component ->
+                                           runEmbeddedComponent(
+                                               this@MainActivity, selectedDistro!!, component, emptyMap(),
+                                               isUninstall = true, onOpenTerminalScreen = openTerminalTab
+                                           )
+                                       },
+                                       onReinstallDistro = {
+                                           // Full base reinstall (rootfs + XFCE + customization)
+                                           // via InstallConfig / OnboardingInstallRunner — not rootfs-only.
+                                           currentScreen = Screen.INSTALL_WIZARD
+                                       },
+                                     onUninstallDistro = {
+                                         // Embedded uninstall: proot → proot-distro remove in Flux
+                                         // Terminal; chroot → uninstall_debian13_chroot.sh in Root Shell.
+                                         val distro = selectedDistro ?: return@DistroSettingsScreen
+                                         com.ivarna.fluxlinux.core.terminal.TerminalLauncher.prepareHost(
+                                             this@MainActivity,
+                                             onDone = { ok ->
+                                                 if (!ok) return@prepareHost
+                                                 val opened = com.ivarna.fluxlinux.core.terminal.FluxTerminalSessionManager
+                                                     .openUninstallSession(this@MainActivity, distro)
+                                                 if (opened) {
+                                                     openTerminalTab()
+                                                 }
                                              }
-                                         }
-                                     )
-                                 },
-                                  onStartActivity = onStartActivityStub,
-                                  onNavigateToStart = { /* Not used in Settings, but if needed */ },
-                                  onLaunchXfce = {
-                                      try {
-                                          com.ivarna.fluxlinux.core.desktop.DesktopLauncher.start(
-                                              this@MainActivity, selectedDistro!!.id
-                                          )
-                                      } catch (e: Exception) {
-                                          android.util.Log.e("FluxLinux", "Launch XFCE4 failed", e)
+                                         )
+                                     },
+                                      onStartActivity = onStartActivityStub,
+                                      onNavigateToStart = { /* Not used in Settings, but if needed */ },
+                                      onLaunchXfce = {
+                                          try {
+                                              com.ivarna.fluxlinux.core.desktop.DesktopLauncher.start(
+                                                  this@MainActivity, selectedDistro!!.id
+                                              )
+                                          } catch (e: Exception) {
+                                              android.util.Log.e("FluxLinux", "Launch XFCE4 failed", e)
+                                          }
+                                      },
+                                      onStopXfce = {
+                                          try {
+                                              com.ivarna.fluxlinux.core.desktop.DesktopLauncher.stop(
+                                                  this@MainActivity, selectedDistro!!.id
+                                              )
+                                          } catch (e: Exception) {
+                                              android.util.Log.e("FluxLinux", "Stop XFCE4 failed", e)
+                                          }
+                                      },
+                                      onLaunchKde = {
+                                          try {
+                                              com.ivarna.fluxlinux.core.desktop.DesktopLauncher.start(
+                                                  this@MainActivity, selectedDistro!!.id, "kde"
+                                              )
+                                          } catch (e: Exception) {
+                                              android.util.Log.e("FluxLinux", "Launch KDE failed", e)
+                                          }
+                                      },
+                                      onStopKde = {
+                                          try {
+                                              com.ivarna.fluxlinux.core.desktop.DesktopLauncher.stop(
+                                                  this@MainActivity, selectedDistro!!.id
+                                              )
+                                          } catch (e: Exception) {
+                                              android.util.Log.e("FluxLinux", "Stop KDE failed", e)
+                                          }
                                       }
-                                  },
-                                  onStopXfce = {
-                                      try {
-                                          com.ivarna.fluxlinux.core.desktop.DesktopLauncher.stop(
-                                              this@MainActivity, selectedDistro!!.id
-                                          )
-                                      } catch (e: Exception) {
-                                          android.util.Log.e("FluxLinux", "Stop XFCE4 failed", e)
-                                      }
-                                  },
-                                  onLaunchKde = {
-                                      try {
-                                          com.ivarna.fluxlinux.core.desktop.DesktopLauncher.start(
-                                              this@MainActivity, selectedDistro!!.id, "kde"
-                                          )
-                                      } catch (e: Exception) {
-                                          android.util.Log.e("FluxLinux", "Launch KDE failed", e)
-                                      }
-                                  },
-                                  onStopKde = {
-                                      try {
-                                          com.ivarna.fluxlinux.core.desktop.DesktopLauncher.stop(
-                                              this@MainActivity, selectedDistro!!.id
-                                          )
-                                      } catch (e: Exception) {
-                                          android.util.Log.e("FluxLinux", "Stop KDE failed", e)
-                                      }
-                                  }
-                              )
+                                  )
 
-                         } else {
-                             currentScreen = Screen.HOME
-                         }
+                             } else {
+                                 currentScreen = Screen.HOME
+                             }
+                        }
                     }
                 }
             }
         }
     }
+}
+
+// ── Folio navigation motion ─────────────────────────────────────────────────
+// Depth model: root routes (onboarding/home tabs) = 0, settings hubs = 1,
+// their detail pages + desktop/install/terminal full-screen flows = 2. Push
+// enters from the right, pop from the left (15% width + fade, 240ms); same-depth
+// swaps crossfade with a small rise. AndroidView-heavy routes (terminal tab,
+// install wizard) fade only so the surface never slides/clips mid-transition.
+
+private const val FolioNavMs = 240
+private const val FolioTabMs = 200
+
+private val FolioFadeOnlyRoutes = setOf(Screen.TERMINAL, Screen.INSTALL_WIZARD)
+
+private fun Screen.navDepth(): Int = when (this) {
+    Screen.ONBOARDING, Screen.PREREQUISITES, Screen.HOME -> 0
+    Screen.SETTINGS_CHROOT_DETAIL, Screen.SETTINGS_PROOT_DETAIL,
+    Screen.DISTRO_SETTINGS, Screen.INSTALL_WIZARD, Screen.TERMINAL -> 2
+    else -> 1
+}
+
+private fun AnimatedContentTransitionScope<Screen>.folioRouteTransition(): ContentTransform {
+    val fadeOnly = initialState in FolioFadeOnlyRoutes || targetState in FolioFadeOnlyRoutes
+    val depthDelta = targetState.navDepth() - initialState.navDepth()
+    // Slides animate IntOffset specs; fades animate Float specs.
+    val slideIn = tween<IntOffset>(FolioNavMs, easing = FastOutSlowInEasing)
+    val slideOut = tween<IntOffset>(FolioNavMs - 60, easing = FastOutSlowInEasing)
+    val fadeInSpec = tween<Float>(200, easing = FastOutSlowInEasing)
+    val fadeOutSpec = tween<Float>(160, easing = FastOutSlowInEasing)
+    val transform = when {
+        fadeOnly ->
+            fadeIn(tween(180)) togetherWith fadeOut(tween(140))
+        depthDelta > 0 ->
+            (slideInHorizontally(slideIn) { w -> w * 3 / 20 } + fadeIn(fadeInSpec)) togetherWith
+                (slideOutHorizontally(slideOut) { w -> -(w / 12) } + fadeOut(fadeOutSpec))
+        depthDelta < 0 ->
+            (slideInHorizontally(slideIn) { w -> -(w * 3 / 20) } + fadeIn(fadeInSpec)) togetherWith
+                (slideOutHorizontally(slideOut) { w -> w / 8 } + fadeOut(fadeOutSpec))
+        else ->
+            (fadeIn(fadeInSpec) + slideInVertically(slideIn) { h -> h / 100 }) togetherWith
+                (fadeOut(fadeOutSpec) + slideOutVertically(slideOut) { h -> -(h / 200) })
+    }
+    // clip = false keeps terminal/X11 surface content from being clipped mid-slide.
+    return transform.using(SizeTransform(clip = false))
+}
+
+private fun AnimatedContentTransitionScope<BottomTab>.folioTabTransition(): ContentTransform {
+    if (initialState == BottomTab.TERMINAL || targetState == BottomTab.TERMINAL) {
+        // Terminal tab hosts the AndroidView emulator — fade only.
+        return fadeIn(tween(180)) togetherWith fadeOut(tween(140))
+    }
+    val rise = tween<IntOffset>(FolioTabMs, easing = FastOutSlowInEasing)
+    val drift = tween<IntOffset>(160, easing = FastOutSlowInEasing)
+    val fadeInSpec = tween<Float>(180, easing = FastOutSlowInEasing)
+    return (fadeIn(fadeInSpec) + slideInVertically(rise) { h -> h / 100 }) togetherWith
+        (fadeOut(tween(140)) + slideOutVertically(drift) { h -> -(h / 140) })
 }

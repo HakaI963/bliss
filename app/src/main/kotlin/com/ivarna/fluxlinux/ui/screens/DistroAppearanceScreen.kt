@@ -1,6 +1,9 @@
 package com.ivarna.fluxlinux.ui.screens
 
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
@@ -44,6 +47,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -72,11 +76,12 @@ import kotlinx.coroutines.withContext
 
 /**
  * Folio Linux appearance editor for one distro: wallpaper (presets / custom
- * image / solid / random), desktop accent, terminal colors and an optional
- * mpv-based video wallpaper.
+ * image + dim / solid / random), desktop accent, terminal colors + font size,
+ * panel & dock opacity/icon size and an optional mpv-based video wallpaper.
  *
  * Rendering only — all state + staging lives in [AppearanceStore]; the guest
- * applies the staged config on the next session (guest script is hash-guarded).
+ * applies the staged config live when the distro's XFCE desktop is running
+ * (otherwise on the next session; the guest script is hash-guarded).
  * Monochrome frost chrome; swatches are the only colored elements.
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class)
@@ -92,13 +97,54 @@ fun DistroAppearanceScreen(
     var cfg by remember(distro.id) { mutableStateOf(AppearanceStore.load(context, distro.id)) }
     var status by remember { mutableStateOf<String?>(null) }
     var statusOk by remember { mutableStateOf(true) }
+    var statusHint by remember { mutableStateOf<String?>(null) }
     var applying by remember { mutableStateOf(false) }
     // null = probing, true/false = mpv availability in the guest.
     var mpvAvailable by remember(distro.id) { mutableStateOf<Boolean?>(null) }
 
+    // Custom wallpaper preview (plain bitmap decode; no new deps).
+    val customFile = remember(cfg.wallpaperKind, cfg.wallpaperLocal) {
+        if (cfg.wallpaperKind == AppearanceStore.KIND_CUSTOM) {
+            AppearanceStore.localFile(context, cfg.wallpaperLocal)
+        } else {
+            null
+        }
+    }
+    var preview by remember(customFile) { mutableStateOf<Bitmap?>(null) }
+
+    // System back leaves the editor instead of the whole distro screen.
+    BackHandler(onBack = onBack)
+
     LaunchedEffect(distro.id) {
         mpvAvailable = withContext(Dispatchers.IO) {
             AppearanceStore.isMpvAvailable(context, distro.id)
+        }
+    }
+
+    LaunchedEffect(customFile) {
+        val file = customFile
+        preview = if (file == null) {
+            null
+        } else {
+            withContext(Dispatchers.IO) {
+                try {
+                    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                    BitmapFactory.decodeFile(file.absolutePath, bounds)
+                    if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return@withContext null
+                    var sample = 1
+                    while (bounds.outWidth / (sample * 2) > 720 ||
+                        bounds.outHeight / (sample * 2) > 1440
+                    ) {
+                        sample *= 2
+                    }
+                    BitmapFactory.decodeFile(
+                        file.absolutePath,
+                        BitmapFactory.Options().apply { inSampleSize = sample }
+                    )
+                } catch (_: Exception) {
+                    null
+                }
+            }
         }
     }
 
@@ -116,7 +162,7 @@ fun DistroAppearanceScreen(
                         wallpaperLocal = name
                     )
                     statusOk = true
-                    status = "Image imported — tap Apply to stage it."
+                    status = "Image imported — tap Apply to apply it."
                 } else {
                     statusOk = false
                     status = "Could not import that image (unsupported type or too large)."
@@ -136,7 +182,7 @@ fun DistroAppearanceScreen(
                 if (name != null) {
                     cfg = cfg.copy(videoLocal = name, videoEnabled = true)
                     statusOk = true
-                    status = "Video imported — tap Apply to stage it."
+                    status = "Video imported — tap Apply to apply it."
                 } else {
                     statusOk = false
                     status = "Could not import that video (unsupported type or too large)."
@@ -148,6 +194,7 @@ fun DistroAppearanceScreen(
     fun applyNow() {
         if (applying) return
         applying = true
+        statusHint = null
         scope.launch {
             val outcome = withContext(Dispatchers.IO) {
                 AppearanceStore.applyAndStage(context, distro.id, cfg)
@@ -155,6 +202,7 @@ fun DistroAppearanceScreen(
             applying = false
             statusOk = outcome.ok
             status = outcome.message
+            statusHint = outcome.hint
         }
     }
 
@@ -227,7 +275,7 @@ fun DistroAppearanceScreen(
                             Spacer(Modifier.height(2.dp))
                             Text(
                                 "Wallpaper, colors and terminal for ${distro.name}. " +
-                                    "Staged for the distro — applies on next session.",
+                                    "Applied live when its desktop is running; otherwise on next session.",
                                 fontSize = 12.sp,
                                 color = TextMuted
                             )
@@ -238,6 +286,15 @@ fun DistroAppearanceScreen(
                                     s,
                                     fontSize = 12.sp,
                                     color = if (statusOk) TextSecondary else FolioDanger
+                                )
+                            }
+                            val hint = statusHint
+                            if (hint != null) {
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    hint,
+                                    fontSize = 11.sp,
+                                    color = TextMuted
                                 )
                             }
                         }
@@ -404,6 +461,67 @@ fun DistroAppearanceScreen(
                                 }
                             }
 
+                            // Picked-image preview tile (decoded bitmap; dim shown live).
+                            if (customFile != null) {
+                                Spacer(Modifier.height(4.dp))
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 6.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .width(84.dp)
+                                            .aspectRatio(0.5625f)
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .border(
+                                                0.75.dp,
+                                                Color.White.copy(alpha = 0.18f),
+                                                RoundedCornerShape(10.dp)
+                                            )
+                                    ) {
+                                        val bmp = preview
+                                        if (bmp != null) {
+                                            Image(
+                                                bitmap = bmp.asImageBitmap(),
+                                                contentDescription = "Custom wallpaper preview",
+                                                contentScale = ContentScale.Crop,
+                                                modifier = Modifier.fillMaxSize()
+                                            )
+                                        }
+                                        if (cfg.wallpaperDim > 0) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .background(
+                                                        Color.Black.copy(
+                                                            alpha = cfg.wallpaperDim / 100f
+                                                        )
+                                                    )
+                                            )
+                                        }
+                                    }
+                                    Spacer(Modifier.width(12.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            "Preview",
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            color = TextPrimary
+                                        )
+                                        Text(
+                                            if (cfg.wallpaperDim > 0)
+                                                "Shown with ${cfg.wallpaperDim}% dim"
+                                            else
+                                                "Shown as staged on the desktop",
+                                            fontSize = 11.sp,
+                                            color = TextMuted
+                                        )
+                                    }
+                                }
+                            }
+
                             FrostDivider()
 
                             // Solid color (no image)
@@ -473,6 +591,43 @@ fun DistroAppearanceScreen(
                                     }
                                 }
                             }
+
+                            FrostDivider()
+
+                            // Dim (custom images only — pre-processed app-side)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 6.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        "Dim",
+                                        fontSize = 13.sp,
+                                        color = TextMuted
+                                    )
+                                    Text(
+                                        if (cfg.wallpaperKind == AppearanceStore.KIND_CUSTOM)
+                                            "Darkens the staged image"
+                                        else
+                                            "Custom images only",
+                                        fontSize = 11.sp,
+                                        color = TextMuted
+                                    )
+                                }
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    AppearanceStore.DIM_OPTIONS.forEach { dim ->
+                                        StylePill(
+                                            dim.label,
+                                            cfg.wallpaperDim == dim.percent,
+                                            enabled = cfg.wallpaperKind == AppearanceStore.KIND_CUSTOM
+                                        ) {
+                                            cfg = cfg.copy(wallpaperDim = dim.percent)
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                     Spacer(modifier = Modifier.height(12.dp))
@@ -528,6 +683,76 @@ fun DistroAppearanceScreen(
                                             color = if (selected) TextPrimary else TextMuted,
                                             maxLines = 1
                                         )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
+
+                // ─── Panel & icons ───
+                item {
+                    FrostGroupTitle("Panel & icons")
+                    FrostContainer {
+                        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        "Panel opacity",
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = TextPrimary
+                                    )
+                                    Text(
+                                        "Top bar and dock · shows with compositing",
+                                        fontSize = 11.sp,
+                                        color = TextMuted
+                                    )
+                                }
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    AppearanceStore.PANEL_OPACITY_OPTIONS.forEach { option ->
+                                        StylePill(
+                                            option.label,
+                                            cfg.panelOpacity == option.id,
+                                            enabled = true
+                                        ) {
+                                            cfg = cfg.copy(panelOpacity = option.id)
+                                        }
+                                    }
+                                }
+                            }
+                            Spacer(Modifier.height(10.dp))
+                            FrostDivider()
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        "Icon size",
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = TextPrimary
+                                    )
+                                    Text(
+                                        "Panel and dock icons",
+                                        fontSize = 11.sp,
+                                        color = TextMuted
+                                    )
+                                }
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    AppearanceStore.ICON_SIZE_OPTIONS.forEach { option ->
+                                        StylePill(
+                                            option.label,
+                                            cfg.iconSize == option.id,
+                                            enabled = true
+                                        ) {
+                                            cfg = cfg.copy(iconSize = option.id)
+                                        }
                                     }
                                 }
                             }
@@ -599,6 +824,36 @@ fun DistroAppearanceScreen(
                                     selectedHex = AppearanceStore.normalizeHex(cfg.termBg),
                                     onPick = { cfg = cfg.copy(termBg = it, termScheme = "custom") }
                                 )
+                            }
+                            Spacer(Modifier.height(10.dp))
+                            FrostDivider()
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        "Font size",
+                                        fontSize = 13.sp,
+                                        color = TextMuted
+                                    )
+                                    Text(
+                                        "Keeps the desktop font family",
+                                        fontSize = 11.sp,
+                                        color = TextMuted
+                                    )
+                                }
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    AppearanceStore.TERM_FONT_SIZES.forEach { option ->
+                                        StylePill(
+                                            option.label,
+                                            cfg.termFontSize == option.size,
+                                            enabled = true
+                                        ) {
+                                            cfg = cfg.copy(termFontSize = option.size)
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -693,7 +948,7 @@ fun DistroAppearanceScreen(
                                 .clickable {
                                     cfg = AppearanceStore.Config()
                                     statusOk = true
-                                    status = "Defaults restored — tap Apply to stage them."
+                                    status = "Defaults restored — tap Apply to apply them."
                                 }
                                 .padding(horizontal = 18.dp, vertical = 14.dp),
                             verticalAlignment = Alignment.CenterVertically

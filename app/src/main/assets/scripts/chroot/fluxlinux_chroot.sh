@@ -463,7 +463,7 @@ if command -v apk >/dev/null 2>&1 && command -v sudo >/dev/null 2>&1; then
   apk() { command sudo apk "$@"; }
 fi
 
-# Folio launch sticker (random monochrome anime banner; opt out FLUX_NO_BANNER=1)
+# Folio launch sticker (random colored anime banner; opt out FLUX_NO_BANNER=1)
 [ -r "$HOME/.config/folio/banner.sh" ] && . "$HOME/.config/folio/banner.sh"
 ZSHRC
   fi
@@ -514,134 +514,162 @@ FOLIO_THEME_EOF
 }
 FFEOF
   fi
-  # ── Folio launch sticker: 8 monochrome anime ASCII designs + banner.sh ────
-  # Random one per interactive shell; opt out with FLUX_NO_BANNER=1.
+  # ── Folio launch sticker: 8 colored anime ASCII designs (256-color) + ------
+  # banner.sh. Random one per interactive shell; opt out with FLUX_NO_BANNER=1.
   # Host-side write (root owns the chroot tree); guards keep it non-fatal.
+  # `.banner-rev` refreshes existing installs on the next customization re-run.
   _fbdir="$_home/.config/folio/banner"
   mkdir -p "$_fbdir" "$_home/.config/folio" 2>/dev/null || true
+  _fbrev="2"
   _fneed=0
+  if [ "$(cat "$_fbdir/.banner-rev" 2>/dev/null || true)" != "$_fbrev" ]; then
+    _fneed=1
+  fi
   for _fb in 01-catgirl 02-mecha 03-kitsune 04-shonen 05-chibi-star 06-robot-kitty 07-magical 08-samurai; do
     [ -s "$_fbdir/$_fb.txt" ] || _fneed=1
   done
   [ -s "$_home/.config/folio/banner.sh" ] || _fneed=1
   if [ "$_fneed" = "1" ]; then
-    cat > "$_fbdir/01-catgirl.txt" <<'FB1'
-      /\   /\
-     /  \_/  \        nyah~
-    |  o     o  |
-    |     ^     |
-     \  \___/  /
-      \_______/
-       /|   |\
-      / |   | \
-        |___|
-FB1
-    cat > "$_fbdir/02-mecha.txt" <<'FB2'
-     __________________
-    |  [=]  [=]  [=]  |
-    |   ___________   |
-    |  |  M E C H |   |
-    |  |___________|  |
-    |_________________|
-      /|           |\
-     / |           | \
-       |___|_|_|___|
-FB2
-    cat > "$_fbdir/03-kitsune.txt" <<'FB3'
-         /\     /\
-        /  \___/  \
-       |  o     o  |
-       |     ^     |
-       |  \  U  /  |
-        \  \___/  /
-         \_______/
-        kitsune mask
-FB3
-    cat > "$_fbdir/04-shonen.txt" <<'FB4'
-        ,--.
-       / o  \__
-      |  |\   |    FIGHT!
-      |  | \  |
-       \_|  \_|
-        / \   \
-      _/   \   \_
-     (__)  (__)
-FB4
-    cat > "$_fbdir/05-chibi-star.txt" <<'FB5'
-    .    *    .    *
-      .-=====-.
-   * /  o   o  \ .
-    |     ^     |
-     \  '---'  /
-   .  '-.___.-'  *
-      *    .    .
-FB5
-    cat > "$_fbdir/06-robot-kitty.txt" <<'FB6'
-     /\_____/\
-    | o     o |     beep
-    | [=====] |     boop
-     \_=====_/
-      /|   |\
-     / |   | \
-       |_| |_|
-FB6
-    cat > "$_fbdir/07-magical.txt" <<'FB7'
-         \ | /
-      .-=======-.
-     /  *     *  \
-    |  o       o  |   HENSHIN!
-     \    ___    /
-      '-..___..-'
-         (o_o)[*]
-FB7
-    cat > "$_fbdir/08-samurai.txt" <<'FB8'
-         ___
-        /o o\___
-       |   >    _>
-        \_ _ _/
-         |___|
-         /| |\
-        / | | \
-          |_|
-      kabuto mask
-FB8
+    cat > "$_fbdir/.folio-banners.$$" <<'FOLIO_BANNER_ALL'
+==>01-catgirl
+\033[38;5;225m       ╱╲              ╱╲\033[0m
+\033[38;5;218m      ╱  ╲▄▄▄▄▄▄▄▄▄▄▄╱  ╲         nyah~\033[0m
+\033[38;5;212m     ╭╯ ░░░░░░░░░░░░░░░ ╰╮\033[0m
+\033[38;5;211m     │  ▄███▀▀   ▀▀███▄  │\033[0m
+\033[38;5;207m     │ ▐█████▌   ▐█████▌ │\033[0m
+\033[38;5;206m     │  ▀▀▀▀▀     ▀▀▀▀▀  │\033[0m
+\033[38;5;205m     │       ╭─────╮       │   =^.^=\033[0m
+\033[38;5;200m      ╲      ╰─────╯      ╱\033[0m
+\033[38;5;199m       ╰──────╮ ╭──────╯\033[0m
+\033[38;5;164m        ╰─────╯ ╰─────╯\033[0m
+\033[38;5;163m         ║▀▀▀▀▀▀▀▀▀║\033[0m
+\033[38;5;225m         ╰─────────╯\033[0m
+==>02-mecha
+\033[38;5;159m         _|_\033[0m
+\033[38;5;123m        ╱   ╲                UNIT-07\033[0m
+\033[38;5;117m    ╔═══╧═╤═╧═══╗\033[0m
+\033[38;5;111m    ║ ▄▄▄▄▄▄▄▄▄▄▄ ║\033[0m
+\033[38;5;75m    ║ █▀▀▀▀▀▀▀▀▀█ ║   ▐▌ ▐▌\033[0m
+\033[38;5;69m    ║ █ ▀▀▀▀▀▀▀ █ ║   ▐▌ ▐▌\033[0m
+\033[38;5;63m    ╚═╦═══════╦═╝\033[0m
+\033[38;5;39m       ║ ▒▒▒▒▒▒▒ ║\033[0m
+\033[38;5;33m      ╔╩═══════╩╗\033[0m
+\033[38;5;27m      ║  ▄▄▄▄▄  ║\033[0m
+\033[38;5;159m      ╚═════════╝\033[0m
+==>03-kitsune
+\033[38;5;223m         ╱╲          ╱╲\033[0m
+\033[38;5;222m        ╱  ╲________╱  ╲      kon!\033[0m
+\033[38;5;221m       ╭╯▄▄▄▄▄▄▄▄▄▄▄▄▄╰╮\033[0m
+\033[38;5;220m       │ ▄▀▀▀▀▀▀▀▀▀▀▀▄ │\033[0m
+\033[38;5;215m       │ ███▄   ▄███ │    . o O\033[0m
+\033[38;5;214m       │ ██▀     ▀██ │\033[0m
+\033[38;5;208m       │  ▀▄▄ ▄ ▄▄▀  │\033[0m
+\033[38;5;202m        ╲    ╰───╯    ╱\033[0m
+\033[38;5;166m         ╰──╮     ╭──╯\033[0m
+\033[38;5;223m     (((     ╰───╯     )))\033[0m
+==>04-shonen
+\033[38;5;33m        ╱▔▔▔▔▔▔▔▔▔╲         FIGHT!\033[0m
+\033[38;5;39m      ╱▔▔▔▔▔▔▔▔▔▔▔▔▔╲\033[0m
+\033[38;5;45m     │  ╱╲ ╱╲ ╱╲ ╱╲  │       /!\033[0m
+\033[38;5;75m     │  ████   ████  │\033[0m
+\033[38;5;111m     │  ██▒█   █▒██  │      o O\033[0m
+\033[38;5;117m     │   ▀▀     ▀▀   │\033[0m
+\033[38;5;153m     │     ╭───╮     │\033[0m
+\033[38;5;159m      ╲    ╰───╯    ╱\033[0m
+\033[38;5;195m       ╰─────╮╭─────╯\033[0m
+\033[38;5;231m        ╰────╯╰────╯\033[0m
+\033[38;5;33m       ╔═╗        ╔═╗\033[0m
+\033[38;5;39m       ╚═╝        ╚═╝\033[0m
+==>05-chibi-star
+\033[38;5;157m       *        .        *\033[0m
+\033[38;5;121m          ╭───────╮\033[0m
+\033[38;5;86m     .   ╱ ▄▄▄▄▄▄▄ ╲   .\033[0m
+\033[38;5;85m        │  ██   ██  │        *\033[0m
+\033[38;5;84m     *  │  ██   ██  │\033[0m
+\033[38;5;79m        │   ╰───╯   │   .\033[0m
+\033[38;5;78m     .   ╲  ╰───╯  ╱\033[0m
+\033[38;5;45m          ╰───────╯        *\033[0m
+\033[38;5;51m       *       .       *\033[0m
+==>06-robot-kitty
+\033[38;5;252m        ╱▔▔╲____╱▔▔╲\033[0m
+\033[38;5;249m       │ ▓▓│    │▓▓ │        beep\033[0m
+\033[38;5;245m       ╰──╯▄▄▄▄╰──╯\033[0m
+\033[38;5;117m      ╭───╮ ▀▀ ╭───╮        boop\033[0m
+\033[38;5;111m      │  ▄▄▄▄▄▄▄▄▄▄▄  │\033[0m
+\033[38;5;75m      │ ██▀▀     ▀▀██ │\033[0m
+\033[38;5;74m      │ ▀▀         ▀▀ │\033[0m
+\033[38;5;68m      │   ▄▄▄▄▄▄▄▄▄   │\033[0m
+\033[38;5;37m      ╰─╮ ▒▒▒▒▒▒▒ ╭─╯\033[0m
+\033[38;5;252m        ╰─────────╯\033[0m
+==>07-magical
+\033[38;5;183m    *       ╱╲        *      *\033[0m
+\033[38;5;177m         ╭──╯  ╰──╮\033[0m
+\033[38;5;141m    *    │ ░░░░░░░ │      *\033[0m
+\033[38;5;135m         │ ██▀ ▀██ │   HENSHIN!\033[0m
+\033[38;5;171m         │ ▀   ▀  │\033[0m
+\033[38;5;207m         │  ╰───╯  │   *\033[0m
+\033[38;5;213m    *     ╲ ▄▄▄▄▄ ╱      *\033[0m
+\033[38;5;219m           ╰─────╯    ╱╲\033[0m
+\033[38;5;183m     *        ╱─────╱  ╲   *\033[0m
+\033[38;5;177m              ╲─────╲  ╱\033[0m
+\033[38;5;141m                 ╰───╯\033[0m
+==>08-samurai
+\033[38;5;17m          ╱╲╱╲\033[0m
+\033[38;5;18m         ╱  ╰╯  ╲           kabuto\033[0m
+\033[38;5;19m        ╭╯▄▄▄▄▄▄▄▄▄╰╮\033[0m
+\033[38;5;61m        │ ▄▄▄▄▄▄▄▄▄ │\033[0m
+\033[38;5;67m       ╭╯ ██▄ ▄██ ╰╮\033[0m
+\033[38;5;104m       │  ███ ███  │        -  -\033[0m
+\033[38;5;146m       │   ▀   ▀   │\033[0m
+\033[38;5;195m       │  ╭─────╮  │\033[0m
+\033[38;5;231m        ╲ ╰─────╯ ╱\033[0m
+\033[38;5;17m         ╰───────╯\033[0m
+\033[38;5;18m          ││   ││\033[0m
+FOLIO_BANNER_ALL
+    awk -v dir="$_fbdir" '
+        /^==> ?[0-9A-Za-z._-]+$/ { name=substr($0,4); gsub(/^[ \t]+|[ \t]+$/, "", name); file=dir "/" name ".txt"; next }
+        { if (file != "") print > file }
+    ' "$_fbdir/.folio-banners.$$" 2>/dev/null || true
+    rm -f "$_fbdir/.folio-banners.$$" 2>/dev/null || true
+    printf '%s\n' "$_fbrev" > "$_fbdir/.banner-rev" 2>/dev/null || true
     cat > "$_home/.config/folio/banner.sh" <<'FB_SH'
-# folio-banner.sh — Folio launch sticker. Monochrome, offline, random per shell.
-# Opt out with FLUX_NO_BANNER=1. Sourced at the end of ~/.zshrc.
+# folio-banner.sh — Folio launch sticker. Colored 256-color ASCII art (no
+# emoji), offline, random design per interactive shell. Opt out FLUX_NO_BANNER=1.
+folio-banner-art() {
+  # Prints one randomly picked design from ~/.config/folio/banner/*.txt.
+  # The designs carry literal \033 256-color escapes -> rendered with printf %b.
+  setopt localoptions nullglob 2>/dev/null || true
+  local -a _bans
+  _bans=( "$HOME"/.config/folio/banner/*.txt )
+  [[ -f "${_bans[1]}" ]] || return 0
+  local _bi=$(( RANDOM % ${#_bans} + 1 ))
+  case "$(cat "${_bans[$_bi]}" 2>/dev/null || true)" in
+    *'\033'*) printf '%b\n' "$(cat "${_bans[$_bi]}")" ;;
+    *)         cat "${_bans[$_bi]}" 2>/dev/null || true ;;
+  esac
+  unset _bans _bi
+}
 folio-banner() {
   [ "${FLUX_NO_BANNER:-0}" = "1" ] && return 0
   case $- in *i*) ;; *) return 0;; esac
-  setopt localoptions nullglob
-  local -a _bans
-  _bans=( "$HOME"/.config/folio/banner/*.txt )
-  if [[ -f "${_bans[1]}" ]]; then
-    local _bi=$(( RANDOM % ${#_bans} + 1 ))
-    cat "${_bans[$_bi]}" 2>/dev/null || true
-  fi
-  unset _bans _bi
-  if command -v fastfetch >/dev/null 2>&1; then
-    local _ff="$HOME/.local/share/fastfetch/presets/termux.jsonc"
-    if [ -f "$_ff" ]; then
-      { fastfetch --config "$_ff" 2>/dev/null || true; } &!
-    else
-      { fastfetch --config termux 2>/dev/null || true; } &!
-    fi
-    unset _ff
+  folio-banner-art
+  local _ff="$HOME/.local/share/fastfetch/presets/termux.jsonc"
+  if command -v fastfetch >/dev/null 2>&1 && [ -f "$_ff" ]; then
+    { fastfetch --config "$_ff" 2>/dev/null || true; } &!
   else
-    printf '%s@%s | %s | %s\n' "${USER:-flux}" "$(hostname 2>/dev/null || echo folio)" \
-      "$(sed -n 's/^PRETTY_NAME=//p' /etc/os-release 2>/dev/null | tr -d '\"' | head -n 1)" \
-      "$(date +%H:%M 2>/dev/null)"
+    printf '%s\n' "folio@localhost | $(sed -n 's/^PRETTY_NAME=//p' /etc/os-release 2>/dev/null | tr -d '"' | head -n 1) | $(date +%H:%M 2>/dev/null)"
   fi
+  unset _ff
 }
 folio-banner
 FB_SH
     _fneed=0
   fi
-  unset _fbdir _fb _fneed
+  unset _fbdir _fb _fneed _fbrev
   # Existing .zshrc: source the sticker when missing (idempotent, cheap grep).
   if [ -f "$_home/.zshrc" ] && ! grep -q "folio/banner.sh" "$_home/.zshrc" 2>/dev/null; then
     {
-      printf '\n# Folio launch sticker (random monochrome anime banner; opt out FLUX_NO_BANNER=1)\n'
+      printf '\n# Folio launch sticker (random colored anime banner; opt out FLUX_NO_BANNER=1)\n'
       printf '[ -r "$HOME/.config/folio/banner.sh" ] && . "$HOME/.config/folio/banner.sh"\n'
     } >> "$_home/.zshrc" 2>/dev/null || true
   fi

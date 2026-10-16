@@ -53,6 +53,8 @@ import com.ivarna.fluxlinux.ui.components.FrostGroupTitle
 import com.ivarna.fluxlinux.ui.components.FrostRow
 import com.ivarna.fluxlinux.ui.theme.TextMuted
 import com.ivarna.fluxlinux.ui.theme.TextPrimary
+import com.ivarna.fluxlinux.ui.theme.rememberStaggerEntrance
+import com.ivarna.fluxlinux.ui.theme.staggerIn
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -73,6 +75,9 @@ fun CrashLogScreen(onBack: () -> Unit) {
     var files by remember { mutableStateOf(CrashLog.files(context)) }
     var openFile by remember { mutableStateOf<File?>(null) }
     val open = openFile
+
+    // Staggered list entrance (30ms steps) — visual only.
+    val entrance = rememberStaggerEntrance()
 
     // Detail first closes the trace; the parent BackHandler leaves the screen.
     BackHandler(enabled = open != null) { openFile = null }
@@ -129,7 +134,10 @@ fun CrashLogScreen(onBack: () -> Unit) {
                         .padding(innerPadding),
                     contentAlignment = Alignment.Center
                 ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.staggerIn(0, entrance)
+                    ) {
                         Icon(
                             imageVector = Icons.Default.BugReport,
                             contentDescription = null,
@@ -162,9 +170,9 @@ fun CrashLogScreen(onBack: () -> Unit) {
                         start = 16.dp, end = 16.dp, top = 4.dp, bottom = 110.dp
                     )
                 ) {
-                    item { FrostGroupTitle("Saved reports") }
+                    item { FrostGroupTitle("Saved reports", Modifier.staggerIn(0, entrance)) }
                     item {
-                        FrostContainer {
+                        FrostContainer(modifier = Modifier.staggerIn(1, entrance)) {
                             files.forEachIndexed { index, file ->
                                 FrostRow(
                                     icon = Icons.Default.BugReport,
@@ -183,7 +191,9 @@ fun CrashLogScreen(onBack: () -> Unit) {
                             fontSize = 12.sp,
                             lineHeight = 17.sp,
                             color = TextMuted,
-                            modifier = Modifier.padding(start = 4.dp, top = 12.dp, end = 4.dp)
+                            modifier = Modifier
+                                .staggerIn(2, entrance)
+                                .padding(start = 4.dp, top = 12.dp, end = 4.dp)
                         )
                     }
                 }

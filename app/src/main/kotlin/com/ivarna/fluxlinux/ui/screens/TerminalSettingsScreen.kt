@@ -50,6 +50,8 @@ import com.ivarna.fluxlinux.core.utils.TerminalPreferences
 import com.ivarna.fluxlinux.ui.components.FluxSwitch
 import com.ivarna.fluxlinux.ui.components.GlassSettingCard
 import com.ivarna.fluxlinux.ui.theme.fluxMutedText
+import com.ivarna.fluxlinux.ui.theme.rememberStaggerEntrance
+import com.ivarna.fluxlinux.ui.theme.staggerIn
 
 /**
  * Terminal font zoom + ExtraKeys toolbar + guest login shell (nativecode settings parity).
@@ -73,6 +75,9 @@ fun TerminalSettingsScreen(
     var legacyProot by remember {
         mutableStateOf(TerminalPreferences.isLegacyProotLauncher(context))
     }
+
+    // Staggered card entrance (30ms steps) — visual only.
+    val entrance = rememberStaggerEntrance()
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -108,7 +113,7 @@ fun TerminalSettingsScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            GlassSettingCard {
+            GlassSettingCard(modifier = Modifier.staggerIn(0, entrance)) {
                 Column(Modifier.padding(20.dp).fillMaxWidth()) {
                     Text(
                         "Global terminal zoom",
@@ -184,7 +189,7 @@ fun TerminalSettingsScreen(
                 }
             }
 
-            GlassSettingCard {
+            GlassSettingCard(modifier = Modifier.staggerIn(1, entrance)) {
                 Row(
                     modifier = Modifier
                         .padding(20.dp)
@@ -217,7 +222,7 @@ fun TerminalSettingsScreen(
                 }
             }
 
-            GlassSettingCard {
+            GlassSettingCard(modifier = Modifier.staggerIn(2, entrance)) {
                 Row(
                     modifier = Modifier
                         .padding(20.dp)
@@ -272,7 +277,7 @@ fun TerminalSettingsScreen(
                 }
             }
 
-            GlassSettingCard {
+            GlassSettingCard(modifier = Modifier.staggerIn(3, entrance)) {
                 Row(
                     modifier = Modifier
                         .padding(20.dp)

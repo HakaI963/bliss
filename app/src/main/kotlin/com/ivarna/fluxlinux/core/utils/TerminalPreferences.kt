@@ -14,6 +14,7 @@ object TerminalPreferences {
     private const val KEY_SHOW_EXTRA_KEYS = "show_extra_keys"
     private const val KEY_GUEST_LOGIN_SHELL = "guest_login_shell"
     private const val KEY_LEGACY_PROOT_LAUNCHER = "legacy_proot_launcher"
+    private const val KEY_SHORTCUT_BAR = "shortcut_bar_config"
 
     const val FONT_MIN = 10
     const val FONT_MAX = 48
@@ -55,6 +56,20 @@ object TerminalPreferences {
 
     fun setLegacyProotLauncher(context: Context, enabled: Boolean) {
         prefs(context).edit().putBoolean(KEY_LEGACY_PROOT_LAUNCHER, enabled).apply()
+    }
+
+    /**
+     * Raw JSON of the configurable shortcut bar (see `ui/terminal/ShortcutBarConfig`).
+     * Null when never saved — callers decode to defaults; a null write removes the
+     * value so the next load is a clean migration to defaults again.
+     */
+    fun getShortcutBarJson(context: Context): String? =
+        prefs(context).getString(KEY_SHORTCUT_BAR, null)
+
+    fun setShortcutBarJson(context: Context, json: String?) {
+        prefs(context).edit().apply {
+            if (json == null) remove(KEY_SHORTCUT_BAR) else putString(KEY_SHORTCUT_BAR, json)
+        }.apply()
     }
 
     fun preferZsh(context: Context): Boolean =

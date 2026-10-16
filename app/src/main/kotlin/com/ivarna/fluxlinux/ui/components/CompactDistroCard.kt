@@ -1,5 +1,6 @@
 package com.ivarna.fluxlinux.ui.components
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -65,6 +66,12 @@ fun CompactDistroCard(
         ),
         label = "compactPress"
     )
+    // Press fill tint rides the same interaction source — no ripple, frost style.
+    val fill by animateColorAsState(
+        targetValue = if (pressed) Color.White.copy(alpha = 0.08f) else FrostSurface,
+        animationSpec = folioSpringAny(),
+        label = "compactFill"
+    )
 
     val clickableMod = if (onNavigateToInstall != null) {
         Modifier.clickable(
@@ -86,7 +93,7 @@ fun CompactDistroCard(
                 scaleY = scale
             }
             .clip(RoundedCornerShape(16.dp))
-            .background(FrostSurface)
+            .background(fill)
             .border(0.75.dp, FolioFrostBorder, RoundedCornerShape(16.dp))
             .then(clickableMod)
             .padding(14.dp),

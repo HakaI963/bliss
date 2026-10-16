@@ -1,13 +1,16 @@
 #!/bin/sh
-# folio_appearance_apply.sh — Folio Linux guest appearance applier (v1).
+# folio_appearance_apply.sh — Folio Linux guest appearance applier (v2).
 #
 # Reads <home>/.config/folio/appearance.env and applies the user's saved
 # appearance choices inside the Linux guest:
 #   - desktop wallpaper (image, solid color or random preset) + image style
-#   - xfce4-terminal colors (foreground/background/cursor/selection)
+#   - xfce4-terminal colors (terminalrc + xfce4-terminal xfconf channel)
+#   - terminal font size 10/12/14 (keeps the configured font family)
 #   - folio zsh prompt color (when the guest has the folio theme)
 #   - accent selection color via ~/.config/gtk-3.0/gtk.css (best-effort)
+#   - panel/dock opacity (solid/frosted/glass) + icon size S/M/L
 #   - optional mpv video-wallpaper autostart entry (opt-in, reversible)
+#   - login-time safety-net autostart entry for re-applying at desktop start
 #
 # Idempotent + hash-guarded: it re-applies only when appearance.env changes
 # (marker: ~/.config/folio/.appearance.applied = FOLIO_APPEARANCE_APPLIED_<sum>).
@@ -15,18 +18,21 @@
 # other steps unless the env changed.
 #
 # Runs from: guest ~/.zshrc trigger, customization scripts (root), the chroot
-# login helper (root, host-side) and the app (chroot, via root shell).
+# login helper (root, host-side), the login autostart entry and the app
+# (proot via proot-distro / chroot via root shell, for live apply).
 # Never fatal: every step is best-effort (`|| true`), no network, no packages.
 #
 # Env overrides (optional):
-#   FOLIO_APPLY_HOME   guest home to configure (default: $HOME then /home/flux)
-#   FOLIO_APPLY_ROOT   prefix for guest-absolute paths for host-side runs
-#                      outside the chroot (file existence checks only; the
-#                      shipped hooks run inside the chroot, so this is a
-#                      debug/advanced escape hatch)
-#   FOLIO_APPLY_FORCE  "1" = apply everything even when the hash is unchanged
+#   FOLIO_APPLY_HOME       guest home to configure (default: $HOME then /home/flux)
+#   FOLIO_APPLY_ROOT       prefix for guest-absolute paths for host-side runs
+#                          outside the chroot (file existence checks only; the
+#                          shipped hooks run inside the chroot, so this is a
+#                          debug/advanced escape hatch)
+#   FOLIO_APPLY_FORCE      "1" = apply everything even when the hash is unchanged
+#   FOLIO_APPLY_PRINT_PICK "1" = print FOLIO_APPEARANCE_PICK_IMAGE/…_STYLE lines
+#                          (machine-readable; used by the app's live-apply path)
 
-FOLIO_APPEARANCE_SCRIPT_VERSION=1
+FOLIO_APPEARANCE_SCRIPT_VERSION=2
 
 _fa_home="${FOLIO_APPLY_HOME:-${HOME:-/home/flux}}"
 [ -d "$_fa_home" ] || exit 0
@@ -35,19 +41,23 @@ _fa_cfg="$_fa_home/.config/folio"
 _fa_env="$_fa_cfg/appearance.env"
 [ -f "$_fa_env" ] || exit 0
 
-# Defaults guard for sourced keys.
+# Defaults guard for sourced keys (old env files → no new-option changes).
 FLUX_WALLPAPER=""
 FLUX_WALLPAPER_STYLE="zoom"
 FLUX_WALLPAPER_SOLID="#0B0B0D"
 FLUX_WALLPAPER_RANDOM="0"
 FLUX_WALLPAPER_CHOICES=""
+FLUX_WALLPAPER_DIM="0"
 FLUX_ACCENT="mono"
 FLUX_ACCENT_HEX=""
 FLUX_TERM_FG=""
 FLUX_TERM_BG=""
 FLUX_TERM_CURSOR=""
 FLUX_TERM_SELECTION=""
+FLUX_TERM_FONT_SIZE=""
 FLUX_PROMPT_COLOR=""
+FLUX_PANEL_OPACITY=""
+FLUX_ICON_SIZE=""
 FLUX_VIDEO_WALLPAPER=""
 # shellcheck disable=SC1090
 . "$_fa_env" 2>/dev/null || true
@@ -86,6 +96,11 @@ _fa_guest_path() {
 # Escape a value for a sed replacement using '#' as the delimiter.
 _fa_esc() { printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/&/\\&/g' -e 's/#/\\#/g'; }
 
+# Escape text for XML attribute values.
+_fa_xml_esc() {
+    printf '%s' "$1" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' -e 's/"/\&quot;/g'
+}
+
 # Solid-color rgba doubles: prints 4 space-separated doubles ("R G B 1").
 _fa_solid_doubles() {
     _h="${1#\#}"
@@ -120,6 +135,37 @@ _fa_rc_set() {
     else
         printf '%s=%s\n' "$_k" "$_v" >> "$_f" 2>/dev/null || true
     fi
+}
+
+# Replace or append a simple single-line <property/> in an xfconf channel XML.
+# Keeps every other key intact (the shipped compact defaults write the same
+# channels, so this must merge, never clobber). Best-effort; never fatal.
+#   $1 file  $2 property name  $3 type  $4 raw value  $5 channel name (new file)
+_fa_xfconf_set() {
+    _x="$1"; _k="$2"; _t="$3"; _v="$4"; _ch="$5"
+    command -v awk >/dev/null 2>&1 || return 0
+    mkdir -p "$(dirname "$_x")" 2>/dev/null || true
+    if [ ! -f "$_x" ]; then
+        printf '<?xml version="1.0" encoding="UTF-8"?>\n<channel name="%s" version="1.0">\n</channel>\n' "$_ch" > "$_x" 2>/dev/null || return 0
+    fi
+    _ve=$(_fa_xml_esc "$_v")
+    awk -v k="$_k" -v t="$_t" -v v="$_ve" '
+        BEGIN { done = 0 }
+        {
+            if (!done && index($0, "<property name=\"" k "\"") > 0 && index($0, "value=") > 0) {
+                sub(/type="[^"]*"/, "type=\"" t "\"")
+                sub(/value="[^"]*"/, "value=\"" v "\"")
+                done = 1
+            }
+            if (!done && index($0, "</channel>") > 0) {
+                print "  <property name=\"" k "\" type=\"" t "\" value=\"" v "\"/>"
+                done = 1
+            }
+            print
+        }
+    ' "$_x" > "$_x.fa.$$" 2>/dev/null && mv "$_x.fa.$$" "$_x" 2>/dev/null \
+        || rm -f "$_x.fa.$$"
+    return 0
 }
 
 # Wallpaper image style string -> xfce4-desktop integer.
@@ -208,7 +254,8 @@ _fa_write_desktop_full() {
         || rm -f "$_xml.fa.$$"
 }
 
-# Surgical merge: keep existing monitor layout / icon prefs, update the image.
+# Surgical merge: keep existing monitor layout / icon prefs, update the image
+# and style. Never clobbers other keys (desktop-icons, menu, cycle, …).
 _fa_merge_desktop() {
     _xml="$_fa_home/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-desktop.xml"
     _wp_esc=$(_fa_esc "$1")
@@ -221,13 +268,28 @@ _fa_merge_desktop() {
 _fa_apply_wallpaper() {
     _xml="$_fa_home/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-desktop.xml"
     _wp=$(_fa_wallpaper_pick)
+    _fa_mode="preset"
     if [ -n "$_wp" ] && [ ! -f "$(_fa_guest_path "$_wp")" ]; then
         _fa_log "wallpaper missing: $_wp (keeping current)"
         return 0
     fi
+    case "$FLUX_WALLPAPER_RANDOM" in
+        1) _fa_mode="random" ;;
+    esac
+    if [ -n "$_wp" ]; then
+        case "$_wp" in
+            */wallpaper-dim.[a-zA-Z]*|*/wallpaper.[a-zA-Z]*) _fa_mode="custom image" ;;
+        esac
+    else
+        _fa_mode="solid color"
+    fi
     _style=$(_fa_style_int "$FLUX_WALLPAPER_STYLE")
     # Solid color (no image): image-style 0 so the rgba color is visible.
     [ -n "$_wp" ] || _style=0
+    if [ "${FOLIO_APPLY_PRINT_PICK:-0}" = "1" ]; then
+        printf 'FOLIO_APPEARANCE_PICK_IMAGE=%s\n' "$_wp"
+        printf 'FOLIO_APPEARANCE_PICK_STYLE=%s\n' "$_style"
+    fi
     if [ -n "$_wp" ] && [ -f "$_xml" ] && grep -q 'last-image' "$_xml" 2>/dev/null; then
         _fa_merge_desktop "$_wp" "$_style"
     else
@@ -235,16 +297,48 @@ _fa_apply_wallpaper() {
     fi
 }
 
-# ── terminal colors + accent ─────────────────────────────────────────────────
+# ── terminal colors + font ───────────────────────────────────────────────────
+# Modern xfce4-terminal (0.9+/1.x) reads the xfce4-terminal xfconf channel;
+# terminalrc is kept for older guests. Both are written (merge, never clobber).
 _fa_apply_terminal() {
-    [ -n "$FLUX_TERM_FG" ] && [ -n "$FLUX_TERM_BG" ] || return 0
     _rc="$_fa_home/.config/xfce4/terminal/terminalrc"
+    _xf="$_fa_home/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-terminal.xml"
+    if [ -n "$FLUX_TERM_FG" ] && [ -n "$FLUX_TERM_BG" ]; then
+        mkdir -p "$(dirname "$_rc")" 2>/dev/null || true
+        _fa_rc_set "$_rc" ColorForeground "$FLUX_TERM_FG"
+        _fa_rc_set "$_rc" ColorBackground "$FLUX_TERM_BG"
+        [ -n "$FLUX_TERM_CURSOR" ] && _fa_rc_set "$_rc" ColorCursor "$FLUX_TERM_CURSOR"
+        [ -n "$FLUX_TERM_SELECTION" ] && _fa_rc_set "$_rc" ColorSelection "$FLUX_TERM_SELECTION"
+        _fa_xfconf_set "$_xf" "color-foreground" "string" "$FLUX_TERM_FG" "xfce4-terminal"
+        _fa_xfconf_set "$_xf" "color-background" "string" "$FLUX_TERM_BG" "xfce4-terminal"
+        [ -n "$FLUX_TERM_CURSOR" ] && _fa_xfconf_set "$_xf" "color-cursor" "string" "$FLUX_TERM_CURSOR" "xfce4-terminal"
+        [ -n "$FLUX_TERM_SELECTION" ] && _fa_xfconf_set "$_xf" "color-selection" "string" "$FLUX_TERM_SELECTION" "xfce4-terminal"
+        _fa_log "terminal colors updated"
+    fi
+}
+
+# Terminal font size: rewrite only the trailing size of the existing FontName so
+# the guest-chosen family (JetBrainsMono Nerd Font Mono, DejaVu, …) is kept.
+_fa_apply_term_font() {
+    case "${FLUX_TERM_FONT_SIZE:-}" in
+        10|11|12|13|14|15|16) ;;
+        *) return 0 ;;
+    esac
+    _rc="$_fa_home/.config/xfce4/terminal/terminalrc"
+    _xf="$_fa_home/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-terminal.xml"
+    _cur=$(sed -n 's/^FontName=//p' "$_rc" 2>/dev/null | head -n 1)
+    if [ -z "$_cur" ] && [ -f "$_xf" ]; then
+        # Modern guests keep the font only in the xfce4-terminal channel.
+        _cur=$(sed -n 's/.*<property name="font-name"[^>]*value="\([^"]*\)".*/\1/p' "$_xf" 2>/dev/null | head -n 1)
+    fi
+    _fam=$(printf '%s' "$_cur" | sed 's/ [0-9][0-9]*$//')
+    [ -n "$_fam" ] || _fam="Monospace"
     mkdir -p "$(dirname "$_rc")" 2>/dev/null || true
-    _fa_rc_set "$_rc" ColorForeground "$FLUX_TERM_FG"
-    _fa_rc_set "$_rc" ColorBackground "$FLUX_TERM_BG"
-    [ -n "$FLUX_TERM_CURSOR" ] && _fa_rc_set "$_rc" ColorCursor "$FLUX_TERM_CURSOR"
-    [ -n "$FLUX_TERM_SELECTION" ] && _fa_rc_set "$_rc" ColorSelection "$FLUX_TERM_SELECTION"
-    _fa_log "terminal colors updated"
+    _fa_rc_set "$_rc" FontUseSystem "FALSE"
+    _fa_rc_set "$_rc" FontName "$_fam $FLUX_TERM_FONT_SIZE"
+    _fa_xfconf_set "$_xf" "font-use-system" "bool" "false" "xfce4-terminal"
+    _fa_xfconf_set "$_xf" "font-name" "string" "$_fam $FLUX_TERM_FONT_SIZE" "xfce4-terminal"
+    _fa_log "terminal font size: $FLUX_TERM_FONT_SIZE"
 }
 
 _fa_apply_prompt() {
@@ -288,6 +382,73 @@ _fa_apply_accent() {
     _fa_log "accent: $FLUX_ACCENT ($_hex)"
 }
 
+# ── panel/dock opacity + icon size ───────────────────────────────────────────
+# Patches ONLY the shipped panel-1 (top bar) / panel-2 (dock) blocks of
+# xfce4-panel.xml; every other key (plugins, positions, per-panel layout) is
+# preserved. Opacity edits the 4th rgba double of each background-rgba array;
+# icon size also scales the panel heights so nothing clips.
+_fa_apply_panel() {
+    _px="$_fa_home/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-panel.xml"
+    [ -f "$_px" ] || return 0
+    command -v awk >/dev/null 2>&1 || return 0
+    _alpha=""
+    case "${FLUX_PANEL_OPACITY:-}" in
+        solid)         _alpha="1.0" ;;
+        frosted|frost) _alpha="0.9" ;;
+        glass)         _alpha="0.7" ;;
+        *)             _alpha="" ;;
+    esac
+    _i1=""; _i2=""; _s1=""; _s2=""
+    case "${FLUX_ICON_SIZE:-}" in
+        s|S) _i1="14"; _i2="28"; _s1="26"; _s2="56" ;;
+        m|M) _i1="16"; _i2="32"; _s1="28"; _s2="64" ;;
+        l|L) _i1="18"; _i2="36"; _s1="32"; _s2="72" ;;
+        *)   ;;
+    esac
+    [ -n "$_alpha$_i1" ] || return 0
+    awk -v alpha="$_alpha" -v i1="$_i1" -v i2="$_i2" -v s1="$_s1" -v s2="$_s2" '
+        BEGIN { pid = ""; ina = 0; n = 0 }
+        {
+            if ($0 ~ /<property name="background-rgba" type="array">/) {
+                ina = 1; n = 0; print; next
+            }
+            if (ina) {
+                if ($0 ~ /<value type="double"/) {
+                    _rest = $0; _out = ""
+                    while (match(_rest, /<value type="double" value="[^"]*"\/>/)) {
+                        n++
+                        _tok = substr(_rest, RSTART, RLENGTH)
+                        if (n == 4 && alpha != "") sub(/value="[^"]*"/, "value=\"" alpha "\"", _tok)
+                        _out = _out substr(_rest, 1, RSTART - 1) _tok
+                        _rest = substr(_rest, RSTART + RLENGTH)
+                    }
+                    print _out _rest
+                    if ($0 ~ /<\/property>/) ina = 0
+                    next
+                }
+                print
+                if ($0 ~ /<\/property>/) ina = 0
+                next
+            }
+            if (match($0, /name="panel-[0-9]+"/)) {
+                pid = substr($0, RSTART + 6, RLENGTH - 7)
+            }
+            if (pid == "panel-1" && i1 != "" && $0 ~ /<property name="icon-size" type="uint"/) {
+                sub(/value="[0-9]+"/, "value=\"" i1 "\"")
+            } else if (pid == "panel-2" && i2 != "" && $0 ~ /<property name="icon-size" type="uint"/) {
+                sub(/value="[0-9]+"/, "value=\"" i2 "\"")
+            } else if (pid == "panel-1" && s1 != "" && $0 ~ /<property name="size" type="uint"/) {
+                sub(/value="[0-9]+"/, "value=\"" s1 "\"")
+            } else if (pid == "panel-2" && s2 != "" && $0 ~ /<property name="size" type="uint"/) {
+                sub(/value="[0-9]+"/, "value=\"" s2 "\"")
+            }
+            print
+        }
+    ' "$_px" > "$_px.fa.$$" 2>/dev/null && mv "$_px.fa.$$" "$_px" 2>/dev/null \
+        || rm -f "$_px.fa.$$"
+    _fa_log "panel opacity: ${FLUX_PANEL_OPACITY:-unchanged}, icons: ${FLUX_ICON_SIZE:-unchanged}"
+}
+
 # ── video wallpaper (opt-in, experimental) ───────────────────────────────────
 _fa_apply_video() {
     _df="$_fa_home/.config/autostart/folio-video-wallpaper.desktop"
@@ -313,6 +474,27 @@ _fa_apply_video() {
     # guest PATH; the in-guest apply performs the real check).
 }
 
+# ── login-time safety net ────────────────────────────────────────────────────
+# Re-applies the staged config when the desktop starts, so existing installs
+# (and the "staged but desktop already running" case) pick it up without a
+# reinstall. Idempotent; removed only with the distro itself.
+_fa_ensure_autostart() {
+    _ad="$_fa_home/.config/autostart"
+    mkdir -p "$_ad" 2>/dev/null || return 0
+    cat > "$_ad/folio-appearance.desktop" <<EOF
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Folio Linux appearance
+Comment=Applies your Folio Linux wallpaper, colors and terminal settings at login.
+Exec=sh $_fa_home/.config/folio/appearance-apply.sh
+Terminal=false
+StartupNotify=false
+OnlyShowIn=XFCE;
+X-GNOME-Autostart-enabled=true
+EOF
+}
+
 # ── ownership (root runs: mirror the home owner; proot: app uid) ─────────────
 _fa_fix_owner() {
     [ "$(id -u 2>/dev/null || echo 0)" = "0" ] || return 0
@@ -322,7 +504,10 @@ _fa_fix_owner() {
     for _p in "$_fa_cfg" "$_fa_home/.local/share/folio" \
               "$_fa_home/.config/xfce4/terminal/terminalrc" \
               "$_fa_home/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-desktop.xml" \
+              "$_fa_home/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-terminal.xml" \
+              "$_fa_home/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-panel.xml" \
               "$_fa_home/.config/gtk-3.0/gtk.css" \
+              "$_fa_home/.config/autostart/folio-appearance.desktop" \
               "$_fa_home/.config/autostart/folio-video-wallpaper.desktop" \
               "$_fa_home/.oh-my-zsh/custom/themes/folio.zsh-theme"; do
         [ -e "$_p" ] || continue
@@ -335,9 +520,12 @@ _fa_apply_wallpaper
 
 if [ "$_fa_full" = "1" ]; then
     _fa_apply_terminal
+    _fa_apply_term_font
     _fa_apply_prompt
     _fa_apply_accent
+    _fa_apply_panel
     _fa_apply_video
+    _fa_ensure_autostart
 fi
 
 _fa_fix_owner
@@ -346,5 +534,5 @@ if [ "$_fa_full" = "1" ]; then
     printf '%s\n' "$_fa_want" > "$_fa_marker" 2>/dev/null || true
 fi
 
-_fa_log "applied (${FLUX_WALLPAPER_STYLE:-zoom}${FLUX_WALLPAPER:+, custom image})"
+_fa_log "applied (${_fa_mode:-preset}, style ${FLUX_WALLPAPER_STYLE:-zoom})"
 exit 0

@@ -8,15 +8,23 @@
 DEBIANPATH="/data/local/folio/chroots/debian"
 USERNAME="flux"
 
-# Desktop contract: FLUX_DESKTOP (env mirror FLUX_DESKTOP_ENV) = xfce | kde | none.
-# Unset/empty → xfce (backward compat); xfce4 is normalized to xfce.
-DESKTOP_CHOICE="${FLUX_DESKTOP:-${FLUX_DESKTOP_ENV:-xfce}}"
-case "$DESKTOP_CHOICE" in
-    xfce4) DESKTOP_CHOICE=xfce ;;
-esac
+# Desktop contract: FLUX_DESKTOPS (space/comma separated) = xfce | kde | none;
+# legacy FLUX_DESKTOP / FLUX_DESKTOP_ENV remain valid single values. Unset/empty
+# → xfce (backward compat). Normalized to the canonical "xfce kde" order;
+# unknown tokens are ignored and "none" installs neither desktop.
+DESKTOPS="${FLUX_DESKTOPS:-${FLUX_DESKTOP:-${FLUX_DESKTOP_ENV:-xfce}}}"
+DESKTOPS=$(printf '%s' "$DESKTOPS" | tr ',' ' ')
+DESKTOPS=$(printf '%s' "$DESKTOPS" | tr -s '[:space:]' ' ')
+DESKTOPS="${DESKTOPS# }"
+DESKTOPS="${DESKTOPS% }"
+case " $DESKTOPS " in *" xfce "*|*" xfce4 "*) _norm="xfce" ;; *) _norm="" ;; esac
+case " $DESKTOPS " in *" kde "*) _norm="${_norm}${_norm:+ }kde" ;; esac
+[ -n "$_norm" ] || _norm="none"
+DESKTOPS="$_norm"
+unset _norm
 # Guest session command for generated launchers (xfce default; kde aware).
 DE_EXEC="startxfce4"
-if [ "$DESKTOP_CHOICE" = "kde" ]; then
+if [ -z "${DESKTOPS##*kde*}" ] && [ -n "${DESKTOPS##*xfce*}" ]; then
     DE_EXEC="startplasma-x11"
 fi
 
@@ -175,7 +183,7 @@ configure_debian_chroot() {
     " || goodbye
 
     # --- DESKTOP INSTALL ---
-    if [ "$DESKTOP_CHOICE" = "xfce" ]; then
+    if [ -z "${DESKTOPS##*xfce*}" ]; then
         progress "Installing XFCE4..."
         $BB chroot "$DEBIANPATH" /bin/su - root -c '
             export DEBIAN_FRONTEND=noninteractive
@@ -183,7 +191,7 @@ configure_debian_chroot() {
             apt install -y --no-install-recommends xfce4-whiskermenu-plugin xfce4-screenshooter 2>/dev/null || true
         ' || goodbye
     else
-        progress "Skipping XFCE4 install (FLUX_DESKTOP=$DESKTOP_CHOICE)"
+        progress "Skipping XFCE4 install (FLUX_DESKTOPS=$DESKTOPS)"
     fi
 
     success "Debian Environment Configured!"

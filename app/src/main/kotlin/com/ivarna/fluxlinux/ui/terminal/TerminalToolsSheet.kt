@@ -18,6 +18,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.ContentPaste
@@ -26,6 +28,7 @@ import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.KeyboardHide
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Terminal
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -64,13 +67,16 @@ private val ToolTileHeight = 48.dp
 /** Destructive actions that must ask before running (session processes are killed). */
 private enum class TerminalToolConfirm { SESSION, ALL }
 
+/** One key-grid entry: label + TerminalKeyInjector payload (+ ctrl for control combos). */
+private data class ToolKeySpec(val label: String, val key: String, val ctrl: Boolean = false)
+
 /**
  * Quality-of-life "tools" bottom sheet for the interactive terminal.
  *
  * Monochrome frost surface (FrostSurface tiles + hairline borders, no color);
- * every action is wired to existing APIs by TerminalScreen — this composable is
- * presentation + confirm dialogs only. Keys go through the same
- * [TerminalKeyInjector] path as the ExtraKeys toolbar.
+ * every key action routes through the same [TerminalKeyInjector] path as the
+ * ExtraKeys bar (TerminalScreen wires [onInjectKey] to it) — this composable is
+ * presentation + confirm dialogs only.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -86,16 +92,15 @@ fun TerminalToolsSheet(
     onDismissRequest: () -> Unit,
     onPaste: () -> Unit,
     onCopyScreen: () -> Unit,
-    onCtrlC: () -> Unit,
-    onCtrlD: () -> Unit,
-    onSendTab: () -> Unit,
-    onSendEscape: () -> Unit,
-    onClearScreen: () -> Unit,
+    onInjectKey: (String, Boolean) -> Unit,
     onRestart: () -> Unit,
     onFontSizeChange: (Int) -> Unit,
     onToggleExtraKeys: () -> Unit,
     onCloseSession: () -> Unit,
-    onCloseAllSessions: () -> Unit
+    onCloseAllSessions: () -> Unit,
+    onAddCustomKey: () -> Unit,
+    onAddToShortcutBar: () -> Unit,
+    onEditShortcutBar: () -> Unit
 ) {
     var confirm by remember { mutableStateOf<TerminalToolConfirm?>(null) }
 
@@ -130,15 +135,63 @@ fun TerminalToolsSheet(
 
             // ── Quick keys (same inject path as the ExtraKeys toolbar) ───────
             ToolSectionLabel("QUICK KEYS")
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                ToolTile("Ctrl C", onClick = onCtrlC, enabled = hasSession, modifier = Modifier.weight(1f))
-                ToolTile("Ctrl D", onClick = onCtrlD, enabled = hasSession, modifier = Modifier.weight(1f))
-                ToolTile("TAB", onClick = onSendTab, enabled = hasSession, modifier = Modifier.weight(1f))
-                ToolTile("ESC", onClick = onSendEscape, enabled = hasSession, modifier = Modifier.weight(1f))
-            }
+            ToolKeyGrid(
+                specs = listOf(
+                    ToolKeySpec("Ctrl C", "c", ctrl = true),
+                    ToolKeySpec("Ctrl D", "d", ctrl = true),
+                    ToolKeySpec("TAB", "TAB"),
+                    ToolKeySpec("ESC", "ESC")
+                ),
+                perRow = 4,
+                enabled = hasSession,
+                onInjectKey = onInjectKey
+            )
+
+            // ── Editing shortcuts: readline/shell editing + history + clear ──
+            ToolSectionLabel("EDITING")
+            ToolKeyGrid(
+                specs = listOf(
+                    ToolKeySpec("Ctrl A", "a", ctrl = true),
+                    ToolKeySpec("Ctrl E", "e", ctrl = true),
+                    ToolKeySpec("Ctrl K", "k", ctrl = true),
+                    ToolKeySpec("Ctrl U", "u", ctrl = true),
+                    ToolKeySpec("Ctrl Z", "z", ctrl = true),
+                    ToolKeySpec("Ctrl W", "w", ctrl = true),
+                    ToolKeySpec("Ctrl R", "r", ctrl = true),
+                    ToolKeySpec("Ctrl L", "l", ctrl = true)
+                ),
+                perRow = 4,
+                enabled = hasSession,
+                onInjectKey = onInjectKey
+            )
+
+            // ── Navigation: arrows + enter + cursor/paging ───────────────────
+            ToolSectionLabel("NAVIGATION")
+            ToolKeyGrid(
+                specs = listOf(
+                    ToolKeySpec("←", "LEFT"),
+                    ToolKeySpec("↑", "UP"),
+                    ToolKeySpec("↓", "DOWN"),
+                    ToolKeySpec("→", "RIGHT"),
+                    ToolKeySpec("ENT", "ENTER"),
+                    ToolKeySpec("Home", "HOME"),
+                    ToolKeySpec("End", "END"),
+                    ToolKeySpec("PgUp", "PGUP"),
+                    ToolKeySpec("PgDn", "PGDN")
+                ),
+                perRow = 5,
+                enabled = hasSession,
+                onInjectKey = onInjectKey
+            )
+
+            // ── Function keys F1–F12 ─────────────────────────────────────────
+            ToolSectionLabel("FUNCTION KEYS")
+            ToolKeyGrid(
+                specs = (1..12).map { ToolKeySpec("F$it", "F$it") },
+                perRow = 6,
+                enabled = hasSession,
+                onInjectKey = onInjectKey
+            )
 
             // ── Clipboard + screen buffer ────────────────────────────────────
             ToolSectionLabel("CLIPBOARD & SCREEN")
@@ -163,8 +216,34 @@ fun TerminalToolsSheet(
                 ToolTile(
                     "Clear",
                     icon = Icons.Default.Terminal,
-                    onClick = onClearScreen,
+                    onClick = { onInjectKey("l", true) },
                     enabled = hasSession,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            // ── Shortcut bar customization ───────────────────────────────────
+            ToolSectionLabel("SHORTCUT BAR")
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                ToolTile(
+                    "Custom key",
+                    icon = Icons.Default.Add,
+                    onClick = onAddCustomKey,
+                    modifier = Modifier.weight(1f)
+                )
+                ToolTile(
+                    "Add to bar",
+                    icon = Icons.AutoMirrored.Filled.PlaylistAdd,
+                    onClick = onAddToShortcutBar,
+                    modifier = Modifier.weight(1f)
+                )
+                ToolTile(
+                    "Edit bar",
+                    icon = Icons.Default.Tune,
+                    onClick = onEditShortcutBar,
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -278,6 +357,39 @@ fun TerminalToolsSheet(
             onDismiss = { confirm = null }
         )
         null -> Unit
+    }
+}
+
+/** Compact key grid: chunks [specs] into rows of [perRow], tiles share width evenly. */
+@Composable
+private fun ToolKeyGrid(
+    specs: List<ToolKeySpec>,
+    perRow: Int,
+    enabled: Boolean,
+    onInjectKey: (String, Boolean) -> Unit
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        specs.chunked(perRow).forEach { chunk ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                chunk.forEach { spec ->
+                    ToolTile(
+                        spec.label,
+                        onClick = { onInjectKey(spec.key, spec.ctrl) },
+                        enabled = enabled,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                repeat(perRow - chunk.size) {
+                    Spacer(Modifier.weight(1f))
+                }
+            }
+        }
     }
 }
 

@@ -55,6 +55,8 @@ import com.ivarna.fluxlinux.ui.theme.FrostHairline
 import com.ivarna.fluxlinux.ui.theme.TextPrimary
 import com.ivarna.fluxlinux.ui.theme.TextSecondary
 import com.ivarna.fluxlinux.ui.theme.fluxMutedText
+import com.ivarna.fluxlinux.ui.theme.rememberStaggerEntrance
+import com.ivarna.fluxlinux.ui.theme.staggerIn
 
 /**
  * Embedded X11 display prefs — writes Lorie keys and broadcasts live updates.
@@ -84,6 +86,9 @@ fun X11SettingsScreen(
     var scancodeWorkaround by remember {
         mutableStateOf(TermuxX11Preferences.getScancodeWorkaround(context))
     }
+
+    // Staggered card entrance (30ms steps) — visual only.
+    val entrance = rememberStaggerEntrance()
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -122,10 +127,11 @@ fun X11SettingsScreen(
             Text(
                 "Changes apply to the embedded X11 display immediately (no external Termux:X11).",
                 fontSize = 13.sp,
-                color = fluxMutedText()
+                color = fluxMutedText(),
+                modifier = Modifier.staggerIn(0, entrance)
             )
 
-            GlassSettingCard {
+            GlassSettingCard(modifier = Modifier.staggerIn(1, entrance)) {
                 Column(Modifier.padding(20.dp).fillMaxWidth()) {
                     Text(
                         "Display",
@@ -195,7 +201,7 @@ fun X11SettingsScreen(
                 }
             }
 
-            GlassSettingCard {
+            GlassSettingCard(modifier = Modifier.staggerIn(2, entrance)) {
                 Column(Modifier.padding(20.dp).fillMaxWidth()) {
                     Text(
                         "Input",
@@ -267,7 +273,10 @@ fun X11SettingsScreen(
                 ),
                 border = BorderStroke(0.75.dp, FrostHairline),
                 shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.fillMaxWidth().height(48.dp)
+                modifier = Modifier
+                    .staggerIn(3, entrance)
+                    .fillMaxWidth()
+                    .height(48.dp)
             ) {
                 Icon(
                     Icons.Default.OpenInNew,
@@ -295,7 +304,10 @@ fun X11SettingsScreen(
                     contentColor = FolioBackground
                 ),
                 shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.fillMaxWidth().height(48.dp)
+                modifier = Modifier
+                    .staggerIn(4, entrance)
+                    .fillMaxWidth()
+                    .height(48.dp)
             ) {
                 Text(
                     "Re-apply to running display",

@@ -4,13 +4,28 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.util.Log
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BugReport
@@ -38,33 +53,53 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.PermissionState
 import com.ivarna.fluxlinux.BuildConfig
+import com.ivarna.fluxlinux.core.root.RootShell
 import com.ivarna.fluxlinux.core.system.CrashLog
 import com.ivarna.fluxlinux.core.system.PhantomProcessFixer
 import com.ivarna.fluxlinux.core.system.SharedStorageAccess
 import com.ivarna.fluxlinux.core.utils.ThemeMode
 import com.ivarna.fluxlinux.ui.components.FrostContainer
 import com.ivarna.fluxlinux.ui.components.FrostDivider
-import com.ivarna.fluxlinux.ui.components.FrostGroupTitle
 import com.ivarna.fluxlinux.ui.components.FrostRow
+import com.ivarna.fluxlinux.ui.components.folioSpring
+import com.ivarna.fluxlinux.ui.theme.FolioFrostBorder
+import com.ivarna.fluxlinux.ui.theme.FolioWordmarkStyle
+import com.ivarna.fluxlinux.ui.theme.FrostHairline
+import com.ivarna.fluxlinux.ui.theme.StatusDot
+import com.ivarna.fluxlinux.ui.theme.TextMuted
+import com.ivarna.fluxlinux.ui.theme.TextPrimary
+import com.ivarna.fluxlinux.ui.theme.TextSecondary
+import com.ivarna.fluxlinux.ui.theme.rememberStaggerEntrance
+import com.ivarna.fluxlinux.ui.theme.rememberStaggerProgress
+import com.ivarna.fluxlinux.ui.theme.staggerIn
 
 /**
- * Settings hub: 4 frosted groups in shared FrostContainer style.
- * No giant buttons, no bitmap logos — monochrome rows with hairline dividers.
+ * Settings hub: hero wordmark card + frosted groups with icon-plate rows.
+ * Motion: staggered entrance (30ms steps, 240ms each), press-scale rows,
+ * animated section rules. Every row keeps its original callback/route.
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalPermissionsApi::class)
 @Composable
@@ -97,8 +132,6 @@ fun SettingsScreen(
     val _onThemeChanged = onThemeChanged
     @Suppress("UNUSED_PARAMETER")
     val _currentTheme = currentTheme
-    @Suppress("UNUSED_PARAMETER")
-    val _onNavigateToRootCheck = onNavigateToRootCheck
 
     val context = LocalContext.current
 
@@ -117,6 +150,14 @@ fun SettingsScreen(
         // OEM builds (MIUI) can throw SecurityException from the PackageManager /
         // Environment storage queries — a settings row must never crash the screen.
         if (storageDeclared) runCatching { SharedStorageAccess.granted() }.getOrDefault(false) else false
+    }
+
+    // Reuse the existing async probe (same one Home uses); callback is main-posted.
+    var rootAvailable by remember { mutableStateOf(false) }
+    LaunchedEffect(lifecycleKey) {
+        RootShell.probeRootAvailable(forceClearCache = lifecycleKey > 0) { ok ->
+            rootAvailable = ok
+        }
     }
 
     val phantomApplicable = PhantomProcessFixer.applicable()
@@ -155,17 +196,32 @@ fun SettingsScreen(
             )
         }
     ) { innerPadding ->
+        val entrance = rememberStaggerEntrance()
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .padding(horizontal = 16.dp, vertical = 12.dp)
+                .padding(horizontal = 16.dp)
                 .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+            verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
+            SettingsHero(
+                versionName = BuildConfig.VERSION_NAME,
+                rootAvailable = rootAvailable,
+                storageDeclared = storageDeclared,
+                storageGranted = storageGranted,
+                onRootClick = { onNavigateToRootCheck?.invoke() },
+                onStorageClick = { SharedStorageAccess.openSettings(context) },
+                modifier = Modifier.staggerIn(0, entrance).padding(top = 12.dp)
+            )
+
             // 1 — Environment & Host
-            FrostGroupTitle("Environment & Host")
-            FrostContainer {
+            SettingsSection(
+                title = "Environment & Host",
+                headerIndex = 1,
+                containerIndex = 2,
+                entrance = entrance
+            ) {
                 if (storageDeclared) {
                     FrostRow(
                         icon = Icons.Default.SdStorage,
@@ -174,7 +230,7 @@ fun SettingsScreen(
                         else "Not allowed: tap, then enable All files access",
                         onClick = { SharedStorageAccess.openSettings(context) }
                     )
-                    FrostDivider()
+                    FrostDivider(startInset = 68.dp)
                 }
                 if (phantomApplicable) {
                     FrostRow(
@@ -187,33 +243,37 @@ fun SettingsScreen(
                         },
                         onClick = { showPhantom = true }
                     )
-                    FrostDivider()
+                    FrostDivider(startInset = 68.dp)
                 }
                 FrostRow(
                     icon = Icons.Default.History,
                     title = "Legacy Termux",
-                    subtitle = "Leftover installs from Folio ≤ v1.8.0",
+                    subtitle = "Leftover installs from Folio Linux ≤ v1.8.0",
                     onClick = { onNavigateToLegacyTermuxSettings?.invoke() }
                 )
             }
 
             // 2 — Interface & Session
-            FrostGroupTitle("Interface & Session")
-            FrostContainer {
+            SettingsSection(
+                title = "Interface & Session",
+                headerIndex = 3,
+                containerIndex = 4,
+                entrance = entrance
+            ) {
                 FrostRow(
                     icon = Icons.Default.Terminal,
                     title = "Terminal",
                     subtitle = "Font zoom, extra keys, guest shell",
                     onClick = { onNavigateToTerminalSettings?.invoke() }
                 )
-                FrostDivider()
+                FrostDivider(startInset = 68.dp)
                 FrostRow(
                     icon = Icons.Default.DisplaySettings,
                     title = "X11 Display",
                     subtitle = "Scale, fullscreen, embedded X11 input",
                     onClick = { onNavigateToX11Settings?.invoke() }
                 )
-                FrostDivider()
+                FrostDivider(startInset = 68.dp)
                 FrostRow(
                     icon = Icons.Default.VolumeUp,
                     title = "Audio",
@@ -223,15 +283,19 @@ fun SettingsScreen(
             }
 
             // 3 — Containers
-            FrostGroupTitle("Containers")
-            FrostContainer {
+            SettingsSection(
+                title = "Containers",
+                headerIndex = 5,
+                containerIndex = 6,
+                entrance = entrance
+            ) {
                 FrostRow(
                     icon = Icons.Default.Folder,
                     title = "PRoot",
                     subtitle = "Installed containers, app-storage size",
                     onClick = { onNavigateToProotSettings?.invoke() }
                 )
-                FrostDivider()
+                FrostDivider(startInset = 68.dp)
                 FrostRow(
                     icon = Icons.Default.Storage,
                     title = "Chroot",
@@ -241,8 +305,12 @@ fun SettingsScreen(
             }
 
             // 4 — System & About
-            FrostGroupTitle("System & About")
-            FrostContainer {
+            SettingsSection(
+                title = "System & About",
+                headerIndex = 7,
+                containerIndex = 8,
+                entrance = entrance
+            ) {
                 if (onNavigateToOnboarding != null) {
                     FrostRow(
                         icon = Icons.Default.School,
@@ -250,7 +318,7 @@ fun SettingsScreen(
                         subtitle = "Replay the first-run tour",
                         onClick = { onNavigateToOnboarding() }
                     )
-                    FrostDivider()
+                    FrostDivider(startInset = 68.dp)
                 }
                 if (onNavigateToTroubleshooting != null) {
                     FrostRow(
@@ -259,7 +327,7 @@ fun SettingsScreen(
                         subtitle = "Diagnose common issues",
                         onClick = { onNavigateToTroubleshooting() }
                     )
-                    FrostDivider()
+                    FrostDivider(startInset = 68.dp)
                 }
                 if (onNavigateToCrashLogs != null) {
                     FrostRow(
@@ -272,16 +340,16 @@ fun SettingsScreen(
                         },
                         onClick = { onNavigateToCrashLogs() }
                     )
-                    FrostDivider()
+                    FrostDivider(startInset = 68.dp)
                 }
                 FrostRow(
                     icon = Icons.Default.Person,
-                    title = "About Folio",
+                    title = "About Folio Linux",
                     subtitle = "Author no_piece",
                     onClick = {},
                     chevron = false
                 )
-                FrostDivider()
+                FrostDivider(startInset = 68.dp)
                 FrostRow(
                     icon = Icons.Default.Tag,
                     title = "Version",
@@ -289,7 +357,7 @@ fun SettingsScreen(
                     onClick = {},
                     chevron = false
                 )
-                FrostDivider()
+                FrostDivider(startInset = 68.dp)
                 FrostRow(
                     icon = Icons.Default.MenuBook,
                     title = "Documentation",
@@ -298,15 +366,233 @@ fun SettingsScreen(
                 )
             }
 
-            // Clears the floating bottom dock (64dp pill + 16dp margins = 80dp
-            // footprint over the inset-consuming content viewport) with spare air,
-            // matching Home/Distro's 110dp reserve.
+            // Clears the floating bottom dock (64dp pill + 16dp margins = 96dp
+            // footprint; the content viewport consumes the navigation-bar inset,
+            // so 110dp always leaves the last row tappable).
             Spacer(Modifier.height(110.dp))
         }
     }
 
     if (showPhantom) {
         com.ivarna.fluxlinux.ui.components.PhantomProcessDialog(warning = false) { showPhantom = false }
+    }
+}
+
+/**
+ * Hero: "Folio Linux" wordmark, build-version chip, and a live device-status
+ * line reusing existing reads only (root probe + shared-storage grant).
+ */
+@Composable
+private fun SettingsHero(
+    versionName: String,
+    rootAvailable: Boolean,
+    storageDeclared: Boolean,
+    storageGranted: Boolean,
+    onRootClick: () -> Unit,
+    onStorageClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val storageActive = storageDeclared && storageGranted
+    FrostContainer(modifier = modifier, corner = 20.dp) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 18.dp, vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(46.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Color.White.copy(alpha = 0.06f))
+                    .border(0.75.dp, FolioFrostBorder, RoundedCornerShape(14.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Terminal,
+                    contentDescription = null,
+                    tint = TextPrimary,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = "Folio Linux",
+                    style = FolioWordmarkStyle,
+                    color = TextPrimary
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = "Linux environments, on-device",
+                    fontSize = 12.sp,
+                    color = TextMuted,
+                    maxLines = 1
+                )
+            }
+            Spacer(Modifier.width(10.dp))
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(Color.White.copy(alpha = 0.07f))
+                    .border(0.75.dp, FolioFrostBorder, RoundedCornerShape(50))
+                    .padding(horizontal = 10.dp, vertical = 5.dp)
+            ) {
+                Text(
+                    text = "v$versionName",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = TextSecondary,
+                    maxLines = 1
+                )
+            }
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 18.dp)
+                .height(0.5.dp)
+                .background(FrostHairline)
+        )
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 18.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            HeroStatusChip(
+                label = if (rootAvailable) "Root ready" else "No root · PRoot",
+                active = rootAvailable,
+                statusDescription = if (rootAvailable) {
+                    "Device status: root available. Opens root access."
+                } else {
+                    "Device status: no root, PRoot mode. Opens root access."
+                },
+                onClick = onRootClick
+            )
+            HeroStatusChip(
+                label = if (storageActive) "Storage allowed" else "Storage off",
+                active = storageActive,
+                statusDescription = if (storageActive) {
+                    "Device status: shared storage allowed. Opens storage settings."
+                } else {
+                    "Device status: shared storage off. Opens storage settings."
+                },
+                onClick = onStorageClick
+            )
+        }
+    }
+}
+
+@Composable
+private fun HeroStatusChip(
+    label: String,
+    active: Boolean,
+    statusDescription: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.97f else 1f,
+        animationSpec = folioSpring(),
+        label = "heroChipPress"
+    )
+    Row(
+        modifier = modifier
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .clip(RoundedCornerShape(50))
+            .background(Color.White.copy(alpha = 0.05f))
+            .border(0.75.dp, FolioFrostBorder, RoundedCornerShape(50))
+            .clickable(
+                interactionSource = interaction,
+                indication = null,
+                onClick = onClick
+            )
+            .semantics(mergeDescendants = true) { contentDescription = statusDescription }
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(6.dp)
+                .clip(CircleShape)
+                .background(if (active) StatusDot else TextMuted)
+        )
+        Spacer(Modifier.width(6.dp))
+        Text(
+            text = label,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Medium,
+            color = TextSecondary,
+            maxLines = 1
+        )
+    }
+}
+
+/**
+ * One settings group: animated header (fade + rule) followed by the frosted
+ * container, both on the shared stagger clock.
+ */
+@Composable
+private fun SettingsSection(
+    title: String,
+    headerIndex: Int,
+    containerIndex: Int,
+    entrance: Boolean,
+    rows: @Composable ColumnScope.() -> Unit
+) {
+    Column(Modifier.fillMaxWidth()) {
+        SettingsSectionHeader(title, headerIndex, entrance)
+        FrostContainer(
+            modifier = Modifier
+                .staggerIn(containerIndex, entrance)
+                .animateContentSize()
+        ) {
+            rows()
+        }
+    }
+}
+
+@Composable
+private fun SettingsSectionHeader(
+    text: String,
+    index: Int,
+    entrance: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val progress = rememberStaggerProgress(index, entrance)
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .graphicsLayer { alpha = progress }
+            .padding(start = 8.dp, end = 8.dp, top = 18.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = text,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold,
+            letterSpacing = 0.4.sp,
+            color = TextSecondary,
+            maxLines = 1
+        )
+        Spacer(Modifier.width(10.dp))
+        // Hairline draws in with the header (alpha rides the same progress).
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .height(0.5.dp)
+                .graphicsLayer { alpha = 0.6f * progress }
+                .background(FrostHairline)
+        )
     }
 }
 

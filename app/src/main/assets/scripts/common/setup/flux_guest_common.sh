@@ -213,14 +213,21 @@ _flux_ensure_home() {
     chmod 755 /home/flux 2>/dev/null || true
     mkdir -p /home/flux/.config /home/flux/.cache /home/flux/.local/share /home/flux/.vnc
     chmod -R u+rwX /home/flux/.config /home/flux/.cache /home/flux/.local 2>/dev/null || true
-    cat > /home/flux/.vnc/xstartup <<'EOF'
+    # Desktop-aware session command (FLUX_DESKTOPS; legacy default xfce).
+    _xs_de="startxfce4"
+    case " ${DESKTOPS:-xfce} " in
+        *" xfce "*) _xs_de="startxfce4" ;;
+        *" kde "*) _xs_de="startplasma-x11" ;;
+    esac
+    cat > /home/flux/.vnc/xstartup <<EOF
 #!/bin/sh
 export PULSE_SERVER=tcp:127.0.0.1
-[ -f "$HOME/.Xresources" ] && xrdb "$HOME/.Xresources"
+[ -f "\$HOME/.Xresources" ] && xrdb "\$HOME/.Xresources"
 # Folio Linux appearance (wallpaper/colors/terminal; hash-guarded inside).
-[ -r "$HOME/.config/folio/appearance-apply.sh" ] && sh "$HOME/.config/folio/appearance-apply.sh" >/dev/null 2>&1 || true
-exec startxfce4
+[ -r "\$HOME/.config/folio/appearance-apply.sh" ] && sh "\$HOME/.config/folio/appearance-apply.sh" >/dev/null 2>&1 || true
+exec $_xs_de
 EOF
+    unset _xs_de
     chmod +x /home/flux/.vnc/xstartup
     if command -v _flux_write_pulse_client >/dev/null 2>&1; then
         _flux_write_pulse_client
@@ -622,12 +629,334 @@ _flux_apply_folio_appearance() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Android-style XFCE panel writer (idempotent, offline, never fatal).
+#
+# TWO panels, single workspace:
+#   panel-1  TOP thin status bar (28px, 100% width, near-black, 92% alpha):
+#            [app-drawer button] [clock %H:%M] --- [systray] [indicators…]
+#            NO window title / task buttons.
+#   panel-2  BOTTOM floating dock (64px, 98% width centered, near-black):
+#            [drawer] [Terminal] [Files] [Settings] [Browser?] --- tasklist
+#            (running windows, icon-only, 32px) --- [power/logout]
+#
+# Every optional plugin is emitted only when its shared object exists in the
+# guest (graceful degrade); launcher entries are written with explicit stock
+# icon names so the trimmed Papirus-Dark resolves them. Caller passes the
+# xfconf dir + the guest home. `_menu_plugin` is intentionally left set for
+# callers' keyboard-shortcut heredocs.
+# ─────────────────────────────────────────────────────────────────────────────
+_flux_write_folio_xfce_panel() {
+    _pcfg="$1"
+    _phome="${2:-/home/flux}"
+    [ -n "$_pcfg" ] || return 0
+    mkdir -p "$_pcfg" 2>/dev/null || return 0
+
+    # Menu button: Whisker when its panel plugin is installed, built-in menu else.
+    _menu_plugin="applicationsmenu"
+    for _pdir in /usr/lib/xfce4/panel/plugins /usr/lib64/xfce4/panel/plugins \
+                 /usr/lib/*/xfce4/panel/plugins /usr/local/lib/xfce4/panel/plugins; do
+        if [ -e "$_pdir/libwhiskermenu.so" ]; then
+            _menu_plugin="whiskermenu"
+            break
+        fi
+    done
+
+    # Status indicators: only the ones actually loadable in this guest
+    # (the PulseAudio panel module ships as libpulseaudio-plugin.so).
+    _status=""
+    for _pnew in pulseaudio-plugin battery netload; do
+        for _pdir in /usr/lib/xfce4/panel/plugins /usr/lib64/xfce4/panel/plugins \
+                     /usr/lib/*/xfce4/panel/plugins /usr/local/lib/xfce4/panel/plugins; do
+            if [ -e "$_pdir/lib$_pnew.so" ]; then
+                _status="$_status $_pnew"
+                break
+            fi
+        done
+    done
+
+    # Dock launcher entries with explicit stock icons (Papirus-Dark-friendly).
+    _browser=""
+    for _bnew in firefox chromium chromium-browser epiphany midori falkon; do
+        if command -v "$_bnew" >/dev/null 2>&1; then
+            _browser="$_bnew"
+            break
+        fi
+    done
+    _appdir="$_phome/.local/share/applications"
+    mkdir -p "$_appdir" 2>/dev/null || true
+    if [ -d "$_appdir" ]; then
+        cat > "$_appdir/folio-terminal.desktop" <<'FOLIO_DESKTOP'
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Terminal
+Comment=Terminal emulator
+Exec=xfce4-terminal
+Icon=utilities-terminal
+Terminal=false
+Categories=System;TerminalEmulator;
+FOLIO_DESKTOP
+        cat > "$_appdir/folio-files.desktop" <<'FOLIO_DESKTOP'
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Files
+Comment=File manager
+Exec=thunar
+Icon=folder
+Terminal=false
+Categories=System;FileManager;
+FOLIO_DESKTOP
+        if command -v xfce4-settings-manager >/dev/null 2>&1; then
+            cat > "$_appdir/folio-settings.desktop" <<'FOLIO_DESKTOP'
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Settings
+Comment=Desktop settings
+Exec=xfce4-settings-manager
+Icon=preferences-system
+Terminal=false
+Categories=Settings;
+FOLIO_DESKTOP
+        fi
+        if [ -n "$_browser" ]; then
+            cat > "$_appdir/folio-browser.desktop" <<FOLIO_DESKTOP
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Browser
+Comment=Web browser
+Exec=$_browser
+Icon=applications-internet
+Terminal=false
+Categories=Network;WebBrowser;
+FOLIO_DESKTOP
+        fi
+        # Root runs: hand the launcher entries to the home owner.
+        _hu=$(stat -c %u "$_phome" 2>/dev/null || stat -f %u "$_phome" 2>/dev/null || true)
+        _hg=$(stat -c %g "$_phome" 2>/dev/null || stat -f %g "$_phome" 2>/dev/null || true)
+        if [ -n "$_hu" ] && [ "$(id -u 2>/dev/null || echo 0)" = "0" ]; then
+            chown "$_hu:$_hg" "$_appdir"/folio-*.desktop 2>/dev/null || true
+        fi
+    fi
+
+    _pid=0
+    _top_ids=""
+    _dock_ids=""
+    _plugins=""
+
+    # ── TOP status bar: drawer + clock … systray + indicators ───────────────
+    _pid=$((_pid + 1))
+    _top_ids="$_top_ids        <value type='int' value='$_pid'/>
+"
+    _plugins="$_plugins
+    <property name='plugin-$_pid' type='string' value='$_menu_plugin'>
+      <property name='button-icon' type='string' value='open-menu'/>
+      <property name='button-title' type='string' value='Apps'/>
+      <property name='show-button-title' type='bool' value='false'/>
+      <property name='show-menu-icons' type='bool' value='true'/>
+      <property name='show-tooltips' type='bool' value='false'/>
+    </property>"
+
+    _pid=$((_pid + 1))
+    _top_ids="$_top_ids        <value type='int' value='$_pid'/>
+"
+    _plugins="$_plugins
+    <property name='plugin-$_pid' type='string' value='clock'>
+      <property name='mode' type='uint' value='4'/>
+      <property name='digital-layout' type='uint' value='1'/>
+      <property name='digital-format' type='string' value='%H:%M'/>
+      <property name='tooltip-format' type='string' value='%A, %B %d, %Y'/>
+      <property name='show-seconds' type='bool' value='false'/>
+      <property name='show-meridiem' type='bool' value='false'/>
+      <property name='timezone' type='string' value=''/>
+    </property>"
+
+    _pid=$((_pid + 1))
+    _top_ids="$_top_ids        <value type='int' value='$_pid'/>
+"
+    _plugins="$_plugins
+    <property name='plugin-$_pid' type='string' value='separator'>
+      <property name='expand' type='bool' value='true'/>
+      <property name='style' type='uint' value='0'/>
+    </property>"
+
+    _pid=$((_pid + 1))
+    _top_ids="$_top_ids        <value type='int' value='$_pid'/>
+"
+    _plugins="$_plugins
+    <property name='plugin-$_pid' type='string' value='systray'>
+      <property name='square-icons' type='bool' value='true'/>
+    </property>"
+
+    for _pnew in $_status; do
+        _pid=$((_pid + 1))
+        _top_ids="$_top_ids        <value type='int' value='$_pid'/>
+"
+        _plugins="$_plugins
+    <property name='plugin-$_pid' type='string' value='$_pnew'/>"
+    done
+
+    # ── BOTTOM dock: apps first, icon-only tasklist in the middle, power ────
+    _pid=$((_pid + 1))
+    _dock_ids="$_dock_ids        <value type='int' value='$_pid'/>
+"
+    _plugins="$_plugins
+    <property name='plugin-$_pid' type='string' value='$_menu_plugin'>
+      <property name='button-icon' type='string' value='open-menu'/>
+      <property name='button-title' type='string' value='Apps'/>
+      <property name='show-button-title' type='bool' value='false'/>
+      <property name='show-menu-icons' type='bool' value='true'/>
+      <property name='show-tooltips' type='bool' value='false'/>
+    </property>"
+
+    _pid=$((_pid + 1))
+    _dock_ids="$_dock_ids        <value type='int' value='$_pid'/>
+"
+    _plugins="$_plugins
+    <property name='plugin-$_pid' type='string' value='launcher'>
+      <property name='items' type='array'>
+        <value type='string' value='folio-terminal.desktop'/>
+      </property>
+    </property>"
+
+    _pid=$((_pid + 1))
+    _dock_ids="$_dock_ids        <value type='int' value='$_pid'/>
+"
+    _plugins="$_plugins
+    <property name='plugin-$_pid' type='string' value='launcher'>
+      <property name='items' type='array'>
+        <value type='string' value='folio-files.desktop'/>
+      </property>
+    </property>"
+
+    if command -v xfce4-settings-manager >/dev/null 2>&1; then
+        _pid=$((_pid + 1))
+        _dock_ids="$_dock_ids        <value type='int' value='$_pid'/>
+"
+        _plugins="$_plugins
+    <property name='plugin-$_pid' type='string' value='launcher'>
+      <property name='items' type='array'>
+        <value type='string' value='folio-settings.desktop'/>
+      </property>
+    </property>"
+    fi
+
+    if [ -n "$_browser" ]; then
+        _pid=$((_pid + 1))
+        _dock_ids="$_dock_ids        <value type='int' value='$_pid'/>
+"
+        _plugins="$_plugins
+    <property name='plugin-$_pid' type='string' value='launcher'>
+      <property name='items' type='array'>
+        <value type='string' value='folio-browser.desktop'/>
+      </property>
+    </property>"
+    fi
+
+    _pid=$((_pid + 1))
+    _dock_ids="$_dock_ids        <value type='int' value='$_pid'/>
+"
+    _plugins="$_plugins
+    <property name='plugin-$_pid' type='string' value='separator'>
+      <property name='expand' type='bool' value='true'/>
+      <property name='style' type='uint' value='0'/>
+    </property>"
+
+    _pid=$((_pid + 1))
+    _dock_ids="$_dock_ids        <value type='int' value='$_pid'/>
+"
+    _plugins="$_plugins
+    <property name='plugin-$_pid' type='string' value='tasklist'>
+      <property name='grouping' type='uint' value='1'/>
+      <property name='flat-buttons' type='bool' value='true'/>
+      <property name='show-labels' type='bool' value='false'/>
+      <property name='show-handle' type='bool' value='false'/>
+      <property name='show-wireframes' type='bool' value='false'/>
+      <property name='window-scrolling' type='bool' value='true'/>
+    </property>"
+
+    _pid=$((_pid + 1))
+    _dock_ids="$_dock_ids        <value type='int' value='$_pid'/>
+"
+    _plugins="$_plugins
+    <property name='plugin-$_pid' type='string' value='separator'>
+      <property name='expand' type='bool' value='true'/>
+      <property name='style' type='uint' value='0'/>
+    </property>"
+
+    _pid=$((_pid + 1))
+    _dock_ids="$_dock_ids        <value type='int' value='$_pid'/>
+"
+    _plugins="$_plugins
+    <property name='plugin-$_pid' type='string' value='actions'>
+      <property name='appearance' type='uint' value='0'/>
+      <property name='items' type='array'>
+        <value type='string' value='logout-dialog'/>
+      </property>
+    </property>"
+
+    cat > "$_pcfg/xfce4-panel.xml" <<EOF
+<?xml version="1.1" encoding="UTF-8"?>
+<channel name="xfce4-panel" version="1.0">
+  <property name="configver" type="int" value="2"/>
+  <property name="panels" type="array">
+    <value type="int" value="1"/>
+    <value type="int" value="2"/>
+    <property name="dark-mode" type="bool" value="true"/>
+    <property name="panel-1" type="empty">
+      <property name="position" type="string" value="p=6;x=0;y=0"/>
+      <property name="length" type="uint" value="100"/>
+      <property name="position-locked" type="bool" value="true"/>
+      <property name="size" type="uint" value="28"/>
+      <property name="icon-size" type="uint" value="16"/>
+      <property name="background-style" type="uint" value="1"/>
+      <property name="background-rgba" type="array">
+        <value type="double" value="0.0431372549019608"/>
+        <value type="double" value="0.0470588235294118"/>
+        <value type="double" value="0.0549019607843137"/>
+        <value type="double" value="0.9215686274509803"/>
+      </property>
+      <property name="plugin-ids" type="array">
+$_top_ids      </property>
+    </property>
+    <property name="panel-2" type="empty">
+      <property name="position" type="string" value="p=10;x=0;y=0"/>
+      <property name="length" type="uint" value="98"/>
+      <property name="position-locked" type="bool" value="true"/>
+      <property name="size" type="uint" value="64"/>
+      <property name="icon-size" type="uint" value="32"/>
+      <property name="background-style" type="uint" value="1"/>
+      <property name="background-rgba" type="array">
+        <value type="double" value="0.0431372549019608"/>
+        <value type="double" value="0.0470588235294118"/>
+        <value type="double" value="0.0549019607843137"/>
+        <value type="double" value="0.8784313725490196"/>
+      </property>
+      <property name="plugin-ids" type="array">
+$_dock_ids      </property>
+    </property>
+  </property>
+  <property name="plugins" type="empty">$_plugins
+  </property>
+</channel>
+EOF
+
+    unset _pcfg _phome _pdir _pnew _status _browser _bnew _appdir _hu _hg \
+        _pid _top_ids _dock_ids _plugins
+    return 0
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Phone-compact XFCE defaults (idempotent, offline, never fatal).
 #
-# One 30px top panel (black, icon tasklist), dark/mono theme reuse, Xft DPI 96
-# (scale factor 1), 9-10pt fonts, Home-only desktop icons, shipped dark
-# wallpaper when reachable (solid charcoal otherwise), Super+Enter terminal /
-# Super+E Thunar / PrintScreen-to-~/Pictures shortcuts, single-click Thunar.
+# Android-style phone layout: thin 28px top status bar (drawer + clock left,
+# systray + indicators right) + 64px floating bottom dock (apps, icon-only
+# tasklist, power), both near-black. Xft DPI 96 (scale factor 1), 9-10pt fonts,
+# Home-only desktop icons, android-dark wallpaper when reachable (existing dark
+# PNG / solid charcoal fallback), Super+Enter terminal / Super+E Thunar /
+# PrintScreen-to-~/Pictures shortcuts, single-click Thunar.
 # Called from every family script's XFCE branch (guarded, `|| true`).
 # Full theming still happens in setup_customization_*.sh.
 # ─────────────────────────────────────────────────────────────────────────────
@@ -671,17 +1000,29 @@ _flux_xfce_compact_defaults() {
         _menu_plugin="whiskermenu"
     fi
 
-    # Wallpaper: shipped mono dark PNG when staged/reachable; else solid charcoal.
+    # Wallpaper: new android-dark default when staged/reachable, else the
+    # existing dark PNG, else a solid charcoal desktop (image-style 0).
     _wpdir="$_h/Pictures/Wallpapers"
     mkdir -p "$_wpdir" 2>/dev/null || true
-    _wp="$_wpdir/fluxlinux-dark.png"
+    _wp="$_wpdir/folio-android-dark.png"
     if [ ! -f "$_wp" ]; then
-        for _src in /tmp/flux_xfce_assets/fluxlinux-dark.png \
-                    /usr/share/backgrounds/folio/fluxlinux-dark.png; do
+        for _src in /tmp/flux_xfce_assets/folio-android-dark.png \
+                    /usr/share/backgrounds/folio/folio-android-dark.png; do
             if [ -f "$_src" ]; then
                 cp -f "$_src" "$_wp" 2>/dev/null && break
             fi
         done
+    fi
+    if [ ! -f "$_wp" ]; then
+        _wp="$_wpdir/fluxlinux-dark.png"
+        if [ ! -f "$_wp" ]; then
+            for _src in /tmp/flux_xfce_assets/fluxlinux-dark.png \
+                        /usr/share/backgrounds/folio/fluxlinux-dark.png; do
+                if [ -f "$_src" ]; then
+                    cp -f "$_src" "$_wp" 2>/dev/null && break
+                fi
+            done
+        fi
     fi
     _img_style=5
     [ -f "$_wp" ] || _img_style=0
@@ -777,78 +1118,11 @@ EOF
 </channel>
 EOF
 
-    cat > "$_cfg/xfce4-panel.xml" <<EOF
-<?xml version="1.1" encoding="UTF-8"?>
-<channel name="xfce4-panel" version="1.0">
-  <property name="configver" type="int" value="2"/>
-  <property name="panels" type="array">
-    <value type="int" value="1"/>
-    <property name="dark-mode" type="bool" value="true"/>
-    <property name="panel-1" type="empty">
-      <property name="position" type="string" value="p=6;x=0;y=0"/>
-      <property name="length" type="double" value="100"/>
-      <property name="position-locked" type="bool" value="true"/>
-      <property name="size" type="uint" value="30"/>
-      <property name="icon-size" type="uint" value="16"/>
-      <property name="background-style" type="uint" value="1"/>
-      <property name="background-rgba" type="array">
-        <value type="double" value="0.0431372549019608"/>
-        <value type="double" value="0.0470588235294118"/>
-        <value type="double" value="0.0549019607843137"/>
-        <value type="double" value="0.94999999999999996"/>
-      </property>
-      <property name="plugin-ids" type="array">
-        <value type="int" value="1"/>
-        <value type="int" value="2"/>
-        <value type="int" value="3"/>
-        <value type="int" value="4"/>
-        <value type="int" value="5"/>
-        <value type="int" value="6"/>
-      </property>
-    </property>
-  </property>
-  <property name="plugins" type="empty">
-    <property name="plugin-1" type="string" value="$_menu_plugin">
-      <property name="button-icon" type="string" value="open-menu"/>
-      <property name="button-title" type="string" value="Menu"/>
-      <property name="show-button-title" type="bool" value="false"/>
-      <property name="show-menu-icons" type="bool" value="true"/>
-      <property name="show-tooltips" type="bool" value="false"/>
-      <property name="small" type="bool" value="true"/>
-    </property>
-    <property name="plugin-2" type="string" value="tasklist">
-      <property name="grouping" type="uint" value="1"/>
-      <property name="flat-buttons" type="bool" value="true"/>
-      <property name="show-labels" type="bool" value="false"/>
-      <property name="show-handle" type="bool" value="false"/>
-      <property name="show-wireframes" type="bool" value="false"/>
-      <property name="window-scrolling" type="bool" value="true"/>
-    </property>
-    <property name="plugin-3" type="string" value="separator">
-      <property name="expand" type="bool" value="true"/>
-      <property name="style" type="uint" value="0"/>
-    </property>
-    <property name="plugin-4" type="string" value="systray">
-      <property name="square-icons" type="bool" value="true"/>
-    </property>
-    <property name="plugin-5" type="string" value="clock">
-      <property name="mode" type="uint" value="4"/>
-      <property name="digital-layout" type="uint" value="1"/>
-      <property name="digital-format" type="string" value="%H:%M"/>
-      <property name="tooltip-format" type="string" value="%A, %B %d, %Y"/>
-      <property name="show-seconds" type="bool" value="false"/>
-      <property name="show-meridiem" type="bool" value="false"/>
-      <property name="timezone" type="string" value=""/>
-    </property>
-    <property name="plugin-6" type="string" value="actions">
-      <property name="appearance" type="uint" value="0"/>
-      <property name="items" type="array">
-        <value type="string" value="logout-dialog"/>
-      </property>
-    </property>
-  </property>
-</channel>
-EOF
+    # Android-style panels (thin status bar + floating dock) via the shared
+    # writer; `_menu_plugin` stays set for the shortcuts block below.
+    if command -v _flux_write_folio_xfce_panel >/dev/null 2>&1; then
+        _flux_write_folio_xfce_panel "$_cfg" "$_h" || true
+    fi
 
     cat > "$_cfg/xfce4-keyboard-shortcuts.xml" <<EOF
 <?xml version="1.1" encoding="UTF-8"?>

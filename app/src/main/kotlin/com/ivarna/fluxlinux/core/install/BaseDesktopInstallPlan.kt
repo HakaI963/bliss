@@ -7,8 +7,8 @@ import com.ivarna.fluxlinux.core.data.DistroRepository
 import com.ivarna.fluxlinux.core.data.ScriptManager
 
 /**
- * Minimal base install: rootfs + family/base setup ([DesktopChoice] gates the
- * desktop packages via `FLUX_DESKTOP`) + customization.
+ * Minimal base install: rootfs + family/base setup ([DesktopChoice] set gates
+ * the desktop packages via `FLUX_DESKTOPS` / `FLUX_DESKTOP`) + customization.
  * Distro-specific paths come from [DistroInstallProfile]; KDE components are
  * resolved from [DistroRepository] data by [DesktopInstallSelection].
  */
@@ -31,15 +31,18 @@ object BaseDesktopInstallPlan {
 
     /**
      * Phase list with stable ids (HOST/DL/ROOTFS/XFCE/CUSTOM). Labels track the
-     * chosen [desktop] (`FLUX_DESKTOP` contract value) so progress stays honest.
+     * selected [desktops] (`FLUX_DESKTOPS` contract) so progress stays honest:
+     * both selected → labels mention both, empty → terminal base.
      */
     fun phasesFor(
         method: String,
         displayName: String = "Debian",
-        desktop: String = DesktopChoice.XFCE.envValue
+        desktops: Set<DesktopChoice> = setOf(DesktopChoice.XFCE)
     ): List<Phase> {
-        val kde = desktop == DesktopChoice.KDE.envValue
-        val terminalOnly = desktop == DesktopChoice.NONE.envValue
+        val selected = DesktopInstallSelection.canonical(desktops)
+        val xfce = DesktopChoice.XFCE in selected
+        val kde = DesktopChoice.KDE in selected
+        val terminalOnly = selected.isEmpty()
         return if (method == "chroot") {
             listOf(
                 Phase("R0", "Checking root access…", 5),
@@ -49,6 +52,7 @@ object BaseDesktopInstallPlan {
                 Phase(
                     "XFCE",
                     when {
+                        xfce && kde -> "Installing XFCE + KDE Plasma desktops…"
                         kde -> "Installing KDE Plasma desktop…"
                         terminalOnly -> "Configuring terminal base…"
                         else -> "Installing XFCE desktop…"
@@ -64,6 +68,7 @@ object BaseDesktopInstallPlan {
                 Phase(
                     "ROOTFS",
                     when {
+                        xfce && kde -> "Installing $displayName rootfs + XFCE + KDE Plasma…"
                         kde -> "Installing $displayName rootfs + KDE Plasma…"
                         terminalOnly -> "Installing $displayName rootfs (terminal base)…"
                         else -> "Installing $displayName rootfs + XFCE…"
@@ -75,23 +80,22 @@ object BaseDesktopInstallPlan {
         }
     }
 
-    /** Back-compat overload used by existing tests. */
-    fun phasesFor(method: String): List<Phase> = phasesFor(method, "Debian")
-
     private fun customizationPhaseLabel(terminalOnly: Boolean): String =
         if (terminalOnly) "Finalizing install…" else "Applying Folio Linux customization…"
 
     /**
-     * Family/base setup payload. [desktop] is the `FLUX_DESKTOP` contract value
-     * (`xfce` | `kde` | `none`) exported for guest family scripts, which gate
-     * desktop packages on it; the body stays the distro family script (base
-     * system, user, pulse — the desktop itself is a separate component).
+     * Family/base setup payload. [desktops] are the `FLUX_DESKTOPS` contract
+     * values (space-separated, canonical) exported for guest family scripts,
+     * which gate desktop packages on them; `FLUX_DESKTOP`/`FLUX_DESKTOP_ENV`
+     * carry the first selection (or `none`) for legacy single-desktop gates.
+     * The body stays the distro family script (base system, user, pulse — the
+     * desktops themselves are separate components).
      */
     fun familySetupPayload(
         ctx: Context,
         theme: String,
         distroId: String = "debian",
-        desktop: String = DesktopChoice.XFCE.envValue
+        desktops: Set<DesktopChoice> = setOf(DesktopChoice.XFCE)
     ): String {
         val profile = DistroInstallProfile.forId(distroId)
             ?: DistroInstallProfile.require("debian")
@@ -100,10 +104,13 @@ object BaseDesktopInstallPlan {
         val common = runCatching {
             sm.getScriptContent("common/setup/flux_guest_common.sh")
         }.getOrDefault("")
+        val desktopsEnv = DesktopInstallSelection.envValue(desktops)
+        val firstEnv = DesktopInstallSelection.firstEnvValue(desktops)
         return buildString {
             append("export FLUX_THEME='").append(theme).append("'\n")
-            append("export FLUX_DESKTOP='").append(desktop).append("'\n")
-            append("export FLUX_DESKTOP_ENV='").append(desktop).append("'\n")
+            append("export FLUX_DESKTOPS='").append(desktopsEnv).append("'\n")
+            append("export FLUX_DESKTOP='").append(firstEnv).append("'\n")
+            append("export FLUX_DESKTOP_ENV='").append(firstEnv).append("'\n")
             append("export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\n\n")
             if (common.isNotBlank()) {
                 append(common).append("\n\n")
@@ -116,27 +123,28 @@ object BaseDesktopInstallPlan {
         ctx: Context,
         theme: String,
         distroId: String = "debian",
-        desktop: String = DesktopChoice.XFCE.envValue
+        desktops: Set<DesktopChoice> = setOf(DesktopChoice.XFCE)
     ): String =
         Base64.encodeToString(
-            familySetupPayload(ctx, theme, distroId, desktop).toByteArray(Charsets.UTF_8),
+            familySetupPayload(ctx, theme, distroId, desktops).toByteArray(Charsets.UTF_8),
             Base64.NO_WRAP
         )
 
     /**
-     * Customization payload. KDE resolves the data-driven `kde_customization`
-     * component script ([DesktopInstallSelection]); XFCE keeps the profile
-     * customization script. Terminal-only installs skip this phase entirely.
+     * Customization payload for one desktop [choice]. KDE resolves the
+     * data-driven `kde_customization` component script
+     * ([DesktopInstallSelection]); XFCE keeps the profile customization script.
+     * Multi-desktop installs run this once per selected desktop.
      */
     fun customizationPayload(
         ctx: Context,
         theme: String,
         distroId: String = "debian",
-        desktop: String = DesktopChoice.XFCE.envValue
+        choice: DesktopChoice = DesktopChoice.XFCE
     ): String {
         val profile = DistroInstallProfile.forId(distroId)
             ?: DistroInstallProfile.require("debian")
-        val scriptPath = if (desktop == DesktopChoice.KDE.envValue) {
+        val scriptPath = if (choice == DesktopChoice.KDE) {
             DesktopInstallSelection.componentScriptName(
                 distroId, DesktopInstallSelection.COMPONENT_KDE_CUSTOMIZATION
             ) ?: profile.customizationScript
@@ -146,7 +154,8 @@ object BaseDesktopInstallPlan {
         val body = ScriptManager(ctx).getScriptContent(scriptPath)
         return buildString {
             append("export FLUX_THEME='").append(theme).append("'\n")
-            append("export FLUX_DESKTOP='").append(desktop).append("'\n")
+            append("export FLUX_DESKTOPS='").append(choice.envValue).append("'\n")
+            append("export FLUX_DESKTOP='").append(choice.envValue).append("'\n")
             // Guest installs pokemon (60s budget). Host never ships it.
             append("export FLUX_SKIP_POKEMON='0'\n")
             append("export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\n\n")
@@ -165,6 +174,7 @@ object BaseDesktopInstallPlan {
         val body = ScriptManager(ctx).getScriptContent(scriptPath)
         return buildString {
             append("export FLUX_THEME='").append(theme).append("'\n")
+            append("export FLUX_DESKTOPS='").append(DesktopChoice.KDE.envValue).append("'\n")
             append("export FLUX_DESKTOP='").append(DesktopChoice.KDE.envValue).append("'\n")
             append("export FLUX_DESKTOP_ENV='").append(DesktopChoice.KDE.envValue).append("'\n")
             append("export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\n\n")

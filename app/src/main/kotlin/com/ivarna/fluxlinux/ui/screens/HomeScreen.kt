@@ -3,10 +3,15 @@ package com.ivarna.fluxlinux.ui.screens
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
@@ -33,6 +38,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -63,6 +69,8 @@ import com.ivarna.fluxlinux.ui.theme.FrostSurface
 import com.ivarna.fluxlinux.ui.theme.TextMuted
 import com.ivarna.fluxlinux.ui.theme.TextPrimary
 import com.ivarna.fluxlinux.ui.theme.TextSecondary
+import com.ivarna.fluxlinux.ui.theme.rememberStaggerEntrance
+import com.ivarna.fluxlinux.ui.theme.staggerIn
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -245,6 +253,10 @@ fun HomeScreen(
         }
     }
 
+    // Shared entrance clock: sections cascade in on first composition only;
+    // rows restored/added later (session start, install finish) appear at rest.
+    val entrance = rememberStaggerEntrance()
+
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 110.dp),
@@ -267,14 +279,20 @@ fun HomeScreen(
                         }
                     },
                     onLogs = { copyDesktopLog() },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .staggerIn(0, entrance)
                 )
                 Spacer(modifier = Modifier.height(4.dp))
             }
         }
 
         item(key = "env-header") {
-            Column(modifier = Modifier.fillMaxWidth()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .staggerIn(1, entrance)
+            ) {
                 Spacer(modifier = Modifier.height(8.dp))
                 FrostGroupTitle("Environments")
             }
@@ -285,6 +303,7 @@ fun HomeScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .staggerIn(2, entrance)
                         .padding(vertical = 40.dp, horizontal = 16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
@@ -306,10 +325,10 @@ fun HomeScreen(
         } else {
             if (prootInstalled.isNotEmpty()) {
                 item(key = "proot-title") {
-                    FrostGroupTitle("PRoot · ${prootInstalled.size}")
+                    FrostGroupTitle("PRoot · ${prootInstalled.size}", Modifier.staggerIn(2, entrance))
                 }
                 item(key = "proot-group") {
-                    FrostContainer {
+                    FrostContainer(modifier = Modifier.staggerIn(3, entrance)) {
                         prootInstalled.forEachIndexed { index, distro ->
                             InstalledEnvRow(
                                 distro = distro,
@@ -352,7 +371,11 @@ fun HomeScreen(
             }
             if (chrootInstalled.isNotEmpty()) {
                 item(key = "chroot-title") {
-                    Column(modifier = Modifier.fillMaxWidth()) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .staggerIn(4, entrance)
+                    ) {
                         FrostGroupTitle("Chroot · ${chrootInstalled.size}")
                         if (!rootAvailable) {
                             Text(
@@ -365,7 +388,7 @@ fun HomeScreen(
                     }
                 }
                 item(key = "chroot-group") {
-                    FrostContainer {
+                    FrostContainer(modifier = Modifier.staggerIn(5, entrance)) {
                         chrootInstalled.forEachIndexed { index, distro ->
                             InstalledEnvRow(
                                 distro = distro,
@@ -415,7 +438,10 @@ fun HomeScreen(
             item(key = "env-footnote") {
                 val anyLogs = com.ivarna.fluxlinux.core.desktop.GuiDesktopLog.hasContent(context)
                 if (anyLogs && session == null) {
-                    TextButton(onClick = { showDesktopLogs = true }) {
+                    TextButton(
+                        onClick = { showDesktopLogs = true },
+                        modifier = Modifier.staggerIn(6, entrance)
+                    ) {
                         Text(
                             "View last desktop log",
                             color = TextSecondary,
@@ -433,6 +459,7 @@ fun HomeScreen(
         val distro = distroToLaunch.value!!
         val llmInstalled = StateManager.isComponentInstalled(context, distro.id, "vulkan_llamacpp")
         val modelInstalled = StateManager.isComponentInstalled(context, distro.id, "qwen25_model")
+        val xfceInstalled = StateManager.isComponentInstalled(context, distro.id, "xfce4_desktop")
         val kdeInstalled = StateManager.isComponentInstalled(context, distro.id, "kde_plasma")
         val isGuiRunning = StateManager.isGuiRunning(context, distro.id)
         val runningType = StateManager.getGuiRunningType(context, distro.id)
@@ -555,77 +582,74 @@ fun HomeScreen(
                         )
                     }
 
-                    Spacer(Modifier.height(10.dp))
-
                     val isCurrentSessionXfce = session != null && session.distroId == distro.id && session.type == DesktopSession.Type.XFCE4
-                    LaunchModeAction(
-                        icon = Icons.Filled.DesktopWindows,
-                        label = if (isCurrentSessionXfce) "Open XFCE4" else "Launch XFCE4",
-                        subtitle = if (isCurrentSessionXfce) "Running on :0" else "Graphical desktop",
-                        onClick = {
-                            if (session != null && session.distroId != distro.id) {
-                                android.widget.Toast.makeText(
-                                    context,
-                                    "Stop ${session.distroName} ${session.type} first",
-                                    android.widget.Toast.LENGTH_SHORT
-                                ).show()
-                            } else if (isCurrentSessionXfce) {
-                                DesktopLauncher.reopenDisplay(context)
-                                distroToLaunch.value = null
-                            } else {
-                                try {
-                                    DesktopLauncher.start(context, distro.id) { ok ->
-                                        refreshKey.value++
-                                        if (!ok) showDesktopLogs = true
-                                    }
-                                    showDesktopLogs = true
-                                    distroToLaunch.value = null
-                                } catch (e: Exception) {
+                    // Only offer what is actually installed (or already running).
+                    if (xfceInstalled || isCurrentSessionXfce) {
+                        Spacer(Modifier.height(10.dp))
+                        LaunchModeAction(
+                            icon = Icons.Filled.DesktopWindows,
+                            label = if (isCurrentSessionXfce) "Open XFCE4" else "Launch XFCE4",
+                            subtitle = if (isCurrentSessionXfce) "Running on :0" else "Graphical desktop",
+                            onClick = {
+                                if (session != null && session.distroId != distro.id) {
                                     android.widget.Toast.makeText(
                                         context,
-                                        "Launch failed: ${e.message}",
+                                        "Stop ${session.distroName} ${session.type} first",
                                         android.widget.Toast.LENGTH_SHORT
                                     ).show()
+                                } else if (isCurrentSessionXfce) {
+                                    DesktopLauncher.reopenDisplay(context)
+                                    distroToLaunch.value = null
+                                } else {
+                                    try {
+                                        DesktopLauncher.start(context, distro.id) { ok ->
+                                            refreshKey.value++
+                                            if (!ok) showDesktopLogs = true
+                                        }
+                                        showDesktopLogs = true
+                                        distroToLaunch.value = null
+                                    } catch (e: Exception) {
+                                        android.widget.Toast.makeText(
+                                            context,
+                                            "Launch failed: ${e.message}",
+                                            android.widget.Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
                                 }
                             }
-                        }
-                    )
-
-                    Spacer(Modifier.height(10.dp))
+                        )
+                    }
 
                     val isCurrentSessionKde = session != null && session.distroId == distro.id && session.type == DesktopSession.Type.KDE
-                    LaunchModeAction(
-                        icon = Icons.Filled.Widgets,
-                        label = if (isCurrentSessionKde) "Open KDE Plasma" else if (kdeInstalled) "Launch KDE Plasma" else "Launch KDE",
-                        subtitle = if (isCurrentSessionKde) "Running on :0" else if (kdeInstalled) "GPU mode picker" else "Not installed",
-                        enabled = true,
-                        onClick = {
-                            if (session != null && session.distroId != distro.id) {
-                                android.widget.Toast.makeText(
-                                    context,
-                                    "Stop ${session.distroName} ${session.type} first",
-                                    android.widget.Toast.LENGTH_SHORT
-                                ).show()
-                            } else if (isCurrentSessionKde) {
-                                DesktopLauncher.reopenDisplay(context)
-                                distroToLaunch.value = null
-                            } else if (session != null || DesktopLauncher.isSessionActive()) {
-                                android.widget.Toast.makeText(
-                                    context,
-                                    "Stop ${session?.distroName ?: "active desktop"} ${session?.type ?: ""} first",
-                                    android.widget.Toast.LENGTH_SHORT
-                                ).show()
-                            } else if (kdeInstalled) {
-                                showKdeGpuPicker.value = distro
-                            } else if (!kdeInstalled) {
-                                android.widget.Toast.makeText(
-                                    context,
-                                    "Install KDE Plasma Desktop first from Settings.",
-                                    android.widget.Toast.LENGTH_LONG
-                                ).show()
+                    if (kdeInstalled || isCurrentSessionKde) {
+                        Spacer(Modifier.height(10.dp))
+                        LaunchModeAction(
+                            icon = Icons.Filled.Widgets,
+                            label = if (isCurrentSessionKde) "Open KDE Plasma" else "Launch KDE Plasma",
+                            subtitle = if (isCurrentSessionKde) "Running on :0" else "GPU mode picker",
+                            enabled = true,
+                            onClick = {
+                                if (session != null && session.distroId != distro.id) {
+                                    android.widget.Toast.makeText(
+                                        context,
+                                        "Stop ${session.distroName} ${session.type} first",
+                                        android.widget.Toast.LENGTH_SHORT
+                                    ).show()
+                                } else if (isCurrentSessionKde) {
+                                    DesktopLauncher.reopenDisplay(context)
+                                    distroToLaunch.value = null
+                                } else if (session != null || DesktopLauncher.isSessionActive()) {
+                                    android.widget.Toast.makeText(
+                                        context,
+                                        "Stop ${session?.distroName ?: "active desktop"} ${session?.type ?: ""} first",
+                                        android.widget.Toast.LENGTH_SHORT
+                                    ).show()
+                                } else {
+                                    showKdeGpuPicker.value = distro
+                                }
                             }
-                        }
-                    )
+                        )
+                    }
 
                     if (isGuiRunning) {
                         Spacer(Modifier.height(10.dp))
@@ -751,10 +775,34 @@ private fun InstalledEnvRow(
     val showKdeLaunch = !desktopActiveForThis &&
         StateManager.isComponentInstalled(context, distro.id, "kde_plasma")
 
+    // Press feedback: row shrinks slightly and picks up a soft frost fill.
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val rowScale by animateFloatAsState(
+        targetValue = if (pressed) 0.99f else 1f,
+        animationSpec = spring(dampingRatio = 0.78f, stiffness = 380f),
+        label = "envRowPress"
+    )
+    val rowFill by animateColorAsState(
+        targetValue = if (pressed) Color.White.copy(alpha = 0.05f) else Color.Transparent,
+        animationSpec = spring(dampingRatio = 0.78f, stiffness = 380f),
+        label = "envRowFill"
+    )
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onOpenLaunch)
+            .graphicsLayer {
+                scaleX = rowScale
+                scaleY = rowScale
+            }
+            .clip(RoundedCornerShape(12.dp))
+            .background(rowFill)
+            .clickable(
+                interactionSource = interaction,
+                indication = null,
+                onClick = onOpenLaunch
+            )
             .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -866,13 +914,33 @@ private fun EnvDesktopPill(
     contentDescription: String,
     onClick: () -> Unit
 ) {
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.95f else 1f,
+        animationSpec = spring(dampingRatio = 0.78f, stiffness = 380f),
+        label = "envPillPress"
+    )
+    val fill by animateColorAsState(
+        targetValue = if (pressed) Color.White.copy(alpha = 0.09f) else FrostSurface,
+        animationSpec = spring(dampingRatio = 0.78f, stiffness = 380f),
+        label = "envPillFill"
+    )
     Row(
         modifier = Modifier
             .height(30.dp)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
             .clip(RoundedCornerShape(50))
-            .background(FrostSurface)
+            .background(fill)
             .border(0.75.dp, FrostHairline, RoundedCornerShape(50))
-            .clickable(onClick = onClick)
+            .clickable(
+                interactionSource = interaction,
+                indication = null,
+                onClick = onClick
+            )
             .padding(horizontal = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -1275,15 +1343,35 @@ private fun GpuOptionCard(
     badgeText: String?,
     onClick: () -> Unit
 ) {
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.98f else 1f,
+        animationSpec = spring(dampingRatio = 0.78f, stiffness = 380f),
+        label = "gpuOptionPress"
+    )
+    val fill by animateColorAsState(
+        targetValue = if (pressed) Color.White.copy(alpha = 0.08f) else FrostSurface,
+        animationSpec = spring(dampingRatio = 0.78f, stiffness = 380f),
+        label = "gpuOptionFill"
+    )
     Box(
         modifier = modifier
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
             .clip(RoundedCornerShape(20.dp))
-            .background(FrostSurface)
+            .background(fill)
             .border(
                 androidx.compose.foundation.BorderStroke(0.75.dp, FrostHairline),
                 RoundedCornerShape(20.dp)
             )
-            .clickable(onClick = onClick)
+            .clickable(
+                interactionSource = interaction,
+                indication = null,
+                onClick = onClick
+            )
     ) {
         Row(
             modifier = Modifier.padding(16.dp).fillMaxWidth(),

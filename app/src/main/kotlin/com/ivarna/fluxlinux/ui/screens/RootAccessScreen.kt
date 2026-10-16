@@ -1,5 +1,12 @@
 package com.ivarna.fluxlinux.ui.screens
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -30,6 +37,9 @@ fun RootAccessScreen(
 ) {
     var isRooted by remember { mutableStateOf(false) }
     var checkComplete by remember { mutableStateOf(false) }
+
+    // Entrance stagger for the status plate (visual only).
+    val entrance = rememberStaggerEntrance()
 
     LaunchedEffect(Unit) {
         isRooted = checkForRoot()
@@ -72,7 +82,8 @@ fun RootAccessScreen(
                     modifier = Modifier
                         .size(120.dp)
                         .clip(RoundedCornerShape(24.dp))
-                        .background(androidx.compose.material3.MaterialTheme.colorScheme.surfaceVariant.copy(alpha=0.5f)),
+                        .background(androidx.compose.material3.MaterialTheme.colorScheme.surfaceVariant.copy(alpha=0.5f))
+                        .staggerIn(0, entrance),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
@@ -85,12 +96,24 @@ fun RootAccessScreen(
 
                 Spacer(modifier = Modifier.height(32.dp))
 
-                if (!checkComplete) {
-                    CircularProgressIndicator(color = androidx.compose.material3.MaterialTheme.colorScheme.primary)
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text("Checking for root access...", color = androidx.compose.material3.MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f))
-                } else {
-                    if (isRooted) {
+                // Checking -> result crossfades instead of popping in.
+                AnimatedContent(
+                    targetState = checkComplete,
+                    transitionSpec = {
+                        (fadeIn(tween(FolioMotion.ScreenMs, easing = FastOutSlowInEasing)) +
+                            scaleIn(initialScale = 0.96f)) togetherWith fadeOut(tween(FolioMotion.FastMs))
+                    },
+                    label = "rootCheck",
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.TopCenter
+                ) { done ->
+                    if (!done) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            CircularProgressIndicator(color = androidx.compose.material3.MaterialTheme.colorScheme.primary)
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text("Checking for root access...", color = androidx.compose.material3.MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f))
+                        }
+                    } else if (isRooted) {
                         Text(
                             "Root Access Detected",
                             fontSize = 24.sp,

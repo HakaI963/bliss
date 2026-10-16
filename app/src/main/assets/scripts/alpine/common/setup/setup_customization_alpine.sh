@@ -345,7 +345,310 @@ EOF
 _flux_chown_r "$CUSTOM_USER:$CUSTOM_GROUP" "$USER_HOME/.config" 2>/dev/null || true
 _flux_chown_r "$CUSTOM_USER:$CUSTOM_GROUP" "$USER_HOME" 2>/dev/null || true
 
-# ── Compact phone layout: single 30px mono top panel + mono shortcuts ───────
+_flux_write_folio_xfce_panel() {
+    _pcfg="$1"
+    _phome="${2:-/home/flux}"
+    [ -n "$_pcfg" ] || return 0
+    mkdir -p "$_pcfg" 2>/dev/null || return 0
+
+    # Menu button: Whisker when its panel plugin is installed, built-in menu else.
+    _menu_plugin="applicationsmenu"
+    for _pdir in /usr/lib/xfce4/panel/plugins /usr/lib64/xfce4/panel/plugins \
+                 /usr/lib/*/xfce4/panel/plugins /usr/local/lib/xfce4/panel/plugins; do
+        if [ -e "$_pdir/libwhiskermenu.so" ]; then
+            _menu_plugin="whiskermenu"
+            break
+        fi
+    done
+
+    # Status indicators: only the ones actually loadable in this guest
+    # (the PulseAudio panel module ships as libpulseaudio-plugin.so).
+    _status=""
+    for _pnew in pulseaudio-plugin battery netload; do
+        for _pdir in /usr/lib/xfce4/panel/plugins /usr/lib64/xfce4/panel/plugins \
+                     /usr/lib/*/xfce4/panel/plugins /usr/local/lib/xfce4/panel/plugins; do
+            if [ -e "$_pdir/lib$_pnew.so" ]; then
+                _status="$_status $_pnew"
+                break
+            fi
+        done
+    done
+
+    # Dock launcher entries with explicit stock icons (Papirus-Dark-friendly).
+    _browser=""
+    for _bnew in firefox chromium chromium-browser epiphany midori falkon; do
+        if command -v "$_bnew" >/dev/null 2>&1; then
+            _browser="$_bnew"
+            break
+        fi
+    done
+    _appdir="$_phome/.local/share/applications"
+    mkdir -p "$_appdir" 2>/dev/null || true
+    if [ -d "$_appdir" ]; then
+        cat > "$_appdir/folio-terminal.desktop" <<'FOLIO_DESKTOP'
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Terminal
+Comment=Terminal emulator
+Exec=xfce4-terminal
+Icon=utilities-terminal
+Terminal=false
+Categories=System;TerminalEmulator;
+FOLIO_DESKTOP
+        cat > "$_appdir/folio-files.desktop" <<'FOLIO_DESKTOP'
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Files
+Comment=File manager
+Exec=thunar
+Icon=folder
+Terminal=false
+Categories=System;FileManager;
+FOLIO_DESKTOP
+        if command -v xfce4-settings-manager >/dev/null 2>&1; then
+            cat > "$_appdir/folio-settings.desktop" <<'FOLIO_DESKTOP'
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Settings
+Comment=Desktop settings
+Exec=xfce4-settings-manager
+Icon=preferences-system
+Terminal=false
+Categories=Settings;
+FOLIO_DESKTOP
+        fi
+        if [ -n "$_browser" ]; then
+            cat > "$_appdir/folio-browser.desktop" <<FOLIO_DESKTOP
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Browser
+Comment=Web browser
+Exec=$_browser
+Icon=applications-internet
+Terminal=false
+Categories=Network;WebBrowser;
+FOLIO_DESKTOP
+        fi
+        # Root runs: hand the launcher entries to the home owner.
+        _hu=$(stat -c %u "$_phome" 2>/dev/null || stat -f %u "$_phome" 2>/dev/null || true)
+        _hg=$(stat -c %g "$_phome" 2>/dev/null || stat -f %g "$_phome" 2>/dev/null || true)
+        if [ -n "$_hu" ] && [ "$(id -u 2>/dev/null || echo 0)" = "0" ]; then
+            chown "$_hu:$_hg" "$_appdir"/folio-*.desktop 2>/dev/null || true
+        fi
+    fi
+
+    _pid=0
+    _top_ids=""
+    _dock_ids=""
+    _plugins=""
+
+    # ── TOP status bar: drawer + clock … systray + indicators ───────────────
+    _pid=$((_pid + 1))
+    _top_ids="$_top_ids        <value type='int' value='$_pid'/>
+"
+    _plugins="$_plugins
+    <property name='plugin-$_pid' type='string' value='$_menu_plugin'>
+      <property name='button-icon' type='string' value='open-menu'/>
+      <property name='button-title' type='string' value='Apps'/>
+      <property name='show-button-title' type='bool' value='false'/>
+      <property name='show-menu-icons' type='bool' value='true'/>
+      <property name='show-tooltips' type='bool' value='false'/>
+    </property>"
+
+    _pid=$((_pid + 1))
+    _top_ids="$_top_ids        <value type='int' value='$_pid'/>
+"
+    _plugins="$_plugins
+    <property name='plugin-$_pid' type='string' value='clock'>
+      <property name='mode' type='uint' value='4'/>
+      <property name='digital-layout' type='uint' value='1'/>
+      <property name='digital-format' type='string' value='%H:%M'/>
+      <property name='tooltip-format' type='string' value='%A, %B %d, %Y'/>
+      <property name='show-seconds' type='bool' value='false'/>
+      <property name='show-meridiem' type='bool' value='false'/>
+      <property name='timezone' type='string' value=''/>
+    </property>"
+
+    _pid=$((_pid + 1))
+    _top_ids="$_top_ids        <value type='int' value='$_pid'/>
+"
+    _plugins="$_plugins
+    <property name='plugin-$_pid' type='string' value='separator'>
+      <property name='expand' type='bool' value='true'/>
+      <property name='style' type='uint' value='0'/>
+    </property>"
+
+    _pid=$((_pid + 1))
+    _top_ids="$_top_ids        <value type='int' value='$_pid'/>
+"
+    _plugins="$_plugins
+    <property name='plugin-$_pid' type='string' value='systray'>
+      <property name='square-icons' type='bool' value='true'/>
+    </property>"
+
+    for _pnew in $_status; do
+        _pid=$((_pid + 1))
+        _top_ids="$_top_ids        <value type='int' value='$_pid'/>
+"
+        _plugins="$_plugins
+    <property name='plugin-$_pid' type='string' value='$_pnew'/>"
+    done
+
+    # ── BOTTOM dock: apps first, icon-only tasklist in the middle, power ────
+    _pid=$((_pid + 1))
+    _dock_ids="$_dock_ids        <value type='int' value='$_pid'/>
+"
+    _plugins="$_plugins
+    <property name='plugin-$_pid' type='string' value='$_menu_plugin'>
+      <property name='button-icon' type='string' value='open-menu'/>
+      <property name='button-title' type='string' value='Apps'/>
+      <property name='show-button-title' type='bool' value='false'/>
+      <property name='show-menu-icons' type='bool' value='true'/>
+      <property name='show-tooltips' type='bool' value='false'/>
+    </property>"
+
+    _pid=$((_pid + 1))
+    _dock_ids="$_dock_ids        <value type='int' value='$_pid'/>
+"
+    _plugins="$_plugins
+    <property name='plugin-$_pid' type='string' value='launcher'>
+      <property name='items' type='array'>
+        <value type='string' value='folio-terminal.desktop'/>
+      </property>
+    </property>"
+
+    _pid=$((_pid + 1))
+    _dock_ids="$_dock_ids        <value type='int' value='$_pid'/>
+"
+    _plugins="$_plugins
+    <property name='plugin-$_pid' type='string' value='launcher'>
+      <property name='items' type='array'>
+        <value type='string' value='folio-files.desktop'/>
+      </property>
+    </property>"
+
+    if command -v xfce4-settings-manager >/dev/null 2>&1; then
+        _pid=$((_pid + 1))
+        _dock_ids="$_dock_ids        <value type='int' value='$_pid'/>
+"
+        _plugins="$_plugins
+    <property name='plugin-$_pid' type='string' value='launcher'>
+      <property name='items' type='array'>
+        <value type='string' value='folio-settings.desktop'/>
+      </property>
+    </property>"
+    fi
+
+    if [ -n "$_browser" ]; then
+        _pid=$((_pid + 1))
+        _dock_ids="$_dock_ids        <value type='int' value='$_pid'/>
+"
+        _plugins="$_plugins
+    <property name='plugin-$_pid' type='string' value='launcher'>
+      <property name='items' type='array'>
+        <value type='string' value='folio-browser.desktop'/>
+      </property>
+    </property>"
+    fi
+
+    _pid=$((_pid + 1))
+    _dock_ids="$_dock_ids        <value type='int' value='$_pid'/>
+"
+    _plugins="$_plugins
+    <property name='plugin-$_pid' type='string' value='separator'>
+      <property name='expand' type='bool' value='true'/>
+      <property name='style' type='uint' value='0'/>
+    </property>"
+
+    _pid=$((_pid + 1))
+    _dock_ids="$_dock_ids        <value type='int' value='$_pid'/>
+"
+    _plugins="$_plugins
+    <property name='plugin-$_pid' type='string' value='tasklist'>
+      <property name='grouping' type='uint' value='1'/>
+      <property name='flat-buttons' type='bool' value='true'/>
+      <property name='show-labels' type='bool' value='false'/>
+      <property name='show-handle' type='bool' value='false'/>
+      <property name='show-wireframes' type='bool' value='false'/>
+      <property name='window-scrolling' type='bool' value='true'/>
+    </property>"
+
+    _pid=$((_pid + 1))
+    _dock_ids="$_dock_ids        <value type='int' value='$_pid'/>
+"
+    _plugins="$_plugins
+    <property name='plugin-$_pid' type='string' value='separator'>
+      <property name='expand' type='bool' value='true'/>
+      <property name='style' type='uint' value='0'/>
+    </property>"
+
+    _pid=$((_pid + 1))
+    _dock_ids="$_dock_ids        <value type='int' value='$_pid'/>
+"
+    _plugins="$_plugins
+    <property name='plugin-$_pid' type='string' value='actions'>
+      <property name='appearance' type='uint' value='0'/>
+      <property name='items' type='array'>
+        <value type='string' value='logout-dialog'/>
+      </property>
+    </property>"
+
+    cat > "$_pcfg/xfce4-panel.xml" <<EOF
+<?xml version="1.1" encoding="UTF-8"?>
+<channel name="xfce4-panel" version="1.0">
+  <property name="configver" type="int" value="2"/>
+  <property name="panels" type="array">
+    <value type="int" value="1"/>
+    <value type="int" value="2"/>
+    <property name="dark-mode" type="bool" value="true"/>
+    <property name="panel-1" type="empty">
+      <property name="position" type="string" value="p=6;x=0;y=0"/>
+      <property name="length" type="uint" value="100"/>
+      <property name="position-locked" type="bool" value="true"/>
+      <property name="size" type="uint" value="28"/>
+      <property name="icon-size" type="uint" value="16"/>
+      <property name="background-style" type="uint" value="1"/>
+      <property name="background-rgba" type="array">
+        <value type="double" value="0.0431372549019608"/>
+        <value type="double" value="0.0470588235294118"/>
+        <value type="double" value="0.0549019607843137"/>
+        <value type="double" value="0.9215686274509803"/>
+      </property>
+      <property name="plugin-ids" type="array">
+$_top_ids      </property>
+    </property>
+    <property name="panel-2" type="empty">
+      <property name="position" type="string" value="p=10;x=0;y=0"/>
+      <property name="length" type="uint" value="98"/>
+      <property name="position-locked" type="bool" value="true"/>
+      <property name="size" type="uint" value="64"/>
+      <property name="icon-size" type="uint" value="32"/>
+      <property name="background-style" type="uint" value="1"/>
+      <property name="background-rgba" type="array">
+        <value type="double" value="0.0431372549019608"/>
+        <value type="double" value="0.0470588235294118"/>
+        <value type="double" value="0.0549019607843137"/>
+        <value type="double" value="0.8784313725490196"/>
+      </property>
+      <property name="plugin-ids" type="array">
+$_dock_ids      </property>
+    </property>
+  </property>
+  <property name="plugins" type="empty">$_plugins
+  </property>
+</channel>
+EOF
+
+    unset _pcfg _phome _pdir _pnew _status _browser _bnew _appdir _hu _hg \
+        _pid _top_ids _dock_ids _plugins
+    return 0
+}
+
+# ── Compact phone layout: top status bar + floating dock + shortcuts ──────
 # Reuses the guest's shipped theme/icons; no colors, no extra downloads.
 _flux_write_folio_xfce_compact() {
     _cfg="$USER_HOME/.config/xfce4/xfconf/xfce-perchannel-xml"
@@ -357,78 +660,10 @@ _flux_write_folio_xfce_compact() {
         _menu_plugin="whiskermenu"
     fi
 
-    cat > "$_cfg/xfce4-panel.xml" <<EOF
-<?xml version="1.1" encoding="UTF-8"?>
-<channel name="xfce4-panel" version="1.0">
-  <property name="configver" type="int" value="2"/>
-  <property name="panels" type="array">
-    <value type="int" value="1"/>
-    <property name="dark-mode" type="bool" value="true"/>
-    <property name="panel-1" type="empty">
-      <property name="position" type="string" value="p=6;x=0;y=0"/>
-      <property name="length" type="double" value="100"/>
-      <property name="position-locked" type="bool" value="true"/>
-      <property name="size" type="uint" value="30"/>
-      <property name="icon-size" type="uint" value="16"/>
-      <property name="background-style" type="uint" value="1"/>
-      <property name="background-rgba" type="array">
-        <value type="double" value="0.0431372549019608"/>
-        <value type="double" value="0.0470588235294118"/>
-        <value type="double" value="0.0549019607843137"/>
-        <value type="double" value="0.94999999999999996"/>
-      </property>
-      <property name="plugin-ids" type="array">
-        <value type="int" value="1"/>
-        <value type="int" value="2"/>
-        <value type="int" value="3"/>
-        <value type="int" value="4"/>
-        <value type="int" value="5"/>
-        <value type="int" value="6"/>
-      </property>
-    </property>
-  </property>
-  <property name="plugins" type="empty">
-    <property name="plugin-1" type="string" value="$_menu_plugin">
-      <property name="button-icon" type="string" value="open-menu"/>
-      <property name="button-title" type="string" value="Menu"/>
-      <property name="show-button-title" type="bool" value="false"/>
-      <property name="show-menu-icons" type="bool" value="true"/>
-      <property name="show-tooltips" type="bool" value="false"/>
-      <property name="small" type="bool" value="true"/>
-    </property>
-    <property name="plugin-2" type="string" value="tasklist">
-      <property name="grouping" type="uint" value="1"/>
-      <property name="flat-buttons" type="bool" value="true"/>
-      <property name="show-labels" type="bool" value="false"/>
-      <property name="show-handle" type="bool" value="false"/>
-      <property name="show-wireframes" type="bool" value="false"/>
-      <property name="window-scrolling" type="bool" value="true"/>
-    </property>
-    <property name="plugin-3" type="string" value="separator">
-      <property name="expand" type="bool" value="true"/>
-      <property name="style" type="uint" value="0"/>
-    </property>
-    <property name="plugin-4" type="string" value="systray">
-      <property name="square-icons" type="bool" value="true"/>
-    </property>
-    <property name="plugin-5" type="string" value="clock">
-      <property name="mode" type="uint" value="4"/>
-      <property name="digital-layout" type="uint" value="1"/>
-      <property name="digital-format" type="string" value="%H:%M"/>
-      <property name="tooltip-format" type="string" value="%A, %B %d, %Y"/>
-      <property name="show-seconds" type="bool" value="false"/>
-      <property name="show-meridiem" type="bool" value="false"/>
-      <property name="timezone" type="string" value=""/>
-    </property>
-    <property name="plugin-6" type="string" value="actions">
-      <property name="appearance" type="uint" value="0"/>
-      <property name="items" type="array">
-        <value type="string" value="logout-dialog"/>
-      </property>
-    </property>
-  </property>
-</channel>
-EOF
+    # Android-style phone panels (thin status bar + floating dock); the
+    # shared writer degrades gracefully and leaves _menu_plugin set for the
+    # keyboard-shortcut block below.
+    _flux_write_folio_xfce_panel "$_cfg" "$USER_HOME" || true
 
     cat > "$_cfg/xfce4-keyboard-shortcuts.xml" <<EOF
 <?xml version="1.1" encoding="UTF-8"?>
@@ -637,7 +872,7 @@ export TMPDIR="${TMPDIR:-/tmp}"
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp}"
 
 # Launch sticker + info block live in ~/.config/folio/banner.sh (sourced at the
-# end of this file): one random monochrome anime ASCII design per shell open.
+# end of this file): one random colored anime ASCII design per shell open.
 # pokemon-colorscripts stays installed but no longer auto-prints (old style).
 
 # oh-my-zsh (optional — install may fail offline; shell still usable without it)
@@ -657,7 +892,7 @@ fi
 if command -v apk >/dev/null 2>&1 && command -v sudo >/dev/null 2>&1; then
   apk() { command sudo apk "$@"; }
 fi
-# ── Folio launch sticker (random monochrome anime banner; opt out FLUX_NO_BANNER=1)
+# ── Folio launch sticker (random colored anime banner; opt out FLUX_NO_BANNER=1)
 [ -r "$HOME/.config/folio/banner.sh" ] && . "$HOME/.config/folio/banner.sh"
 
 ZSHEOF
@@ -670,16 +905,21 @@ if [ ! -f "$ZPROFILE" ]; then
     _flux_chown "$CUSTOM_USER:$CUSTOM_GROUP" "$ZPROFILE"
 fi
 
-# ── Folio launch stickers: 8 monochrome anime-ish ASCII designs ─────────────
+# ── Folio launch stickers: 8 colored anime ASCII designs (256-color) ────────
 # Installs ~/.config/folio/banner/*.txt (random pick per shell open) and
 # ~/.config/folio/banner.sh (the folio-banner function sourced by .zshrc).
-# Offline, idempotent, cheap. Opt out at runtime: FLUX_NO_BANNER=1.
+# Offline, idempotent (`.banner-rev` refreshes existing installs).
+# Opt out at runtime: FLUX_NO_BANNER=1.
 _flux_write_folio_banner() {
     _home="$1"
     _owner="${2:-}"
     [ -n "$_home" ] || return 0
     _bdir="$_home/.config/folio/banner"
+    _brev="2"
     _need=0
+    if [ "$(cat "$_bdir/.banner-rev" 2>/dev/null || true)" != "$_brev" ]; then
+        _need=1
+    fi
     for _b in 01-catgirl 02-mecha 03-kitsune 04-shonen 05-chibi-star 06-robot-kitty 07-magical 08-samurai; do
         [ -s "$_bdir/$_b.txt" ] || _need=1
     done
@@ -689,111 +929,135 @@ _flux_write_folio_banner() {
     mkdir -p "$_bdir" 2>/dev/null || return 0
     cat > "$_bdir/.folio-banners.$$" <<'FOLIO_BANNER_ALL'
 ==>01-catgirl
-      /\   /\
-     /  \_/  \        nyah~
-    |  o     o  |
-    |     ^     |
-     \  \___/  /
-      \_______/
-       /|   |\
-      / |   | \
-        |___|
+\033[38;5;225m       ╱╲              ╱╲\033[0m
+\033[38;5;218m      ╱  ╲▄▄▄▄▄▄▄▄▄▄▄╱  ╲         nyah~\033[0m
+\033[38;5;212m     ╭╯ ░░░░░░░░░░░░░░░ ╰╮\033[0m
+\033[38;5;211m     │  ▄███▀▀   ▀▀███▄  │\033[0m
+\033[38;5;207m     │ ▐█████▌   ▐█████▌ │\033[0m
+\033[38;5;206m     │  ▀▀▀▀▀     ▀▀▀▀▀  │\033[0m
+\033[38;5;205m     │       ╭─────╮       │   =^.^=\033[0m
+\033[38;5;200m      ╲      ╰─────╯      ╱\033[0m
+\033[38;5;199m       ╰──────╮ ╭──────╯\033[0m
+\033[38;5;164m        ╰─────╯ ╰─────╯\033[0m
+\033[38;5;163m         ║▀▀▀▀▀▀▀▀▀║\033[0m
+\033[38;5;225m         ╰─────────╯\033[0m
 ==>02-mecha
-     __________________
-    |  [=]  [=]  [=]  |
-    |   ___________   |
-    |  |  M E C H |   |
-    |  |___________|  |
-    |_________________|
-      /|           |\
-     / |           | \
-       |___|_|_|___|
+\033[38;5;159m         _|_\033[0m
+\033[38;5;123m        ╱   ╲                UNIT-07\033[0m
+\033[38;5;117m    ╔═══╧═╤═╧═══╗\033[0m
+\033[38;5;111m    ║ ▄▄▄▄▄▄▄▄▄▄▄ ║\033[0m
+\033[38;5;75m    ║ █▀▀▀▀▀▀▀▀▀█ ║   ▐▌ ▐▌\033[0m
+\033[38;5;69m    ║ █ ▀▀▀▀▀▀▀ █ ║   ▐▌ ▐▌\033[0m
+\033[38;5;63m    ╚═╦═══════╦═╝\033[0m
+\033[38;5;39m       ║ ▒▒▒▒▒▒▒ ║\033[0m
+\033[38;5;33m      ╔╩═══════╩╗\033[0m
+\033[38;5;27m      ║  ▄▄▄▄▄  ║\033[0m
+\033[38;5;159m      ╚═════════╝\033[0m
 ==>03-kitsune
-         /\     /\
-        /  \___/  \
-       |  o     o  |
-       |     ^     |
-       |  \  U  /  |
-        \  \___/  /
-         \_______/
-        kitsune mask
+\033[38;5;223m         ╱╲          ╱╲\033[0m
+\033[38;5;222m        ╱  ╲________╱  ╲      kon!\033[0m
+\033[38;5;221m       ╭╯▄▄▄▄▄▄▄▄▄▄▄▄▄╰╮\033[0m
+\033[38;5;220m       │ ▄▀▀▀▀▀▀▀▀▀▀▀▄ │\033[0m
+\033[38;5;215m       │ ███▄   ▄███ │    . o O\033[0m
+\033[38;5;214m       │ ██▀     ▀██ │\033[0m
+\033[38;5;208m       │  ▀▄▄ ▄ ▄▄▀  │\033[0m
+\033[38;5;202m        ╲    ╰───╯    ╱\033[0m
+\033[38;5;166m         ╰──╮     ╭──╯\033[0m
+\033[38;5;223m     (((     ╰───╯     )))\033[0m
 ==>04-shonen
-        ,--.
-       / o  \__
-      |  |\   |    FIGHT!
-      |  | \  |
-       \_|  \_|
-        / \   \
-      _/   \   \_
-     (__)  (__)
+\033[38;5;33m        ╱▔▔▔▔▔▔▔▔▔╲         FIGHT!\033[0m
+\033[38;5;39m      ╱▔▔▔▔▔▔▔▔▔▔▔▔▔╲\033[0m
+\033[38;5;45m     │  ╱╲ ╱╲ ╱╲ ╱╲  │       /!\033[0m
+\033[38;5;75m     │  ████   ████  │\033[0m
+\033[38;5;111m     │  ██▒█   █▒██  │      o O\033[0m
+\033[38;5;117m     │   ▀▀     ▀▀   │\033[0m
+\033[38;5;153m     │     ╭───╮     │\033[0m
+\033[38;5;159m      ╲    ╰───╯    ╱\033[0m
+\033[38;5;195m       ╰─────╮╭─────╯\033[0m
+\033[38;5;231m        ╰────╯╰────╯\033[0m
+\033[38;5;33m       ╔═╗        ╔═╗\033[0m
+\033[38;5;39m       ╚═╝        ╚═╝\033[0m
 ==>05-chibi-star
-    .    *    .    *
-      .-=====-.
-   * /  o   o  \ .
-    |     ^     |
-     \  '---'  /
-   .  '-.___.-'  *
-      *    .    .
+\033[38;5;157m       *        .        *\033[0m
+\033[38;5;121m          ╭───────╮\033[0m
+\033[38;5;86m     .   ╱ ▄▄▄▄▄▄▄ ╲   .\033[0m
+\033[38;5;85m        │  ██   ██  │        *\033[0m
+\033[38;5;84m     *  │  ██   ██  │\033[0m
+\033[38;5;79m        │   ╰───╯   │   .\033[0m
+\033[38;5;78m     .   ╲  ╰───╯  ╱\033[0m
+\033[38;5;45m          ╰───────╯        *\033[0m
+\033[38;5;51m       *       .       *\033[0m
 ==>06-robot-kitty
-     /\_____/\
-    | o     o |     beep
-    | [=====] |     boop
-     \_=====_/
-      /|   |\
-     / |   | \
-       |_| |_|
+\033[38;5;252m        ╱▔▔╲____╱▔▔╲\033[0m
+\033[38;5;249m       │ ▓▓│    │▓▓ │        beep\033[0m
+\033[38;5;245m       ╰──╯▄▄▄▄╰──╯\033[0m
+\033[38;5;117m      ╭───╮ ▀▀ ╭───╮        boop\033[0m
+\033[38;5;111m      │  ▄▄▄▄▄▄▄▄▄▄▄  │\033[0m
+\033[38;5;75m      │ ██▀▀     ▀▀██ │\033[0m
+\033[38;5;74m      │ ▀▀         ▀▀ │\033[0m
+\033[38;5;68m      │   ▄▄▄▄▄▄▄▄▄   │\033[0m
+\033[38;5;37m      ╰─╮ ▒▒▒▒▒▒▒ ╭─╯\033[0m
+\033[38;5;252m        ╰─────────╯\033[0m
 ==>07-magical
-         \ | /
-      .-=======-.
-     /  *     *  \
-    |  o       o  |   HENSHIN!
-     \    ___    /
-      '-..___..-'
-         (o_o)[*]
+\033[38;5;183m    *       ╱╲        *      *\033[0m
+\033[38;5;177m         ╭──╯  ╰──╮\033[0m
+\033[38;5;141m    *    │ ░░░░░░░ │      *\033[0m
+\033[38;5;135m         │ ██▀ ▀██ │   HENSHIN!\033[0m
+\033[38;5;171m         │ ▀   ▀  │\033[0m
+\033[38;5;207m         │  ╰───╯  │   *\033[0m
+\033[38;5;213m    *     ╲ ▄▄▄▄▄ ╱      *\033[0m
+\033[38;5;219m           ╰─────╯    ╱╲\033[0m
+\033[38;5;183m     *        ╱─────╱  ╲   *\033[0m
+\033[38;5;177m              ╲─────╲  ╱\033[0m
+\033[38;5;141m                 ╰───╯\033[0m
 ==>08-samurai
-         ___
-        /o o\___
-       |   >    _>
-        \_ _ _/
-         |___|
-         /| |\
-        / | | \
-          |_|
-      kabuto mask
+\033[38;5;17m          ╱╲╱╲\033[0m
+\033[38;5;18m         ╱  ╰╯  ╲           kabuto\033[0m
+\033[38;5;19m        ╭╯▄▄▄▄▄▄▄▄▄╰╮\033[0m
+\033[38;5;61m        │ ▄▄▄▄▄▄▄▄▄ │\033[0m
+\033[38;5;67m       ╭╯ ██▄ ▄██ ╰╮\033[0m
+\033[38;5;104m       │  ███ ███  │        -  -\033[0m
+\033[38;5;146m       │   ▀   ▀   │\033[0m
+\033[38;5;195m       │  ╭─────╮  │\033[0m
+\033[38;5;231m        ╲ ╰─────╯ ╱\033[0m
+\033[38;5;17m         ╰───────╯\033[0m
+\033[38;5;18m          ││   ││\033[0m
 FOLIO_BANNER_ALL
     awk -v dir="$_bdir" '
         /^==> ?[0-9A-Za-z._-]+$/ { name=substr($0,4); gsub(/^[ \t]+|[ \t]+$/, "", name); file=dir "/" name ".txt"; next }
         { if (file != "") print > file }
     ' "$_bdir/.folio-banners.$$" 2>/dev/null || true
     rm -f "$_bdir/.folio-banners.$$" 2>/dev/null || true
+    printf '%s\n' "$_brev" > "$_bdir/.banner-rev" 2>/dev/null || true
 
     cat > "$_home/.config/folio/banner.sh" <<'FOLIO_BANNER_SH'
-# folio-banner.sh — Folio launch sticker. Monochrome, offline, random per shell.
-# Opt out with FLUX_NO_BANNER=1. Sourced at the end of ~/.zshrc.
+# folio-banner.sh — Folio launch sticker. Colored 256-color ASCII art (no
+# emoji), offline, random design per interactive shell. Opt out FLUX_NO_BANNER=1.
+folio-banner-art() {
+  # Prints one randomly picked design from ~/.config/folio/banner/*.txt.
+  # The designs carry literal \033 256-color escapes -> rendered with printf %b.
+  setopt localoptions nullglob 2>/dev/null || true
+  local -a _bans
+  _bans=( "$HOME"/.config/folio/banner/*.txt )
+  [[ -f "${_bans[1]}" ]] || return 0
+  local _bi=$(( RANDOM % ${#_bans} + 1 ))
+  case "$(cat "${_bans[$_bi]}" 2>/dev/null || true)" in
+    *'\033'*) printf '%b\n' "$(cat "${_bans[$_bi]}")" ;;
+    *)         cat "${_bans[$_bi]}" 2>/dev/null || true ;;
+  esac
+  unset _bans _bi
+}
 folio-banner() {
   [ "${FLUX_NO_BANNER:-0}" = "1" ] && return 0
   case $- in *i*) ;; *) return 0;; esac
-  setopt localoptions nullglob
-  local -a _bans
-  _bans=( "$HOME"/.config/folio/banner/*.txt )
-  if [[ -f "${_bans[1]}" ]]; then
-    local _bi=$(( RANDOM % ${#_bans} + 1 ))
-    cat "${_bans[$_bi]}" 2>/dev/null || true
-  fi
-  unset _bans _bi
-  if command -v fastfetch >/dev/null 2>&1; then
-    local _ff="$HOME/.local/share/fastfetch/presets/termux.jsonc"
-    if [ -f "$_ff" ]; then
-      { fastfetch --config "$_ff" 2>/dev/null || true; } &!
-    else
-      { fastfetch --config termux 2>/dev/null || true; } &!
-    fi
-    unset _ff
+  folio-banner-art
+  local _ff="$HOME/.local/share/fastfetch/presets/termux.jsonc"
+  if command -v fastfetch >/dev/null 2>&1 && [ -f "$_ff" ]; then
+    { fastfetch --config "$_ff" 2>/dev/null || true; } &!
   else
-    printf '%s@%s | %s | %s\n' "${USER:-flux}" "$(hostname 2>/dev/null || echo folio)" \
-      "$(sed -n 's/^PRETTY_NAME=//p' /etc/os-release 2>/dev/null | tr -d '\"' | head -n 1)" \
-      "$(date +%H:%M 2>/dev/null)"
+    printf '%s\n' "folio@localhost | $(sed -n 's/^PRETTY_NAME=//p' /etc/os-release 2>/dev/null | tr -d '"' | head -n 1) | $(date +%H:%M 2>/dev/null)"
   fi
+  unset _ff
 }
 folio-banner
 FOLIO_BANNER_SH
@@ -840,7 +1104,7 @@ FFEOF
 }
 _flux_write_fastfetch_preset "$USER_HOME" "$CUSTOM_USER:$CUSTOM_GROUP"
 _flux_write_fastfetch_preset /root
-# Random monochrome anime launch sticker for the guest shell.
+# Random colored anime launch sticker for the guest shell.
 _flux_write_folio_banner "$USER_HOME" "$CUSTOM_USER:$CUSTOM_GROUP"
 _flux_write_folio_banner /root
 mkdir -p /usr/share/fastfetch/presets

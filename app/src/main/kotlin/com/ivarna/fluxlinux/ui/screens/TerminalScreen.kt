@@ -9,15 +9,19 @@ import android.system.OsConstants
 import android.view.KeyEvent
 import android.view.inputmethod.InputMethodManager
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -25,7 +29,6 @@ import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.only
@@ -33,8 +36,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -50,9 +56,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -65,25 +69,38 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import com.ivarna.fluxlinux.R
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.ivarna.fluxlinux.R
 import com.ivarna.fluxlinux.core.terminal.FluxTerminalSessionManager
 import com.ivarna.fluxlinux.core.terminal.FluxTerminalSessionManager.SessionOpenResult
 import com.ivarna.fluxlinux.core.utils.TerminalPreferences
 import com.ivarna.fluxlinux.ui.terminal.AnimeSplashArt
+import com.ivarna.fluxlinux.ui.terminal.ShortcutBarActions
+import com.ivarna.fluxlinux.ui.terminal.ShortcutBarConfig
+import com.ivarna.fluxlinux.ui.terminal.ShortcutBarEditorSheet
+import com.ivarna.fluxlinux.ui.terminal.ShortcutBarStore
+import com.ivarna.fluxlinux.ui.terminal.ShortcutKeyEditorSheet
+import com.ivarna.fluxlinux.ui.terminal.ShortcutQuickAddDialog
 import com.ivarna.fluxlinux.ui.terminal.TerminalExtraKeys
 import com.ivarna.fluxlinux.ui.terminal.TerminalKeyInjector
 import com.ivarna.fluxlinux.ui.terminal.TerminalModifierState
+import com.ivarna.fluxlinux.ui.terminal.TerminalNewSessionPanel
 import com.ivarna.fluxlinux.ui.terminal.TerminalSessionSplash
+import com.ivarna.fluxlinux.ui.terminal.TerminalShortcutKey
 import com.ivarna.fluxlinux.ui.terminal.TerminalToolSelector
 import com.ivarna.fluxlinux.ui.terminal.TerminalToolsSheet
+import com.ivarna.fluxlinux.ui.terminal.newShortcutKeyId
+import com.ivarna.fluxlinux.ui.theme.FolioBackground
 import com.ivarna.fluxlinux.ui.theme.FrostHairline
 import com.ivarna.fluxlinux.ui.theme.FrostSurface
 import com.ivarna.fluxlinux.ui.theme.TextPrimary
@@ -96,8 +113,8 @@ import com.termux.view.TerminalViewClient
  * + full ExtraKeys toolbar (injectKey / ModifierState lock).
  *
  * Empty state = compact proot/chroot session rows (`TerminalToolSelector`); active state =
- * interactive `TerminalView` (focus + IME + clipboard) with a compact ExtraKeys
- * toolbar. Plan: docs/plans/terminal-grid-extrakeys-interactive.md.
+ * interactive `TerminalView` (focus + IME + clipboard) with a compact, fully
+ * configurable ExtraKeys toolbar. Plan: docs/plans/terminal-grid-extrakeys-interactive.md.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -120,8 +137,14 @@ fun TerminalScreen(
         mutableStateOf(TerminalPreferences.isExtraKeysEnabled(context))
     }
     var terminalViewRef by remember { mutableStateOf<TerminalView?>(null) }
-    var showNewSessionSheet by remember { mutableStateOf(false) }
+    // "+" opens an anchored in-place panel (no modal sheet → no dismiss/tap race).
+    var showNewSessionPanel by remember { mutableStateOf(false) }
     var showToolsSheet by remember { mutableStateOf(false) }
+    var shortcutConfig by remember { mutableStateOf(ShortcutBarStore.load(context)) }
+    var showShortcutEditor by remember { mutableStateOf(false) }
+    var showShortcutKeyEditor by remember { mutableStateOf(false) }
+    var editingShortcutKey by remember { mutableStateOf<TerminalShortcutKey?>(null) }
+    var showQuickAddKey by remember { mutableStateOf(false) }
     // Launch-sticker splash: shown when the screen opens with a live session and
     // whenever a NEW session lands — not on plain switches between existing tabs.
     var splashArtRes by remember { mutableIntStateOf(0) }
@@ -132,6 +155,7 @@ fun TerminalScreen(
     // cols/rows or the attached pid actually change (R2: pinch zoom changes cols/rows
     // without a view-size change, so pixel width/height is NOT a valid guard key).
     val lastWinchKey = remember { intArrayOf(-1, -1, -1) } // cols, rows, pid
+    val tabListState = rememberLazyListState()
 
     // Reload prefs when returning from Settings (Terminal / X11 detail pages).
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -140,6 +164,7 @@ fun TerminalScreen(
             if (event == Lifecycle.Event.ON_RESUME) {
                 fontSize = TerminalPreferences.getFontSize(context)
                 showExtraKeys = TerminalPreferences.isExtraKeysEnabled(context)
+                shortcutConfig = ShortcutBarStore.load(context)
                 terminalViewRef?.setTextSize(fontSize)
             }
         }
@@ -147,16 +172,44 @@ fun TerminalScreen(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
+    // Back closes the panel first; the panel also collapses itself once a session
+    // lands (and whenever no session remains — the empty-state selector is right there).
+    BackHandler(enabled = showNewSessionPanel) { showNewSessionPanel = false }
+    LaunchedEffect(sessions.isEmpty()) {
+        if (sessions.isEmpty()) showNewSessionPanel = false
+    }
+
     fun toast(message: String) {
         Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
     }
 
-    fun openCard(type: String, title: String, method: String, distroId: String? = null) {
+    /** Single pty write path for TEXT keys + clipboard paste (bracketed-aware). */
+    fun sendText(text: String) {
+        if (text.isEmpty()) return
+        val session = FluxTerminalSessionManager.activeSession?.session
+        if (session == null) {
+            toast("No active session")
+            return
+        }
+        try {
+            session.emulator?.paste(text) ?: session.write(text)
+        } catch (_: Exception) {
+            toast("Write failed")
+        }
+    }
+
+    fun openCard(
+        type: String,
+        title: String,
+        method: String,
+        distroId: String? = null,
+        onOpened: (() -> Unit)? = null
+    ) {
         if (method == "host") {
             // R4: gate on host ready — prepare when missing, toast "Host not ready".
             FluxTerminalSessionManager.openHostShellAfterReady(context, title) { result ->
                 when (result) {
-                    SessionOpenResult.OPENED -> {}
+                    SessionOpenResult.OPENED -> onOpened?.invoke()
                     SessionOpenResult.MAX_TABS -> toast("Tab limit reached (${FluxTerminalSessionManager.MAX_TABS})")
                     SessionOpenResult.HOST_NOT_READY -> toast("Host not ready — check Settings")
                     else -> toast("Host shell failed to open")
@@ -172,7 +225,7 @@ fun TerminalScreen(
             distroId = distroId,
             onResult = { result ->
                 when (result) {
-                    SessionOpenResult.OPENED -> {}
+                    SessionOpenResult.OPENED -> onOpened?.invoke()
                     SessionOpenResult.MAX_TABS -> toast("Tab limit reached (${FluxTerminalSessionManager.MAX_TABS})")
                     SessionOpenResult.HOST_PREPARE_FAILED -> toast("Host bootstrap not ready — check Settings")
                     SessionOpenResult.OPEN_FAILED ->
@@ -209,18 +262,6 @@ fun TerminalScreen(
         }
     }
 
-    // Splash trigger: entry into a live terminal (0→n) or a newly opened session
-    // (n→n+1). Plain tab switches keep the same count and stay silent.
-    LaunchedEffect(sessions.size, activeIndex) {
-        if (sessions.isNotEmpty() && splashBudget < sessions.size) {
-            splashBudget = sessions.size
-            splashArtRes = AnimeSplashArt.random()
-            splashTitle = FluxTerminalSessionManager.activeSession?.title
-                ?: titles.getOrNull(activeIndex)
-                ?: "session"
-        }
-    }
-
     fun injectKey(key: String, ctrl: Boolean = false) {
         TerminalKeyInjector.injectKey(terminalViewRef, key, ctrl, false, false)
     }
@@ -241,16 +282,7 @@ fun TerminalScreen(
             toast("Clipboard too large to paste")
             return
         }
-        val session = FluxTerminalSessionManager.activeSession?.session
-        if (session == null) {
-            toast("No active session")
-            return
-        }
-        try {
-            session.emulator?.paste(text) ?: session.write(text)
-        } catch (_: Exception) {
-            toast("Paste failed")
-        }
+        sendText(text)
     }
 
     /** Copy the scrollback tail (transcript) to the clipboard — "Copy screen" tool. */
@@ -288,6 +320,30 @@ fun TerminalScreen(
         showExtraKeys = next
         TerminalPreferences.setExtraKeysEnabled(context, next)
         terminalViewRef?.let { forceTerminalResize(it) }
+    }
+
+    fun updateShortcutConfig(config: ShortcutBarConfig) {
+        shortcutConfig = config
+        ShortcutBarStore.save(context, config)
+    }
+
+    // Splash trigger: entry into a live terminal (0→n) or a newly opened session
+    // (n→n+1). Plain tab switches keep the same count and stay silent.
+    LaunchedEffect(sessions.size, activeIndex) {
+        if (sessions.isNotEmpty() && splashBudget < sessions.size) {
+            splashBudget = sessions.size
+            splashArtRes = AnimeSplashArt.random()
+            splashTitle = FluxTerminalSessionManager.activeSession?.title
+                ?: titles.getOrNull(activeIndex)
+                ?: "session"
+        }
+    }
+
+    // Keep the active tab visible in the session strip.
+    LaunchedEffect(activeIndex, sessions.size) {
+        if (activeIndex in sessions.indices) {
+            tabListState.animateScrollToItem(activeIndex)
+        }
     }
 
     Column(
@@ -358,89 +414,47 @@ fun TerminalScreen(
                 )
             }
             IconButton(
-                onClick = { showNewSessionSheet = true },
+                onClick = { showNewSessionPanel = !showNewSessionPanel },
                 modifier = Modifier.size(36.dp)
             ) {
                 Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = "New session",
+                    imageVector = if (showNewSessionPanel) Icons.Default.Close else Icons.Default.Add,
+                    contentDescription = if (showNewSessionPanel) "Close new session panel" else "New session",
                     tint = TextPrimary,
                     modifier = Modifier.size(20.dp)
                 )
             }
         }
 
+        // ── Session strip: pill tabs (icon + name, integrated close) ─────────
         if (sessions.isNotEmpty()) {
-            Row(
+            LazyRow(
+                state = tabListState,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 10.dp, vertical = 2.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(vertical = 4.dp),
+                contentPadding = PaddingValues(horizontal = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                sessions.forEachIndexed { i, managed ->
-                    val selected = i == activeIndex
-                    val icon = managed.iconRes ?: R.drawable.ic_terminal
-                    Box(
-                        modifier = Modifier.size(40.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(
-                                    if (selected) TextPrimary.copy(alpha = 0.14f)
-                                    else FrostSurface
-                                )
-                                .border(
-                                    BorderStroke(
-                                        if (selected) 1.5.dp else 0.75.dp,
-                                        if (selected) TextPrimary else FrostHairline
-                                    ),
-                                    RoundedCornerShape(10.dp)
-                                )
-                                .clickable { FluxTerminalSessionManager.switchSession(i) },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Image(
-                                painter = painterResource(id = icon),
-                                contentDescription = managed.title.ifBlank { titles.getOrElse(i) { "session" } },
-                                modifier = Modifier.size(22.dp)
-                            )
-                        }
-                        if (selected) {
-                            Box(
-                                modifier = Modifier
-                                    .align(Alignment.TopEnd)
-                                    .size(16.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.surface)
-                                    .border(
-                                        BorderStroke(0.75.dp, FrostHairline),
-                                        CircleShape
-                                    )
-                                    .clickable {
-                                        FluxTerminalSessionManager.closeSession(context, i)
-                                    },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Close,
-                                    contentDescription = "Close",
-                                    tint = TextSecondary,
-                                    modifier = Modifier.size(10.dp)
-                                )
-                            }
-                        }
-                    }
+                items(
+                    count = sessions.size,
+                    key = { i -> "tab-$i" }
+                ) { i ->
+                    val managed = sessions[i]
+                    TerminalSessionTab(
+                        title = managed.title,
+                        label = compactSessionLabel(managed.title, managed.type, managed.method),
+                        iconRes = managed.iconRes ?: R.drawable.ic_terminal,
+                        selected = i == activeIndex,
+                        onSelect = { FluxTerminalSessionManager.switchSession(i) },
+                        onClose = { FluxTerminalSessionManager.closeSession(context, i) }
+                    )
                 }
             }
         }
 
-        if (activeIndex >= 0) {
-            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+            if (activeIndex >= 0) {
                 AndroidView(
                     factory = { ctx ->
                         TerminalView(ctx, null).apply {
@@ -523,13 +537,21 @@ fun TerminalScreen(
                     },
                     modifier = Modifier.fillMaxSize()
                 )
-            }
-            DisposableEffect(Unit) {
-                onDispose {
-                    terminalViewRef?.let { com.ivarna.fluxlinux.ui.terminal.hideIme(it) }
-                    FluxTerminalSessionManager.detachView()
-                    terminalViewRef = null
+                DisposableEffect(Unit) {
+                    onDispose {
+                        terminalViewRef?.let { com.ivarna.fluxlinux.ui.terminal.hideIme(it) }
+                        FluxTerminalSessionManager.detachView()
+                        terminalViewRef = null
+                    }
                 }
+            } else {
+                // Empty state: installed-only session rows with the original icons.
+                TerminalToolSelector(
+                    onOpen = { type, title, method, distroId ->
+                        openCard(type, title, method, distroId)
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
             }
 
             // Launch-sticker splash (random anime art per open); removed once faded
@@ -542,32 +564,59 @@ fun TerminalScreen(
                 )
             }
 
-            // ExtraKeys toolbar: nativecode inject path (TerminalView.onKeyDown / inputCodePoint).
-            if (showExtraKeys) {
-                TerminalExtraKeys(
-                    modState = modState,
-                    terminalView = { terminalViewRef },
-                    modifier = Modifier.fillMaxWidth()
+            // ── "+" new-session panel: anchored dropdown, dismiss via ×/back/scrim ──
+            if (showNewSessionPanel) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.45f))
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null
+                        ) { showNewSessionPanel = false }
+                )
+                TerminalNewSessionPanel(
+                    onOpen = { type, title, method, distroId ->
+                        openCard(type, title, method, distroId) {
+                            showNewSessionPanel = false
+                        }
+                    },
+                    onDismiss = { showNewSessionPanel = false },
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
                 )
             }
-        } else {
-            // Empty state: nativecode-style 2-column card grid with original distro icons.
-            TerminalToolSelector(onOpen = ::openCard)
         }
-    }
 
-    // "+" — same selector as a bottom sheet so users can add sessions from anywhere.
-    if (showNewSessionSheet) {
-        ModalBottomSheet(
-            onDismissRequest = { showNewSessionSheet = false },
-            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-        ) {
-            TerminalToolSelector(
-                onOpen = { type, title, method, distroId ->
-                    showNewSessionSheet = false
-                    openCard(type, title, method, distroId)
-                },
-                modifier = Modifier.heightIn(max = 460.dp)
+        // ExtraKeys toolbar: nativecode inject path (TerminalView.onKeyDown / inputCodePoint).
+        if (activeIndex >= 0 && showExtraKeys) {
+            TerminalExtraKeys(
+                modState = modState,
+                terminalView = { terminalViewRef },
+                config = shortcutConfig,
+                modifier = Modifier.fillMaxWidth(),
+                onSendText = { sendText(it) },
+                actions = ShortcutBarActions(
+                    onEditKey = { key ->
+                        editingShortcutKey = key
+                        showShortcutKeyEditor = true
+                    },
+                    onDuplicateKey = { key ->
+                        val index = shortcutConfig.keys.indexOfFirst { it.id == key.id }
+                        val copy = key.copy(id = newShortcutKeyId())
+                        val keys = shortcutConfig.keys.toMutableList().apply {
+                            if (index >= 0) add(index + 1, copy) else add(copy)
+                        }
+                        updateShortcutConfig(shortcutConfig.copy(keys = keys))
+                    },
+                    onRemoveKey = { key ->
+                        updateShortcutConfig(
+                            shortcutConfig.copy(keys = shortcutConfig.keys.filterNot { it.id == key.id })
+                        )
+                    },
+                    onEditBar = { showShortcutEditor = true }
+                )
             )
         }
     }
@@ -587,12 +636,7 @@ fun TerminalScreen(
             onDismissRequest = { showToolsSheet = false },
             onPaste = { pasteFromClipboard() },
             onCopyScreen = { copyTranscript() },
-            onCtrlC = { injectKey("c", ctrl = true) },
-            onCtrlD = { injectKey("d", ctrl = true) },
-            onSendTab = { injectKey("TAB") },
-            onSendEscape = { injectKey("ESC") },
-            // Ctrl+L: clears the visible screen in shells/pagers without side effects.
-            onClearScreen = { injectKey("l", ctrl = true) },
+            onInjectKey = { key, ctrl -> injectKey(key, ctrl) },
             onRestart = {
                 val idx = activeIndex
                 if (idx >= 0) {
@@ -607,7 +651,161 @@ fun TerminalScreen(
                 val idx = activeIndex
                 if (idx >= 0) FluxTerminalSessionManager.closeSession(context, idx)
             },
-            onCloseAllSessions = { FluxTerminalSessionManager.closeAll(context) }
+            onCloseAllSessions = { FluxTerminalSessionManager.closeAll(context) },
+            onAddCustomKey = {
+                showToolsSheet = false
+                editingShortcutKey = null
+                showShortcutKeyEditor = true
+            },
+            onAddToShortcutBar = {
+                showToolsSheet = false
+                showQuickAddKey = true
+            },
+            onEditShortcutBar = {
+                showToolsSheet = false
+                showShortcutEditor = true
+            }
         )
     }
+
+    // Shortcut bar manager (order / size / edit / delete / reset + live persistence).
+    if (showShortcutEditor) {
+        ShortcutBarEditorSheet(
+            config = shortcutConfig,
+            onConfigChange = { updateShortcutConfig(it) },
+            onDismiss = { showShortcutEditor = false }
+        )
+    }
+
+    // Custom key creator (from the bar editor, the bar's long-press menu, or tools).
+    if (showShortcutKeyEditor) {
+        ShortcutKeyEditorSheet(
+            initial = editingShortcutKey,
+            onSave = { key ->
+                val editing = editingShortcutKey
+                val keys = if (editing == null) {
+                    shortcutConfig.keys + key
+                } else {
+                    shortcutConfig.keys.map { if (it.id == editing.id) key else it }
+                }
+                updateShortcutConfig(shortcutConfig.copy(keys = keys))
+                showShortcutKeyEditor = false
+                editingShortcutKey = null
+            },
+            onDismiss = {
+                showShortcutKeyEditor = false
+                editingShortcutKey = null
+            }
+        )
+    }
+
+    // Quick "Add to shortcut bar" (label + sequence) from the tools sheet.
+    if (showQuickAddKey) {
+        ShortcutQuickAddDialog(
+            onAdd = { key ->
+                updateShortcutConfig(shortcutConfig.copy(keys = shortcutConfig.keys + key))
+                showQuickAddKey = false
+            },
+            onDismiss = { showQuickAddKey = false }
+        )
+    }
+}
+
+/**
+ * One session tab: frosted pill, white inverted when active (dock parity), spring
+ * animated; integrated × with a >= 24dp touch target.
+ */
+@Composable
+private fun TerminalSessionTab(
+    title: String,
+    label: String,
+    iconRes: Int,
+    selected: Boolean,
+    onSelect: () -> Unit,
+    onClose: () -> Unit
+) {
+    val shape = RoundedCornerShape(percent = 50)
+    val background by animateColorAsState(
+        targetValue = if (selected) TextPrimary else FrostSurface,
+        animationSpec = spring(dampingRatio = 0.78f, stiffness = 380f),
+        label = "sessionTabBackground"
+    )
+    val foreground by animateColorAsState(
+        targetValue = if (selected) FolioBackground else TextSecondary,
+        animationSpec = spring(dampingRatio = 0.78f, stiffness = 380f),
+        label = "sessionTabForeground"
+    )
+    val edge by animateColorAsState(
+        targetValue = if (selected) TextPrimary else FrostHairline,
+        animationSpec = spring(dampingRatio = 0.78f, stiffness = 380f),
+        label = "sessionTabEdge"
+    )
+
+    Row(
+        modifier = Modifier
+            .height(38.dp)
+            .clip(shape)
+            .background(background)
+            .border(BorderStroke(0.75.dp, edge), shape)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onSelect
+            )
+            .padding(start = 9.dp, end = 3.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Image(
+            painter = painterResource(id = iconRes),
+            contentDescription = null,
+            modifier = Modifier.size(18.dp)
+        )
+        Spacer(Modifier.width(6.dp))
+        Text(
+            text = label,
+            color = foreground,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.widthIn(max = 110.dp)
+        )
+        Box(
+            modifier = Modifier
+                .size(30.dp)
+                .clip(CircleShape)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onClose
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.Close,
+                contentDescription = "Close $title",
+                tint = foreground,
+                modifier = Modifier.size(14.dp)
+            )
+        }
+    }
+}
+
+/** "Alpine Shell Rooted" → "Alpine root", "Alpine Chroot Shell" → "Alpine chroot". */
+private fun compactSessionLabel(title: String, type: String, method: String): String {
+    val base = title
+        .replace(" Shell Rooted", "")
+        .replace(" Rooted", "")
+        .replace(" Chroot Shell", "")
+        .replace(" Chroot", "")
+        .replace(" Shell", "")
+        .trim()
+        .ifBlank { "session" }
+    val suffix = when {
+        type == "shell-root" -> " root"
+        method == "chroot" -> " chroot"
+        else -> ""
+    }
+    val label = base + suffix
+    return if (label.length <= 16) label else label.take(15) + "…"
 }

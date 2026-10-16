@@ -28,6 +28,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Refresh
@@ -62,6 +63,10 @@ import com.ivarna.fluxlinux.ui.theme.TextSecondary
 
 /**
  * Shared install progress UI for onboarding + Distros [InstallConfigScreen].
+ *
+ * [onCancel] renders an explicit "Cancel install" action while running — back
+ * navigation leaves the install running in the background (task bar takes
+ * over), so cancelling must be a deliberate tap.
  */
 @Composable
 fun InstallProgressPanel(
@@ -76,6 +81,7 @@ fun InstallProgressPanel(
     onRetry: () -> Unit,
     onBack: (() -> Unit)? = null,
     onDone: (() -> Unit)? = null,
+    onCancel: (() -> Unit)? = null,
     isDone: Boolean = false,
     modifier: Modifier = Modifier
 ) {
@@ -315,6 +321,21 @@ fun InstallProgressPanel(
             Spacer(Modifier.weight(1f))
         }
 
+        // Background continues after leaving: cancelling needs an explicit tap.
+        // Only shown when the host screen supports leave-in-background (onCancel
+        // wired); onboarding keeps its back-cancels behavior and passes null.
+        if (!failed && !isDone && onCancel != null) {
+            Spacer(Modifier.height(10.dp))
+            Text(
+                text = "Going back keeps this install running — watch the live " +
+                    "install bar at the top of the app.",
+                fontSize = 12.sp,
+                color = colors.onBackground.copy(alpha = 0.6f),
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+
         Spacer(Modifier.height(16.dp))
 
         // Action Buttons
@@ -372,6 +393,29 @@ fun InstallProgressPanel(
                     shape = CircleShape
                 ) {
                     Text("Continue", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                }
+            }
+
+            !isDone && onCancel != null -> {
+                Button(
+                    onClick = onCancel,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(54.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = FrostSurface,
+                        contentColor = colors.error
+                    ),
+                    border = BorderStroke(0.75.dp, FrostHairline),
+                    shape = CircleShape
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Close,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text("Cancel install", fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
                 }
             }
         }

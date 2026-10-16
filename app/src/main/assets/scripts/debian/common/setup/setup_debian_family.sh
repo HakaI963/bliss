@@ -10,22 +10,34 @@ echo "Folio: Configuring ${DISTRO_NAME} (Debian Family)..."
 export DEBIAN_FRONTEND=noninteractive
 apt update -y || exit 1
 apt install -y sudo dbus-x11 tigervnc-standalone-server || exit 1
-# Desktop gate: FLUX_DESKTOP (env mirror FLUX_DESKTOP_ENV) = xfce | kde | none.
-# Unset/empty → xfce (backward compat); xfce4 is normalized to xfce.
-DESKTOP_CHOICE="${FLUX_DESKTOP:-${FLUX_DESKTOP_ENV:-xfce}}"
-case "$DESKTOP_CHOICE" in
-    xfce4) DESKTOP_CHOICE=xfce ;;
-esac
-if [ "$DESKTOP_CHOICE" = "xfce" ]; then
+# Desktop contract: FLUX_DESKTOPS (space/comma separated) = xfce | kde | none;
+# legacy FLUX_DESKTOP / FLUX_DESKTOP_ENV remain valid single values. Unset/empty
+# → xfce (backward compat). Normalized to the canonical "xfce kde" order;
+# unknown tokens are ignored and "none" installs neither desktop.
+DESKTOPS="${FLUX_DESKTOPS:-${FLUX_DESKTOP:-${FLUX_DESKTOP_ENV:-xfce}}}"
+DESKTOPS=$(printf '%s' "$DESKTOPS" | tr ',' ' ')
+DESKTOPS=$(printf '%s' "$DESKTOPS" | tr -s '[:space:]' ' ')
+DESKTOPS="${DESKTOPS# }"
+DESKTOPS="${DESKTOPS% }"
+case " $DESKTOPS " in *" xfce "*|*" xfce4 "*) _norm="xfce" ;; *) _norm="" ;; esac
+case " $DESKTOPS " in *" kde "*) _norm="${_norm}${_norm:+ }kde" ;; esac
+[ -n "$_norm" ] || _norm="none"
+DESKTOPS="$_norm"
+unset _norm
+if [ -z "${DESKTOPS##*xfce*}" ]; then
     apt install -y xfce4 xfce4-goodies || exit 1
     # Phone niceties: Whisker panel menu + screenshot tool (best-effort).
     DEBIAN_FRONTEND=noninteractive apt install -y --no-install-recommends \
         xfce4-whiskermenu-plugin xfce4-screenshooter 2>/dev/null || true
+    # Phone status indicators: battery + network-load panel plugins
+    # (best-effort; the panel writer adds them only when the .so exists).
+    DEBIAN_FRONTEND=noninteractive apt install -y --no-install-recommends \
+        xfce4-battery-plugin xfce4-netload-plugin 2>/dev/null || true
 fi
 # Named Pulse *client* only — do not treat xfce4 as the audio path.
 DEBIAN_FRONTEND=noninteractive apt install -y --no-install-recommends \
     libpulse0 pulseaudio-utils || true
-if [ "$DESKTOP_CHOICE" = "xfce" ]; then
+if [ -z "${DESKTOPS##*xfce*}" ]; then
     DEBIAN_FRONTEND=noninteractive apt install -y --no-install-recommends \
         xfce4-pulseaudio-plugin || true
 fi
@@ -50,12 +62,19 @@ fi
 # 3. Configure Sudo
 echo "flux ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/flux
 
-# 4. Configure VNC for User
+# 4. Configure VNC for User (session command follows FLUX_DESKTOPS)
 mkdir -p /home/flux/.vnc
-echo "#!/bin/bash
+_xs_de="startxfce4"
+if [ -z "${DESKTOPS##*kde*}" ] && [ -n "${DESKTOPS##*xfce*}" ]; then
+    _xs_de="startplasma-x11"
+fi
+cat > /home/flux/.vnc/xstartup <<EOF
+#!/bin/bash
 export PULSE_SERVER=tcp:127.0.0.1
-xrdb $HOME/.Xresources
-startxfce4" > /home/flux/.vnc/xstartup
+xrdb \$HOME/.Xresources
+exec $_xs_de
+EOF
+unset _xs_de
 chmod +x /home/flux/.vnc/xstartup
 chown -R flux:flux /home/flux/.vnc
 
@@ -95,7 +114,7 @@ fi
 # Phone-compact XFCE defaults (30px mono top panel, DPI 96, wallpaper,
 # Home-only desktop icons, shortcuts). Helper ships in flux_guest_common.sh;
 # guarded so a standalone run without it is a no-op and never fails install.
-if [ "$DESKTOP_CHOICE" = "xfce" ] && command -v _flux_xfce_compact_defaults >/dev/null 2>&1; then
+if [ -z "${DESKTOPS##*xfce*}" ] && command -v _flux_xfce_compact_defaults >/dev/null 2>&1; then
     _flux_xfce_compact_defaults || true
 fi
 

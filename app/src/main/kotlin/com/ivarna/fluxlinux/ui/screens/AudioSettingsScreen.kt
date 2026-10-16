@@ -4,6 +4,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -49,6 +50,8 @@ import com.ivarna.fluxlinux.ui.theme.FolioBackground
 import com.ivarna.fluxlinux.ui.theme.TextPrimary
 import com.ivarna.fluxlinux.ui.theme.TextSecondary
 import com.ivarna.fluxlinux.ui.theme.fluxMutedText
+import com.ivarna.fluxlinux.ui.theme.rememberStaggerEntrance
+import com.ivarna.fluxlinux.ui.theme.staggerIn
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -115,6 +118,9 @@ fun AudioSettingsScreen(
 
     LaunchedEffect(Unit) { loadStatus(startIfStopped = true) }
 
+    // Staggered card entrance (30ms steps) — visual only.
+    val entrance = rememberStaggerEntrance()
+
     val running = status?.running == true
     val healthy = status?.healthy == true
     val statusColor = when {
@@ -161,10 +167,11 @@ fun AudioSettingsScreen(
             Text(
                 "Host PulseAudio in the Folio Linux prefix. Guests connect with PULSE_SERVER=tcp:127.0.0.1. Stopping the desktop does not stop this service.",
                 fontSize = 13.sp,
-                color = fluxMutedText()
+                color = fluxMutedText(),
+                modifier = Modifier.staggerIn(0, entrance)
             )
 
-            GlassSettingCard {
+            GlassSettingCard(modifier = Modifier.staggerIn(1, entrance)) {
                 Column(Modifier.padding(20.dp).fillMaxWidth()) {
                     Text(
                         "Host server",
@@ -225,7 +232,11 @@ fun AudioSettingsScreen(
                 }
             }
 
-            GlassSettingCard {
+            GlassSettingCard(
+                modifier = Modifier
+                    .staggerIn(2, entrance)
+                    .animateContentSize()
+            ) {
                 Column(Modifier.padding(20.dp).fillMaxWidth()) {
                     Text(
                         "Logs",
@@ -288,7 +299,7 @@ fun AudioSettingsScreen(
                 }
             }
 
-            GlassSettingCard {
+            GlassSettingCard(modifier = Modifier.staggerIn(3, entrance)) {
                 Column(Modifier.padding(20.dp).fillMaxWidth()) {
                     Text(
                         "Guest clients",

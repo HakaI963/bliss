@@ -73,12 +73,20 @@ if [ ! -e /var/lib/dbus/machine-id ]; then
     fi
 fi
 
-# 4. Desktop gate: FLUX_DESKTOP (env mirror FLUX_DESKTOP_ENV) = xfce | kde | none.
-# Unset/empty → xfce (backward compat); xfce4 is normalized to xfce.
-DESKTOP_CHOICE="${FLUX_DESKTOP:-${FLUX_DESKTOP_ENV:-xfce}}"
-case "$DESKTOP_CHOICE" in
-    xfce4) DESKTOP_CHOICE=xfce ;;
-esac
+# Desktop contract: FLUX_DESKTOPS (space/comma separated) = xfce | kde | none;
+# legacy FLUX_DESKTOP / FLUX_DESKTOP_ENV remain valid single values. Unset/empty
+# → xfce (backward compat). Normalized to the canonical "xfce kde" order;
+# unknown tokens are ignored and "none" installs neither desktop.
+DESKTOPS="${FLUX_DESKTOPS:-${FLUX_DESKTOP:-${FLUX_DESKTOP_ENV:-xfce}}}"
+DESKTOPS=$(printf '%s' "$DESKTOPS" | tr ',' ' ')
+DESKTOPS=$(printf '%s' "$DESKTOPS" | tr -s '[:space:]' ' ')
+DESKTOPS="${DESKTOPS# }"
+DESKTOPS="${DESKTOPS% }"
+case " $DESKTOPS " in *" xfce "*|*" xfce4 "*) _norm="xfce" ;; *) _norm="" ;; esac
+case " $DESKTOPS " in *" kde "*) _norm="${_norm}${_norm:+ }kde" ;; esac
+[ -n "$_norm" ] || _norm="none"
+DESKTOPS="$_norm"
+unset _norm
 
 # Shared fonts + Mesa — needed by any desktop (and by text rendering alone).
 apk add --no-cache \
@@ -92,7 +100,7 @@ apk add --no-cache \
     }
 
 # XFCE desktop (always include xfce4-session for failsafe session name)
-if [ "$DESKTOP_CHOICE" = "xfce" ]; then
+if [ -z "${DESKTOPS##*xfce*}" ]; then
     echo "Folio: Installing XFCE4..."
     apk add --no-cache \
         xfce4 \
@@ -115,11 +123,14 @@ if [ "$DESKTOP_CHOICE" = "xfce" ]; then
     fi
     # Phone niceties: Whisker panel menu + screenshot tool (best-effort).
     apk add --no-cache xfce4-whiskermenu-plugin xfce4-screenshooter 2>/dev/null || true
+    # Phone status indicators: battery + network-load panel plugins
+    # (best-effort; the panel writer adds them only when the .so exists).
+    apk add --no-cache xfce4-battery-plugin xfce4-netload-plugin 2>/dev/null || true
 fi
 
 # Named Pulse *client* only — do not pull the xfce4 metapackage for audio.
 apk add --no-cache libpulse pulseaudio-utils 2>/dev/null || true
-if [ "$DESKTOP_CHOICE" = "xfce" ]; then
+if [ -z "${DESKTOPS##*xfce*}" ]; then
     apk add --no-cache xfce4-pulseaudio 2>/dev/null || true
 fi
 
@@ -180,15 +191,20 @@ if [ -f /etc/sudoers ] && ! grep -qE '@includedir[[:space:]]+/etc/sudoers\.d' /e
 fi
 chmod 4755 /usr/bin/sudo 2>/dev/null || true
 
-# 7. Optional VNC xstartup parity with Debian family
+# 7. Optional VNC xstartup parity with Debian family (desktop-aware)
 if id flux >/dev/null 2>&1; then
     mkdir -p /home/flux/.vnc
-    cat > /home/flux/.vnc/xstartup <<'EOF'
+    _xs_de="startxfce4"
+    if [ -z "${DESKTOPS##*kde*}" ] && [ -n "${DESKTOPS##*xfce*}" ]; then
+        _xs_de="startplasma-x11"
+    fi
+    cat > /home/flux/.vnc/xstartup <<EOF
 #!/bin/sh
 export PULSE_SERVER=tcp:127.0.0.1
-[ -f "$HOME/.Xresources" ] && xrdb "$HOME/.Xresources"
-exec startxfce4
+[ -f "\$HOME/.Xresources" ] && xrdb "\$HOME/.Xresources"
+exec $_xs_de
 EOF
+    unset _xs_de
     chmod +x /home/flux/.vnc/xstartup
 fi
 if command -v _flux_write_pulse_client >/dev/null 2>&1; then
@@ -259,7 +275,7 @@ echo "Folio: gpu_mode=virgl (first-paint; hw-accel may upgrade)"
 # Phone-compact XFCE defaults (30px mono top panel, DPI 96, wallpaper,
 # Home-only desktop icons, shortcuts). Helper ships in flux_guest_common.sh;
 # guarded so a standalone run without it is a no-op and never fails install.
-if [ "$DESKTOP_CHOICE" = "xfce" ] && command -v _flux_xfce_compact_defaults >/dev/null 2>&1; then
+if [ -z "${DESKTOPS##*xfce*}" ] && command -v _flux_xfce_compact_defaults >/dev/null 2>&1; then
     _flux_xfce_compact_defaults || true
 fi
 

@@ -500,7 +500,12 @@ export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp}"
 # Background visuals - don't block shell startup; skip missing tools (no error spam)
 {
   if command -v fastfetch >/dev/null 2>&1; then
-    fastfetch --config termux 2>/dev/null || fastfetch 2>/dev/null || true
+    _ff="$HOME/.local/share/fastfetch/presets/termux.jsonc"
+    if [ -f "$_ff" ]; then
+      fastfetch --config "$_ff" 2>/dev/null || true
+    else
+      printf '%s\n' "folio@localhost | $(sed -n 's/^PRETTY_NAME=//p' /etc/os-release 2>/dev/null | tr -d '"' | head -n 1) | $(date +%H:%M 2>/dev/null)"
+    fi
   fi
   if command -v pokemon-colorscripts >/dev/null 2>&1; then
     pokemon-colorscripts --no-title -r 1,2,3 2>/dev/null || true

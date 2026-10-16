@@ -195,13 +195,21 @@ if ! pacman -S --noconfirm --needed \
     exit 1
 fi
 
-# Desktop gate: FLUX_DESKTOP (env mirror FLUX_DESKTOP_ENV) = xfce | kde | none.
-# Unset/empty → xfce (backward compat); xfce4 is normalized to xfce.
-DESKTOP_CHOICE="${FLUX_DESKTOP:-${FLUX_DESKTOP_ENV:-xfce}}"
-case "$DESKTOP_CHOICE" in
-    xfce4) DESKTOP_CHOICE=xfce ;;
-esac
-if [ "$DESKTOP_CHOICE" = "xfce" ]; then
+# Desktop contract: FLUX_DESKTOPS (space/comma separated) = xfce | kde | none;
+# legacy FLUX_DESKTOP / FLUX_DESKTOP_ENV remain valid single values. Unset/empty
+# → xfce (backward compat). Normalized to the canonical "xfce kde" order;
+# unknown tokens are ignored and "none" installs neither desktop.
+DESKTOPS="${FLUX_DESKTOPS:-${FLUX_DESKTOP:-${FLUX_DESKTOP_ENV:-xfce}}}"
+DESKTOPS=$(printf '%s' "$DESKTOPS" | tr ',' ' ')
+DESKTOPS=$(printf '%s' "$DESKTOPS" | tr -s '[:space:]' ' ')
+DESKTOPS="${DESKTOPS# }"
+DESKTOPS="${DESKTOPS% }"
+case " $DESKTOPS " in *" xfce "*|*" xfce4 "*) _norm="xfce" ;; *) _norm="" ;; esac
+case " $DESKTOPS " in *" kde "*) _norm="${_norm}${_norm:+ }kde" ;; esac
+[ -n "$_norm" ] || _norm="none"
+DESKTOPS="$_norm"
+unset _norm
+if [ -z "${DESKTOPS##*xfce*}" ]; then
     _flux_log "Installing XFCE packages (targeted — no xfce4 group first)..."
     if ! pacman -S --noconfirm --needed \
         xfce4-session xfce4-panel xfce4-settings xfce4-terminal \
@@ -217,6 +225,9 @@ if [ "$DESKTOP_CHOICE" = "xfce" ]; then
     fi
     # Phone niceties: Whisker panel menu + screenshot tool (best-effort).
     pacman -S --noconfirm --needed xfce4-whiskermenu-plugin xfce4-screenshooter 2>/dev/null || true
+    # Phone status indicators: battery + network-load panel plugins
+    # (best-effort; the panel writer adds them only when the .so exists).
+    pacman -S --noconfirm --needed xfce4-battery-plugin xfce4-netload-plugin 2>/dev/null || true
 fi
 
 _flux_ensure_dbus
@@ -240,7 +251,7 @@ _flux_ensure_hostname() {
     hostname manjaro 2>/dev/null || true
 }
 
-if [ "$DESKTOP_CHOICE" = "xfce" ]; then
+if [ -z "${DESKTOPS##*xfce*}" ]; then
     _flux_require_startxfce4
 fi
 _flux_ensure_user
@@ -255,7 +266,7 @@ _flux_fix_pm_writable
 # Phone-compact XFCE defaults (30px mono top panel, DPI 96, wallpaper,
 # Home-only desktop icons, shortcuts). Helper ships in flux_guest_common.sh;
 # guarded so a standalone run without it is a no-op and never fails install.
-if [ "$DESKTOP_CHOICE" = "xfce" ] && command -v _flux_xfce_compact_defaults >/dev/null 2>&1; then
+if [ -z "${DESKTOPS##*xfce*}" ] && command -v _flux_xfce_compact_defaults >/dev/null 2>&1; then
     _flux_xfce_compact_defaults || true
 fi
 

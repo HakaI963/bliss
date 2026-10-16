@@ -41,6 +41,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -78,10 +79,15 @@ import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 import dev.chrisbanes.haze.materials.HazeMaterials
 
 /**
- * Thin install wizard: desktop picker (Terminal only / XFCE4 / KDE Plasma) +
- * theme + optional hardware acceleration (no feature modules).
- * Uses [OnboardingInstallRunner] for both proot and chroot.
- * Grouped-sheet layout: Desktop / Extras / Appearance / Includes / Actions with compact pills.
+ * Thin install wizard: desktop toggles (XFCE4 / KDE Plasma — any combination,
+ * none = terminal-only) + theme + optional hardware acceleration (no feature
+ * modules). Uses [OnboardingInstallRunner] for both proot and chroot.
+ * Grouped-sheet layout: Desktop / Extras / Appearance / Includes / Actions with
+ * compact pills.
+ *
+ * Back navigation is allowed while an install runs: the runner + foreground
+ * service continue in the background, the in-app task bar takes over, and a
+ * re-entered screen adopts the live session (see [OnboardingInstallRunner.live]).
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class)
 @Composable
@@ -94,7 +100,7 @@ fun InstallConfigScreen(
     val context = LocalContext.current
     val appCtx = context.applicationContext
     var selectedTheme by remember { mutableStateOf("dark") }
-    var selectedDesktop by remember(distro.id) { mutableStateOf(DesktopChoice.XFCE) }
+    var selectedDesktops by remember(distro.id) { mutableStateOf(setOf(DesktopChoice.XFCE)) }
     var hwAccel by remember(distro.id) { mutableStateOf(true) }
     var phase by remember { mutableStateOf(InstallPhase.OPTIONS) }
     var percent by remember { mutableIntStateOf(0) }
@@ -115,13 +121,13 @@ fun InstallConfigScreen(
         detail = ""
         logText = ""
         phase = InstallPhase.RUNNING
-        val desktop = selectedDesktop
+        val desktops = selectedDesktops
         val extras: Set<InstallExtra> =
             if (hwAccel) emptySet() else setOf(InstallExtra.SKIP_HW_ACCEL)
         runner.start(
             distroId = distro.id,
             theme = selectedTheme,
-            desktop = desktop,
+            desktops = desktops,
             extras = extras
         ) { progress ->
             percent = progress.overallPercent
@@ -136,10 +142,11 @@ fun InstallConfigScreen(
             }
             if (progress.finished && !progress.failed) {
                 phase = InstallPhase.DONE
-                val toast = if (desktop == DesktopChoice.NONE) {
-                    "Terminal base installed"
-                } else {
-                    "Base desktop installed"
+                val toast = when {
+                    desktops.isEmpty() -> "Terminal base installed"
+                    desktops.size == 1 && DesktopChoice.XFCE in desktops -> "XFCE4 installed"
+                    desktops.size == 1 -> "KDE Plasma installed"
+                    else -> "XFCE4 + KDE Plasma installed"
                 }
                 Toast.makeText(context, toast, Toast.LENGTH_SHORT).show()
             }
@@ -147,7 +154,35 @@ fun InstallConfigScreen(
     }
 
     DisposableEffect(Unit) {
-        onDispose { runner.cancel() }
+        onDispose {
+            // Leaving mid-install leaves it running in the background (FGS + task
+            // bar take over); only idle sessions are torn down here.
+            if (!(phase == InstallPhase.RUNNING && !failed)) {
+                runner.cancel()
+            }
+        }
+    }
+
+    // Adopt a background session for this distro (task-bar tap or a return to
+    // this screen while the runner keeps working). Fresh finished sessions are
+    // still shown so "Install complete" / failure logs survive navigation.
+    val liveInstall by OnboardingInstallRunner.live.collectAsState()
+    LaunchedEffect(liveInstall, distro.id) {
+        val live = liveInstall ?: return@LaunchedEffect
+        if (live.distroId != distro.id) return@LaunchedEffect
+        if (live.progress.finished &&
+            System.currentTimeMillis() - live.atMillis > LIVE_ATTACH_WINDOW_MS
+        ) {
+            return@LaunchedEffect
+        }
+        val p = live.progress
+        percent = p.overallPercent
+        phaseLabel = p.phaseLabel
+        detail = p.detail
+        logText = live.logText
+        failed = p.failed
+        if (p.failed) errorMessage = p.errorMessage ?: p.detail
+        phase = if (p.finished && !p.failed) InstallPhase.DONE else InstallPhase.RUNNING
     }
 
     val profile = DistroInstallProfile.forId(distro.id)
@@ -155,7 +190,9 @@ fun InstallConfigScreen(
     val kdeAvailable = remember(distro.id) {
         DesktopInstallSelection.kdePlasmaAvailable(distro.id)
     }
-    val terminalOnly = selectedDesktop == DesktopChoice.NONE
+    val xfceSelected = DesktopChoice.XFCE in selectedDesktops
+    val kdeSelected = DesktopChoice.KDE in selectedDesktops
+    val terminalOnly = selectedDesktops.isEmpty()
 
     val baseLine = when {
         distro.id.startsWith("alpine") -> "Alpine 3.24 minirootfs"
@@ -171,11 +208,17 @@ fun InstallConfigScreen(
         distro.id.startsWith("opensuse") -> " (zypper)"
         else -> ""
     }
-    val rootfsLine = when (selectedDesktop) {
-        DesktopChoice.NONE -> "Installs $baseLine as a terminal base (no desktop). "
-        DesktopChoice.XFCE -> "Installs $baseLine, XFCE4$xfceManagerNote, and Folio Linux theming. "
-        DesktopChoice.KDE -> "Installs $baseLine, KDE Plasma, and Folio Linux theming. "
-    } + "App modules can be added later from Distro Settings."
+    val rootfsLine = buildString {
+        append("Installs $baseLine")
+        if (xfceSelected) append(", XFCE4$xfceManagerNote")
+        if (kdeSelected) append(", KDE Plasma")
+        if (terminalOnly) {
+            append(" as a terminal base (no desktop). ")
+        } else {
+            append(", and Folio Linux theming. ")
+        }
+        append("App modules can be added later from Distro Settings.")
+    }
 
     val includes: List<Pair<ImageVector, String>> = buildList {
         add(
@@ -187,19 +230,25 @@ fun InstallConfigScreen(
                 else -> "${profile?.displayName ?: distro.name} rootfs"
             }
         )
-        when (selectedDesktop) {
-            DesktopChoice.XFCE -> add(Icons.Default.CheckCircle to "XFCE4 desktop")
-            DesktopChoice.KDE -> add(Icons.Default.CheckCircle to "KDE Plasma desktop")
-            DesktopChoice.NONE ->
+        when {
+            terminalOnly ->
                 add(Icons.Default.CheckCircle to "Terminal base — no desktop packages")
+            xfceSelected && kdeSelected -> {
+                add(Icons.Default.CheckCircle to "XFCE4 desktop")
+                add(Icons.Default.CheckCircle to "KDE Plasma desktop")
+            }
+            xfceSelected -> add(Icons.Default.CheckCircle to "XFCE4 desktop")
+            else -> add(Icons.Default.CheckCircle to "KDE Plasma desktop")
         }
         if (!terminalOnly && hwAccel && profile?.hwAccelScript != null) {
             add(Icons.Default.CheckCircle to "Mesa / VirGL hardware acceleration")
         }
         if (!terminalOnly) {
             add(
-                Icons.Default.CheckCircle to when (selectedDesktop) {
-                    DesktopChoice.KDE -> "KDE Plasma theming / wallpapers / Zsh"
+                Icons.Default.CheckCircle to when {
+                    xfceSelected && kdeSelected ->
+                        "XFCE4 + KDE Plasma theming / wallpapers / Zsh"
+                    kdeSelected -> "KDE Plasma theming / wallpapers / Zsh"
                     else -> "Folio Linux theme / wallpapers / fonts"
                 }
             )
@@ -212,10 +261,11 @@ fun InstallConfigScreen(
         terminalOnly -> "Install terminal base"
         else -> "Install base desktop"
     }
-    val actionsSubtitle = when (selectedDesktop) {
-        DesktopChoice.NONE -> "Terminal base — no desktop"
-        DesktopChoice.XFCE -> "XFCE4 + theme ($selectedTheme)"
-        DesktopChoice.KDE -> "KDE Plasma + theme ($selectedTheme)"
+    val actionsSubtitle = when {
+        terminalOnly -> "Terminal base — no desktop"
+        xfceSelected && kdeSelected -> "XFCE4 + KDE Plasma + theme ($selectedTheme)"
+        xfceSelected -> "XFCE4 + theme ($selectedTheme)"
+        else -> "KDE Plasma + theme ($selectedTheme)"
     }
 
     GlassScaffold(
@@ -236,9 +286,9 @@ fun InstallConfigScreen(
                 navigationIcon = {
                     IconButton(
                         onClick = {
-                            if (phase == InstallPhase.RUNNING && !failed) {
-                                runner.cancel()
-                            }
+                            // Back never cancels: the install keeps running in the
+                            // background (task bar + FGS), cancellation is explicit
+                            // via the progress panel's "Cancel install".
                             onBack()
                         }
                     ) {
@@ -277,33 +327,51 @@ fun InstallConfigScreen(
 
                 FrostGroupTitle("Desktop")
                 FrostContainer {
-                    ThemeSheetRow(
+                    // Base line is read-only: rootfs + shell are always installed.
+                    InfoSheetRow(
                         icon = Icons.Default.Terminal,
-                        title = "Terminal only",
-                        subtitle = "Rootfs + shell — no desktop packages",
-                        selected = terminalOnly,
-                        onSelect = { selectedDesktop = DesktopChoice.NONE }
+                        title = "Terminal base (always included)",
+                        subtitle = "Rootfs + shell — desktops below are optional"
                     )
                     FrostDivider()
-                    ThemeSheetRow(
+                    ToggleSheetRow(
                         icon = Icons.Default.Palette,
-                        title = "XFCE4",
+                        title = "XFCE4 desktop",
                         subtitle = "Lightweight classic desktop",
-                        selected = selectedDesktop == DesktopChoice.XFCE,
-                        onSelect = { selectedDesktop = DesktopChoice.XFCE }
+                        checked = xfceSelected,
+                        onCheckedChange = { on ->
+                            selectedDesktops = if (on) {
+                                selectedDesktops + DesktopChoice.XFCE
+                            } else {
+                                selectedDesktops - DesktopChoice.XFCE
+                            }
+                        }
                     )
+                    if (kdeAvailable) {
+                        FrostDivider()
+                        ToggleSheetRow(
+                            icon = Icons.Default.Brush,
+                            title = "KDE Plasma",
+                            subtitle = "Feature-rich, highly customizable desktop",
+                            checked = kdeSelected,
+                            onCheckedChange = { on ->
+                                selectedDesktops = if (on) {
+                                    selectedDesktops + DesktopChoice.KDE
+                                } else {
+                                    selectedDesktops - DesktopChoice.KDE
+                                }
+                            }
+                        )
+                    }
                     FrostDivider()
-                    ThemeSheetRow(
-                        icon = Icons.Default.Brush,
-                        title = "KDE Plasma",
-                        subtitle = if (kdeAvailable) {
-                            "Feature-rich, highly customizable desktop"
+                    InfoSheetRow(
+                        icon = Icons.Default.CheckCircle,
+                        title = if (terminalOnly) "Terminal only" else "Selected desktops install together",
+                        subtitle = if (terminalOnly) {
+                            "No desktop packages — toggle one above to add a desktop."
                         } else {
-                            "Not available for this distro"
-                        },
-                        selected = selectedDesktop == DesktopChoice.KDE,
-                        onSelect = { selectedDesktop = DesktopChoice.KDE },
-                        enabled = kdeAvailable
+                            "Any combination is fine; XFCE4 and KDE Plasma can coexist."
+                        }
                     )
                 }
                 Spacer(modifier = Modifier.height(12.dp))
@@ -328,14 +396,6 @@ fun InstallConfigScreen(
                             icon = Icons.Default.Info,
                             title = "Root required",
                             subtitle = "Grant superuser (KernelSU / Magisk) when prompted."
-                        )
-                    }
-                    if (terminalOnly) {
-                        FrostDivider()
-                        InfoSheetRow(
-                            icon = Icons.Default.Info,
-                            title = "Terminal only",
-                            subtitle = "No desktop packages, theming, or GPU drivers."
                         )
                     }
                 }
@@ -436,12 +496,22 @@ fun InstallConfigScreen(
                 showLog = showLog,
                 onToggleLog = { showLog = !showLog },
                 onRetry = { startInstall() },
-                onDone = onInstallComplete,
+                onDone = {
+                    OnboardingInstallRunner.clearLive(distro.id)
+                    onInstallComplete()
+                },
+                onCancel = {
+                    // Cancel the live session, whichever runner instance owns it.
+                    OnboardingInstallRunner.cancelActive()
+                },
                 isDone = phase == InstallPhase.DONE
             )
         }
     }
 }
+
+/** Finished live sessions older than this are not re-attached on entry. */
+private const val LIVE_ATTACH_WINDOW_MS = 5 * 60 * 1000L
 
 /** 36dp rounded icon chip shared by the option rows. */
 @Composable
@@ -526,6 +596,36 @@ private fun SwitchSheetRow(
             checked = checked,
             onCheckedChange = onCheckedChange,
             enabled = enabled
+        )
+    }
+}
+
+/** Multi-select desktop toggle: whole row flips the option, not just the switch. */
+@Composable
+private fun ToggleSheetRow(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onCheckedChange(!checked) }
+            .padding(horizontal = 18.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        SheetIconChip(icon)
+        Spacer(modifier = Modifier.width(14.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = TextPrimary)
+            Text(subtitle, fontSize = 12.sp, color = TextMuted)
+        }
+        Spacer(modifier = Modifier.width(12.dp))
+        FluxSwitch(
+            checked = checked,
+            onCheckedChange = onCheckedChange
         )
     }
 }

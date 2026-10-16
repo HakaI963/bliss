@@ -82,17 +82,25 @@ _flux_log "Enabling user repo (chimera-repo-user)..."
 apk add chimera-repo-user 2>/dev/null || true
 apk update || true
 
-# Desktop gate: FLUX_DESKTOP (env mirror FLUX_DESKTOP_ENV) = xfce | kde | none.
-# Unset/empty → xfce (backward compat); xfce4 is normalized to xfce.
-DESKTOP_CHOICE="${FLUX_DESKTOP:-${FLUX_DESKTOP_ENV:-xfce}}"
-case "$DESKTOP_CHOICE" in
-    xfce4) DESKTOP_CHOICE=xfce ;;
-esac
+# Desktop contract: FLUX_DESKTOPS (space/comma separated) = xfce | kde | none;
+# legacy FLUX_DESKTOP / FLUX_DESKTOP_ENV remain valid single values. Unset/empty
+# → xfce (backward compat). Normalized to the canonical "xfce kde" order;
+# unknown tokens are ignored and "none" installs neither desktop.
+DESKTOPS="${FLUX_DESKTOPS:-${FLUX_DESKTOP:-${FLUX_DESKTOP_ENV:-xfce}}}"
+DESKTOPS=$(printf '%s' "$DESKTOPS" | tr ',' ' ')
+DESKTOPS=$(printf '%s' "$DESKTOPS" | tr -s '[:space:]' ' ')
+DESKTOPS="${DESKTOPS# }"
+DESKTOPS="${DESKTOPS% }"
+case " $DESKTOPS " in *" xfce "*|*" xfce4 "*) _norm="xfce" ;; *) _norm="" ;; esac
+case " $DESKTOPS " in *" kde "*) _norm="${_norm}${_norm:+ }kde" ;; esac
+[ -n "$_norm" ] || _norm="none"
+DESKTOPS="$_norm"
+unset _norm
 
 # Shared Mesa — needed by any desktop (best-effort; names may differ on Chimera).
 apk add mesa mesa-dri 2>/dev/null || true
 
-if [ "$DESKTOP_CHOICE" = "xfce" ]; then
+if [ -z "${DESKTOPS##*xfce*}" ]; then
     _flux_log "Installing XFCE4 (targeted — never the xfce4 metapackage)..."
     if ! apk add xfce4-session xfce4-panel xfce4-settings xfce4-terminal \
             xfdesktop xfwm4 thunar; then
@@ -132,7 +140,7 @@ if [ ! -e /var/lib/dbus/machine-id ]; then
         || cp -f /etc/machine-id /var/lib/dbus/machine-id 2>/dev/null || true
 fi
 
-if [ "$DESKTOP_CHOICE" = "xfce" ]; then
+if [ -z "${DESKTOPS##*xfce*}" ]; then
     _flux_require_startxfce4
 fi
 _flux_ensure_groups
@@ -147,7 +155,7 @@ _flux_fix_pm_writable
 # Phone-compact XFCE defaults (30px mono top panel, DPI 96, wallpaper,
 # Home-only desktop icons, shortcuts). Helper ships in flux_guest_common.sh;
 # guarded so a standalone run without it is a no-op and never fails install.
-if [ "$DESKTOP_CHOICE" = "xfce" ] && command -v _flux_xfce_compact_defaults >/dev/null 2>&1; then
+if [ -z "${DESKTOPS##*xfce*}" ] && command -v _flux_xfce_compact_defaults >/dev/null 2>&1; then
     _flux_xfce_compact_defaults || true
 fi
 
