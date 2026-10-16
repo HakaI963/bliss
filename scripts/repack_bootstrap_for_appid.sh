@@ -128,21 +128,24 @@ skipped_large = 0
 scanned = 0
 seen = set()
 for path in collect_files():
-    real = os.path.realpath(path)
-    if real in seen:
-        continue
-    seen.add(real)
     try:
         st = os.lstat(path)
     except OSError:
         continue
     if not stat.S_ISREG(st.st_mode):
+        # Symlinks must NOT enter `seen`: their realpath equals the target's,
+        # so marking it here made the walk skip the target file whenever the
+        # symlink was listed first (CI: ~30 libraries left unpatched).
         continue
     if st.st_size == 0:
         continue
     if st.st_size > MAX_BYTES:
         skipped_large += 1
         continue
+    real = os.path.realpath(path)
+    if real in seen:
+        continue
+    seen.add(real)
     scanned += 1
     try:
         with open(path, "rb") as fh:
