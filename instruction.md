@@ -12,13 +12,13 @@ Quick facts:
 
 | Item | Value |
 |---|---|
-| App id / brand | `com.nopiece.folio` / "Folio" |
+| App id / brand | `com.nopiece.folio` / "Folio Linux" |
 | Source package | `com.ivarna.fluxlinux` |
 | Branch | `main` |
-| Latest green CI | run `38776662519` (commit `33c97e9`) |
-| Released APK | [`folio-debug-33c97e9`](https://github.com/HakaI963/folio/releases/tag/folio-debug-33c97e9) `app-folio-debug.apk` (177,124,385 B) |
-| APK sha256 | `48445f6834200425943eb992b25fabfff62020de2210c862fcc1de7e7f7ec713` |
-| Verify APK proof | package `com.nopiece.folio`, `targetSdkVersion 28`, `assets/bootstrap.tar` 129,792,000 B, libbash/libproot/libloader*.so packaged |
+| Latest green CI | run `38854972100` (commit `77e2c0a`) |
+| Released APK | [`folio-debug-77e2c0a`](https://github.com/HakaI963/folio/releases/tag/folio-debug-77e2c0a) `app-folio-debug.apk` (170,584,378 B) |
+| APK sha256 | `07fbaf19a3d2e512f7652b58b649422df0defa562678691f2cd0e156ea47ddc3` |
+| Verify APK proof | package `com.nopiece.folio`, `targetSdkVersion 28`, `assets/bootstrap.tar` packaged, libbash/libproot/libloader*.so packaged |
 | Signing | debug only (per-run keystore — uninstall before re-install) |
 | CI gate | `.github/workflows/build.yml` compiles **main sources only** (`assembleFolioDebug` + bootstrap assembly + Verify APK). Unit tests are not part of the gate. |
 
@@ -218,9 +218,9 @@ The historical "verify before restarting" checklist is fully resolved: nav crash
 
 ## 10. Next steps (ordered)
 
-1. **Commit + push round 2** (changed files only; artifacts excluded; `ProotZshBootstrap` local theme, helper v2.11 + tests, brand sweep).
-2. **CI compile + "Verify APK"** — fix any compile error that surfaces (main sourceset only).
-3. **Release** `folio-debug-<commit>`; update §0 quick facts.
+1. ~~Commit + push round 2~~ — **done** (`23949ab` code+docs, `77e2c0a` KDoc compile fix).
+2. ~~CI compile + "Verify APK"~~ — **green** (run `38854972100`).
+3. ~~Release~~ — **done**: [`folio-debug-77e2c0a`](https://github.com/HakaI963/folio/releases/tag/folio-debug-77e2c0a).
 4. **On-device QA** (cannot be done in this environment):
    - **Crash**: tab switching Home ↔ Distros ↔ Settings; if anything still crashes, open Settings → Crash logs, copy the trace and share it.
    - **Sessions**: "Open Shell" twice → same tab focused; tools sheet actions (paste/copy/clear/restart/font/close); anime splash appears once per open.
@@ -233,7 +233,7 @@ The historical "verify before restarting" checklist is fully resolved: nav crash
 ## 11. Definition of done for this phase
 
 - Round 1: CI green with "Verify APK" passing — **done** (run `38776662519`); release `folio-debug-33c97e9` published.
-- Round 2 (this push): CI green + release `folio-debug-<commit>` — **pending §10.1–10.3**.
+- Round 2: CI green + release — **done** (run `38854972100`, release `folio-debug-77e2c0a`).
 - Every item in §4 + §4b marked DONE — **done** (on-device confirmation is §10.4; the crash fix is hardened + instrumented rather than reproduced locally).
 - Branding: "Folio Linux" everywhere user-visible; residuals are functional identifiers / short `Folio:` guest prefixes only.
 - Working tree verified locally by: `bash -n` on all 89 scripts, import-resolution sweep + brace/paren scanner on all 171 `.kt`, byte-identical diff guard for `host/setup_termux.sh`, helper-version consistency (v2.11 incl. tests), signature/call-site checks for every refactored API (`GlassScaffold`, `GlassBottomNavigation`, `OnboardingInstallRunner.start`, `SessionRegistry.ManagedSession`, `SettingsScreen.onNavigateToCrashLogs`, `TerminalScreen`).
