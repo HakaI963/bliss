@@ -1,34 +1,34 @@
-# Folio — Project Instructions, Status & Next Steps
+# Bliss — Project Instructions, Status & Next Steps
 
 Updated: 2026-10-16 · Repo: `HakaI963/folio` (branch `main`) · Local working copy: `/emulated/folio` (no git) · Git clone: `/tmp/opencode/folio-clone` · Upstream reference clone: `/tmp/opencode/fluxlinux-src`
 
 ## 0. TL;DR
 
-Folio is a rebranded, standalone Android build of the FluxLinux app (app id `com.nopiece.folio`, source package `com.ivarna.fluxlinux`, brand "Folio"). It boots Linux distros on-device via a bundled Termux-derived host bootstrap, proot containers, chroot distros, and termux-x11 GUI sessions.
+Bliss is a rebranded, standalone Android build of the FluxLinux app (app id `com.nopiece.bliss`, source package `com.ivarna.fluxlinux`, brand **"Bliss"**). It boots Linux distros on-device via a bundled Termux-derived host bootstrap, proot containers, chroot distros, and termux-x11 GUI sessions.
 
-The host-boot failure (commit `10ef127`, release `folio-debug-10ef127`) is shipped. The **UI/UX + feature overhaul** (§4) shipped as release `folio-debug-33c97e9`; the **second user-feedback round** (§4b) shipped as `folio-debug-77e2c0a`; the **third** (§4c) shipped as `folio-debug-7b4b67a`. A **fourth feedback round** (recording + screenshot, §4d) — first-run onboarding **no longer forces a distro download** (optional "Install a distro now" / "Later"), **multiple shells of the same distro** from the "+" panel, **tools menu redesigned** (trimmed + plain human copy), shell banner reduced to exactly **`foila@<distro>`**, new **XFCE display-size** option (slider + exact WxH + match device), **Void XFCE install failure** fixed (metadata-refresh + 3-attempt retry across all package managers), and the **Folio → Foila** rename (brand confirmed by the user; app name **"Foila Linux"**) — is implemented in the working tree, pending the CI compile + "Verify APK" run. See §2.9.
+The host-boot failure (commit `10ef127`, release `folio-debug-10ef127`) is shipped. The **UI/UX + feature overhaul** (§4) shipped as release `folio-debug-33c97e9`; the **second user-feedback round** (§4b) shipped as `folio-debug-77e2c0a`; the **third** (§4c) as `folio-debug-7b4b67a`; the **fourth** (§4d) as `folio-debug-5791429`. The **fifth round** (§4e, three screenshots; §2.10) — host-shell **Permission denied fixed** (repack patches every baked app-id string in binaries + RUNPATH; host shell launches with its own generated rc), **installs made much faster** (6-connection parallel rootfs download, guest fast-mirror racing, dnf parallel downloads, apt retry tuning), **real anime banner art** (truecolor half-block, 5 free-licensed characters, header `bliss@<distro>`), **renamed to Bliss** (app id `com.nopiece.bliss`, new lotus icon, version 3.0.0), and the **distro list overhauled** (Rocky Linux 9 + CentOS Stream 9 added for arm64 proot; Adélie/Artix/BackBox/openKylin/Gentoo removed — no usable arm64 rootfs / source-based; Retro Emulation component enabled) — shipped as release **`bliss-debug-46bc7d8`** (CI run `38936982387`, first-try green after two repack-patcher fixes). See §2.10.
 
 Quick facts:
 
 | Item | Value |
 |---|---|
-| App id / brand | `com.nopiece.folio` / "Foila Linux" (renamed from "Folio Linux" in round 4; functional ids keep `folio`/`flux` internals) |
+| App id / brand | `com.nopiece.bliss` / **"Bliss"** (renamed from "Foila Linux" in round 5; functional ids keep `folio`/`flux` internals) |
 | Source package | `com.ivarna.fluxlinux` |
 | Branch | `main` |
-| Latest green CI | run `38904315238` (commit `5791429`) |
-| Released APK | [`folio-debug-5791429`](https://github.com/HakaI963/folio/releases/tag/folio-debug-5791429) `app-folio-debug.apk` (172,230,228 B) |
-| APK sha256 | `d159359fc5602bbd950ed0e19906c4b63a0d64ea0bd5bc0e806c4c2eb6032317` |
-| Verify APK proof | package `com.nopiece.folio`, `targetSdkVersion 28`, `assets/bootstrap.tar` packaged, libbash/libproot/libloader*.so packaged |
+| Latest green CI | run `38936982387` (commit `46bc7d8`) |
+| Released APK | [`bliss-debug-46bc7d8`](https://github.com/HakaI963/folio/releases/tag/bliss-debug-46bc7d8) `app-bliss-debug.apk` (172,320,841 B) |
+| APK sha256 | `85b85668c582c5f1b5f05a64eee4cae8d97cf6539c498667e14844a0786ec5cc` |
+| Verify APK proof | package `com.nopiece.bliss`, `targetSdkVersion 28`, `assets/bootstrap.tar` packaged, libbash/libproot/libloader*.so packaged |
 | Signing | debug only (per-run keystore — uninstall before re-install) |
-| CI gate | `.github/workflows/build.yml` compiles **main sources only** (`assembleFolioDebug` + bootstrap assembly + Verify APK). Unit tests are not part of the gate. |
+| CI gate | `.github/workflows/build.yml` compiles **main sources only** (`assembleBlissDebug` + bootstrap assembly + Verify APK). Unit tests are not part of the gate. |
 
 ---
 
-## 1. What Folio is
+## 1. What Bliss is
 
 Folio installs Linux distributions on Android using:
 
-- **Host bootstrap** — Termux-derived, bundled in assets (`native/bootstrap/com.nopiece.folio`, repacked ~130 MB tar, prefix rewritten to `com.nopiece.folio`). Extracted into the app data dir; scripts then run under it.
+- **Host bootstrap** — Termux-derived, bundled in assets (`native/bootstrap/com.nopiece.bliss`, repacked ~130 MB tar, prefix rewritten to `com.nopiece.bliss`). Extracted into the app data dir; scripts then run under it.
 - **proot containers** — `usr/var/lib/proot-distro` inside the app prefix. No root required.
 - **chroot distros** — created under `/data/local/folio/chroots/<distro>` (moved from `/data/local/tmp` so Folio and the other FluxLinux app coexist — §4 item 11). Require root.
 - **termux-x11** — GUI sessions; XFCE4 and KDE Plasma 6 both installable and launchable (§4 item 2).
@@ -45,7 +45,7 @@ Folio installs Linux distributions on Android using:
   - `android:requestLegacyExternalStorage="true"`; `SharedStorageAccess.granted()` accepts legacy external-storage mode.
   - `BootstrapInstaller.EXTRACT_VERSION = 3` → one-time re-extract + repair of previously broken trees; proot containers preserved.
   - Extractor applies **real** tar modes via `android.system.Os.chmod` (`applyTarMode`) and a repair walk `repairHostExecPermissions`.
-  - Prefix rewrite to `com.nopiece.folio` happens **before** `setup_termux.sh` runs.
+  - Prefix rewrite to `com.nopiece.bliss` happens **before** `setup_termux.sh` runs.
   - `assets/scripts/host/setup_termux.sh` reverted **byte-identical to upstream** (still true after this overhaul — verified by diff).
   - bash/proot/loader/pulse stay pinned to `nativeLibraryDir` (jniLibs).
 
@@ -119,6 +119,23 @@ Evidence base: `Screenrecorder-2026-10-16-16-47-41-257.mp4` (first-run: forced 5
 - **XFCE display size (agent 1)** — `X11SettingsScreen` "Display size": width slider 480–2560 (8px snap, height from device aspect) writing `displayResolutionMode=custom` + `displayResolutionCustom="WxH"`; exact-field commits validated `WxH` (320–7680 × 200–4320); "Match device" restores adaptive `scaled`. Uses the vendored termux-x11's real keys (`LorieView` source of truth) with the same broadcast model as existing prefs; hint "takes effect when the desktop (re)opens".
 - **Folio → Foila rename (all)** — brand confirmed by the user: **"Foila Linux"**. App label (`strings.xml`), wordmark, onboarding/prereqs/legacy screens, notifications, install titles, component/screen copy, preset labels, splash text, and **85 script files** (echoes, hints, `.desktop` names, Konsole display name, theme/PROMPT label → `foila`) are all renamed; `ProotZshBootstrap` theme label fixed too. Functional identifiers intentionally kept: `FLUX_*` env vars, `flux` guest user + `/home/flux`, `/etc/fluxlinux`, `/data/local/folio`, `folio.zsh-theme`/`folio-banner`/`folio-*` ids, `FOLIO_*` payload vars, `FluxLinux`/`FluxApp`/`Folio*` Kotlin identifiers, `Theme.Folio`/`Theme.FluxLinux` style ids, Konsole `Folio.profile` file name, `wallpapers/Folio` path. Zero user-visible `flux`/`Folio` left (verified by repo-wide scans).
 
+### 2.10 Wave 7 — fifth user-feedback round (shipped)
+
+Evidence base: `Screenshot_2026-10-16-19-15-12-464` (Alpine shell + old banner), `Screenshot_2026-10-16-19-20-30-209` (host shell: `libbash.so: /data/data/com.ivarna.fluxlinux/files/usr/etc/profile: Permission denied`), `Screenshot_2026-10-16-19-20-36-000` (Void terminal-base install at 70%).
+
+- **Host shell fix (two layers)** —
+  root cause: the Flavor bootstrap's `libbash.so` (and ~600 other files) had `/data/data/com.ivarna.fluxlinux/...` baked in; the repack script only rewrote *text* files, so login bash sourced a foreign path → SELinux EACCES + bare `libbash-5.3$` prompt.
+  (a) `scripts/repack_bootstrap_for_appid.sh`: pure byte patcher (no patchelf anymore — its version-dependent behavior left stale strings on CI) rewrites the **bare app-id** in every NUL-terminated string (paths, RUNPATH, app-ids) with NUL-padding; hard verify (`grep -ra` must find zero old-id refs) fails the build. Two latent patcher bugs were fixed during validation: `seen`-set ordering that skipped real files behind symlinks (the CI failure: `realpath` of a versioned symlink entered `seen` before the S_ISREG skip, so `libreadline.so.8.3`-style targets were never patched when listed after their symlink) and the `data/data/`-prefixed-only match. Verified: repack → `verify_bootstrap.sh` PASS, `readelf` RUNPATH updated on bash/libreadline/libbash.so, flat tree zero refs.
+  (b) Runtime safety net: `TermuxHostPaths.ensureHostShellRc()` writes `$HOME/.bashrc` (+`.bash_profile`, content-compared, refreshed on shell open / extract / app update) with PATH/PS1/HISTFILE + guarded sourcing of `$PREFIX/etc/profile`; `openHostShell` launches `libbash --noprofile --rcfile $HOME/.bashrc -i` so no baked path can break it. `rewriteStockPaths` now maps all legacy data roots (`com.termux`, `com.ivarna.fluxlinux`, `com.zenithblue.fluxlinux`, `com.nopiece.folio`, `com.nopiece.bliss`) → current.
+- **Install speed** —
+  `RootfsDownloader`: parallel segmented download (6 Range GETs sharing the probe response as segment 0, positional `FileChannel` writes into one `.partial`, per-segment resume ×3, 150 ms progress throttle, cancel-all; single-stream fallback for no-Range servers; SHA/min-size/rename gates unchanged). Guest side (`flux_guest_common.sh`): `_flux_pick_fast_mirror` races candidates with `curl -r 0-262143 --max-time 4` and picks the fastest — rewrites `/etc/apk/repositories` + `/etc/xbps.d/00-bliss-repository.conf`, prepends winner server to Arch `mirrorlist`, drops `99-bliss-fast` apt tuning, sets `max_parallel_downloads=10` (+`fastestmirror=True` on dnf4) for dnf; hooked into `_flux_retry_pkg`/`_flux_apt_prep`; all best-effort, one-line log, sandbox-tested (12 cases, dash+bash). `flux_install.sh` confirmed single-download (local archive path).
+- **Real anime banner (truecolor)** — 5 characters (anime-girl, maid, kitsune, chibi, catgirl) generated from free-licensed illustrations (credits: `docs/art-credits.md`; generator: `scripts/tools/ansi_art_gen.py`) as **half-block truecolor** art (~31-43 visible cols × 16-19 rows, 10-15 KB each), embedded **identically** in all 6 writer scripts + `GuestZshrcRepair` (byte-stream equality verified). Header now exactly **`bliss@<id>`**; theme label `bliss`; `.banner-rev`=4, `BANNER_ART_REVISION`=4, `REPAIR_REVISION`=7 (existing installs self-fix). Sandbox: art + exactly one header line; `FLUX_NO_BANNER`/non-interactive silent; no literal escape leaks.
+- **Bliss rebrand** — flavor/appId `bliss` / `com.nopiece.bliss` (versionCode 14, versionName "3.0.0"); CI `assembleBlissDebug` → `app-bliss-debug.apk`; `settings.gradle` rootProject "Bliss"; `HostBootstrap.BLISS_PACKAGE` (+legacy folio pin); `app/src/folio`→`app/src/bliss` (pulse-runtime `.so` RUNPATH patched to the bliss path); **new icon** `ic_bliss_mark` (five-petal lotus + sparkle over indigo→violet→pink gradient, vector monochrome layer; legacy `ic_launcher_monochrome.png` removed); brand sweep of all user-visible `Foila`→`Bliss` (39 Kotlin/res files + 83 scripts + `GuestZshrcRepair`); functional ids untouched ($0 table).
+- **Distro list overhaul** — every `comingSoon` card resolved (zero left):
+  **Added** `rocky` + `centos_stream` (proot-only, arm64): official container bases converted to plain rootfs tars (`/tmp/opencode/rootfs-staging/convert_image.py` method) and hosted on the `rootfs` release of `HakaI963/folio` — `rocky_9_aarch64_plain.tar.xz` 51,693,928 B sha256 `7af07eade178c80ad3d322940ec6064c566dd34a8cb7e931fcbf4a5e44c18611`; `centos_stream_9_aarch64_plain.tar.xz` 37,294,356 B sha256 `d9ba19e6647c99d0c4d1424dc4a7717f350943c485116423445a64b1faa65f9a`. Shared `rpm/common/setup/setup_rpm_family.sh` (dnf makecache → base pkgs → EPEL (+key import) → tolerant CRB enable → `groupinstall "Xfce"` fallback chain → whisker/screenshooter/battery/netload → locale/user/pulse/banner/GPU; KDE requested → skip with log; XFCE-missing → exit 1; all transactions via `_flux_retry_pkg`); customization reuses the distro-agnostic `setup_customization_xfce.sh`; `flux_install.sh` cases; `HostScriptDeployer` deploys the rpm script for the manual path; enum/component/tests updated (26 installable: 14 proot + 12 chroot).
+  **Removed** adelie (a viable `adelie-rootfs-mini-aarch64-1.0-beta6-20241223.txz` pin exists — recorded for a possible future round), artix (no official arm64 rootfs tarball), backbox (amd64-only), openkylin (ISOs only), gentoo (source-based desktop impractical).
+  **Retro Emulation** (Debian component): enabled (`comingSoon` removed) — complete installer, arm64 packages verified reachable.
+
 ---
 
 ## 3. Standalone-host constraints (never regress these)
@@ -184,6 +201,15 @@ Legend: DONE / PARTIAL / TODO.
 39. **"Add option to select XFCE display size (slider + absolute pixel value)"** — **DONE** (§2.9): X11 Display → Display size section.
 40. **"Replace flux with foila; Foila Linux app new name — every UI file, backend file"** — **DONE** (§2.9): brand "Foila Linux" everywhere user-visible incl. 85 script files; functional internals documented and kept.
 
+### 4e. Fifth feedback round (2026-10-16 night) — three screenshots
+
+41. **"Host shell can't be used — Permission denied (`libbash.so: /data/data/com.ivarna.fluxlinux/.../profile`)"** — **DONE** (§2.10): repack patches every baked app-id string byte-wise (+RUNPATH, no patchelf), verify fails the build on leftovers; host shell runs `--noprofile --rcfile ~/.bashrc` with a generated rc; extraction re-roots every legacy data path.
+42. **"Downloading way too slow — 30+ min even without XFCE, network is fast — make installation quick as hell"** — **DONE** (§2.10): 6-connection parallel rootfs download with resume/retries; guest fast-mirror racing (apk/xbps/pacman), apt retry tuning, dnf parallel downloads; single local rootfs confirmed.
+43. **"ASCII figure is not anime — make real anime, high quality, real anime characters"** — **DONE** (§2.10): truecolor half-block art of 5 anime characters from free-licensed illustrations (`docs/art-credits.md`), random per shell, identical in all writers, revision-bumped for existing installs.
+44. **"Rename app to Bliss, everything to bliss, change app icon"** — **DONE** (§2.10): app id/flavor `com.nopiece.bliss`, new lotus icon + gradient background + monochrome layer, version 3.0.0, full user-visible sweep (Kotlin, res, 83 scripts, prompts, install logs, notifications).
+45. **"Distro list: many tagged Soon — diagnose for arm64; add all that work, remove what can't"** — **DONE** (§2.10): added Rocky Linux 9 + CentOS Stream 9 (arm64 proot, hosted+SHA-pinned); removed Adélie/Artix/BackBox/openKylin/Gentoo with evidence; zero "Soon" cards remain; Retro Emulation enabled.
+46. **"Check every file — replace flux with bliss"** — **DONE** (§2.10): zero `Foila`/`foila`/`flux` display text anywhere in `app/src` (repo scans); functional ids (`FLUX_*`, `flux` user, `folio-*`) kept by design.
+
 ---
 
 ## 5. Wave-2 interruption checklist — resolved
@@ -206,7 +232,7 @@ The historical "verify before restarting" checklist is fully resolved: nav crash
 - `core/data/DistroRepository.kt` — distro + component ids (`kde_plasma → debian/common/setup/setup_kde_debian.sh`, `kde_customization → setup_customization_kde_debian.sh` for Debian family; XFCE components elsewhere).
 - `core/desktop/DesktopLauncher.kt` — desktop session start (`FLUX_DESKTOP` passing; readiness via `X server PID=` / `host X0 socket ready`).
 - `assets/scripts/` — `host/setup_termux.sh` (**byte-identical to upstream — do not patch**), per-distro setup scripts (`DESKTOPS` membership gates: `xfce`/`kde`/none), chroot scripts (helper v2.11), `common/setup/flux_guest_common.sh` (`_flux_xfce_compact_defaults()` + `_flux_write_folio_xfce_panel()` two-panel android layout), `common/setup/folio_appearance_apply.sh` (guest applier), banner writers (colored 256-color art, `.banner-rev 2`).
-- `native/bootstrap/com.nopiece.folio/`, `scripts/repack_bootstrap_for_appid.sh`, `.github/workflows/build.yml`.
+- `native/bootstrap/com.nopiece.bliss/`, `scripts/repack_bootstrap_for_appid.sh`, `.github/workflows/build.yml`.
 
 ### User-visible "Flux" inventory
 
@@ -246,7 +272,7 @@ The historical "verify before restarting" checklist is fully resolved: nav crash
 | Upstream reference | `/tmp/opencode/fluxlinux-src` |
 | CI | `.github/workflows/build.yml` |
 | Bootstrap repack | `scripts/repack_bootstrap_for_appid.sh` |
-| Repacked bootstrap | `native/bootstrap/com.nopiece.folio/` |
+| Repacked bootstrap | `native/bootstrap/com.nopiece.bliss/` |
 | Wave-3 report | `/tmp/opencode/wave3-report.md` |
 
 ---
@@ -265,17 +291,17 @@ The historical "verify before restarting" checklist is fully resolved: nav crash
 
 ## 10. Next steps (ordered)
 
-1. ~~Commit + push round 4~~ — **done** (`5791429`, 143 files).
-2. ~~CI compile + "Verify APK"~~ — **green** (run `38904315238`, first try).
-3. ~~Release~~ — **done**: [`folio-debug-5791429`](https://github.com/HakaI963/folio/releases/tag/folio-debug-5791429).
+1. ~~Commit + push round 5~~ — **done** (`b7bc309` + two repack fixes `93bbdb9`, `46bc7d8`).
+2. ~~CI compile + "Verify APK"~~ — **green** (run `38936982387`).
+3. ~~Release~~ — **done**: [`bliss-debug-46bc7d8`](https://github.com/HakaI963/folio/releases/tag/bliss-debug-46bc7d8) (APK 172,320,841 B; upload via curl after the usual big-upload flakiness).
 4. **On-device QA** (cannot be done in this environment):
-   - **First run**: fresh install → onboarding = Welcome → Downloads → Host → Ready; "Later" lands Home with nothing downloaded; "Show onboarding" from Settings still works; the Distros tab installs later as usual.
-   - **Void install**: install Void with XFCE on a slow connection → on a download failure it now retries up to 3× with "retrying (2/3)…" instead of dying; a hard failure shows "…after 3 tries — check your network, then tap Retry Setup."
-   - **Terminal**: open a shell → "+" → same distro again → a second tab opens (repeat up to 10; limit toast); Home "Shell" still focuses the existing tab; tools sheet is the compact Keys/Clipboard/Session palette; key editor unchanged capabilities.
-   - **Banner**: new shell shows art + exactly `foila@alpine`-style line (no host/version/time); existing installs update on next shell open.
-   - **Display size**: X11 → Display settings → move the slider / type `1280x2772` / Match device → reopen the desktop to see it.
-   - **Brand**: launcher label "Foila Linux", wordmark, notifications, onboarding/prereqs copy, presets ("Foila Linux …").
-   - Regressions to re-check from earlier rounds: task bar during install, wallpaper live-apply, appearance options, motion, crash logs.
+   - **Host shell**: Terminal → "+" → Host → prompt is `bliss:~$` (colored), no `Permission denied` line, `ls`/`pkg`/`proot-distro` all work. (Old installs: fresh app id means a fresh data dir — re-init is expected.)
+   - **Install speed**: install Alpine or Rocky and watch the DL phase — the download should use several connections (faster than the old single-stream on the same link); guest phase logs one `Bliss: fast mirror: …` line before package installs.
+   - **Banner**: open a new shell a few times → different anime art each time; below it exactly one `bliss@<distro>` line; no host/version/time; art is truecolor (not the old block face).
+   - **Bliss brand**: launcher icon = lotus over gradient, label "Bliss"; settings/about/notification names say Bliss; terminal prompt label `bliss`; install logs `Bliss:` lines.
+   - **Distros**: no "Soon" cards anywhere; install **Rocky Linux** and **CentOS Stream** (proot) — rootfs downloads from the `rootfs` release, base install + XFCE via dnf/EPEL, then the desktop launches; Retro Emulation component installs (Debian).
+   - **Previous rounds re-check**: task bar during install, "+" opens a second same-distro tab, X11 display-size, wallpaper live-apply, appearance options, motion, crash logs.
+   - Reminder: if anything crashes → Settings → Crash logs → share the trace.
 
 ---
 
@@ -285,6 +311,7 @@ The historical "verify before restarting" checklist is fully resolved: nav crash
 - Round 2: CI green + release — **done** (run `38854972100`, release `folio-debug-77e2c0a`).
 - Round 3: CI green + release — **done** (run `38887109342`, release `folio-debug-7b4b67a`; two pre-CI fixes: 10-digit splash colors, missing `collectAsState` import + stray string constant).
 - Round 4: CI green + release — **done** (run `38904315238`, release `folio-debug-5791429`, first-try green; APK upload needed a curl retry after a network drop).
-- Every item in §4, §4b, §4c, §4d marked DONE — **done** (on-device confirmation is §10.4).
-- Branding: **"Foila Linux"** everywhere user-visible (Kotlin, XML, 85 script files); residuals are functional identifiers only (`FLUX_*`, `flux` user, `folio-*` ids, `Folio.profile`, `Folio*`/`FluxLinux` identifiers, `Theme.Folio`).
-- Working tree verified locally by: `bash -n` on all 89 scripts, import-resolution sweep + nested-comment-aware brace/paren scanner on all 176 `.kt`, res color-literal check (3/4/6/8 digits), byte-identical guard for `host/setup_termux.sh`, sandbox runs (XFCE two-panel XML idempotent + valid; appearance applier 60/60 bash+dash + 20/20 e2e; `_flux_retry_pkg` success/flaky/hard-fail under dash + busybox; banner header `foila@<id>` incl. fallbacks + opt-out), cross-file signature checks for every refactored API (`reuseExisting` on session openers, `X11SettingsScreen` display-size, `OnboardingFlowScreen` Ready/Later, `TermuxX11Preferences` custom resolution).
+- Round 5: CI green + release — **done** (run `38936982387`, release [`bliss-debug-46bc7d8`](https://github.com/HakaI963/folio/releases/tag/bliss-debug-46bc7d8), after two repack-patcher CI fixes: drop patchelf + bare-id match, then the symlink/seen-ordering bug; the sim that forced the CI order now passes).
+- Every item in §4, §4b, §4c, §4d, §4e marked DONE — **done** (on-device confirmation is §10.4).
+- Branding: **"Bliss"** everywhere user-visible (Kotlin, XML, 83 scripts, prompts, logs); residuals are functional identifiers only (`FLUX_*`, `flux` user, `folio-*` ids, `Folio*`/`FluxLinux` identifiers, `Theme.Folio`, Konsole `Folio.profile`, `wallpapers/Folio`).
+- Working tree verified locally by: `bash -n` on all 90 scripts, import-resolution sweep + nested-comment-aware brace/paren scanner on all 176 `.kt`, res color-literal check (3/4/6/8 digits), byte-identical guard for `host/setup_termux.sh`, sandbox runs (banner art+header/opt-out/non-interactive; mirror racing 12 cases dash+bash; `_flux_retry_pkg` success/flaky/hard-fail; repack byte-patcher incl. forced symlink-first ordering + `verify_bootstrap.sh` PASS + `readelf` RUNPATH checks), cross-file signature checks for every refactored API (`RootfsDownloader.ensurePresent`, `TermuxHostPaths.ensureHostShellRc`, `HostBootstrap.BLISS_PACKAGE`, distro profiles/`SupportedDistro` enum, host rc launch args).
