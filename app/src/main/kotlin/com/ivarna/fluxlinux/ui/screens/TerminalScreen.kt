@@ -1,5 +1,7 @@
 package com.ivarna.fluxlinux.ui.screens
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.graphics.Typeface
 import android.system.Os
@@ -38,6 +40,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.KeyboardHide
@@ -52,6 +55,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -73,9 +77,13 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.ivarna.fluxlinux.core.terminal.FluxTerminalSessionManager
 import com.ivarna.fluxlinux.core.terminal.FluxTerminalSessionManager.SessionOpenResult
 import com.ivarna.fluxlinux.core.utils.TerminalPreferences
+import com.ivarna.fluxlinux.ui.terminal.AnimeSplashArt
 import com.ivarna.fluxlinux.ui.terminal.TerminalExtraKeys
+import com.ivarna.fluxlinux.ui.terminal.TerminalKeyInjector
 import com.ivarna.fluxlinux.ui.terminal.TerminalModifierState
+import com.ivarna.fluxlinux.ui.terminal.TerminalSessionSplash
 import com.ivarna.fluxlinux.ui.terminal.TerminalToolSelector
+import com.ivarna.fluxlinux.ui.terminal.TerminalToolsSheet
 import com.ivarna.fluxlinux.ui.theme.FrostHairline
 import com.ivarna.fluxlinux.ui.theme.FrostSurface
 import com.ivarna.fluxlinux.ui.theme.TextPrimary
@@ -113,6 +121,13 @@ fun TerminalScreen(
     }
     var terminalViewRef by remember { mutableStateOf<TerminalView?>(null) }
     var showNewSessionSheet by remember { mutableStateOf(false) }
+    var showToolsSheet by remember { mutableStateOf(false) }
+    // Launch-sticker splash: shown when the screen opens with a live session and
+    // whenever a NEW session lands — not on plain switches between existing tabs.
+    var splashArtRes by remember { mutableIntStateOf(0) }
+    var splashTitle by remember { mutableStateOf("") }
+    // Session count at the last splash; -1 forces the splash on first show.
+    var splashBudget by remember { mutableIntStateOf(-1) }
     // Avoid SIGWINCH spam on every Compose recomposition — only when the emulator's
     // cols/rows or the attached pid actually change (R2: pinch zoom changes cols/rows
     // without a view-size change, so pixel width/height is NOT a valid guard key).
@@ -194,6 +209,87 @@ fun TerminalScreen(
         }
     }
 
+    // Splash trigger: entry into a live terminal (0→n) or a newly opened session
+    // (n→n+1). Plain tab switches keep the same count and stay silent.
+    LaunchedEffect(sessions.size, activeIndex) {
+        if (sessions.isNotEmpty() && splashBudget < sessions.size) {
+            splashBudget = sessions.size
+            splashArtRes = AnimeSplashArt.random()
+            splashTitle = FluxTerminalSessionManager.activeSession?.title
+                ?: titles.getOrNull(activeIndex)
+                ?: "session"
+        }
+    }
+
+    fun injectKey(key: String, ctrl: Boolean = false) {
+        TerminalKeyInjector.injectKey(terminalViewRef, key, ctrl, false, false)
+    }
+
+    /** Paste via the emulator when available (bracketed-paste aware), else raw pty write. */
+    fun pasteFromClipboard() {
+        val text = try {
+            val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+            cm?.primaryClip?.getItemAt(0)?.coerceToText(context)?.toString()
+        } catch (_: Exception) {
+            null
+        }
+        if (text.isNullOrEmpty()) {
+            toast("Clipboard is empty")
+            return
+        }
+        if (text.length > 100_000) {
+            toast("Clipboard too large to paste")
+            return
+        }
+        val session = FluxTerminalSessionManager.activeSession?.session
+        if (session == null) {
+            toast("No active session")
+            return
+        }
+        try {
+            session.emulator?.paste(text) ?: session.write(text)
+        } catch (_: Exception) {
+            toast("Paste failed")
+        }
+    }
+
+    /** Copy the scrollback tail (transcript) to the clipboard — "Copy screen" tool. */
+    fun copyTranscript() {
+        val text = try {
+            FluxTerminalSessionManager.activeSession?.session?.emulator?.screen
+                ?.getTranscriptText()
+        } catch (_: Exception) {
+            null
+        }
+        if (text.isNullOrBlank()) {
+            toast("Nothing to copy")
+            return
+        }
+        try {
+            val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+            cm?.setPrimaryClip(ClipData.newPlainText("terminal", text.take(200_000)))
+            toast("Screen copied")
+        } catch (_: Exception) {
+            toast("Copy failed")
+        }
+    }
+
+    fun applyFontSize(requested: Int) {
+        val next = requested.coerceIn(TerminalPreferences.FONT_MIN, TerminalPreferences.FONT_MAX)
+        if (next == fontSize) return
+        fontSize = next
+        TerminalPreferences.setFontSize(context, next)
+        terminalViewRef?.setTextSize(next)
+        terminalViewRef?.let { forceTerminalResize(it) }
+    }
+
+    fun toggleExtraKeys() {
+        val next = !showExtraKeys
+        showExtraKeys = next
+        TerminalPreferences.setExtraKeysEnabled(context, next)
+        terminalViewRef?.let { forceTerminalResize(it) }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -239,12 +335,7 @@ fun TerminalScreen(
             )
             Spacer(Modifier.weight(1f))
             IconButton(
-                onClick = {
-                    val next = !showExtraKeys
-                    showExtraKeys = next
-                    TerminalPreferences.setExtraKeysEnabled(context, next)
-                    terminalViewRef?.let { forceTerminalResize(it) }
-                },
+                onClick = { toggleExtraKeys() },
                 modifier = Modifier.size(36.dp)
             ) {
                 Icon(
@@ -252,6 +343,17 @@ fun TerminalScreen(
                     contentDescription = if (showExtraKeys) "Hide extra keys" else "Show extra keys",
                     tint = if (showExtraKeys) TextPrimary
                     else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+            IconButton(
+                onClick = { showToolsSheet = true },
+                modifier = Modifier.size(36.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Build,
+                    contentDescription = "Terminal tools",
+                    tint = TextPrimary,
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -430,6 +532,16 @@ fun TerminalScreen(
                 }
             }
 
+            // Launch-sticker splash (random anime art per open); removed once faded
+            // or tapped, so it never intercepts input afterwards.
+            if (splashArtRes != 0) {
+                TerminalSessionSplash(
+                    title = splashTitle,
+                    artRes = splashArtRes,
+                    onFinished = { splashArtRes = 0 }
+                )
+            }
+
             // ExtraKeys toolbar: nativecode inject path (TerminalView.onKeyDown / inputCodePoint).
             if (showExtraKeys) {
                 TerminalExtraKeys(
@@ -458,5 +570,44 @@ fun TerminalScreen(
                 modifier = Modifier.heightIn(max = 460.dp)
             )
         }
+    }
+
+    // Tools sheet — QoL actions bound to the existing inject/session APIs.
+    if (showToolsSheet) {
+        val activeManaged = FluxTerminalSessionManager.activeSession
+        TerminalToolsSheet(
+            sessionTitle = activeManaged?.title,
+            hasSession = activeIndex >= 0 && activeManaged != null,
+            sessionCount = sessions.size,
+            extraKeysVisible = showExtraKeys,
+            fontSize = fontSize,
+            canRestart = FluxTerminalSessionManager.isRestartable(activeManaged),
+            fontMin = TerminalPreferences.FONT_MIN,
+            fontMax = TerminalPreferences.FONT_MAX,
+            onDismissRequest = { showToolsSheet = false },
+            onPaste = { pasteFromClipboard() },
+            onCopyScreen = { copyTranscript() },
+            onCtrlC = { injectKey("c", ctrl = true) },
+            onCtrlD = { injectKey("d", ctrl = true) },
+            onSendTab = { injectKey("TAB") },
+            onSendEscape = { injectKey("ESC") },
+            // Ctrl+L: clears the visible screen in shells/pagers without side effects.
+            onClearScreen = { injectKey("l", ctrl = true) },
+            onRestart = {
+                val idx = activeIndex
+                if (idx >= 0) {
+                    FluxTerminalSessionManager.restartSession(context, idx) { result ->
+                        if (result != SessionOpenResult.OPENED) toast("Session restart failed")
+                    }
+                }
+            },
+            onFontSizeChange = { delta -> applyFontSize(fontSize + delta) },
+            onToggleExtraKeys = { toggleExtraKeys() },
+            onCloseSession = {
+                val idx = activeIndex
+                if (idx >= 0) FluxTerminalSessionManager.closeSession(context, idx)
+            },
+            onCloseAllSessions = { FluxTerminalSessionManager.closeAll(context) }
+        )
     }
 }

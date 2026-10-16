@@ -113,6 +113,8 @@ if [ "$DESKTOP_CHOICE" = "xfce" ]; then
         echo "Folio: ERROR: startxfce4 missing after apk install"
         exit 1
     fi
+    # Phone niceties: Whisker panel menu + screenshot tool (best-effort).
+    apk add --no-cache xfce4-whiskermenu-plugin xfce4-screenshooter 2>/dev/null || true
 fi
 
 # Named Pulse *client* only — do not pull the xfce4 metapackage for audio.
@@ -253,6 +255,13 @@ _flux_fix_apk_writable
 mkdir -p /etc/fluxlinux
 printf '%s\n' virgl > /etc/fluxlinux/gpu_mode
 echo "Folio: gpu_mode=virgl (first-paint; hw-accel may upgrade)"
+
+# Phone-compact XFCE defaults (30px mono top panel, DPI 96, wallpaper,
+# Home-only desktop icons, shortcuts). Helper ships in flux_guest_common.sh;
+# guarded so a standalone run without it is a no-op and never fails install.
+if [ "$DESKTOP_CHOICE" = "xfce" ] && command -v _flux_xfce_compact_defaults >/dev/null 2>&1; then
+    _flux_xfce_compact_defaults || true
+fi
 
 echo "Folio: ${DISTRO_NAME} Alpine setup complete!"
 exit 0

@@ -1,0 +1,25 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="96dp"
+    android:height="96dp"
+    android:viewportWidth="120"
+    android:viewportHeight="120">
+    <!-- Mecha head silhouette: antenna, rounded visor head, dark visor slit (original). -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M58,34 L58,18 L62,18 L62,34 Z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M56.5,16 a3.5,3.5 0 1 0 7,0 a3.5,3.5 0 1 0 -7,0 Z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M34,34 L86,34 Q92,34 92,40 L92,76 Q92,84 84,84 L36,84 Q28,84 28,76 L28,40 Q28,34 34,34 Z" />
+    <path
+        android:fillColor="#FF09090B"
+        android:pathData="M38,52 L82,52 L82,62 L38,62 Z" />
+    <path
+        android:fillColor="#FF09090B"
+        android:pathData="M44,70 L58,70 L58,75 L44,75 Z M62,70 L76,70 L76,75 L62,75 Z" />
+    <path
+        android:fillColor="#FF09090B"
+        android:pathData="M26,58 a4,4 0 1 0 8,0 a4,4 0 1 0 -8,0 Z M86,58 a4,4 0 1 0 8,0 a4,4 0 1 0 -8,0 Z" />
+</vector>

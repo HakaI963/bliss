@@ -1,0 +1,242 @@
+package com.ivarna.fluxlinux.ui.screens
+
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.widget.Toast
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BugReport
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.rounded.ArrowBack
+import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.ivarna.fluxlinux.core.system.CrashLog
+import com.ivarna.fluxlinux.ui.components.FrostContainer
+import com.ivarna.fluxlinux.ui.components.FrostDivider
+import com.ivarna.fluxlinux.ui.components.FrostGroupTitle
+import com.ivarna.fluxlinux.ui.components.FrostRow
+import com.ivarna.fluxlinux.ui.theme.TextMuted
+import com.ivarna.fluxlinux.ui.theme.TextPrimary
+import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+/**
+ * Crash logs viewer (Settings -> Crash logs).
+ *
+ * List mode shows every report written to `filesDir/crashlog` by [CrashLog]
+ * (time, file name, size). Tapping a row opens the raw trace in a monospace,
+ * scrollable, selectable view with a copy button; the top bar can delete all
+ * reports. Reports are only ever written by the uncaught-exception handler.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun CrashLogScreen(onBack: () -> Unit) {
+    val context = LocalContext.current
+    var files by remember { mutableStateOf(CrashLog.files(context)) }
+    var openFile by remember { mutableStateOf<File?>(null) }
+    val open = openFile
+
+    // Detail first closes the trace; the parent BackHandler leaves the screen.
+    BackHandler(enabled = open != null) { openFile = null }
+
+    Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
+        topBar = {
+            CenterAlignedTopAppBar(
+                title = {
+                    Text(
+                        text = if (open == null) "Crash logs" else prettyTime(open),
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = MaterialTheme.colorScheme.onBackground,
+                        maxLines = 1
+                    )
+                },
+                navigationIcon = {
+                    IconButton(onClick = { if (open != null) openFile = null else onBack() }) {
+                        Icon(
+                            Icons.Rounded.ArrowBack,
+                            contentDescription = "Back",
+                            tint = MaterialTheme.colorScheme.onBackground
+                        )
+                    }
+                },
+                actions = {
+                    if (open == null && files.isNotEmpty()) {
+                        IconButton(
+                            onClick = {
+                                CrashLog.deleteAll(context)
+                                files = CrashLog.files(context)
+                                Toast.makeText(context, "Crash logs deleted", Toast.LENGTH_SHORT).show()
+                            }
+                        ) {
+                            Icon(
+                                Icons.Default.Delete,
+                                contentDescription = "Delete all crash logs",
+                                tint = MaterialTheme.colorScheme.onBackground
+                            )
+                        }
+                    }
+                },
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                    containerColor = Color.Transparent
+                )
+            )
+        }
+    ) { innerPadding ->
+        if (open == null) {
+            if (files.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(
+                            imageVector = Icons.Default.BugReport,
+                            contentDescription = null,
+                            tint = TextMuted,
+                            modifier = Modifier.size(40.dp)
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            text = "No crash logs",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = TextMuted
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = "Folio Linux saves a report here if it ever crashes.",
+                            fontSize = 12.sp,
+                            color = TextMuted
+                        )
+                    }
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding),
+                    // 110dp keeps the last row clear of the floating bottom dock
+                    // (same reserve as Home/Distro/Settings content).
+                    contentPadding = PaddingValues(
+                        start = 16.dp, end = 16.dp, top = 4.dp, bottom = 110.dp
+                    )
+                ) {
+                    item { FrostGroupTitle("Saved reports") }
+                    item {
+                        FrostContainer {
+                            files.forEachIndexed { index, file ->
+                                FrostRow(
+                                    icon = Icons.Default.BugReport,
+                                    title = prettyTime(file),
+                                    subtitle = "${file.name} · ${prettySize(file.length())}",
+                                    onClick = { openFile = file }
+                                )
+                                if (index < files.lastIndex) FrostDivider()
+                            }
+                        }
+                    }
+                    item {
+                        Text(
+                            text = "Reports are stored in the app's private crashlog/ folder. " +
+                                "Copy a trace and share it with the developer.",
+                            fontSize = 12.sp,
+                            lineHeight = 17.sp,
+                            color = TextMuted,
+                            modifier = Modifier.padding(start = 4.dp, top = 12.dp, end = 4.dp)
+                        )
+                    }
+                }
+            }
+        } else {
+            val trace = remember(open) { CrashLog.read(open) }
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+                    .padding(12.dp)
+            ) {
+                SelectionContainer(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                    Text(
+                        text = trace,
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 12.sp,
+                        lineHeight = 17.sp,
+                        color = TextPrimary,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState())
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+                TextButton(
+                    onClick = { copyTrace(context, trace) },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ContentCopy,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text("Copy trace", fontWeight = FontWeight.SemiBold, color = TextPrimary)
+                }
+            }
+        }
+    }
+}
+
+private fun copyTrace(context: Context, text: String) {
+    val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager ?: return
+    cm.setPrimaryClip(ClipData.newPlainText("Folio Linux crash log", text))
+    Toast.makeText(context, "Crash log copied", Toast.LENGTH_SHORT).show()
+}
+
+private fun prettyTime(file: File): String =
+    SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date(file.lastModified()))
+
+private fun prettySize(bytes: Long): String = when {
+    bytes >= 1_048_576 -> String.format(Locale.US, "%.1f MB", bytes / 1_048_576.0)
+    bytes >= 1024 -> String.format(Locale.US, "%.1f KB", bytes / 1024.0)
+    else -> "$bytes B"
+}

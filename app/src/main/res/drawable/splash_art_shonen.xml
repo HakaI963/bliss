@@ -1,0 +1,28 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="96dp"
+    android:height="96dp"
+    android:viewportWidth="120"
+    android:viewportHeight="120">
+    <!-- Spiky-haired shonen silhouette: face under zig-zag hair, collar (original). -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M35,76 a25,25 0 1 0 50,0 a25,25 0 1 0 -50,0 Z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M30,74 L22,42 L38,50 L42,22 L54,44 L60,14 L68,44 L78,22 L84,50 L98,44 L90,74 C82,62 72,58 60,58 C48,58 38,62 30,74 Z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M52,94 L68,94 L68,104 L52,104 Z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M30,118 L42,100 L78,100 L90,118 Z" />
+    <path
+        android:fillColor="#FF09090B"
+        android:pathData="M46,72 L54,72 L54,77 L46,77 Z M66,72 L74,72 L74,77 L66,77 Z" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#B3FFFFFF"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M54,88 Q60,92 66,88" />
+</vector>

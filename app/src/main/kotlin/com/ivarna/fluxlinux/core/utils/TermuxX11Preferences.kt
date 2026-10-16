@@ -29,6 +29,18 @@ object TermuxX11Preferences {
     private const val KEY_PREFER_SCANCODES = "preferScancodes"
     private const val KEY_SCANCODE_WORKAROUND = "hardwareKbdScancodesWorkaround"
     private const val KEY_RESOLUTION_MODE = "displayResolutionMode"
+    private const val KEY_DISPLAY_STRETCH = "displayStretch"
+    private const val KEY_CLIPBOARD_ENABLE = "clipboardEnable"
+    private const val KEY_TOUCH_MODE = "touchMode"
+    private const val KEY_SCALE_TOUCHPAD = "scaleTouchpad"
+
+    /**
+     * Default X screen scale for fresh installs. `scaled` mode derives the X
+     * resolution from the X11 view (`view * 100 / scale`), so the picture always
+     * matches the device aspect ratio and fills the screen (see LorieView).
+     * 120 keeps phone-sized UI legible without shrinking the workspace too much.
+     */
+    private const val DEFAULT_DISPLAY_SCALE = 120
 
     private fun prefs(context: Context) =
         PreferenceManager.getDefaultSharedPreferences(context.applicationContext)
@@ -43,16 +55,27 @@ object TermuxX11Preferences {
         notifyChanged(context, KEY_DISPLAY_SCALE)
     }
 
+    /**
+     * Fullscreen default is **true** for unset installs: the desktop was
+     * letterboxed by the status/navigation bars in non-fullscreen mode (user
+     * report: "not full screen, big black bezel"). Users who explicitly turned
+     * it off keep their stored `false` — only the unset default changed.
+     */
     fun getFullscreen(context: Context): Boolean =
-        prefs(context).getBoolean(KEY_FULLSCREEN, false)
+        prefs(context).getBoolean(KEY_FULLSCREEN, true)
 
     fun setFullscreen(context: Context, enabled: Boolean) {
         prefs(context).edit().putBoolean(KEY_FULLSCREEN, enabled).apply()
         notifyChanged(context, KEY_FULLSCREEN)
     }
 
+    /**
+     * Cutout overlay follows the fullscreen default: edge-to-edge on fresh
+     * installs (the display activity uses LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS),
+     * stored value wins once the user touches the switch.
+     */
     fun getHideCutout(context: Context): Boolean =
-        prefs(context).getBoolean(KEY_HIDE_CUTOUT, false)
+        prefs(context).getBoolean(KEY_HIDE_CUTOUT, true)
 
     fun setHideCutout(context: Context, enabled: Boolean) {
         prefs(context).edit().putBoolean(KEY_HIDE_CUTOUT, enabled).apply()
@@ -115,18 +138,42 @@ object TermuxX11Preferences {
     /**
      * Ensure common defaults exist and notify a running X11 activity.
      * Call before opening the display (DesktopLauncher / Open X11).
+     *
+     * Fresh installs default to a **fullscreen, edge-to-edge, aspect-matched**
+     * display: `fullscreen` + `hideCutout` ON, `scaled` resolution (X screen
+     * follows the view aspect → no letterbox) and `displayStretch` as a safety
+     * net for frozen/mismatched dimensions. Only keys that were never written
+     * are filled in — existing users keep their stored values.
      */
     fun applyToTermux(context: Context) {
         try {
             val p = prefs(context)
-            if (!p.contains(KEY_RESOLUTION_MODE)) {
-                p.edit()
-                    .putString(KEY_RESOLUTION_MODE, "scaled")
-                    .putBoolean("clipboardEnable", true)
-                    .putString("touchMode", "1")
-                    .putBoolean("scaleTouchpad", true)
-                    .apply()
+            val edit = p.edit()
+            if (!p.contains(KEY_FULLSCREEN)) {
+                edit.putBoolean(KEY_FULLSCREEN, true)
             }
+            if (!p.contains(KEY_HIDE_CUTOUT)) {
+                edit.putBoolean(KEY_HIDE_CUTOUT, true)
+            }
+            if (!p.contains(KEY_DISPLAY_SCALE)) {
+                edit.putInt(KEY_DISPLAY_SCALE, DEFAULT_DISPLAY_SCALE)
+            }
+            if (!p.contains(KEY_RESOLUTION_MODE)) {
+                edit.putString(KEY_RESOLUTION_MODE, "scaled")
+            }
+            if (!p.contains(KEY_DISPLAY_STRETCH)) {
+                edit.putBoolean(KEY_DISPLAY_STRETCH, true)
+            }
+            if (!p.contains(KEY_CLIPBOARD_ENABLE)) {
+                edit.putBoolean(KEY_CLIPBOARD_ENABLE, true)
+            }
+            if (!p.contains(KEY_TOUCH_MODE)) {
+                edit.putString(KEY_TOUCH_MODE, "1")
+            }
+            if (!p.contains(KEY_SCALE_TOUCHPAD)) {
+                edit.putBoolean(KEY_SCALE_TOUCHPAD, true)
+            }
+            edit.apply()
             notifyChanged(context, null)
             Log.d(TAG, "Notified embedded X11 of preference apply")
         } catch (e: Exception) {

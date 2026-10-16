@@ -1,27 +1,43 @@
 package com.ivarna.fluxlinux.core.terminal
 
 import android.content.Context
+import android.util.Base64
 import android.util.Log
 import com.ivarna.fluxlinux.core.root.ChrootPaths
+import com.ivarna.fluxlinux.core.root.RootShell
 import java.io.File
 
 /**
- * One-shot repair for guest `~/.zshrc` that hard-sources missing oh-my-zsh or
- * invokes missing `pokemon-colorscripts` (seen on device after partial network
- * customization installs). Keeps the same optimized profile shape as
+ * One-shot repair for guest `~/.zshrc` that hard-sources missing oh-my-zsh,
+ * invokes missing `pokemon-colorscripts`, still uses the old colorful
+ * `agnosterzak` theme, or lacks the Folio launch sticker (random monochrome
+ * anime ASCII banner). Keeps the same optimized profile shape as
  * `setup_customization_debian.sh` / Alpine customization, but guards every
  * optional tool.
  *
- * Proot rootfs lives under the app filesDir (writable). Chroot is under
- * `/data/local/tmp` and is only patched when the file is world-writable or
- * already app-owned — otherwise skip (needs re-run customization as root).
+ * Proot rootfs lives under the app filesDir (writable) → direct file writes.
+ * Chroot is under `/data/local/folio` (root-only, SELinux) → the same repair
+ * runs **inside the chroot as root** through the staged helper
+ * ([RootShell.captureInChroot]); it is skipped silently when root is not
+ * available, never fatal.
  *
  * Also **creates** a missing `.zshrc` when the home dir is writable (Alpine
- * installs that never wrote the Flux profile).
+ * installs that never wrote the Folio profile).
  */
 object GuestZshrcRepair {
 
     private const val TAG = "GuestZshrcRepair"
+
+    /**
+     * Local repair revision. The cache key carries it (on top of
+     * [GuestRepairCache.zshrcKey]) so the banner/theme sweep runs exactly once
+     * on existing installs even though the shared ZSHRC_VERSION is unchanged.
+     * Bump when [DEFENSIVE_ZSHRC] / banner content changes again.
+     */
+    private const val REPAIR_REVISION = 4
+
+    /** Marker echoed by the root chroot repair payload on success. */
+    private const val CHROOT_OK_MARKER = "FOLIO_ZSH_OK"
 
     /** Defensive zshrc — mirrors setup_customization_debian.sh (post-fix). */
     private val DEFENSIVE_ZSHRC = """
@@ -58,31 +74,24 @@ export XDG_RUNTIME_DIR="${'$'}{XDG_RUNTIME_DIR:-/tmp}"
 # shell can get SIGTTIN-killed. Disable MONITOR (job control) for the guest.
 setopt no_monitor
 
-# Background visuals — theme/fastfetch/pokemon always run when installed.
-{
-  if command -v fastfetch >/dev/null 2>&1; then
-    _ff="${'$'}HOME/.local/share/fastfetch/presets/termux.jsonc"
-    if [ -f "${'$'}_ff" ]; then
-      fastfetch --config "${'$'}_ff" 2>/dev/null || true
-    else
-      fastfetch --config termux 2>/dev/null || true
-    fi
-    unset _ff
-  fi
-  if command -v pokemon-colorscripts >/dev/null 2>&1; then
-    pokemon-colorscripts --no-title -r 1,2,3 2>/dev/null || true
-  fi
-} &!
+# Launch sticker + info block: ~/.config/folio/banner.sh (sourced at the end).
+# pokemon-colorscripts stays installed but no longer auto-prints (old style).
 
 export ZSH="${'$'}{ZSH:-${'$'}HOME/.oh-my-zsh}"
 if [ -f "${'$'}ZSH/oh-my-zsh.sh" ]; then
-  ZSH_THEME="agnosterzak"
+  ZSH_THEME="folio"
   DISABLE_UPDATE_PROMPT=true
   DISABLE_AUTO_UPDATE=true
   ZSH_DISABLE_COMPFIX=true
   plugins=(git zsh-autosuggestions zsh-syntax-highlighting)
   source "${'$'}ZSH/oh-my-zsh.sh"
 fi
+
+# Folio launch sticker (random monochrome anime banner; opt out FLUX_NO_BANNER=1)
+[ -r "${'$'}HOME/.config/folio/banner.sh" ] && . "${'$'}HOME/.config/folio/banner.sh"
+
+# Folio Linux appearance (wallpaper/colors/terminal; hash-guarded inside).
+[ -r "${'$'}HOME/.config/folio/appearance-apply.sh" ] && sh "${'$'}HOME/.config/folio/appearance-apply.sh" >/dev/null 2>&1 || true
 """.trimStart()
 
     /**
@@ -129,13 +138,182 @@ if command -v sudo >/dev/null 2>&1; then
 fi
 """.trimStart()
 
+    /** folio.zsh-theme content (monochrome prompt; replaces agnosterzak). */
+    internal val FOLIO_THEME = """
+# folio.zsh-theme — Folio's minimal monochrome prompt.
+# White/gray on black only; ASCII-safe (no powerline glyphs, no ANSI colors 31-44).
+# Segments:  time  folio  working-dir  input-char
+PROMPT='%F{240}%D{%H:%M}%f %F{255}folio%f %F{250}%~%f %F{255}%#%f '
+PROMPT2='%F{240}> %f'
+""".trimStart()
+
+    /**
+     * Launch-sticker designs (monochrome, original/generic anime-ish ASCII).
+     * Installed at `~/.config/folio/banner/<name>.txt`; one is picked at random
+     * per interactive shell open by [BANNER_SH].
+     */
+    internal val BANNER_FILES: List<Pair<String, String>> = listOf(
+        "01-catgirl.txt" to """
+      /\   /\
+     /  \_/  \        nyah~
+    |  o     o  |
+    |     ^     |
+     \  \___/  /
+      \_______/
+       /|   |\
+      / |   | \
+        |___|
+""".trim('\n'),
+        "02-mecha.txt" to """
+     __________________
+    |  [=]  [=]  [=]  |
+    |   ___________   |
+    |  |  M E C H |   |
+    |  |___________|  |
+    |_________________|
+      /|           |\
+     / |           | \
+       |___|_|_|___|
+""".trim('\n'),
+        "03-kitsune.txt" to """
+         /\     /\
+        /  \___/  \
+       |  o     o  |
+       |     ^     |
+       |  \  U  /  |
+        \  \___/  /
+         \_______/
+        kitsune mask
+""".trim('\n'),
+        "04-shonen.txt" to """
+        ,--.
+       / o  \__
+      |  |\   |    FIGHT!
+      |  | \  |
+       \_|  \_|
+        / \   \
+      _/   \   \_
+     (__)  (__)
+""".trim('\n'),
+        "05-chibi-star.txt" to """
+    .    *    .    *
+      .-=====-.
+   * /  o   o  \ .
+    |     ^     |
+     \  '---'  /
+   .  '-.___.-'  *
+      *    .    .
+""".trim('\n'),
+        "06-robot-kitty.txt" to """
+     /\_____/\
+    | o     o |     beep
+    | [=====] |     boop
+     \_=====_/
+      /|   |\
+     / |   | \
+       |_| |_|
+""".trim('\n'),
+        "07-magical.txt" to """
+         \ | /
+      .-=======-.
+     /  *     *  \
+    |  o       o  |   HENSHIN!
+     \    ___    /
+      '-..___..-'
+         (o_o)[*]
+""".trim('\n'),
+        "08-samurai.txt" to """
+         ___
+        /o o\___
+       |   >    _>
+        \_ _ _/
+         |___|
+         /| |\
+        / | | \
+          |_|
+      kabuto mask
+""".trim('\n')
+    )
+
+    /** `~/.config/folio/banner.sh` — random sticker + compact info block. */
+    internal val BANNER_SH = """
+# folio-banner.sh — Folio launch sticker. Monochrome, offline, random per shell.
+# Opt out with FLUX_NO_BANNER=1. Sourced at the end of ~/.zshrc.
+folio-banner() {
+  [ "${'$'}{FLUX_NO_BANNER:-0}" = "1" ] && return 0
+  case $- in *i*) ;; *) return 0;; esac
+  setopt localoptions nullglob
+  local -a _bans
+  _bans=( "${'$'}HOME"/.config/folio/banner/*.txt )
+  if [[ -f "${'$'}{_bans[1]}" ]]; then
+    local _bi=${'$'}(( RANDOM % ${'$'}{#_bans} + 1 ))
+    cat "${'$'}{_bans[${'$'}_bi]}" 2>/dev/null || true
+  fi
+  unset _bans _bi
+  if command -v fastfetch >/dev/null 2>&1; then
+    local _ff="${'$'}HOME/.local/share/fastfetch/presets/termux.jsonc"
+    if [ -f "${'$'}_ff" ]; then
+      { fastfetch --config "${'$'}_ff" 2>/dev/null || true; } &!
+    else
+      { fastfetch --config termux 2>/dev/null || true; } &!
+    fi
+    unset _ff
+  else
+    printf '%s@%s | %s | %s\n' "${'$'}{USER:-flux}" "${'$'}(hostname 2>/dev/null || echo folio)" \
+      "${'$'}(sed -n 's/^PRETTY_NAME=//p' /etc/os-release 2>/dev/null | tr -d '\"' | head -n 1)" \
+      "${'$'}(date +%H:%M 2>/dev/null)"
+  fi
+}
+folio-banner
+""".trimStart()
+
+    /** .zshrc tail that sources the sticker (idempotent append target). */
+    internal val BANNER_SOURCE_BLOCK = """
+# Folio launch sticker (random monochrome anime banner; opt out FLUX_NO_BANNER=1)
+[ -r "${'$'}HOME/.config/folio/banner.sh" ] && . "${'$'}HOME/.config/folio/banner.sh"
+""".trimStart()
+
+    /**
+     * .zshrc tail that applies the staged Folio Linux appearance (idempotent
+     * append target for existing profiles; the guest script hash-guards itself).
+     */
+    internal val APPEARANCE_SOURCE_BLOCK = """
+# Folio Linux appearance (wallpaper/colors/terminal; hash-guarded inside).
+[ -r "${'$'}HOME/.config/folio/appearance-apply.sh" ] && sh "${'$'}HOME/.config/folio/appearance-apply.sh" >/dev/null 2>&1 || true
+""".trimStart()
+
     fun repairIfNeeded(ctx: Context, method: String, distroId: String? = null) {
         // Versioned cache (proot-opt-01): after one successful verification pass
         // per distro, later session opens skip the file reads + regex sweeps.
-        val cacheKey = GuestRepairCache.zshrcKey(distroId ?: method)
+        // The local revision suffix re-runs the sweep once for installs that
+        // already completed the v2 pass (no banner / old theme back then).
+        val cacheKey = GuestRepairCache.zshrcKey(distroId ?: method) + "_r$REPAIR_REVISION"
         val prefs = ctx.getSharedPreferences(GuestRepairCache.PREFS, Context.MODE_PRIVATE)
-        if (prefs.getBoolean(cacheKey, false)) return
+        if (method == "chroot") {
+            // Root-only tree (SELinux) → the repair runs as root in the chroot.
+            // Cached after the first root pass; the login helper keeps patching
+            // the profile afterwards.
+            if (prefs.getBoolean(cacheKey, false)) return
+            if (repairChrootAsRoot(ctx, distroId)) {
+                prefs.edit().putBoolean(cacheKey, true).apply()
+            }
+            return
+        }
         val zshrc = resolveZshrc(ctx, method, distroId) ?: return
+        if (prefs.getBoolean(cacheKey, false)) {
+            // Cheap re-verify so a reinstall / wiped profile still gets fixed:
+            // the banner source line in .zshrc is the single marker.
+            val wired = try {
+                if (!zshrc.isFile) false
+                else {
+                    val text = zshrc.readText()
+                    text.contains("folio/banner.sh") && text.contains("appearance-apply.sh")
+                }
+            } catch (_: Exception) {
+                false
+            }
+            if (wired) return
+        }
         val rootfs = zshrc.parentFile?.parentFile?.parentFile // home/flux/.zshrc → rootfs
         val isApkGuest = isApkGuest(distroId)
         val needsPmWrap = !isApkGuest && isGlibcGuest(distroId)
@@ -162,6 +340,14 @@ fi
                     zshrc.appendText("\n$GLIBC_PM_WRAPPER")
                     Log.i(TAG, "Appended glibc PM wrappers to ${zshrc.absolutePath}")
                 }
+                // Gentle path for otherwise-healthy profiles: append the Folio
+                // Linux appearance trigger only (the guest script self-guards).
+                if (!needsRepair(text) && !text.contains("appearance-apply.sh") &&
+                    zshrc.canWrite()
+                ) {
+                    zshrc.appendText("\n$APPEARANCE_SOURCE_BLOCK")
+                    Log.i(TAG, "Appended appearance trigger to ${zshrc.absolutePath}")
+                }
             } else {
                 // Create missing Flux profile (Alpine used to never write .zshrc)
                 val home = zshrc.parentFile ?: return
@@ -172,6 +358,12 @@ fi
                     zshrc.writeText(profileFor(isApkGuest, needsPmWrap))
                     Log.i(TAG, "Created defensive .zshrc at ${zshrc.absolutePath}")
                 }
+            }
+            // Monochrome folio prompt theme + random anime launch sticker.
+            zshrc.parentFile?.let { home ->
+                removeLegacyThemes(home)
+                writeFolioTheme(home)
+                writeBannerFiles(home)
             }
             ensureZprofile(zshrc.parentFile)
             // Prefer zsh login shell when binary exists (Alpine often left /bin/bash)
@@ -186,6 +378,136 @@ fi
         } catch (e: Exception) {
             Log.w(TAG, "zshrc repair failed: ${e.message}")
         }
+    }
+
+    /**
+     * Old colorful OMZ theme shipped by earlier Folio builds — remove the file
+     * (the `.zshrc` rewrite/sed switches the reference to `folio`).
+     */
+    internal fun removeLegacyThemes(home: File?) {
+        if (home == null) return
+        try {
+            File(home, ".oh-my-zsh/custom/themes/agnosterzak.zsh-theme").delete()
+        } catch (e: Exception) {
+            Log.w(TAG, "legacy theme remove failed: ${e.message}")
+        }
+    }
+
+    /** Write the monochrome `folio` prompt theme (used by ZSH_THEME=folio). */
+    internal fun writeFolioTheme(home: File?) {
+        if (home == null || !File(home, ".oh-my-zsh").isDirectory) return
+        val theme = File(home, ".oh-my-zsh/custom/themes/folio.zsh-theme")
+        try {
+            theme.parentFile?.mkdirs()
+            if (theme.isFile && !theme.canWrite()) return
+            theme.writeText(FOLIO_THEME)
+            Log.i(TAG, "Wrote folio prompt theme at ${theme.absolutePath}")
+        } catch (e: Exception) {
+            Log.w(TAG, "folio theme write failed: ${e.message}")
+        }
+    }
+
+    /** Install the launch sticker: `banner/*.txt` designs + `banner.sh`. */
+    internal fun writeBannerFiles(home: File?) {
+        if (home == null || !home.isDirectory) return
+        val dir = File(home, ".config/folio/banner")
+        try {
+            dir.mkdirs()
+            if (!dir.isDirectory) return
+            for ((name, art) in BANNER_FILES) {
+                val f = File(dir, name)
+                if (f.isFile && f.length() > 0L) continue
+                if (f.isFile && !f.canWrite()) continue
+                f.writeText(art + "\n")
+            }
+            val sh = File(home, ".config/folio/banner.sh")
+            if (!sh.isFile || sh.canWrite()) {
+                sh.writeText(BANNER_SH)
+            }
+            Log.i(TAG, "Banner assets ready at ${dir.absolutePath}")
+        } catch (e: Exception) {
+            Log.w(TAG, "banner write failed: ${e.message}")
+        }
+    }
+
+    /**
+     * Chroot variant: `/data/local/folio` is root-only, so the same repair runs
+     * inside the chroot as root through the staged helper
+     * ([RootShell.captureInChroot]). True when the success marker came back.
+     */
+    private fun repairChrootAsRoot(ctx: Context, distroId: String?): Boolean {
+        val root = if (distroId != null) {
+            ChrootPaths.pathForDistro(distroId)
+        } else {
+            ChrootPaths.CHROOT_PATH
+        }
+        return try {
+            val res = RootShell.captureInChroot(
+                chrootRepairScript(),
+                user = "root",
+                chrootPath = root,
+                timeoutMs = 20_000L,
+                context = ctx
+            )
+            val ok = res.stdout.contains(CHROOT_OK_MARKER)
+            if (ok) {
+                Log.i(TAG, "Repaired chroot guest profile at $root")
+            } else {
+                Log.w(TAG, "chroot zshrc repair marker missing (exit ${res.exitCode})")
+            }
+            ok
+        } catch (e: Exception) {
+            Log.w(TAG, "chroot zshrc repair failed: ${e.message}")
+            false
+        }
+    }
+
+    private fun b64(text: String): String =
+        Base64.encodeToString(text.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
+
+    /**
+     * POSIX shell payload executed as root **inside** the chroot. All content is
+     * base64-encoded, so no quoting/heredoc hazards; every step is best-effort
+     * (`|| true`) and the marker always prints so a partially repaired guest is
+     * still cached.
+     */
+    internal fun chrootRepairScript(): String {
+        val D = "\$"
+        val sb = StringBuilder()
+        sb.append("set +e\n")
+        sb.append("H=/home/flux\n")
+        sb.append("[ -d \"${D}H\" ] || { echo $CHROOT_OK_MARKER; exit 0; }\n")
+        sb.append("_put() { printf '%s' \"${D}2\" | base64 -d > \"${D}1\" 2>/dev/null || true; }\n")
+        sb.append("mkdir -p \"${D}H/.config/folio/banner\" \"${D}H/.local/share/fastfetch/presets\" 2>/dev/null || true\n")
+        sb.append("_put \"${D}H/.config/folio/banner.sh\" '").append(b64(BANNER_SH)).append("'\n")
+        for ((name, art) in BANNER_FILES) {
+            sb.append("[ -s \"${D}H/.config/folio/banner/$name\" ] || _put \"${D}H/.config/folio/banner/$name\" '")
+                .append(b64(art + "\n"))
+                .append("'\n")
+        }
+        sb.append("[ -s \"${D}H/.local/share/fastfetch/presets/termux.jsonc\" ] || _put \"${D}H/.local/share/fastfetch/presets/termux.jsonc\" '")
+            .append(b64(TERMUX_JSONC))
+            .append("'\n")
+        sb.append("if [ -d \"${D}H/.oh-my-zsh\" ]; then\n")
+        sb.append("  mkdir -p \"${D}H/.oh-my-zsh/custom/themes\" 2>/dev/null || true\n")
+        sb.append("  rm -f \"${D}H/.oh-my-zsh/custom/themes/agnosterzak.zsh-theme\" 2>/dev/null || true\n")
+        sb.append("  _put \"${D}H/.oh-my-zsh/custom/themes/folio.zsh-theme\" '").append(b64(FOLIO_THEME)).append("'\n")
+        sb.append("fi\n")
+        sb.append("if [ -f \"${D}H/.zshrc\" ]; then\n")
+        sb.append("  grep -q 'ZSH_THEME=\"agnosterzak\"' \"${D}H/.zshrc\" 2>/dev/null && ")
+            .append("sed -i 's|ZSH_THEME=\"agnosterzak\"|ZSH_THEME=\"folio\"|' \"${D}H/.zshrc\" 2>/dev/null || true\n")
+        sb.append("  if ! grep -q 'folio/banner.sh' \"${D}H/.zshrc\" 2>/dev/null; then\n")
+        sb.append("    printf '\\n# Folio launch sticker (random monochrome anime banner; opt out FLUX_NO_BANNER=1)\\n'\n")
+        sb.append("    printf '[ -r \"${D}HOME/.config/folio/banner.sh\" ] && . \"${D}HOME/.config/folio/banner.sh\"\\n'\n")
+        sb.append("  fi >> \"${D}H/.zshrc\" 2>/dev/null || true\n")
+        sb.append("  if ! grep -q 'appearance-apply.sh' \"${D}H/.zshrc\" 2>/dev/null; then\n")
+        sb.append("    printf '\\n# Folio Linux appearance (wallpaper/colors/terminal; hash-guarded inside).\\n'\n")
+        sb.append("    printf '[ -r \"${D}HOME/.config/folio/appearance-apply.sh\" ] && sh \"${D}HOME/.config/folio/appearance-apply.sh\" >/dev/null 2>&1 || true\\n'\n")
+        sb.append("  fi >> \"${D}H/.zshrc\" 2>/dev/null || true\n")
+        sb.append("fi\n")
+        sb.append("chown -R --reference=\"${D}H\" \"${D}H/.config/folio\" 2>/dev/null || true\n")
+        sb.append("echo $CHROOT_OK_MARKER\n")
+        return sb.toString()
     }
 
     internal val LOCALE_PROFILE = """
@@ -452,6 +774,12 @@ exit 1
         // Theme / pokemon must not be gated on LC_ALL (user-visible shell).
         if (text.contains("ZSH_THEME=\"\"")) return true
         if (text.contains("[ -n \"\${LC_ALL:-}\" ] && command -v pokemon-colorscripts")) return true
+        // Colorful remote theme (pre-Folio builds) → switch to the mono theme.
+        if (text.contains("ZSH_THEME=\"agnosterzak\"")) return true
+        // Older profiles never print ZSH_THEME=folio after OMZ loads.
+        if (!text.contains("ZSH_THEME=\"folio\"")) return true
+        // Launch sticker (random anime banner + info block) not wired yet.
+        if (!text.contains("folio/banner.sh")) return true
         return false
     }
 }

@@ -253,6 +253,10 @@ object DesktopLauncher {
 
         startFgs(app)
         toast(app, "Starting desktop…")
+        // Write fullscreen/scaled defaults BEFORE start_gui.sh reaches its own
+        // `am start` — otherwise the X11 activity would open with stale prefs
+        // (letterboxed) until the healthy-line broadcast arrives.
+        runCatching { TermuxX11Preferences.applyToTermux(app) }
         Log.i(TAG, "startGui method=$method script=${script.absolutePath}")
 
         val bash = TermuxHostPaths.libBash(app).absolutePath
@@ -402,6 +406,9 @@ object DesktopLauncher {
 
     /** Re-open the X11 surface without restarting the DE. */
     fun reopenDisplay(ctx: Context) {
+        // Re-assert display defaults (fullscreen/scaled) for unset installs so
+        // every "Open display" path is edge-to-edge, not letterboxed.
+        runCatching { TermuxX11Preferences.applyToTermux(ctx.applicationContext) }
         // Prefer Activity context so NEW_TASK is not required (BACK returns to Home).
         openX11(ctx)
     }

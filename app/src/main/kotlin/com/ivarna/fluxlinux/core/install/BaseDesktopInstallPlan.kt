@@ -79,7 +79,7 @@ object BaseDesktopInstallPlan {
     fun phasesFor(method: String): List<Phase> = phasesFor(method, "Debian")
 
     private fun customizationPhaseLabel(terminalOnly: Boolean): String =
-        if (terminalOnly) "Finalizing install…" else "Applying Folio customization…"
+        if (terminalOnly) "Finalizing install…" else "Applying Folio Linux customization…"
 
     /**
      * Family/base setup payload. [desktop] is the `FLUX_DESKTOP` contract value

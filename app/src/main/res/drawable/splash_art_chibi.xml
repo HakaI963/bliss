@@ -1,0 +1,34 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="96dp"
+    android:height="96dp"
+    android:viewportWidth="120"
+    android:viewportHeight="120">
+    <!-- Star-eyed chibi: ahoge, round head, sparkle eyes, blush, tiny body (original). -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"
+        android:pathData="M56,30 Q60,18 70,14" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M40,118 C40,104 50,98 60,98 C70,98 80,104 80,118 Z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M32,64 a28,28 0 1 0 56,0 a28,28 0 1 0 -56,0 Z" />
+    <path
+        android:fillColor="#FF09090B"
+        android:pathData="M48,62 L51,67 L56,70 L51,73 L48,78 L45,73 L40,70 L45,67 Z" />
+    <path
+        android:fillColor="#FF09090B"
+        android:pathData="M72,62 L75,67 L80,70 L75,73 L72,78 L69,73 L64,70 L69,67 Z" />
+    <path
+        android:fillColor="#59FFFFFF"
+        android:pathData="M38,76 L46,76 L46,79 L38,79 Z M74,76 L82,76 L82,79 L74,79 Z" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#B3FFFFFF"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M56,86 Q60,90 64,86" />
+</vector>

@@ -273,7 +273,7 @@ private fun WelcomePage(onNext: () -> Unit) {
             ) {
                 Image(
                     painter = painterResource(id = R.drawable.ic_logo),
-                    contentDescription = "Folio Logo",
+                    contentDescription = "Folio Linux logo",
                     modifier = Modifier.size(44.dp)
                 )
             }
@@ -281,7 +281,7 @@ private fun WelcomePage(onNext: () -> Unit) {
             Spacer(Modifier.height(14.dp))
 
             Text(
-                text = "Folio",
+                text = "Folio Linux",
                 fontSize = 32.sp,
                 fontWeight = FontWeight.ExtraBold,
                 color = colors.onBackground,
@@ -321,7 +321,7 @@ private fun WelcomePage(onNext: () -> Unit) {
                 icon = Icons.Filled.DesktopWindows,
                 iconTint = TextSecondary,
                 title = "XFCE4 Desktop",
-                description = "Pre-configured desktop experience with Folio glass themes, icons, wallpapers, and fonts."
+                description = "Pre-configured desktop experience with Folio Linux glass themes, icons, wallpapers, and fonts."
             )
 
             // Feature 3: Integrated Terminal & X11
@@ -495,7 +495,7 @@ private fun ConsentPage(onBack: () -> Unit, onNext: () -> Unit) {
                     Spacer(Modifier.height(12.dp))
 
                     Text(
-                        text = "The F-Droid APK is intentionally lightweight and does not bundle large Linux OS archives. To provide a complete Linux environment, Folio downloads the required system components directly from GitHub Releases upon continuation:",
+                        text = "The F-Droid APK is intentionally lightweight and does not bundle large Linux OS archives. To provide a complete Linux environment, Folio Linux downloads the required system components directly from GitHub Releases upon continuation:",
                         color = colors.onSurface.copy(alpha = 0.75f),
                         fontSize = 13.5.sp,
                         lineHeight = 19.sp
@@ -910,7 +910,7 @@ private fun DistroPickPage(
                     Spacer(Modifier.width(10.dp))
                     Text(
                         text = if (probingRoot) "Checking superuser access…"
-                        else "Grant superuser to Folio in Magisk/KernelSU, then tap Chroot again.",
+                        else "Grant superuser to Folio Linux in Magisk/KernelSU, then tap Chroot again.",
                         color = colors.error,
                         fontSize = 12.5.sp,
                         lineHeight = 16.sp,
@@ -1118,7 +1118,7 @@ private fun OptionsPage(
                             color = colors.onSurface
                         )
                         Text(
-                            text = "Base XFCE4 desktop with Folio customizations",
+                            text = "Base XFCE4 desktop with Folio Linux customizations",
                             fontSize = 12.sp,
                             color = colors.onSurface.copy(alpha = 0.65f)
                         )
@@ -1195,7 +1195,7 @@ private fun OptionsPage(
                         "XFCE4 lightweight desktop environment",
                         if (distroId.startsWith("fedora") || distroId.startsWith("void") || distroId.startsWith("opensuse"))
                             "Mesa / VirGL 3D hardware acceleration" else null,
-                        "Folio themes, wallpapers, and Nerd fonts",
+                        "Folio Linux themes, wallpapers, and Nerd fonts",
                         "Embedded X11 display server + Zsh terminal"
                     ).filterNotNull()
 

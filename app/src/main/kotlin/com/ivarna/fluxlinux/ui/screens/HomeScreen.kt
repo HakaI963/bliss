@@ -203,7 +203,7 @@ fun HomeScreen(
         if (isChrootRow && !rootAvailable) {
             android.widget.Toast.makeText(
                 context,
-                "Grant superuser to Folio first",
+                "Grant superuser to Folio Linux first",
                 android.widget.Toast.LENGTH_SHORT
             ).show()
             return
@@ -322,7 +322,7 @@ fun HomeScreen(
                                     if (needsRoot && !rootAvailable) {
                                         android.widget.Toast.makeText(
                                             context,
-                                            "Grant superuser to Folio first",
+                                            "Grant superuser to Folio Linux first",
                                             android.widget.Toast.LENGTH_SHORT
                                         ).show()
                                     } else {
@@ -377,7 +377,7 @@ fun HomeScreen(
                                     if (!rootAvailable) {
                                         android.widget.Toast.makeText(
                                             context,
-                                            "Grant superuser to Folio first",
+                                            "Grant superuser to Folio Linux first",
                                             android.widget.Toast.LENGTH_SHORT
                                         ).show()
                                     } else {
@@ -388,7 +388,7 @@ fun HomeScreen(
                                     if (!rootAvailable) {
                                         android.widget.Toast.makeText(
                                             context,
-                                            "Grant superuser to Folio first",
+                                            "Grant superuser to Folio Linux first",
                                             android.widget.Toast.LENGTH_SHORT
                                         ).show()
                                     } else if (session != null && session.distroId != distro.id) {

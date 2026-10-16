@@ -18,6 +18,9 @@ case "$DESKTOP_CHOICE" in
 esac
 if [ "$DESKTOP_CHOICE" = "xfce" ]; then
     apt install -y xfce4 xfce4-goodies || exit 1
+    # Phone niceties: Whisker panel menu + screenshot tool (best-effort).
+    DEBIAN_FRONTEND=noninteractive apt install -y --no-install-recommends \
+        xfce4-whiskermenu-plugin xfce4-screenshooter 2>/dev/null || true
 fi
 # Named Pulse *client* only — do not treat xfce4 as the audio path.
 DEBIAN_FRONTEND=noninteractive apt install -y --no-install-recommends \
@@ -87,6 +90,13 @@ EOF
             printf 'autospawn = no\n' >> /etc/pulse/client.conf
         fi
     fi
+fi
+
+# Phone-compact XFCE defaults (30px mono top panel, DPI 96, wallpaper,
+# Home-only desktop icons, shortcuts). Helper ships in flux_guest_common.sh;
+# guarded so a standalone run without it is a no-op and never fails install.
+if [ "$DESKTOP_CHOICE" = "xfce" ] && command -v _flux_xfce_compact_defaults >/dev/null 2>&1; then
+    _flux_xfce_compact_defaults || true
 fi
 
 echo "Folio: ${DISTRO_NAME} Setup Complete!"

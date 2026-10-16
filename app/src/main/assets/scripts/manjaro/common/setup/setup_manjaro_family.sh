@@ -215,6 +215,8 @@ if [ "$DESKTOP_CHOICE" = "xfce" ]; then
         _flux_log "startxfce4 missing — falling back to xfce4 group"
         pacman -S --noconfirm --needed xfce4 || true
     fi
+    # Phone niceties: Whisker panel menu + screenshot tool (best-effort).
+    pacman -S --noconfirm --needed xfce4-whiskermenu-plugin xfce4-screenshooter 2>/dev/null || true
 fi
 
 _flux_ensure_dbus
@@ -249,6 +251,13 @@ _flux_ensure_locale || exit 1
 _flux_ensure_hostname
 _flux_write_gpu_mode virgl
 _flux_fix_pm_writable
+
+# Phone-compact XFCE defaults (30px mono top panel, DPI 96, wallpaper,
+# Home-only desktop icons, shortcuts). Helper ships in flux_guest_common.sh;
+# guarded so a standalone run without it is a no-op and never fails install.
+if [ "$DESKTOP_CHOICE" = "xfce" ] && command -v _flux_xfce_compact_defaults >/dev/null 2>&1; then
+    _flux_xfce_compact_defaults || true
+fi
 
 echo "Folio: ${DISTRO_NAME} Manjaro setup complete!"
 exit 0

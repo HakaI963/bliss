@@ -170,6 +170,9 @@ if [ "$DESKTOP_CHOICE" = "xfce" ]; then
             exit 1
         }
     _flux_opensuse_protect_zypper
+    # Phone niceties: Whisker panel menu + screenshot tool (best-effort).
+    zypper --non-interactive install --no-recommends --auto-agree-with-licenses \
+        xfce4-whiskermenu-plugin xfce4-screenshooter 2>/dev/null || true
 fi
 
 # TW GTK/glycin uses bwrap; replace with Alpine-style proot-safe shim.
@@ -217,6 +220,13 @@ _flux_ensure_home
 _flux_setup_pulse
 _flux_write_gpu_mode virgl
 _flux_fix_pm_writable
+
+# Phone-compact XFCE defaults (30px mono top panel, DPI 96, wallpaper,
+# Home-only desktop icons, shortcuts). Helper ships in flux_guest_common.sh;
+# guarded so a standalone run without it is a no-op and never fails install.
+if [ "$DESKTOP_CHOICE" = "xfce" ] && command -v _flux_xfce_compact_defaults >/dev/null 2>&1; then
+    _flux_xfce_compact_defaults || true
+fi
 
 echo "Folio: ${DISTRO_NAME} openSUSE setup complete!"
 exit 0

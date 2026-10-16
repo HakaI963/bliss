@@ -1,5 +1,5 @@
 #!/system/bin/sh
-# fluxlinux-chroot v2.10
+# fluxlinux-chroot v2.11
 # SSOT chroot runner for NativeCode Debian 13 (requires root).
 # Do not nest this under run_debian13_root.sh — it already owns mounts + one chroot.
 # Guest entry always uses env -i + Debian PATH (never Android /system PATH).
@@ -17,7 +17,7 @@
 #   FLUX_CHROOT  FLUX_PACKAGE  FLUX_HOST_TMP  FLUX_PREFIX  FLUX_BB  FLUX_SHELL
 set -u
 
-VERSION_STR="fluxlinux-chroot v2.10"
+VERSION_STR="fluxlinux-chroot v2.11"
 # Prefer caller-pinned env (RootShell / start_gui). Fallbacks cover both store flavors.
 if [ -z "${FLUX_PACKAGE:-}" ]; then
   if [ -d /data/data/com.zenithblue.fluxlinux/files/usr ]; then
@@ -447,20 +447,7 @@ unset PROOT_TMP_DIR
 export TMPDIR="${TMPDIR:-/tmp}"
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp}"
 
-{
-  if command -v fastfetch >/dev/null 2>&1; then
-    _ff="$HOME/.local/share/fastfetch/presets/termux.jsonc"
-    if [ -f "$_ff" ]; then
-      fastfetch --config "$_ff" 2>/dev/null || true
-    else
-      fastfetch --config termux 2>/dev/null || true
-    fi
-    unset _ff
-  fi
-  if command -v pokemon-colorscripts >/dev/null 2>&1; then
-    pokemon-colorscripts --no-title -r 1,2,3 2>/dev/null || true
-  fi
-} &!
+# Launch sticker + info block: ~/.config/folio/banner.sh (sourced at the end).
 
 export ZSH="${ZSH:-$HOME/.oh-my-zsh}"
 if [ -f "$ZSH/oh-my-zsh.sh" ]; then
@@ -475,6 +462,9 @@ fi
 if command -v apk >/dev/null 2>&1 && command -v sudo >/dev/null 2>&1; then
   apk() { command sudo apk "$@"; }
 fi
+
+# Folio launch sticker (random monochrome anime banner; opt out FLUX_NO_BANNER=1)
+[ -r "$HOME/.config/folio/banner.sh" ] && . "$HOME/.config/folio/banner.sh"
 ZSHRC
   fi
   # Monochrome Folio prompt theme (replaces the removed agnosterzak theme).
@@ -524,6 +514,137 @@ FOLIO_THEME_EOF
 }
 FFEOF
   fi
+  # ── Folio launch sticker: 8 monochrome anime ASCII designs + banner.sh ────
+  # Random one per interactive shell; opt out with FLUX_NO_BANNER=1.
+  # Host-side write (root owns the chroot tree); guards keep it non-fatal.
+  _fbdir="$_home/.config/folio/banner"
+  mkdir -p "$_fbdir" "$_home/.config/folio" 2>/dev/null || true
+  _fneed=0
+  for _fb in 01-catgirl 02-mecha 03-kitsune 04-shonen 05-chibi-star 06-robot-kitty 07-magical 08-samurai; do
+    [ -s "$_fbdir/$_fb.txt" ] || _fneed=1
+  done
+  [ -s "$_home/.config/folio/banner.sh" ] || _fneed=1
+  if [ "$_fneed" = "1" ]; then
+    cat > "$_fbdir/01-catgirl.txt" <<'FB1'
+      /\   /\
+     /  \_/  \        nyah~
+    |  o     o  |
+    |     ^     |
+     \  \___/  /
+      \_______/
+       /|   |\
+      / |   | \
+        |___|
+FB1
+    cat > "$_fbdir/02-mecha.txt" <<'FB2'
+     __________________
+    |  [=]  [=]  [=]  |
+    |   ___________   |
+    |  |  M E C H |   |
+    |  |___________|  |
+    |_________________|
+      /|           |\
+     / |           | \
+       |___|_|_|___|
+FB2
+    cat > "$_fbdir/03-kitsune.txt" <<'FB3'
+         /\     /\
+        /  \___/  \
+       |  o     o  |
+       |     ^     |
+       |  \  U  /  |
+        \  \___/  /
+         \_______/
+        kitsune mask
+FB3
+    cat > "$_fbdir/04-shonen.txt" <<'FB4'
+        ,--.
+       / o  \__
+      |  |\   |    FIGHT!
+      |  | \  |
+       \_|  \_|
+        / \   \
+      _/   \   \_
+     (__)  (__)
+FB4
+    cat > "$_fbdir/05-chibi-star.txt" <<'FB5'
+    .    *    .    *
+      .-=====-.
+   * /  o   o  \ .
+    |     ^     |
+     \  '---'  /
+   .  '-.___.-'  *
+      *    .    .
+FB5
+    cat > "$_fbdir/06-robot-kitty.txt" <<'FB6'
+     /\_____/\
+    | o     o |     beep
+    | [=====] |     boop
+     \_=====_/
+      /|   |\
+     / |   | \
+       |_| |_|
+FB6
+    cat > "$_fbdir/07-magical.txt" <<'FB7'
+         \ | /
+      .-=======-.
+     /  *     *  \
+    |  o       o  |   HENSHIN!
+     \    ___    /
+      '-..___..-'
+         (o_o)[*]
+FB7
+    cat > "$_fbdir/08-samurai.txt" <<'FB8'
+         ___
+        /o o\___
+       |   >    _>
+        \_ _ _/
+         |___|
+         /| |\
+        / | | \
+          |_|
+      kabuto mask
+FB8
+    cat > "$_home/.config/folio/banner.sh" <<'FB_SH'
+# folio-banner.sh — Folio launch sticker. Monochrome, offline, random per shell.
+# Opt out with FLUX_NO_BANNER=1. Sourced at the end of ~/.zshrc.
+folio-banner() {
+  [ "${FLUX_NO_BANNER:-0}" = "1" ] && return 0
+  case $- in *i*) ;; *) return 0;; esac
+  setopt localoptions nullglob
+  local -a _bans
+  _bans=( "$HOME"/.config/folio/banner/*.txt )
+  if [[ -f "${_bans[1]}" ]]; then
+    local _bi=$(( RANDOM % ${#_bans} + 1 ))
+    cat "${_bans[$_bi]}" 2>/dev/null || true
+  fi
+  unset _bans _bi
+  if command -v fastfetch >/dev/null 2>&1; then
+    local _ff="$HOME/.local/share/fastfetch/presets/termux.jsonc"
+    if [ -f "$_ff" ]; then
+      { fastfetch --config "$_ff" 2>/dev/null || true; } &!
+    else
+      { fastfetch --config termux 2>/dev/null || true; } &!
+    fi
+    unset _ff
+  else
+    printf '%s@%s | %s | %s\n' "${USER:-flux}" "$(hostname 2>/dev/null || echo folio)" \
+      "$(sed -n 's/^PRETTY_NAME=//p' /etc/os-release 2>/dev/null | tr -d '\"' | head -n 1)" \
+      "$(date +%H:%M 2>/dev/null)"
+  fi
+}
+folio-banner
+FB_SH
+    _fneed=0
+  fi
+  unset _fbdir _fb _fneed
+  # Existing .zshrc: source the sticker when missing (idempotent, cheap grep).
+  if [ -f "$_home/.zshrc" ] && ! grep -q "folio/banner.sh" "$_home/.zshrc" 2>/dev/null; then
+    {
+      printf '\n# Folio launch sticker (random monochrome anime banner; opt out FLUX_NO_BANNER=1)\n'
+      printf '[ -r "$HOME/.config/folio/banner.sh" ] && . "$HOME/.config/folio/banner.sh"\n'
+    } >> "$_home/.zshrc" 2>/dev/null || true
+  fi
   if [ ! -f "$_home/.zprofile" ]; then
     printf '%s\n' '[[ -o interactive ]] || { [ -f "$HOME/.zshrc" ] && . "$HOME/.zshrc"; }' \
       > "$_home/.zprofile"
@@ -537,6 +658,18 @@ FFEOF
   chown --reference="$_home" "$_home/.zshrc" "$_home/.zprofile" \
     "$_home/.oh-my-zsh/custom/themes/folio.zsh-theme" \
     "$_home/.local/share/fastfetch/presets/termux.jsonc" 2>/dev/null || true
+  if [ -d "$_home/.config/folio" ]; then
+    chown -R --reference="$_home" "$_home/.config/folio" 2>/dev/null || true
+  fi
+  # Folio Linux appearance: re-apply the app-staged config when it changed.
+  # Runs inside the chroot (guest tools + guest paths); the script is
+  # hash-guarded, so repeated logins are cheap no-ops when nothing changed.
+  if [ -r "$_home/.config/folio/appearance-apply.sh" ]; then
+    "$BB" chroot "$FLUX_CHROOT" /bin/sh -c \
+      'export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin; \
+       FOLIO_APPLY_HOME=/home/flux /bin/sh /home/flux/.config/folio/appearance-apply.sh \
+       >/dev/null 2>&1 || true' >/dev/null 2>&1 || true
+  fi
 }
 
 guest_login() {

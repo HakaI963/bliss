@@ -180,6 +180,7 @@ configure_debian_chroot() {
         $BB chroot "$DEBIANPATH" /bin/su - root -c '
             export DEBIAN_FRONTEND=noninteractive
             apt install -y xfce4 xfce4-terminal
+            apt install -y --no-install-recommends xfce4-whiskermenu-plugin xfce4-screenshooter 2>/dev/null || true
         ' || goodbye
     else
         progress "Skipping XFCE4 install (FLUX_DESKTOP=$DESKTOP_CHOICE)"

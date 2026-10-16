@@ -164,6 +164,140 @@ install_nerd_font() {
     termux-reload-settings
 }
 
+# ── Folio launch stickers: 8 monochrome anime-ish ASCII designs ─────────────
+# Installs ~/.config/folio/banner/*.txt (random pick per shell open) and
+# ~/.config/folio/banner.sh (the folio-banner function sourced by .zshrc).
+# Offline, idempotent, cheap. Opt out at runtime: FLUX_NO_BANNER=1.
+_flux_write_folio_banner() {
+    _home="$1"
+    _owner="${2:-}"
+    [ -n "$_home" ] || return 0
+    _bdir="$_home/.config/folio/banner"
+    _need=0
+    for _b in 01-catgirl 02-mecha 03-kitsune 04-shonen 05-chibi-star 06-robot-kitty 07-magical 08-samurai; do
+        [ -s "$_bdir/$_b.txt" ] || _need=1
+    done
+    [ -s "$_home/.config/folio/banner.sh" ] || _need=1
+    [ "$_need" = "1" ] || return 0
+
+    mkdir -p "$_bdir" 2>/dev/null || return 0
+    cat > "$_bdir/.folio-banners.$$" <<'FOLIO_BANNER_ALL'
+==>01-catgirl
+      /\   /\
+     /  \_/  \        nyah~
+    |  o     o  |
+    |     ^     |
+     \  \___/  /
+      \_______/
+       /|   |\
+      / |   | \
+        |___|
+==>02-mecha
+     __________________
+    |  [=]  [=]  [=]  |
+    |   ___________   |
+    |  |  M E C H |   |
+    |  |___________|  |
+    |_________________|
+      /|           |\
+     / |           | \
+       |___|_|_|___|
+==>03-kitsune
+         /\     /\
+        /  \___/  \
+       |  o     o  |
+       |     ^     |
+       |  \  U  /  |
+        \  \___/  /
+         \_______/
+        kitsune mask
+==>04-shonen
+        ,--.
+       / o  \__
+      |  |\   |    FIGHT!
+      |  | \  |
+       \_|  \_|
+        / \   \
+      _/   \   \_
+     (__)  (__)
+==>05-chibi-star
+    .    *    .    *
+      .-=====-.
+   * /  o   o  \ .
+    |     ^     |
+     \  '---'  /
+   .  '-.___.-'  *
+      *    .    .
+==>06-robot-kitty
+     /\_____/\
+    | o     o |     beep
+    | [=====] |     boop
+     \_=====_/
+      /|   |\
+     / |   | \
+       |_| |_|
+==>07-magical
+         \ | /
+      .-=======-.
+     /  *     *  \
+    |  o       o  |   HENSHIN!
+     \    ___    /
+      '-..___..-'
+         (o_o)[*]
+==>08-samurai
+         ___
+        /o o\___
+       |   >    _>
+        \_ _ _/
+         |___|
+         /| |\
+        / | | \
+          |_|
+      kabuto mask
+FOLIO_BANNER_ALL
+    awk -v dir="$_bdir" '
+        /^==> ?[0-9A-Za-z._-]+$/ { name=substr($0,4); gsub(/^[ \t]+|[ \t]+$/, "", name); file=dir "/" name ".txt"; next }
+        { if (file != "") print > file }
+    ' "$_bdir/.folio-banners.$$" 2>/dev/null || true
+    rm -f "$_bdir/.folio-banners.$$" 2>/dev/null || true
+
+    cat > "$_home/.config/folio/banner.sh" <<'FOLIO_BANNER_SH'
+# folio-banner.sh — Folio launch sticker. Monochrome, offline, random per shell.
+# Opt out with FLUX_NO_BANNER=1. Sourced at the end of ~/.zshrc.
+folio-banner() {
+  [ "${FLUX_NO_BANNER:-0}" = "1" ] && return 0
+  case $- in *i*) ;; *) return 0;; esac
+  setopt localoptions nullglob
+  local -a _bans
+  _bans=( "$HOME"/.config/folio/banner/*.txt )
+  if [[ -f "${_bans[1]}" ]]; then
+    local _bi=$(( RANDOM % ${#_bans} + 1 ))
+    cat "${_bans[$_bi]}" 2>/dev/null || true
+  fi
+  unset _bans _bi
+  if command -v fastfetch >/dev/null 2>&1; then
+    local _ff="$HOME/.local/share/fastfetch/presets/termux.jsonc"
+    if [ -f "$_ff" ]; then
+      { fastfetch --config "$_ff" 2>/dev/null || true; } &!
+    else
+      { fastfetch --config termux 2>/dev/null || true; } &!
+    fi
+    unset _ff
+  else
+    printf '%s@%s | %s | %s\n' "${USER:-flux}" "$(hostname 2>/dev/null || echo folio)" \
+      "$(sed -n 's/^PRETTY_NAME=//p' /etc/os-release 2>/dev/null | tr -d '\"' | head -n 1)" \
+      "$(date +%H:%M 2>/dev/null)"
+  fi
+}
+folio-banner
+FOLIO_BANNER_SH
+
+    if [ -n "$_owner" ]; then
+        chown -R "$_owner" "$_home/.config/folio" 2>/dev/null || true
+    fi
+    return 0
+}
+
 configure_fastfetch() {
     echo > "$PREFIX/etc/motd"
     rm -f "$PREFIX/etc/motd"
@@ -197,12 +331,23 @@ configure_fastfetch() {
 }
 FFEOF
 
+    # Random monochrome anime launch sticker (replaces the plain fastfetch line).
+    _flux_write_folio_banner "$HOME"
+
     RCFILE="$HOME/.zshrc"
     [ -f "$RCFILE" ] || touch "$RCFILE"
 
-    # Add fastfetch at top if missing (prefers the local monochrome preset).
-    if ! grep -q 'fastfetch --config' "$RCFILE"; then
-        sed -i '1ifastfetch --config "$HOME/.local/share/fastfetch/presets/termux.jsonc" 2>/dev/null || fastfetch 2>/dev/null || true' "$RCFILE"
+    # Drop the plain auto-print fastfetch line from older runs; the banner runs
+    # fastfetch itself (info block) after printing the sticker.
+    if grep -q 'fastfetch --config' "$RCFILE" 2>/dev/null; then
+        grep -v '^fastfetch --config' "$RCFILE" > "${RCFILE}.folio.$$" 2>/dev/null \
+            && mv -f "${RCFILE}.folio.$$" "$RCFILE" 2>/dev/null || rm -f "${RCFILE}.folio.$$"
+    fi
+    if ! grep -q 'folio/banner.sh' "$RCFILE" 2>/dev/null; then
+        {
+            printf '\n# Folio launch sticker (random monochrome anime banner; opt out FLUX_NO_BANNER=1)\n'
+            printf '[ -r "$HOME/.config/folio/banner.sh" ] && . "$HOME/.config/folio/banner.sh"\n'
+        } >> "$RCFILE"
     fi
 
     echo "✅ Fastfetch configured."
@@ -210,11 +355,33 @@ FFEOF
     chsh -s zsh
 }
 
+# ── Folio Linux appearance (host Termux side) ────────────────────────────────
+# Applies the terminal colors from ~/.config/folio/appearance.env when the app
+# staged one for the host bootstrap. No-op otherwise; never fatal.
+apply_host_appearance() {
+    ENV="$HOME/.config/folio/appearance.env"
+    [ -r "$ENV" ] || return 0
+    FG=$(. "$ENV" >/dev/null 2>&1 || true; printf '%s' "${FLUX_TERM_FG:-#F4F4F5}")
+    BG=$(. "$ENV" >/dev/null 2>&1 || true; printf '%s' "${FLUX_TERM_BG:-#09090B}")
+    mkdir -p "$HOME/.termux" 2>/dev/null || true
+    {
+        printf 'foreground=%s\n' "$FG"
+        printf 'background=%s\n' "$BG"
+        printf 'cursor=%s\n' "$FG"
+    } > "$HOME/.termux/colors.properties" 2>/dev/null || true
+    if command -v termux-reload-settings >/dev/null 2>&1; then
+        termux-reload-settings >/dev/null 2>&1 || true
+    fi
+    unset ENV FG BG
+    return 0
+}
+
 # Main execution
 install_ohmyzsh
 set_termux_colors
 install_nerd_font
 configure_fastfetch
+apply_host_appearance
 
 echo ""
 echo "🎉 Folio: Termux enhancement complete!"

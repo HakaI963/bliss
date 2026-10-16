@@ -131,7 +131,7 @@ class OnboardingInstallRunner(private val ctx: Context) {
         try {
             BaseInstallService.start(
                 appCtx,
-                title = "Folio — Installing",
+                title = "Folio Linux — Installing",
                 text = "${profile.displayName} base desktop",
                 percent = 0
             )
@@ -487,7 +487,7 @@ class OnboardingInstallRunner(private val ctx: Context) {
         if (!RootShell.isRootAvailable()) {
             postFail(
                 onProgress, phases,
-                "Root not available. Grant superuser to Folio, then retry."
+                "Root not available. Grant superuser to Folio Linux, then retry."
             )
             return
         }
@@ -1124,7 +1124,7 @@ class OnboardingInstallRunner(private val ctx: Context) {
         try {
             BaseInstallService.update(
                 appCtx,
-                title = "Folio — $label",
+                title = "Folio Linux — $label",
                 text = detail,
                 percent = percent
             )

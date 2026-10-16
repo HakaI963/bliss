@@ -217,6 +217,8 @@ _flux_ensure_home() {
 #!/bin/sh
 export PULSE_SERVER=tcp:127.0.0.1
 [ -f "$HOME/.Xresources" ] && xrdb "$HOME/.Xresources"
+# Folio Linux appearance (wallpaper/colors/terminal; hash-guarded inside).
+[ -r "$HOME/.config/folio/appearance-apply.sh" ] && sh "$HOME/.config/folio/appearance-apply.sh" >/dev/null 2>&1 || true
 exec startxfce4
 EOF
     chmod +x /home/flux/.vnc/xstartup
@@ -601,4 +603,345 @@ _flux_install_pulse_client() {
 _flux_setup_pulse() {
     _flux_write_pulse_client
     _flux_install_pulse_client
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Folio Linux appearance: apply the app-staged wallpaper/colors/terminal config
+# (~/.config/folio/appearance.env + appearance-apply.sh, staged by the app).
+# No-op when the user never configured appearance. Forces ONE pass because
+# callers are install / script re-run paths that just rewrote the defaults.
+# ─────────────────────────────────────────────────────────────────────────────
+_flux_apply_folio_appearance() {
+    _home="${1:-/home/flux}"
+    _script="$_home/.config/folio/appearance-apply.sh"
+    [ -r "$_script" ] || { unset _home _script; return 0; }
+    FOLIO_APPLY_HOME="$_home" FOLIO_APPLY_FORCE=1 \
+        sh "$_script" >/dev/null 2>&1 || true
+    unset _home _script
+    return 0
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Phone-compact XFCE defaults (idempotent, offline, never fatal).
+#
+# One 30px top panel (black, icon tasklist), dark/mono theme reuse, Xft DPI 96
+# (scale factor 1), 9-10pt fonts, Home-only desktop icons, shipped dark
+# wallpaper when reachable (solid charcoal otherwise), Super+Enter terminal /
+# Super+E Thunar / PrintScreen-to-~/Pictures shortcuts, single-click Thunar.
+# Called from every family script's XFCE branch (guarded, `|| true`).
+# Full theming still happens in setup_customization_*.sh.
+# ─────────────────────────────────────────────────────────────────────────────
+_flux_xfce_compact_defaults() {
+    _h="/home/flux"
+    [ -d "$_h" ] || return 0
+    _cfg="$_h/.config/xfce4/xfconf/xfce-perchannel-xml"
+    mkdir -p "$_cfg" 2>/dev/null || return 0
+
+    # Reuse what the guest ships; never invent theme/icon names.
+    _theme="Adwaita"
+    for _t in Space-transparency Adwaita-dark Greybird-dark; do
+        if [ -d "/usr/share/themes/$_t" ]; then _theme="$_t"; break; fi
+    done
+    _icon="Adwaita"
+    [ -d /usr/share/icons/Papirus-Dark ] && _icon="Papirus-Dark"
+    _cursor="default"
+    [ -d /usr/share/icons/Vimix-white-cursors ] && _cursor="Vimix-white-cursors"
+    if [ "$_cursor" = "default" ] && [ -d /usr/share/icons/Vimix-cursors ]; then
+        _cursor="Vimix-cursors"
+    fi
+    if fc-list 2>/dev/null | grep -qi "JetBrainsMono Nerd"; then
+        _font="JetBrainsMono Nerd Font 9"
+        _mono="JetBrainsMono Nerd Font Mono 10"
+        _title="JetBrainsMono Nerd Font Bold 9"
+    elif fc-list 2>/dev/null | grep -qi "DejaVu Sans Mono"; then
+        _font="DejaVu Sans 9"
+        _mono="DejaVu Sans Mono 10"
+        _title="DejaVu Sans Bold 9"
+    else
+        _font="Sans 9"
+        _mono="Monospace 10"
+        _title="Sans Bold 9"
+    fi
+
+    # Whisker menu only when its panel plugin is actually installed.
+    _menu_plugin="applicationsmenu"
+    if [ -e /usr/lib/xfce4/panel/plugins/libwhiskermenu.so ] \
+        || [ -e /usr/lib64/xfce4/panel/plugins/libwhiskermenu.so ] \
+        || command -v xfce4-whiskermenu-plugin >/dev/null 2>&1; then
+        _menu_plugin="whiskermenu"
+    fi
+
+    # Wallpaper: shipped mono dark PNG when staged/reachable; else solid charcoal.
+    _wpdir="$_h/Pictures/Wallpapers"
+    mkdir -p "$_wpdir" 2>/dev/null || true
+    _wp="$_wpdir/fluxlinux-dark.png"
+    if [ ! -f "$_wp" ]; then
+        for _src in /tmp/flux_xfce_assets/fluxlinux-dark.png \
+                    /usr/share/backgrounds/folio/fluxlinux-dark.png; do
+            if [ -f "$_src" ]; then
+                cp -f "$_src" "$_wp" 2>/dev/null && break
+            fi
+        done
+    fi
+    _img_style=5
+    [ -f "$_wp" ] || _img_style=0
+
+    cat > "$_cfg/xsettings.xml" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<channel name="xsettings" version="1.0">
+  <property name="Net" type="empty">
+    <property name="ThemeName" type="string" value="$_theme"/>
+    <property name="IconThemeName" type="string" value="$_icon"/>
+    <property name="EnableEventSounds" type="bool" value="false"/>
+    <property name="EnableInputFeedbackSounds" type="bool" value="false"/>
+  </property>
+  <property name="Gtk" type="empty">
+    <property name="CursorThemeName" type="string" value="$_cursor"/>
+    <property name="CursorThemeSize" type="int" value="32"/>
+    <property name="FontName" type="string" value="$_font"/>
+    <property name="MonospaceFontName" type="string" value="$_mono"/>
+    <property name="DecorationLayout" type="string" value="menu:minimize,maximize,close"/>
+  </property>
+  <property name="Xft" type="empty">
+    <property name="DPI" type="int" value="96"/>
+    <property name="Antialias" type="int" value="1"/>
+    <property name="HintStyle" type="string" value="hintslight"/>
+    <property name="RGBA" type="string" value="rgb"/>
+  </property>
+  <property name="Gdk" type="empty">
+    <property name="WindowScalingFactor" type="int" value="1"/>
+  </property>
+</channel>
+EOF
+
+    cat > "$_cfg/xfwm4.xml" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<channel name="xfwm4" version="1.0">
+  <property name="general" type="empty">
+    <property name="theme" type="string" value="$_theme"/>
+    <property name="title_font" type="string" value="$_title"/>
+    <property name="title_alignment" type="string" value="left"/>
+    <property name="button_layout" type="string" value="|HMC"/>
+    <property name="borderless_maximize" type="bool" value="true"/>
+    <property name="use_compositing" type="bool" value="false"/>
+    <property name="snap_to_border" type="bool" value="true"/>
+    <property name="snap_to_windows" type="bool" value="true"/>
+    <property name="tile_on_move" type="bool" value="true"/>
+    <property name="wrap_windows" type="bool" value="true"/>
+    <property name="workspace_count" type="int" value="1"/>
+    <property name="scroll_workspaces" type="bool" value="false"/>
+  </property>
+</channel>
+EOF
+
+    _monitors="monitor0 monitor1 monitorVNC-0 monitorbuiltin builtin monitorHDMI-A-0 monitorVirtual-0 monitorVirtual-1 monitorVirtual1"
+    _props=""
+    for _m in $_monitors; do
+        _props="$_props
+      <property name=\"$_m\" type=\"empty\">
+        <property name=\"workspace0\" type=\"empty\">
+          <property name=\"last-image\" type=\"string\" value=\"$_wp\"/>
+          <property name=\"image-style\" type=\"int\" value=\"$_img_style\"/>
+          <property name=\"color-style\" type=\"int\" value=\"0\"/>
+          <property name=\"rgba1\" type=\"array\">
+            <value type=\"double\" value=\"0.0431372549019608\"/>
+            <value type=\"double\" value=\"0.0470588235294118\"/>
+            <value type=\"double\" value=\"0.0549019607843137\"/>
+            <value type=\"double\" value=\"1\"/>
+          </property>
+          <property name=\"rgba2\" type=\"array\">
+            <value type=\"double\" value=\"0.0431372549019608\"/>
+            <value type=\"double\" value=\"0.0470588235294118\"/>
+            <value type=\"double\" value=\"0.0549019607843137\"/>
+            <value type=\"double\" value=\"1\"/>
+          </property>
+        </property>
+      </property>"
+    done
+    cat > "$_cfg/xfce4-desktop.xml" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<channel name="xfce4-desktop" version="1.0">
+  <property name="backdrop" type="empty">
+    <property name="screen0" type="empty">$_props
+    </property>
+  </property>
+  <property name="desktop-icons" type="empty">
+    <property name="style" type="int" value="2"/>
+    <property name="file-icons" type="empty">
+      <property name="show-home" type="bool" value="true"/>
+      <property name="show-filesystem" type="bool" value="false"/>
+      <property name="show-trash" type="bool" value="false"/>
+      <property name="show-removable" type="bool" value="false"/>
+    </property>
+  </property>
+</channel>
+EOF
+
+    cat > "$_cfg/xfce4-panel.xml" <<EOF
+<?xml version="1.1" encoding="UTF-8"?>
+<channel name="xfce4-panel" version="1.0">
+  <property name="configver" type="int" value="2"/>
+  <property name="panels" type="array">
+    <value type="int" value="1"/>
+    <property name="dark-mode" type="bool" value="true"/>
+    <property name="panel-1" type="empty">
+      <property name="position" type="string" value="p=6;x=0;y=0"/>
+      <property name="length" type="double" value="100"/>
+      <property name="position-locked" type="bool" value="true"/>
+      <property name="size" type="uint" value="30"/>
+      <property name="icon-size" type="uint" value="16"/>
+      <property name="background-style" type="uint" value="1"/>
+      <property name="background-rgba" type="array">
+        <value type="double" value="0.0431372549019608"/>
+        <value type="double" value="0.0470588235294118"/>
+        <value type="double" value="0.0549019607843137"/>
+        <value type="double" value="0.94999999999999996"/>
+      </property>
+      <property name="plugin-ids" type="array">
+        <value type="int" value="1"/>
+        <value type="int" value="2"/>
+        <value type="int" value="3"/>
+        <value type="int" value="4"/>
+        <value type="int" value="5"/>
+        <value type="int" value="6"/>
+      </property>
+    </property>
+  </property>
+  <property name="plugins" type="empty">
+    <property name="plugin-1" type="string" value="$_menu_plugin">
+      <property name="button-icon" type="string" value="open-menu"/>
+      <property name="button-title" type="string" value="Menu"/>
+      <property name="show-button-title" type="bool" value="false"/>
+      <property name="show-menu-icons" type="bool" value="true"/>
+      <property name="show-tooltips" type="bool" value="false"/>
+      <property name="small" type="bool" value="true"/>
+    </property>
+    <property name="plugin-2" type="string" value="tasklist">
+      <property name="grouping" type="uint" value="1"/>
+      <property name="flat-buttons" type="bool" value="true"/>
+      <property name="show-labels" type="bool" value="false"/>
+      <property name="show-handle" type="bool" value="false"/>
+      <property name="show-wireframes" type="bool" value="false"/>
+      <property name="window-scrolling" type="bool" value="true"/>
+    </property>
+    <property name="plugin-3" type="string" value="separator">
+      <property name="expand" type="bool" value="true"/>
+      <property name="style" type="uint" value="0"/>
+    </property>
+    <property name="plugin-4" type="string" value="systray">
+      <property name="square-icons" type="bool" value="true"/>
+    </property>
+    <property name="plugin-5" type="string" value="clock">
+      <property name="mode" type="uint" value="4"/>
+      <property name="digital-layout" type="uint" value="1"/>
+      <property name="digital-format" type="string" value="%H:%M"/>
+      <property name="tooltip-format" type="string" value="%A, %B %d, %Y"/>
+      <property name="show-seconds" type="bool" value="false"/>
+      <property name="show-meridiem" type="bool" value="false"/>
+      <property name="timezone" type="string" value=""/>
+    </property>
+    <property name="plugin-6" type="string" value="actions">
+      <property name="appearance" type="uint" value="0"/>
+      <property name="items" type="array">
+        <value type="string" value="logout-dialog"/>
+      </property>
+    </property>
+  </property>
+</channel>
+EOF
+
+    cat > "$_cfg/xfce4-keyboard-shortcuts.xml" <<EOF
+<?xml version="1.1" encoding="UTF-8"?>
+<channel name="xfce4-keyboard-shortcuts" version="1.0">
+  <property name="commands" type="empty">
+    <property name="custom" type="empty">
+      <property name="&lt;Super&gt;Return" type="string" value="xfce4-terminal">
+        <property name="startup-notify" type="bool" value="true"/>
+      </property>
+      <property name="&lt;Super&gt;e" type="string" value="thunar">
+        <property name="startup-notify" type="bool" value="true"/>
+      </property>
+      <property name="&lt;Primary&gt;&lt;Alt&gt;t" type="string" value="xfce4-terminal">
+        <property name="startup-notify" type="bool" value="true"/>
+      </property>
+      <property name="Print" type="string" value="xfce4-screenshooter -f -s /home/flux/Pictures"/>
+      <property name="&lt;Shift&gt;Print" type="string" value="xfce4-screenshooter -r -s /home/flux/Pictures"/>
+      <property name="&lt;Alt&gt;F1" type="string" value="xfce4-popup-$_menu_plugin"/>
+      <property name="&lt;Primary&gt;&lt;Alt&gt;Delete" type="string" value="xfce4-session-logout"/>
+      <property name="override" type="bool" value="true"/>
+    </property>
+  </property>
+  <property name="providers" type="array">
+    <value type="string" value="xfwm4"/>
+    <value type="string" value="commands"/>
+  </property>
+</channel>
+EOF
+
+    cat > "$_cfg/xfce4-screensaver.xml" <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<channel name="xfce4-screensaver" version="1.0">
+  <property name="saver" type="empty">
+    <property name="enabled" type="bool" value="false"/>
+  </property>
+  <property name="lock" type="empty">
+    <property name="enabled" type="bool" value="false"/>
+  </property>
+</channel>
+EOF
+
+    cat > "$_cfg/thunar.xml" <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<channel name="thunar" version="1.0">
+  <property name="misc-single-click" type="bool" value="true"/>
+  <property name="misc-thumbnail-mode" type="string" value="THUNAR_THUMBNAIL_MODE_ONLY_LOCAL"/>
+</channel>
+EOF
+    mkdir -p "$_h/.config/Thunar" 2>/dev/null || true
+    if [ ! -f "$_h/.config/Thunar/thunarrc" ] \
+        || ! grep -q '^MiscSingleClick=' "$_h/.config/Thunar/thunarrc" 2>/dev/null; then
+        cat > "$_h/.config/Thunar/thunarrc" <<'EOF'
+[Configuration]
+MiscSingleClick=TRUE
+EOF
+    fi
+
+    mkdir -p "$_h/.config/xfce4/terminal" 2>/dev/null || true
+    cat > "$_h/.config/xfce4/terminal/terminalrc" <<EOF
+[Configuration]
+FontUseSystem=FALSE
+FontName=$_mono
+MiscMenubarDefault=FALSE
+MiscToolbarDefault=FALSE
+MiscConfirmClose=TRUE
+MiscAlwaysShowTabs=FALSE
+MiscBell=FALSE
+MiscCursorBlinks=FALSE
+MiscDefaultGeometry=80x24
+ScrollingLines=1000
+EOF
+    cat > "$_cfg/xfce4-terminal.xml" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<channel name="xfce4-terminal" version="1.0">
+  <property name="font-use-system" type="bool" value="false"/>
+  <property name="font-name" type="string" value="$_mono"/>
+  <property name="misc-menubar-default" type="bool" value="false"/>
+  <property name="misc-toolbar-default" type="bool" value="false"/>
+</channel>
+EOF
+
+    # Ownership stays with the home owner (proot: Android app uid).
+    _uid=$(_flux_stat_u "$_h")
+    _gid=$(_flux_stat_g "$_h")
+    if [ -n "${_uid:-}" ]; then
+        chown -R "$_uid:$_gid" "$_h/.config" 2>/dev/null || true
+    fi
+    # Folio Linux appearance (staged by the app) — applied after the compact
+    # defaults so the user's wallpaper/colors win. No-op when unconfigured.
+    if command -v _flux_apply_folio_appearance >/dev/null 2>&1; then
+        _flux_apply_folio_appearance "$_h" || true
+    fi
+    unset _h _cfg _theme _icon _cursor _font _mono _title _menu_plugin \
+        _wpdir _wp _img_style _monitors _props _m _t _src _uid _gid
+    return 0
 }

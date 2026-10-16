@@ -143,6 +143,7 @@ fi
 # containers whose family pre-dates xz in the base set). Best-effort.
 _flux_pkg_add xz-utils 2>/dev/null || _flux_pkg_add xz 2>/dev/null || true
 _flux_pkg_add xfce4-screenshooter 2>/dev/null || true
+_flux_pkg_add xfce4-whiskermenu-plugin 2>/dev/null || true
 _flux_pkg_add fastfetch 2>/dev/null || _flux_pkg_add neofetch 2>/dev/null || true
 
 # Fail closed: guest OMZ + pokemon need git and zsh. Host PREFIX/bin/git is
@@ -607,14 +608,16 @@ if ! fc-list 2>/dev/null | grep -qi "JetBrainsMono Nerd"; then
 fi
 
 if fc-list 2>/dev/null | grep -qi "JetBrainsMono Nerd"; then
-    _gtk_font="JetBrainsMono Nerd Font 10"
+    _gtk_font="JetBrainsMono Nerd Font 9"
     _mono_font="JetBrainsMono Nerd Font Mono 10"
-    _term_font="JetBrainsMono Nerd Font 12"
+    _term_font="JetBrainsMono Nerd Font 10"
+    _title_font="JetBrainsMono Nerd Font Bold 9"
 else
     echo "Folio: JetBrainsMono Nerd not in fontconfig — VTE fallback DejaVu Sans Mono"
-    _gtk_font="DejaVu Sans Mono 10"
+    _gtk_font="DejaVu Sans Mono 9"
     _mono_font="DejaVu Sans Mono 10"
-    _term_font="DejaVu Sans Mono 12"
+    _term_font="DejaVu Sans Mono 10"
+    _title_font="DejaVu Sans Bold 9"
 fi
 
 echo "Folio: Applying XFCE4 Settings..."
@@ -628,15 +631,24 @@ cat > "$XFCONF_DIR/xsettings.xml" <<EOF
   <property name="Net" type="empty">
     <property name="ThemeName" type="string" value="$SEL_THEME"/>
     <property name="IconThemeName" type="string" value="$SEL_ICON"/>
+    <property name="EnableEventSounds" type="bool" value="false"/>
+    <property name="EnableInputFeedbackSounds" type="bool" value="false"/>
   </property>
   <property name="Gtk" type="empty">
     <property name="CursorThemeName" type="string" value="$SEL_CURSOR"/>
-    <property name="CursorThemeSize" type="int" value="52"/>
+    <property name="CursorThemeSize" type="int" value="32"/>
     <property name="FontName" type="string" value="$_gtk_font"/>
     <property name="MonospaceFontName" type="string" value="$_mono_font"/>
+    <property name="DecorationLayout" type="string" value="minimize,maximize,close"/>
+  </property>
+  <property name="Xft" type="empty">
+    <property name="DPI" type="int" value="96"/>
+    <property name="Antialias" type="int" value="1"/>
+    <property name="HintStyle" type="string" value="hintslight"/>
+    <property name="RGBA" type="string" value="rgb"/>
   </property>
   <property name="Gdk" type="empty">
-    <property name="WindowScalingFactor" type="int" value="2"/>
+    <property name="WindowScalingFactor" type="int" value="1"/>
   </property>
 </channel>
 EOF
@@ -670,7 +682,17 @@ cat > "$XFCONF_DIR/xfwm4.xml" <<EOF
 <channel name="xfwm4" version="1.0">
   <property name="general" type="empty">
     <property name="theme" type="string" value="$SEL_THEME"/>
+    <property name="title_font" type="string" value="$_title_font"/>
+    <property name="title_alignment" type="string" value="left"/>
+    <property name="button_layout" type="string" value="|HMC"/>
+    <property name="borderless_maximize" type="bool" value="true"/>
     <property name="use_compositing" type="bool" value="false"/>
+    <property name="snap_to_border" type="bool" value="true"/>
+    <property name="snap_to_windows" type="bool" value="true"/>
+    <property name="tile_on_move" type="bool" value="true"/>
+    <property name="wrap_windows" type="bool" value="true"/>
+    <property name="workspace_count" type="int" value="1"/>
+    <property name="scroll_workspaces" type="bool" value="false"/>
   </property>
 </channel>
 EOF
@@ -684,6 +706,18 @@ for M in $MONITORS; do
           <property name=\"last-image\" type=\"string\" value=\"$WALLPAPER_PATH\"/>
           <property name=\"image-style\" type=\"int\" value=\"5\"/>
           <property name=\"color-style\" type=\"int\" value=\"0\"/>
+          <property name=\"rgba1\" type=\"array\">
+            <value type=\"double\" value=\"0.0431372549019608\"/>
+            <value type=\"double\" value=\"0.0470588235294118\"/>
+            <value type=\"double\" value=\"0.0549019607843137\"/>
+            <value type=\"double\" value=\"1\"/>
+          </property>
+          <property name=\"rgba2\" type=\"array\">
+            <value type=\"double\" value=\"0.0431372549019608\"/>
+            <value type=\"double\" value=\"0.0470588235294118\"/>
+            <value type=\"double\" value=\"0.0549019607843137\"/>
+            <value type=\"double\" value=\"1\"/>
+          </property>
         </property>
       </property>"
 done
@@ -708,6 +742,152 @@ EOF
 
 _flux_chown_r "$CUSTOM_USER:$CUSTOM_GROUP" "$USER_HOME/.config" 2>/dev/null || true
 _flux_chown_r "$CUSTOM_USER:$CUSTOM_GROUP" "$USER_HOME" 2>/dev/null || true
+
+# ── Compact phone layout: single 30px mono top panel + mono shortcuts ───────
+# Reuses the guest's shipped theme/icons; no colors, no extra downloads.
+_flux_write_folio_xfce_compact() {
+    _cfg="$USER_HOME/.config/xfce4/xfconf/xfce-perchannel-xml"
+    mkdir -p "$_cfg" "$USER_HOME/Pictures" 2>/dev/null || return 0
+    _menu_plugin="applicationsmenu"
+    if [ -e /usr/lib/xfce4/panel/plugins/libwhiskermenu.so ] \
+        || [ -e /usr/lib64/xfce4/panel/plugins/libwhiskermenu.so ] \
+        || command -v xfce4-whiskermenu-plugin >/dev/null 2>&1; then
+        _menu_plugin="whiskermenu"
+    fi
+
+    cat > "$_cfg/xfce4-panel.xml" <<EOF
+<?xml version="1.1" encoding="UTF-8"?>
+<channel name="xfce4-panel" version="1.0">
+  <property name="configver" type="int" value="2"/>
+  <property name="panels" type="array">
+    <value type="int" value="1"/>
+    <property name="dark-mode" type="bool" value="true"/>
+    <property name="panel-1" type="empty">
+      <property name="position" type="string" value="p=6;x=0;y=0"/>
+      <property name="length" type="double" value="100"/>
+      <property name="position-locked" type="bool" value="true"/>
+      <property name="size" type="uint" value="30"/>
+      <property name="icon-size" type="uint" value="16"/>
+      <property name="background-style" type="uint" value="1"/>
+      <property name="background-rgba" type="array">
+        <value type="double" value="0.0431372549019608"/>
+        <value type="double" value="0.0470588235294118"/>
+        <value type="double" value="0.0549019607843137"/>
+        <value type="double" value="0.94999999999999996"/>
+      </property>
+      <property name="plugin-ids" type="array">
+        <value type="int" value="1"/>
+        <value type="int" value="2"/>
+        <value type="int" value="3"/>
+        <value type="int" value="4"/>
+        <value type="int" value="5"/>
+        <value type="int" value="6"/>
+      </property>
+    </property>
+  </property>
+  <property name="plugins" type="empty">
+    <property name="plugin-1" type="string" value="$_menu_plugin">
+      <property name="button-icon" type="string" value="open-menu"/>
+      <property name="button-title" type="string" value="Menu"/>
+      <property name="show-button-title" type="bool" value="false"/>
+      <property name="show-menu-icons" type="bool" value="true"/>
+      <property name="show-tooltips" type="bool" value="false"/>
+      <property name="small" type="bool" value="true"/>
+    </property>
+    <property name="plugin-2" type="string" value="tasklist">
+      <property name="grouping" type="uint" value="1"/>
+      <property name="flat-buttons" type="bool" value="true"/>
+      <property name="show-labels" type="bool" value="false"/>
+      <property name="show-handle" type="bool" value="false"/>
+      <property name="show-wireframes" type="bool" value="false"/>
+      <property name="window-scrolling" type="bool" value="true"/>
+    </property>
+    <property name="plugin-3" type="string" value="separator">
+      <property name="expand" type="bool" value="true"/>
+      <property name="style" type="uint" value="0"/>
+    </property>
+    <property name="plugin-4" type="string" value="systray">
+      <property name="square-icons" type="bool" value="true"/>
+    </property>
+    <property name="plugin-5" type="string" value="clock">
+      <property name="mode" type="uint" value="4"/>
+      <property name="digital-layout" type="uint" value="1"/>
+      <property name="digital-format" type="string" value="%H:%M"/>
+      <property name="tooltip-format" type="string" value="%A, %B %d, %Y"/>
+      <property name="show-seconds" type="bool" value="false"/>
+      <property name="show-meridiem" type="bool" value="false"/>
+      <property name="timezone" type="string" value=""/>
+    </property>
+    <property name="plugin-6" type="string" value="actions">
+      <property name="appearance" type="uint" value="0"/>
+      <property name="items" type="array">
+        <value type="string" value="logout-dialog"/>
+      </property>
+    </property>
+  </property>
+</channel>
+EOF
+
+    cat > "$_cfg/xfce4-keyboard-shortcuts.xml" <<EOF
+<?xml version="1.1" encoding="UTF-8"?>
+<channel name="xfce4-keyboard-shortcuts" version="1.0">
+  <property name="commands" type="empty">
+    <property name="custom" type="empty">
+      <property name="&lt;Super&gt;Return" type="string" value="xfce4-terminal">
+        <property name="startup-notify" type="bool" value="true"/>
+      </property>
+      <property name="&lt;Super&gt;e" type="string" value="thunar">
+        <property name="startup-notify" type="bool" value="true"/>
+      </property>
+      <property name="&lt;Primary&gt;&lt;Alt&gt;t" type="string" value="xfce4-terminal">
+        <property name="startup-notify" type="bool" value="true"/>
+      </property>
+      <property name="Print" type="string" value="xfce4-screenshooter -f -s /home/flux/Pictures"/>
+      <property name="&lt;Shift&gt;Print" type="string" value="xfce4-screenshooter -r -s /home/flux/Pictures"/>
+      <property name="&lt;Alt&gt;F1" type="string" value="xfce4-popup-$_menu_plugin"/>
+      <property name="&lt;Primary&gt;&lt;Alt&gt;Delete" type="string" value="xfce4-session-logout"/>
+      <property name="override" type="bool" value="true"/>
+    </property>
+  </property>
+  <property name="providers" type="array">
+    <value type="string" value="xfwm4"/>
+    <value type="string" value="commands"/>
+  </property>
+</channel>
+EOF
+
+    cat > "$_cfg/xfce4-screensaver.xml" <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<channel name="xfce4-screensaver" version="1.0">
+  <property name="saver" type="empty">
+    <property name="enabled" type="bool" value="false"/>
+  </property>
+  <property name="lock" type="empty">
+    <property name="enabled" type="bool" value="false"/>
+  </property>
+</channel>
+EOF
+
+    cat > "$_cfg/thunar.xml" <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<channel name="thunar" version="1.0">
+  <property name="misc-single-click" type="bool" value="true"/>
+  <property name="misc-thumbnail-mode" type="string" value="THUNAR_THUMBNAIL_MODE_ONLY_LOCAL"/>
+</channel>
+EOF
+    mkdir -p "$USER_HOME/.config/Thunar" 2>/dev/null || true
+    if [ ! -f "$USER_HOME/.config/Thunar/thunarrc" ]; then
+        cat > "$USER_HOME/.config/Thunar/thunarrc" <<'EOF'
+[Configuration]
+MiscSingleClick=TRUE
+EOF
+    fi
+    _flux_chown_r "$CUSTOM_USER:$CUSTOM_GROUP" "$_cfg" 2>/dev/null || true
+    _flux_chown_r "$CUSTOM_USER:$CUSTOM_GROUP" "$USER_HOME/.config/Thunar" 2>/dev/null || true
+    unset _cfg _menu_plugin
+    return 0
+}
+_flux_write_folio_xfce_compact
 
 _flux_timeout_works() {
     # Chimera/BSD timeout under Android chroot dies with
@@ -903,20 +1083,8 @@ export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp}"
 # shell can get SIGTTIN-killed. Disable MONITOR (job control) for the guest.
 setopt no_monitor
 
-{
-  if command -v fastfetch >/dev/null 2>&1; then
-    _ff="$HOME/.local/share/fastfetch/presets/termux.jsonc"
-    if [ -f "$_ff" ]; then
-      fastfetch --config "$_ff" 2>/dev/null || true
-    else
-      fastfetch --config termux 2>/dev/null || true
-    fi
-    unset _ff
-  fi
-  if command -v pokemon-colorscripts >/dev/null 2>&1; then
-    pokemon-colorscripts --no-title -r 1,2,3 2>/dev/null || true
-  fi
-} &!
+# Launch sticker + info block: ~/.config/folio/banner.sh (sourced at the end).
+# pokemon-colorscripts stays installed but no longer auto-prints (old style).
 
 export ZSH="${ZSH:-$HOME/.oh-my-zsh}"
 if [ -f "$ZSH/oh-my-zsh.sh" ]; then
@@ -955,6 +1123,9 @@ if command -v sudo >/dev/null 2>&1; then
     apk() { command sudo apk "$@"; }
   fi
 fi
+# ── Folio launch sticker (random monochrome anime banner; opt out FLUX_NO_BANNER=1)
+[ -r "$HOME/.config/folio/banner.sh" ] && . "$HOME/.config/folio/banner.sh"
+
 ZSHEOF
 _flux_chown "$CUSTOM_USER:$CUSTOM_GROUP" "$ZSHRC"
 ZPROFILE="$USER_HOME/.zprofile"
@@ -963,6 +1134,140 @@ if [ ! -f "$ZPROFILE" ]; then
         > "$ZPROFILE"
     _flux_chown "$CUSTOM_USER:$CUSTOM_GROUP" "$ZPROFILE"
 fi
+
+# ── Folio launch stickers: 8 monochrome anime-ish ASCII designs ─────────────
+# Installs ~/.config/folio/banner/*.txt (random pick per shell open) and
+# ~/.config/folio/banner.sh (the folio-banner function sourced by .zshrc).
+# Offline, idempotent, cheap. Opt out at runtime: FLUX_NO_BANNER=1.
+_flux_write_folio_banner() {
+    _home="$1"
+    _owner="${2:-}"
+    [ -n "$_home" ] || return 0
+    _bdir="$_home/.config/folio/banner"
+    _need=0
+    for _b in 01-catgirl 02-mecha 03-kitsune 04-shonen 05-chibi-star 06-robot-kitty 07-magical 08-samurai; do
+        [ -s "$_bdir/$_b.txt" ] || _need=1
+    done
+    [ -s "$_home/.config/folio/banner.sh" ] || _need=1
+    [ "$_need" = "1" ] || return 0
+
+    mkdir -p "$_bdir" 2>/dev/null || return 0
+    cat > "$_bdir/.folio-banners.$$" <<'FOLIO_BANNER_ALL'
+==>01-catgirl
+      /\   /\
+     /  \_/  \        nyah~
+    |  o     o  |
+    |     ^     |
+     \  \___/  /
+      \_______/
+       /|   |\
+      / |   | \
+        |___|
+==>02-mecha
+     __________________
+    |  [=]  [=]  [=]  |
+    |   ___________   |
+    |  |  M E C H |   |
+    |  |___________|  |
+    |_________________|
+      /|           |\
+     / |           | \
+       |___|_|_|___|
+==>03-kitsune
+         /\     /\
+        /  \___/  \
+       |  o     o  |
+       |     ^     |
+       |  \  U  /  |
+        \  \___/  /
+         \_______/
+        kitsune mask
+==>04-shonen
+        ,--.
+       / o  \__
+      |  |\   |    FIGHT!
+      |  | \  |
+       \_|  \_|
+        / \   \
+      _/   \   \_
+     (__)  (__)
+==>05-chibi-star
+    .    *    .    *
+      .-=====-.
+   * /  o   o  \ .
+    |     ^     |
+     \  '---'  /
+   .  '-.___.-'  *
+      *    .    .
+==>06-robot-kitty
+     /\_____/\
+    | o     o |     beep
+    | [=====] |     boop
+     \_=====_/
+      /|   |\
+     / |   | \
+       |_| |_|
+==>07-magical
+         \ | /
+      .-=======-.
+     /  *     *  \
+    |  o       o  |   HENSHIN!
+     \    ___    /
+      '-..___..-'
+         (o_o)[*]
+==>08-samurai
+         ___
+        /o o\___
+       |   >    _>
+        \_ _ _/
+         |___|
+         /| |\
+        / | | \
+          |_|
+      kabuto mask
+FOLIO_BANNER_ALL
+    awk -v dir="$_bdir" '
+        /^==> ?[0-9A-Za-z._-]+$/ { name=substr($0,4); gsub(/^[ \t]+|[ \t]+$/, "", name); file=dir "/" name ".txt"; next }
+        { if (file != "") print > file }
+    ' "$_bdir/.folio-banners.$$" 2>/dev/null || true
+    rm -f "$_bdir/.folio-banners.$$" 2>/dev/null || true
+
+    cat > "$_home/.config/folio/banner.sh" <<'FOLIO_BANNER_SH'
+# folio-banner.sh — Folio launch sticker. Monochrome, offline, random per shell.
+# Opt out with FLUX_NO_BANNER=1. Sourced at the end of ~/.zshrc.
+folio-banner() {
+  [ "${FLUX_NO_BANNER:-0}" = "1" ] && return 0
+  case $- in *i*) ;; *) return 0;; esac
+  setopt localoptions nullglob
+  local -a _bans
+  _bans=( "$HOME"/.config/folio/banner/*.txt )
+  if [[ -f "${_bans[1]}" ]]; then
+    local _bi=$(( RANDOM % ${#_bans} + 1 ))
+    cat "${_bans[$_bi]}" 2>/dev/null || true
+  fi
+  unset _bans _bi
+  if command -v fastfetch >/dev/null 2>&1; then
+    local _ff="$HOME/.local/share/fastfetch/presets/termux.jsonc"
+    if [ -f "$_ff" ]; then
+      { fastfetch --config "$_ff" 2>/dev/null || true; } &!
+    else
+      { fastfetch --config termux 2>/dev/null || true; } &!
+    fi
+    unset _ff
+  else
+    printf '%s@%s | %s | %s\n' "${USER:-flux}" "$(hostname 2>/dev/null || echo folio)" \
+      "$(sed -n 's/^PRETTY_NAME=//p' /etc/os-release 2>/dev/null | tr -d '\"' | head -n 1)" \
+      "$(date +%H:%M 2>/dev/null)"
+  fi
+}
+folio-banner
+FOLIO_BANNER_SH
+
+    if [ -n "$_owner" ]; then
+        chown -R "$_owner" "$_home/.config/folio" 2>/dev/null || true
+    fi
+    return 0
+}
 
 _flux_write_fastfetch_preset() {
     _home="$1"
@@ -999,6 +1304,9 @@ FFEOF
 }
 _flux_write_fastfetch_preset "$USER_HOME" "$CUSTOM_USER:$CUSTOM_GROUP"
 _flux_write_fastfetch_preset /root
+# Random monochrome anime launch sticker for the guest shell.
+_flux_write_folio_banner "$USER_HOME" "$CUSTOM_USER:$CUSTOM_GROUP"
+_flux_write_folio_banner /root
 mkdir -p /usr/share/fastfetch/presets
 if [ -f "$USER_HOME/.local/share/fastfetch/presets/termux.jsonc" ]; then
     cp -f "$USER_HOME/.local/share/fastfetch/presets/termux.jsonc" \
@@ -1014,6 +1322,14 @@ if command -v zsh >/dev/null 2>&1; then
 fi
 
 _flux_chown_r "$CUSTOM_USER:$CUSTOM_GROUP" "$USER_HOME" 2>/dev/null || true
+
+# ── Folio Linux appearance (wallpaper/colors/terminal) ───────────────────────
+# Re-apply the app-staged appearance config. Runs last (after the compact
+# defaults + theme setup) and forces one pass so a re-run always wins.
+if [ -r "$USER_HOME/.config/folio/appearance-apply.sh" ]; then
+    FOLIO_APPLY_HOME="$USER_HOME" FOLIO_APPLY_FORCE=1 \
+        sh "$USER_HOME/.config/folio/appearance-apply.sh" >/dev/null 2>&1 || true
+fi
 
 # Proot-safe PM db ownership (portable stat: GNU -c / BSD -f)
 _ref_u=$(stat -c %u /etc 2>/dev/null || stat -f %u /etc 2>/dev/null || true)

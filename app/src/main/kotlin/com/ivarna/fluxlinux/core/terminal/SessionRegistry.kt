@@ -36,6 +36,13 @@ object SessionRegistry {
         val onClosed: ((exitStatus: Int) -> Unit)? = null,
         val distroId: String? = null,
         val iconRes: Int? = null,
+        /**
+         * Shell payload this tab was opened with (null = non-interactive / unknown).
+         * FluxTerminalSessionManager matches on it so "Open Shell" focuses the
+         * existing tab instead of stacking a second one, and so the Qwen launcher
+         * session (payload != interactive sentinel) is never reused as a plain shell.
+         */
+        val shellCmd: String? = null,
     )
 
     private val sessionsList = ArrayList<ManagedSession>()

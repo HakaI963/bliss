@@ -173,8 +173,8 @@ fun InstallConfigScreen(
     }
     val rootfsLine = when (selectedDesktop) {
         DesktopChoice.NONE -> "Installs $baseLine as a terminal base (no desktop). "
-        DesktopChoice.XFCE -> "Installs $baseLine, XFCE4$xfceManagerNote, and Folio theming. "
-        DesktopChoice.KDE -> "Installs $baseLine, KDE Plasma, and Folio theming. "
+        DesktopChoice.XFCE -> "Installs $baseLine, XFCE4$xfceManagerNote, and Folio Linux theming. "
+        DesktopChoice.KDE -> "Installs $baseLine, KDE Plasma, and Folio Linux theming. "
     } + "App modules can be added later from Distro Settings."
 
     val includes: List<Pair<ImageVector, String>> = buildList {
@@ -200,7 +200,7 @@ fun InstallConfigScreen(
             add(
                 Icons.Default.CheckCircle to when (selectedDesktop) {
                     DesktopChoice.KDE -> "KDE Plasma theming / wallpapers / Zsh"
-                    else -> "Folio theme / wallpapers / fonts"
+                    else -> "Folio Linux theme / wallpapers / fonts"
                 }
             )
         }

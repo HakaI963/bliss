@@ -18,6 +18,11 @@ import dev.chrisbanes.haze.haze
 @Composable
 fun GlassScaffold(
     hazeState: HazeState,
+    // Kept for call-site/signature stability. The blur source is now mounted
+    // unconditionally (see the content Box): the old per-tab toggle removed the
+    // HazeNode while the TopBar/BottomNav hazeChild nodes stayed mounted, which is
+    // the tab-switch crash class on device. Blur is only visible where a hazeChild
+    // actually draws, so keeping the source mounted is visually inert.
     blurContent: Boolean = true,
     topBar: @Composable () -> Unit = {},
     bottomBar: @Composable () -> Unit = {},
@@ -44,7 +49,16 @@ fun GlassScaffold(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .then(if (blurContent) Modifier.haze(state = hazeState) else Modifier)
+                        // Haze source stays mounted for the whole screen lifetime.
+                        // HazeNode.onDetach() releases the shared contentLayer without
+                        // resetting state.contentDrawing, and a draw exception leaves
+                        // that flag stuck true — removing the source on a tab switch
+                        // (old `if (blurContent)` toggle) while hazeChild nodes from
+                        // the top bar / dock are still mounted is the crash class
+                        // reported on device. Always-on removes the lifetime race.
+                        // `blurContent` is intentionally unused: blur only renders
+                        // where a hazeChild draws, so this is a no-op visually.
+                        .haze(state = hazeState)
                         .padding(top = paddingValues.calculateTopPadding()) // Only respect top padding from Scaffold
                 ) {
                     content()

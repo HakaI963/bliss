@@ -295,6 +295,7 @@ configure_debian_chroot() {
             export DEBIAN_FRONTEND=noninteractive
             chmod 1777 /tmp /var/tmp 2>/dev/null || true
             apt-get install -y xfce4 xfce4-terminal
+            apt-get install -y --no-install-recommends xfce4-whiskermenu-plugin xfce4-screenshooter 2>/dev/null || true
         ' || goodbye
     else
         progress "Skipping XFCE4 install (FLUX_DESKTOP=$DESKTOP_CHOICE)"

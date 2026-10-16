@@ -18,6 +18,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Refresh
@@ -40,6 +41,7 @@ import com.ivarna.fluxlinux.core.gpu.DriverRelease
 import com.ivarna.fluxlinux.core.gpu.GpuDriverInstaller
 import com.ivarna.fluxlinux.core.gpu.PanvkInstaller
 import com.ivarna.fluxlinux.core.terminal.GpuAccelDetector
+import com.ivarna.fluxlinux.core.theme.AppearanceStore
 import com.ivarna.fluxlinux.core.utils.InstallationQueueManager
 import com.ivarna.fluxlinux.core.utils.StateManager
 import com.ivarna.fluxlinux.ui.components.FrostContainer
@@ -127,6 +129,16 @@ fun DistroSettingsScreen(
     var showGpuSheet by remember { mutableStateOf(false) }
     var activeComponent by remember { mutableStateOf<DistroComponent?>(null) }
 
+    // Local appearance-editor flag: this file owns the whole flow (no routes).
+    var showAppearanceEditor by remember { mutableStateOf(false) }
+    // Bumped when the editor closes so the row summary re-reads the saved picks.
+    var appearanceRefresh by remember { mutableStateOf(0) }
+
+    // Summary of the saved Folio Linux appearance for this distro.
+    val appearanceSummary = remember(distro.id, refreshKey, appearanceRefresh) {
+        AppearanceStore.summary(context, distro.id)
+    }
+
     var selectedTheme by remember { mutableStateOf("dark") }
     var selectedGpu by remember { mutableStateOf("auto") }
 
@@ -163,6 +175,19 @@ fun DistroSettingsScreen(
             }
             else -> onInstallComponent(component, emptyMap())
         }
+    }
+
+    // Appearance editor replaces the whole screen content (local state only).
+    if (showAppearanceEditor) {
+        DistroAppearanceScreen(
+            distro = distro,
+            hazeState = hazeState,
+            onBack = {
+                showAppearanceEditor = false
+                appearanceRefresh++
+            }
+        )
+        return
     }
 
     GlassScaffold(
@@ -304,6 +329,49 @@ fun DistroSettingsScreen(
                                 modifier = Modifier
                                     .clickable { showUninstallDialog = true }
                                     .padding(horizontal = 8.dp, vertical = 8.dp)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
+
+                // ─── Appearance (wallpaper / accent / terminal / video) ───
+                item {
+                    FrostGroupTitle("Appearance")
+                    FrostContainer {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { showAppearanceEditor = true }
+                                .padding(horizontal = 18.dp, vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Edit,
+                                contentDescription = null,
+                                tint = TextSecondary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(14.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    "Wallpaper, colors & terminal",
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = TextPrimary
+                                )
+                                Text(
+                                    appearanceSummary,
+                                    fontSize = 12.sp,
+                                    color = TextMuted,
+                                    maxLines = 1
+                                )
+                            }
+                            Icon(
+                                Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                                contentDescription = null,
+                                tint = TextMuted,
+                                modifier = Modifier.size(20.dp)
                             )
                         }
                     }

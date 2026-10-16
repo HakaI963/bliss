@@ -20,6 +20,77 @@ object FluxTerminalSessionManager {
     /** Guest opens between the tab-limit check and SessionRegistry.add (main thread only). */
     private var pendingOpens = 0
 
+    /** Types eligible for tab reuse — install/component/host-script tabs never reuse. */
+    private val interactiveTypes = setOf("shell", "shell-root", "host")
+
+    /**
+     * Index of an existing tab to focus instead of opening a duplicate (R5: "Open Shell"
+     * twice must return to the same tab). Match: same [distroId] + [type] + [shellCmd].
+     * `distroId` may be null (Qwen launcher) — null matches null by design; `shellCmd`
+     * keeps the launcher payload apart from the plain-shell sentinel ("exec zsh").
+     */
+    private fun findReusableTab(type: String, shellCmd: String, distroId: String?): Int {
+        if (type !in interactiveTypes) return -1
+        return SessionRegistry.sessions().indexOfFirst { managed ->
+            managed.type == type &&
+                managed.distroId == distroId &&
+                managed.shellCmd == shellCmd
+        }
+    }
+
+    /** Focus an existing tab; true when one matched (no new process, no tab-limit use). */
+    private fun reuseExistingTab(type: String, shellCmd: String, distroId: String?): Boolean {
+        val index = findReusableTab(type, shellCmd, distroId)
+        if (index < 0) return false
+        SessionRegistry.switchSession(index)
+        return true
+    }
+
+    /**
+     * True when [managed] can be closed + reopened with identical parameters:
+     * interactive guest shells and the embedded host login shell only.
+     */
+    fun isRestartable(managed: SessionRegistry.ManagedSession?): Boolean = managed != null && (
+        managed.type == "shell" ||
+            managed.type == "shell-root" ||
+            (managed.type == "host" && managed.shellCmd == GuestSessionFactory.HOST_SHELL_CMD)
+        )
+
+    /**
+     * Close [index] and reopen the same session (same type/title/method/distro/payload).
+     * Reuses the normal open paths so host-prep + tab limits still apply (R3/R4).
+     */
+    fun restartSession(
+        ctx: Context,
+        index: Int,
+        onResult: (SessionOpenResult) -> Unit = {}
+    ) {
+        val managed = SessionRegistry.sessions().getOrNull(index)
+        if (managed == null || !isRestartable(managed)) {
+            onResult(SessionOpenResult.OPEN_FAILED)
+            return
+        }
+        val type = managed.type
+        val title = managed.title
+        val method = managed.method
+        val distroId = managed.distroId
+        val shellCmd = managed.shellCmd ?: "exec zsh"
+        SessionRegistry.closeSession(ctx, index)
+        if (type == "host") {
+            openHostShellAfterReady(ctx, title, onResult)
+        } else {
+            openSessionAfterHost(
+                ctx = ctx,
+                type = type,
+                title = title,
+                shellCmd = shellCmd,
+                method = method,
+                distroId = distroId,
+                onResult = onResult
+            )
+        }
+    }
+
     /**
      * Outcome of a session-open request — lets UI show distinct toasts
      * (R3: tab limit vs host prepare vs open failure).
@@ -68,6 +139,13 @@ object FluxTerminalSessionManager {
         distroId: String? = null,
         onResult: (SessionOpenResult) -> Unit = {}
     ) {
+        // R5: "Open Shell" twice = focus the previous tab, never a second session.
+        // Before the tab-limit check and host prep: reuse spawns no process and
+        // must not consume a tab slot (UI-thread function — synchronous is fine).
+        if (reuseExistingTab(type, shellCmd, distroId)) {
+            onResult(SessionOpenResult.OPENED)
+            return
+        }
         com.ivarna.fluxlinux.core.system.PhantomProcessFixer.maybePrompt(ctx)
         // Count in-flight opens too, so rapid taps cannot pass the check before
         // any add lands. SessionRegistry.add still rejects as a backstop.
@@ -118,7 +196,12 @@ object FluxTerminalSessionManager {
         title: String = type,
         shellCmd: String = "exec zsh",
         method: String
-    ): Boolean = GuestSessionFactory.openSession(ctx, type, title, shellCmd, method)
+    ): Boolean {
+        // Mirror openSessionAfterHost: focus the existing tab when one matches
+        // (this path never carries a distroId, so only distroId-less tabs reuse).
+        if (reuseExistingTab(type, shellCmd, null)) return true
+        return GuestSessionFactory.openSession(ctx, type, title, shellCmd, method)
+    }
 
     /**
      * Interactive host (embedded Termux prefix) shell — HOST selector card.
@@ -137,6 +220,13 @@ object FluxTerminalSessionManager {
         title: String = "Host Shell",
         onResult: (SessionOpenResult) -> Unit = {}
     ) {
+        // Same reuse rule for the HOST card: focus the existing host login shell
+        // tab instead of stacking a second one (install/command host tabs keep
+        // shellCmd = null and are never matched).
+        if (reuseExistingTab("host", GuestSessionFactory.HOST_SHELL_CMD, null)) {
+            onResult(SessionOpenResult.OPENED)
+            return
+        }
         if (!SessionRegistry.hasFreeTab()) {
             onResult(SessionOpenResult.MAX_TABS)
             return

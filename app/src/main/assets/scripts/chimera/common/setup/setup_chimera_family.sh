@@ -111,6 +111,8 @@ if [ "$DESKTOP_CHOICE" = "xfce" ]; then
         ln -sf "$_sx" /usr/bin/startxfce4 2>/dev/null || true
         _flux_log "linked startxfce4: $_sx → /usr/bin/startxfce4"
     fi
+    # Phone niceties: Whisker panel menu + screenshot tool (best-effort).
+    apk add xfce4-whiskermenu-plugin xfce4-screenshooter 2>/dev/null || true
 fi
 
 # dbus machine-id: dbus-uuidgen if present; else write a hex id.
@@ -141,6 +143,13 @@ _flux_setup_pulse
 _flux_ensure_en_us_locale || exit 1
 _flux_write_gpu_mode virgl
 _flux_fix_pm_writable
+
+# Phone-compact XFCE defaults (30px mono top panel, DPI 96, wallpaper,
+# Home-only desktop icons, shortcuts). Helper ships in flux_guest_common.sh;
+# guarded so a standalone run without it is a no-op and never fails install.
+if [ "$DESKTOP_CHOICE" = "xfce" ] && command -v _flux_xfce_compact_defaults >/dev/null 2>&1; then
+    _flux_xfce_compact_defaults || true
+fi
 
 echo "Folio: ${DISTRO_NAME} Chimera setup complete!"
 exit 0

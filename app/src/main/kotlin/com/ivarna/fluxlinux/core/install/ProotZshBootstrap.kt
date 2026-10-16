@@ -22,8 +22,19 @@ object ProotZshBootstrap {
         "https://github.com/zsh-users/zsh-autosuggestions.git"
     private const val SYNTAX =
         "https://github.com/zsh-users/zsh-syntax-highlighting.git"
-    private const val THEME_URL =
-        "https://raw.githubusercontent.com/zakaziko99/agnosterzak-ohmyzsh-theme/master/agnosterzak.zsh-theme"
+
+    /**
+     * Local monochrome prompt theme written during OMZ staging (matches the guest
+     * scripts' folio.zsh-theme). Remote colorful themes were removed — no network
+     * dependency for the prompt anymore.
+     */
+    private val FOLIO_THEME = """
+        # folio.zsh-theme — Folio's minimal monochrome prompt.
+        # White/gray on black only; ASCII-safe (no powerline glyphs, no ANSI colors 31-44).
+        # Segments:  time  folio  working-dir  input-char
+        PROMPT='%F{240}%D{%H:%M}%f %F{255}folio%f %F{250}%~%f %F{255}%#%f '
+        PROMPT2='%F{240}> %f'
+    """.trimIndent() + "\n"
 
     fun omzDir(rootfs: File): File = File(rootfs, "home/flux/.oh-my-zsh")
 
@@ -102,10 +113,13 @@ object ProotZshBootstrap {
         )
         // Do NOT install zsh-autocomplete (known 30s+ startup under proot)
 
-        val themeFile = File(themes, "agnosterzak.zsh-theme")
+        // Local monochrome prompt theme — no remote colorful download. Drop the
+        // old remote theme if a previous staging left it behind.
+        File(themes, "agnosterzak.zsh-theme").delete()
+        val themeFile = File(themes, "folio.zsh-theme")
         if (!themeFile.isFile || themeFile.length() < 50) {
-            onLog("Fetching agnosterzak theme…")
-            httpGetToFile(THEME_URL, themeFile, onLog)
+            onLog("Writing folio prompt theme…")
+            runCatching { themeFile.writeText(FOLIO_THEME) }
         }
     }
 
@@ -178,24 +192,6 @@ object ProotZshBootstrap {
             onLog("git clone error: ${e.message}")
             dest.deleteRecursively()
             false
-        }
-    }
-
-    private fun httpGetToFile(url: String, dest: File, onLog: (String) -> Unit) {
-        try {
-            dest.parentFile?.mkdirs()
-            val conn = (java.net.URL(url).openConnection() as java.net.HttpURLConnection).apply {
-                connectTimeout = 15_000
-                readTimeout = 30_000
-                instanceFollowRedirects = true
-            }
-            conn.inputStream.use { input ->
-                dest.outputStream().use { input.copyTo(it) }
-            }
-            conn.disconnect()
-        } catch (e: Exception) {
-            onLog("theme download failed: ${e.message}")
-            dest.delete()
         }
     }
 }

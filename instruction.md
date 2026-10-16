@@ -1,12 +1,12 @@
 # Folio — Project Instructions, Status & Next Steps
 
-Updated: 2026-10-15 · Repo: `HakaI963/folio` (branch `main`) · Local working copy: `/emulated/folio` (no git) · Git clone: `/tmp/opencode/folio-clone` · Upstream reference clone: `/tmp/opencode/fluxlinux-src`
+Updated: 2026-10-16 · Repo: `HakaI963/folio` (branch `main`) · Local working copy: `/emulated/folio` (no git) · Git clone: `/tmp/opencode/folio-clone` · Upstream reference clone: `/tmp/opencode/fluxlinux-src`
 
 ## 0. TL;DR
 
 Folio is a rebranded, standalone Android build of the FluxLinux app (app id `com.nopiece.folio`, source package `com.ivarna.fluxlinux`, brand "Folio"). It boots Linux distros on-device via a bundled Termux-derived host bootstrap, proot containers, chroot distros, and termux-x11 GUI sessions.
 
-The host-boot failure (commit `10ef127`, release `folio-debug-10ef127`) is shipped. The **UI/UX + feature overhaul** (§4) has now been **implemented across three waves** (parallel agents + orchestrator, strict file ownership) and is in the working tree, pending the CI compile + "Verify APK" run. See §2.5/§2.6 for the full change summary and §4 for item-by-item status.
+The host-boot failure (commit `10ef127`, release `folio-debug-10ef127`) is shipped. The **UI/UX + feature overhaul** (§4) was shipped as release `folio-debug-33c97e9`. A **second user-feedback round** (screen recording + screenshots, §4b) — tab-crash hardening + on-device crash logger, dock redesign, shell session reuse, terminal tools + anime splash, XFCE fullscreen/compact/wallpapers/anime banner + live repair of existing installs, per-distro appearance editor (wallpaper/colors/terminal/video), and the **"Folio" → "Folio Linux"** rename — is implemented in the working tree, pending the CI compile + "Verify APK" run. See §2.7 for the full change summary.
 
 Quick facts:
 
@@ -84,6 +84,19 @@ Areas mapped: onboarding buttons · nav/tab-switch crash · nav overlap · termi
 - **`FLUX_DESKTOP` gating** — all 12 distro-family scripts + 4 chroot setup scripts normalize `xfce|xfce4|kde|none` (unset → xfce) and gate only desktop-specific packages; shared base stack stays. Chroot launchers select `startxfce4`/`startplasma-x11` at generation time.
 - **Nav/final integration (orchestrator)** — see §4 items 3–6.
 
+### 2.7 Wave 4 — second user-feedback round (working tree)
+
+Evidence base: 4 screenshots + a 30s screen recording in `/emulated/` (Settings-tab crash captured on device; duplicate shell tabs; ugly default XFCE; stale "flux" prompt).
+
+- **Crash workstream** — haze blur source is now mounted **unconditionally** in `GlassScaffold` (the old per-tab `blurContent` toggle unmounted the `HazeNode` while `hazeChild` nodes from the top bar/dock stayed mounted — the on-device crash class; `HazeNode.onDetach()` does not reset `contentDrawing`). NEW **`core/system/CrashLog.kt`**: uncaught-exception handler installed in `FluxApp.onCreate` writes full stack traces to `filesDir/crashlog/` (cap 20), chained to the previous handler so MIUI's dialog still appears. NEW **`ui/screens/CrashLogScreen.kt`** + `Screen.CRASH_LOGS` route + Settings row ("Crash logs", count subtitle, tap → trace, copy, delete all).
+- **Dock redesign** — `GlassBottomNavigation` rebuilt: 64dp frosted pill, 16dp margins, 0.75dp hairline + top sheen, **three evenly distributed tabs** (dead placeholder slot removed), inverted white active pill with animated spring (icon tint/size/label brighten). `SettingsScreen` content now clears the dock (110dp reserve) and guards `SharedStorageAccess`/`PhantomProcessFixer` reads with `runCatching` (MIUI SecurityException safety).
+- **Shell session reuse** — `FluxTerminalSessionManager.openSessionAfterHost`/`openHostShellAfterReady` now **focus the existing tab** (match on `type + distroId + shellCmd`) instead of stacking duplicates; `SessionRegistry.ManagedSession` gained `shellCmd`; new `restartSession`/`isRestartable` APIs.
+- **Terminal tools + anime splash** — terminal top bar gained a tools button opening a QoL sheet (Ctrl+C/D, TAB, ESC, Paste with 100KB guard + bracketed paste, Copy screen/transcript, Clear via Ctrl+L, Restart, font A±, extra-keys toggle, Close session/all with confirms). NEW **`TerminalSessionSplash.kt`**: randomized monochrome anime-character art (5 original vector drawables) shown when opening the terminal / a new session, auto-fades, never blocks input.
+- **XFCE experience** — display defaults flipped for fresh installs: `fullscreen=true`, `hideCutout=true`, `displayScale=120`, `scaled` resolution + stretch (edge-to-edge, aspect-matched; applied by `DesktopLauncher` before every launch/reopen). NEW shared `_flux_xfce_compact_defaults()` in `flux_guest_common.sh`: single 30px top panel (whisker/tasklist/systray/clock/power), DPI 96, 9–10pt fonts, compact dark xfwm4 (`|HMC`, borderless maximize), Home-only desktop icons, Thunar single-click, screensaver off, keyboard shortcuts (Super+Enter/E, Ctrl+Alt+T, Print → xfce4-screenshooter); called by **all 12 family scripts** (base installs) and the 3 customization scripts (full experience). New monochrome 1280×2772 wallpapers replace the old color-tinted ones (~6.8 MB APK shrink) + 3 appearance presets.
+- **Anime launch sticker (guest)** — 8 original monochrome ASCII designs installed to `~/.config/folio/banner/` + `banner.sh`; random pick per interactive shell, then a local mono info block; `FLUX_NO_BANNER=1` opts out. **Existing installs auto-repair** on next shell open (proot: direct writes; chroot: root payload inside the chroot) — rewrites `ZSH_THEME="folio"`, deletes the old `agnosterzak` theme, installs the banner; helper bumped to **v2.11**. `ProotZshBootstrap` no longer downloads any remote theme (writes the local folio theme).
+- **Appearance editor** — NEW **`core/theme/AppearanceStore.kt`** + **`ui/screens/DistroAppearanceScreen.kt`** + NEW guest script `common/setup/folio_appearance_apply.sh`: per-distro wallpaper (6 presets + custom SAF image + solid color + **random rotation**), wallpaper style, accent palettes (mono + accents), terminal FG/BG schemes + custom colors + prompt color, mpv-gated **video wallpaper** (honest disabled state without mpv; opt-in autostart overlay), all written to `~/.config/folio/appearance.env` + applied on next session (hash-guarded; chroot applies at Save time via root). Reachable from Distro Settings → "Wallpaper, colors & terminal".
+- **Brand rename** — user-visible "Folio" → **"Folio Linux"** everywhere (app label, wordmark, onboarding/prereqs/legacy screens, notifications, install titles, component descriptions, preset names; short `Folio:` guest progress prefixes intentionally kept).
+
 ---
 
 ## 3. Standalone-host constraints (never regress these)
@@ -113,6 +126,18 @@ Legend: DONE / PARTIAL / TODO.
 12. **More install options for new distros, per method capability (proot vs chroot)** — **DONE** (with item 2; `DesktopChoice` + `InstallExtra` per method).
 13. **Workflow: track down → write → compile last** — **DONE**. Three waves of partitioned agents + orchestrator integration; CI compile is the final gate.
 
+### 4b. Second feedback round (2026-10-16) — screen recording + screenshots
+
+14. **"UI navigation still crashes"** (recording: Settings tab → ~1.5s → "Folio keeps stopping"; predates the overhaul) — **DONE (hardened + instrumented)**. The haze source can no longer unmount while top bar/dock `hazeChild` nodes are mounted (the identified crash class), and the new in-app **crash logger** now writes the full stack to `filesDir/crashlog/` (viewable in Settings → Crash logs) if anything still throws — share that trace if it recurs. (Tapping MIUI's "View summary" on the old dialog would still give the definitive stack for the previous build.)
+15. **Dock ("doch") redesign** — **DONE** (§2.7): 64dp frost pill, 3 evenly distributed tabs, inverted white active pill, spring animation, no dead placeholder; Settings content no longer hides under it.
+16. **"Open Shell" always opens a new shell** — **DONE** (§2.7): focuses the existing session/tab for that distro instead of stacking duplicates.
+17. **XFCE UI bad: not fullscreen, no good background, few features, needs compact phone layout** — **DONE** (§2.7): fullscreen/edge-to-edge defaults, compact top panel + small-screen metrics everywhere, new monochrome wallpapers, screenshooter + shortcuts + single-click Thunar.
+18. **"In Termux it's still flux and old style"** — **DONE** (§2.7): existing installs repair themselves on the next shell open (theme + banner); new installs write the monochrome folio profile.
+19. **Rename everything from "Folio" to "Folio Linux"** — **DONE** (§2.7).
+20. **Distro settings: custom wallpaper (image/video), colors, terminal text colors, dynamic multiples** — **DONE** (§2.7 appearance editor; video is mpv-gated/honest).
+21. **Bring back the terminal launch sticker, anime characters, not hardcoded** — **DONE** (§2.7): app-side randomized anime splash + guest-side random anime ASCII banner (8 designs).
+22. **Terminal top bar: keyboard/plus — add more buttons/tools/QoL toolbar** — **DONE** (§2.7 tools sheet).
+
 ---
 
 ## 5. Wave-2 interruption checklist — resolved
@@ -125,10 +150,12 @@ The historical "verify before restarting" checklist is fully resolved: nav crash
 
 - `app/src/main/kotlin/com/ivarna/fluxlinux/MainActivity.kt` — UI root: `enum class Screen`, `enum BottomTab`, `MainScreenContent` tab dispatch. Navigation state is **single-source** (Compose snapshot state); external requests (FGS/deep links) go through `pendingTabRequest`/`pendingScreenRequest` one-shot channels drained in `LaunchedEffect`s. On `BottomTab.TERMINAL` the chrome (top bar + nav) hides and the content takes the full window height.
 - `ui/components/` — `Frost.kt` (frost primitives), `GlassScaffold.kt` (root Box + `FolioAnimatedBackground` + Scaffold + floating nav overlay), `GlassBottomNavigation.kt` (3 tabs + empty placeholder, 0.75dp hairline), `FolioBackground.kt`.
-- `ui/screens/` — `HomeScreen.kt`, `InstallConfigScreen.kt` (desktop picker), `SettingsScreen.kt`, `DistroSettingsScreen.kt` (component re-run/subtitle), `TerminalScreen.kt`, legacy screens.
-- `ui/terminal/` — `TerminalExtraKeys.kt` (grid redesign), `ImeController.kt` (`hideIme`).
+- `ui/screens/` — `HomeScreen.kt`, `InstallConfigScreen.kt` (desktop picker), `SettingsScreen.kt`, `DistroSettingsScreen.kt` (component re-run/subtitle + Appearance section), `DistroAppearanceScreen.kt` (wallpaper/colors/terminal/video editor), `TerminalScreen.kt` (tools sheet + anime splash), `CrashLogScreen.kt`, legacy screens.
+- `ui/terminal/` — `TerminalExtraKeys.kt` (grid redesign), `TerminalToolsSheet.kt` (QoL tools), `TerminalSessionSplash.kt` (random anime launch sticker), `ImeController.kt` (`hideIme`).
 - `core/install/` — `OnboardingInstallRunner.kt` (desktop/extras-aware), `DesktopInstallSelection.kt`, `BaseDesktopInstallPlan.kt`, `DistroInstallProfile`.
-- `core/root/` — `ChrootPaths.kt` (**SSOT** for `/data/local/folio`), `BusyBoxPaths.kt`, `RootShell.kt`.
+- `core/theme/AppearanceStore.kt` — per-distro appearance config (wallpapers/accents/terminal schemes/video) + guest staging for proot & chroot.
+- `core/system/CrashLog.kt` — uncaught-exception recorder (`filesDir/crashlog/`) installed from `FluxApp`.
+- `core/root/` — `ChrootPaths.kt` (**SSOT** for `/data/local/folio`, helper **v2.11**), `BusyBoxPaths.kt`, `RootShell.kt` (`captureInChroot`).
 - `core/data/DistroRepository.kt` — distro + component ids (`kde_plasma → debian/common/setup/setup_kde_debian.sh`, `kde_customization → setup_customization_kde_debian.sh` for Debian family; XFCE components elsewhere).
 - `core/desktop/DesktopLauncher.kt` — desktop session start (`FLUX_DESKTOP` passing; readiness via `X server PID=` / `host X0 socket ready`).
 - `assets/scripts/` — `host/setup_termux.sh` (**byte-identical to upstream — do not patch**), per-distro setup scripts (desktop-gated), chroot scripts (paths v2.10), banner/theme writers (`folio.zsh-theme` + local fastfetch preset).
@@ -191,21 +218,22 @@ The historical "verify before restarting" checklist is fully resolved: nav crash
 
 ## 10. Next steps (ordered)
 
-1. ~~Commit + push this overhaul~~ — **done** (`b64ddd6` + sync fix `33c97e9`).
-2. ~~CI compile + "Verify APK"~~ — **green** (run `38776662519`: all steps ✓, Verify APK passed).
-3. ~~Release~~ — **done**: [`folio-debug-33c97e9`](https://github.com/HakaI963/folio/releases/tag/folio-debug-33c97e9).
+1. **Commit + push round 2** (changed files only; artifacts excluded; `ProotZshBootstrap` local theme, helper v2.11 + tests, brand sweep).
+2. **CI compile + "Verify APK"** — fix any compile error that surfaces (main sourceset only).
+3. **Release** `folio-debug-<commit>`; update §0 quick facts.
 4. **On-device QA** (cannot be done in this environment):
-   - Initialize Host still succeeds (`exit=126` regression check).
-   - Tab switching Home ↔ Distros ↔ Settings never crashes; chrome hides on terminal; no content hidden behind the floating nav (scroll to last item on Home/Distros).
-   - Install a distro: Terminal-only, XFCE4, and KDE (Debian family) — picker respects availability; env gates skip desktop packages correctly.
-   - Launch XFCE and KDE (proot + chroot); Stop reaps Plasma daemons; KDE banner/prompt is monochrome "Folio".
-   - Confirm `/data/local/folio` tree exists; old `/data/local/tmp/chroot*` untouched; no user-visible "Flux" strings.
+   - **Crash**: tab switching Home ↔ Distros ↔ Settings; if anything still crashes, open Settings → Crash logs, copy the trace and share it.
+   - **Sessions**: "Open Shell" twice → same tab focused; tools sheet actions (paste/copy/clear/restart/font/close); anime splash appears once per open.
+   - **XFCE**: fresh install → fullscreen desktop, compact panel, monochrome wallpaper; Super+Enter/E, Print screenshot; existing install → next shell open shows folio prompt + anime banner.
+   - **Appearance**: Distro Settings → Wallpaper/colors/terminal → Save → next session shows picks (chroot applies immediately with root).
+   - **Brand**: launcher label "Folio Linux", wordmark, notifications; guest banners read Folio.
 
 ---
 
 ## 11. Definition of done for this phase
 
-- CI green with "Verify APK" passing (`com.nopiece.folio`, `targetSdkVersion 28`) — **done** (run `38776662519`); release `folio-debug-33c97e9` published.
-- Every item in §4 marked DONE — **done** (on-device confirmation is §10.4).
-- Wave-3 branding sweep clean — **done** (residuals are functional/never-touch only).
-- Working tree verified locally by: `bash -n` on all 88 scripts, import-resolution sweep + brace/paren scanner on all 165 `.kt`, byte-identical diff guard for `host/setup_termux.sh`, signature/call-site checks for every refactored API.
+- Round 1: CI green with "Verify APK" passing — **done** (run `38776662519`); release `folio-debug-33c97e9` published.
+- Round 2 (this push): CI green + release `folio-debug-<commit>` — **pending §10.1–10.3**.
+- Every item in §4 + §4b marked DONE — **done** (on-device confirmation is §10.4; the crash fix is hardened + instrumented rather than reproduced locally).
+- Branding: "Folio Linux" everywhere user-visible; residuals are functional identifiers / short `Folio:` guest prefixes only.
+- Working tree verified locally by: `bash -n` on all 89 scripts, import-resolution sweep + brace/paren scanner on all 171 `.kt`, byte-identical diff guard for `host/setup_termux.sh`, helper-version consistency (v2.11 incl. tests), signature/call-site checks for every refactored API (`GlassScaffold`, `GlassBottomNavigation`, `OnboardingInstallRunner.start`, `SessionRegistry.ManagedSession`, `SettingsScreen.onNavigateToCrashLogs`, `TerminalScreen`).

@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.DisplaySettings
 import androidx.compose.material.icons.filled.Folder
@@ -52,6 +53,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.PermissionState
 import com.ivarna.fluxlinux.BuildConfig
+import com.ivarna.fluxlinux.core.system.CrashLog
 import com.ivarna.fluxlinux.core.system.PhantomProcessFixer
 import com.ivarna.fluxlinux.core.system.SharedStorageAccess
 import com.ivarna.fluxlinux.core.utils.ThemeMode
@@ -80,6 +82,7 @@ fun SettingsScreen(
     onNavigateToChrootSettings: (() -> Unit)? = null,
     onNavigateToProotSettings: (() -> Unit)? = null,
     onNavigateToLegacyTermuxSettings: (() -> Unit)? = null,
+    onNavigateToCrashLogs: (() -> Unit)? = null,
     onThemeChanged: ((ThemeMode) -> Unit)? = null,
     currentTheme: ThemeMode = ThemeMode.SYSTEM
 ) {
@@ -111,12 +114,20 @@ fun SettingsScreen(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
     val storageGranted = remember(lifecycleKey, storageDeclared) {
-        if (storageDeclared) SharedStorageAccess.granted() else false
+        // OEM builds (MIUI) can throw SecurityException from the PackageManager /
+        // Environment storage queries — a settings row must never crash the screen.
+        if (storageDeclared) runCatching { SharedStorageAccess.granted() }.getOrDefault(false) else false
     }
 
     val phantomApplicable = PhantomProcessFixer.applicable()
     var showPhantom by remember { mutableStateOf(false) }
-    val phantomState = remember(showPhantom) { PhantomProcessFixer.state(context) }
+    val phantomState = remember(showPhantom) {
+        runCatching { PhantomProcessFixer.state(context) }
+            .getOrDefault(PhantomProcessFixer.State.UNKNOWN)
+    }
+
+    // Newest-first crash reports written by CrashLog (0 -> empty state).
+    val crashLogCount = remember(lifecycleKey) { CrashLog.files(context).size }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -250,6 +261,19 @@ fun SettingsScreen(
                     )
                     FrostDivider()
                 }
+                if (onNavigateToCrashLogs != null) {
+                    FrostRow(
+                        icon = Icons.Default.BugReport,
+                        title = "Crash logs",
+                        subtitle = when (crashLogCount) {
+                            0 -> "No crash logs"
+                            1 -> "1 saved report"
+                            else -> "$crashLogCount saved reports"
+                        },
+                        onClick = { onNavigateToCrashLogs() }
+                    )
+                    FrostDivider()
+                }
                 FrostRow(
                     icon = Icons.Default.Person,
                     title = "About Folio",
@@ -274,7 +298,10 @@ fun SettingsScreen(
                 )
             }
 
-            Spacer(Modifier.height(80.dp))
+            // Clears the floating bottom dock (64dp pill + 16dp margins = 80dp
+            // footprint over the inset-consuming content viewport) with spare air,
+            // matching Home/Distro's 110dp reserve.
+            Spacer(Modifier.height(110.dp))
         }
     }
 

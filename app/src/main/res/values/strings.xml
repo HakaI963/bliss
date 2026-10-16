@@ -1,4 +1,4 @@
 <resources>
-    <string name="app_name">Folio</string>
-    <string name="accessibility_service_description">Folio Keyboard Toggle allows you to toggle the keyboard in Termux:X11 using a floating button.</string>
+    <string name="app_name">Folio Linux</string>
+    <string name="accessibility_service_description">Folio Linux Keyboard Toggle allows you to toggle the keyboard in Termux:X11 using a floating button.</string>
 </resources>

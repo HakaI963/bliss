@@ -17,6 +17,13 @@ import com.termux.terminal.TerminalSession
 object GuestSessionFactory {
 
     /**
+     * ManagedSession.shellCmd marker for the interactive host login shell. Lets
+     * FluxTerminalSessionManager reuse-match HOST tabs while keeping host
+     * install/command sessions (shellCmd = null) out of the reuse set.
+     */
+    const val HOST_SHELL_CMD = "host:login"
+
+    /**
      * Create + open an interactive guest session.
      * [shellCmd] default `"exec zsh"` (the interactive sentinel) or blank →
      * interactive login; the actual guest binary comes from
@@ -76,7 +83,8 @@ object GuestSessionFactory {
                     title,
                     method,
                     distroId = distroId,
-                    iconRes = DistroRepository.iconResFor(distroId) ?: R.drawable.ic_terminal
+                    iconRes = DistroRepository.iconResFor(distroId) ?: R.drawable.ic_terminal,
+                    shellCmd = shellCmd
                 )
             )
         }
@@ -115,7 +123,8 @@ object GuestSessionFactory {
                 "host",
                 title,
                 "host",
-                iconRes = R.drawable.ic_terminal
+                iconRes = R.drawable.ic_terminal,
+                shellCmd = HOST_SHELL_CMD
             )
         )
     }

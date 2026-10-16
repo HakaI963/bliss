@@ -55,6 +55,7 @@ enum class Screen {
     SETTINGS_LEGACY_TERMUX,
     TROUBLESHOOTING,
     ROOT_ACCESS,
+    CRASH_LOGS,
     INSTALL_WIZARD,
     DISTRO_SETTINGS,
     TERMINAL
@@ -609,7 +610,8 @@ class MainActivity : ComponentActivity() {
                         || currentScreen == Screen.SETTINGS_PROOT
                         || currentScreen == Screen.SETTINGS_LEGACY_TERMUX
                         || currentScreen == Screen.TROUBLESHOOTING
-                        || currentScreen == Screen.ROOT_ACCESS) {
+                        || currentScreen == Screen.ROOT_ACCESS
+                        || currentScreen == Screen.CRASH_LOGS) {
                         currentScreen = Screen.SETTINGS
                     } else if (currentScreen == Screen.SETTINGS
                         || currentScreen == Screen.DISTRO_SETTINGS
@@ -785,6 +787,7 @@ class MainActivity : ComponentActivity() {
                                 },
                                 onNavigateToTroubleshooting = { currentScreen = Screen.TROUBLESHOOTING },
                                 onNavigateToRootCheck = { currentScreen = Screen.ROOT_ACCESS },
+                                onNavigateToCrashLogs = { currentScreen = Screen.CRASH_LOGS },
                                 onNavigateToTerminalSettings = { currentScreen = Screen.SETTINGS_TERMINAL },
                                 onNavigateToX11Settings = { currentScreen = Screen.SETTINGS_X11 },
                                 onNavigateToAudioSettings = { currentScreen = Screen.SETTINGS_AUDIO },
@@ -824,7 +827,7 @@ class MainActivity : ComponentActivity() {
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "Folio",
+                                text = "Folio Linux",
                                 style = com.ivarna.fluxlinux.ui.theme.FolioWordmarkStyle,
                                 color = MaterialTheme.colorScheme.onBackground
                             )
@@ -926,7 +929,10 @@ class MainActivity : ComponentActivity() {
 
                         GlassScaffold(
                             hazeState = hazeState,
-                            blurContent = showChrome && currentTab == BottomTab.HOME,
+                            // No per-tab blur toggle: the haze source must stay
+                            // mounted while the TopBar/dock hazeChild nodes are up
+                            // (see GlassScaffold) — leaving HOME used to unmount it
+                            // mid-session, which is the tab-switch crash class.
                             topBar = {
                                 if (showChrome) {
                                     TopBar(
@@ -952,16 +958,17 @@ class MainActivity : ComponentActivity() {
                                 modifier = Modifier
                                     .fillMaxSize()
                                     // Overlap math. The floating nav is a
-                                    // 72dp pill with 24dp top padding inside a
+                                    // 64dp pill with 16dp top padding inside a
                                     // `navigationBarsPadding()` box, so its top
-                                    // edge sits at navBarInset + 96dp. The tab
-                                    // screens reserve 110dp of LazyColumn bottom
-                                    // padding, which only clears a 0dp inset.
-                                    // Consuming the navigation-bar inset here
-                                    // shifts the scrolling viewport up by that
-                                    // same amount, so 110dp always clears the
-                                    // nav (with ~14dp to spare) and the last item
-                                    // can always be scrolled above it.
+                                    // edge sits at navBarInset + 80dp over a
+                                    // full-window coordinate space. The tab
+                                    // screens reserve 110dp of bottom content
+                                    // padding. Consuming the navigation-bar
+                                    // inset here shifts the scrolling viewport
+                                    // up by that same amount, so 110dp always
+                                    // clears the nav (with ~30dp to spare) and
+                                    // the last item can always be scrolled
+                                    // above it.
                                     // The Terminal tab is excluded: it owns its
                                     // own ime∪navigationBars padding and must
                                     // keep the full window height.
@@ -992,6 +999,7 @@ class MainActivity : ComponentActivity() {
                             },
                             onNavigateToTroubleshooting = { currentScreen = Screen.TROUBLESHOOTING },
                             onNavigateToRootCheck = { currentScreen = Screen.ROOT_ACCESS },
+                            onNavigateToCrashLogs = { currentScreen = Screen.CRASH_LOGS },
                             onNavigateToTerminalSettings = {
                                 currentScreen = Screen.SETTINGS_TERMINAL
                             },
@@ -1125,6 +1133,11 @@ class MainActivity : ComponentActivity() {
                                 android.widget.Toast.makeText(this@MainActivity, "Chroot Mode Enabled", android.widget.Toast.LENGTH_SHORT).show()
                                 currentScreen = Screen.SETTINGS
                             }
+                        )
+                    }
+                    Screen.CRASH_LOGS -> {
+                        com.ivarna.fluxlinux.ui.screens.CrashLogScreen(
+                            onBack = { currentScreen = Screen.SETTINGS }
                         )
                     }
                     Screen.INSTALL_WIZARD -> {
