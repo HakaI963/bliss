@@ -64,7 +64,7 @@ data class ShortcutBarConfig(
 
 const val SHORTCUT_LABEL_MAX = 8
 private const val SHORTCUT_PAYLOAD_MAX = 256
-private const val SHORTCUT_KEYS_MAX: Int = "probe"
+private const val SHORTCUT_KEYS_MAX: Int = 64
 
 fun defaultShortcutBarConfig(): ShortcutBarConfig =
     ShortcutBarConfig(keys = defaultShortcutKeys(), scale = ShortcutBarScale.M)
