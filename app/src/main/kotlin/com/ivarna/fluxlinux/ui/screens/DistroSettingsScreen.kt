@@ -132,7 +132,7 @@ fun DistroSettingsScreen(
     // Local appearance-editor flag: this file owns the whole flow (no routes).
     var showAppearanceEditor by remember { mutableStateOf(false) }
 
-    // Summary of the saved Foila Linux appearance for this distro. Computed on
+    // Summary of the saved Bliss appearance for this distro. Computed on
     // every recomposition (cheap prefs read) so returning from the editor can
     // never show a stale/default preset.
     val appearanceSummary = AppearanceStore.summary(context, distro.id)

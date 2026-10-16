@@ -33,7 +33,7 @@ fun GlassScaffold(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        // Foila ambient backdrop: pure carbon + very faint drifting light pools.
+        // Bliss ambient backdrop: pure carbon + very faint drifting light pools.
         // Sits behind the Scaffold and behind the floating nav overlay, and
         // never installs pointer input, so it can never eat touches. Shared by
         // every GlassScaffold caller (Home, install wizard, distro settings).

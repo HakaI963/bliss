@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================
-# Foila — Native Termux XFCE4 Desktop Setup
+# Bliss — Native Termux XFCE4 Desktop Setup
 # Location: termux/setup/setup_xfce4_termux.sh
 # Runs on: HOST Termux (native, no container)
 # Root required: no
@@ -17,7 +17,7 @@ send_callback() {
 
 handle_error() {
     echo ""
-    echo "❌ Foila Error: Script failed at step: $1"
+    echo "❌ Bliss Error: Script failed at step: $1"
     echo "---------------------------------------------------"
     echo "Please check the error message above for details."
     echo "---------------------------------------------------"
@@ -28,17 +28,17 @@ handle_error() {
 
 echo ""
 echo "══════════════════════════════════════════════"
-echo "  Foila — Native XFCE4 Desktop Setup"
+echo "  Bliss — Native XFCE4 Desktop Setup"
 echo "══════════════════════════════════════════════"
 echo ""
 
 # ── Step 1: Repositories ──────────────────────────────────
-echo "Foila: Enabling required repositories..."
+echo "Bliss: Enabling required repositories..."
 pkg install x11-repo -y || handle_error "x11-repo install"
 pkg install tur-repo -y || handle_error "tur-repo install"
 
 # ── Step 2: Update ───────────────────────────────────────
-echo "Foila: Updating package lists..."
+echo "Bliss: Updating package lists..."
 pkg update -y || handle_error "pkg update"
 
 # ── Step 3: Core XFCE4 packages ──────────────────────────
@@ -122,7 +122,7 @@ echo " [✅] Default XFCE4 settings applied"
 # ── Verification ─────────────────────────────────────────
 verify_installation() {
     echo ""
-    echo "🔎 Foila: Verifying XFCE4 Installation..."
+    echo "🔎 Bliss: Verifying XFCE4 Installation..."
     echo "------------------------------------------------"
     MISSING=0
 

@@ -199,7 +199,7 @@ configure_alpine_chroot() {
     touch "$ALPINEPATH/.flux_configured"
     success "Alpine Environment Configured (rootfs + user; XFCE via family phase)!"
 
-    # Root-staged helper/launchers live in the Foila helpers dir (idempotent).
+    # Root-staged helper/launchers live in the Bliss helpers dir (idempotent).
     mkdir -p /data/local/folio/helpers
 
     # Stage SSOT helper
@@ -247,7 +247,7 @@ EOF
     chmod 755 "$CLI_SCRIPT"
 
     cleanup_mounts
-    success "Foila: Alpine Chroot Setup Complete!"
+    success "Bliss: Alpine Chroot Setup Complete!"
 
     am start -a android.intent.action.VIEW \
         -d "fluxlinux://callback?result=success&name=distro_install_alpine_chroot" \
@@ -302,7 +302,7 @@ if [ -z "${BB:-}" ]; then
   fi
 fi
 if [ -z "${BB:-}" ]; then
-  echo "Foila: ERROR — root-capable busybox not found" >&2
+  echo "Bliss: ERROR — root-capable busybox not found" >&2
   exit 1
 fi
 

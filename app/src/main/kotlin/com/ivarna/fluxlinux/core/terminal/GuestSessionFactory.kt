@@ -54,7 +54,7 @@ object GuestSessionFactory {
     ): (() -> Boolean)? {
         if (!SessionRegistry.hasFreeTab()) return null
         // Patch guest .zshrc if it still hard-sources missing oh-my-zsh / pokemon,
-        // or create a missing Foila profile (Alpine installs that never wrote one).
+        // or create a missing Bliss profile (Alpine installs that never wrote one).
         GuestZshrcRepair.repairIfNeeded(ctx, method, distroId)
         // Alpine proot: ensure apk db/lock is app-writable so `sudo apk` works.
         GuestApkDbRepair.repairIfNeeded(ctx, method, distroId)
@@ -102,16 +102,24 @@ object GuestSessionFactory {
      * Interactive host (embedded Termux prefix) shell under libbash — no guest login.
      * Used by the HOST card in the terminal tool selector (plan §5.1).
      * Host env carries PREFIX/HOME/TMPDIR/package identity via [HostCommandBuilder].
+     *
+     * Launch is `libbash --noprofile --rcfile ~/.bashrc -i`: the ELF-baked
+     * `SYS_PROFILE` / `SYS_BASHRC` constants (a compile-time prefix that may
+     * belong to a foreign applicationId) are never consulted, so a stale or
+     * foreign baked path cannot make startup fail with SELinux EACCES and
+     * leave the shell on its fallback `libbash-5.3$` prompt.
      */
     fun openHostShell(ctx: Context, title: String = "Host Shell"): Boolean {
         if (!SessionRegistry.hasFreeTab()) return false
         val shell = TermuxHostPaths.libBash(ctx).absolutePath
+        // (Re)write the host rc for THIS package before every open; content-compared.
+        val rc = TermuxHostPaths.ensureHostShellRc(ctx)
         val (_, envMap) = HostCommandBuilder.build(ctx, shell, forceHostSetup = false)
         val env = envMap.map { "${it.key}=${it.value}" }.toTypedArray()
         val session = TerminalSession(
             shell,
             TermuxHostPaths.homeDir(ctx).absolutePath,
-            arrayOf(shell, "-l"),
+            arrayOf(shell, "--noprofile", "--rcfile", rc.absolutePath, "-i"),
             env,
             10000,
             SessionRegistry.sessionClient()

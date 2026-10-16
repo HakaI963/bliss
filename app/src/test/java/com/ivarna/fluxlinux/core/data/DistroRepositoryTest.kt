@@ -43,7 +43,9 @@ class DistroRepositoryTest {
         assertTrue(available.contains("parrot_chroot"))
         assertTrue(available.contains("archlinux"))
         assertTrue(available.contains("archlinux_chroot"))
-        assertEquals(24, available.size)
+        assertTrue(available.contains("rocky"))
+        assertTrue(available.contains("centos_stream"))
+        assertEquals(26, available.size)
     }
 
     @Test
@@ -70,7 +72,8 @@ class DistroRepositoryTest {
             "ubuntu", "ubuntu_chroot",
             "kali", "kali_chroot",
             "parrot", "parrot_chroot",
-            "archlinux", "archlinux_chroot"
+            "archlinux", "archlinux_chroot",
+            "rocky", "centos_stream"
         ).forEach { id ->
             val distro = DistroRepository.supportedDistros.first { it.id == id }
             val ids = distro.components.map { it.id }
@@ -86,7 +89,8 @@ class DistroRepositoryTest {
         val scripts = DistroRepository.supportedDistros
             .filter { it.id in setOf(
                 "deepin", "chimera", "manjaro",
-                "ubuntu", "kali", "parrot", "archlinux"
+                "ubuntu", "kali", "parrot", "archlinux",
+                "rocky", "centos_stream"
             ) }
             .flatMap { it.components }
             .map { it.scriptName }
@@ -173,9 +177,11 @@ class DistroRepositoryTest {
     }
 
     @Test
-    fun installableCards_splitEvenlyBetweenProotAndChroot() {
+    fun installableCards_splitBetweenProotAndChroot() {
         val available = DistroRepository.supportedDistros.filter { !it.comingSoon }
-        assertEquals(12, available.count { it.prootSupported })
+        // 14 proot cards (12 proot/chroot pairs + Rocky / CentOS Stream
+        // proot-only) against 12 chroot cards.
+        assertEquals(14, available.count { it.prootSupported })
         assertEquals(12, available.count { it.chrootSupported })
         assertTrue(available.none { it.prootSupported && it.chrootSupported })
     }
@@ -187,13 +193,43 @@ class DistroRepositoryTest {
         assertEquals("Alpine", available.first())
         assertTrue(available.indexOf("openSUSE") < available.indexOf("Parrot"))
         assertTrue(available.indexOf("openSUSE") < available.indexOf("Void"))
-        assertTrue(sorted.indexOfFirst { it.comingSoon } > sorted.indexOfLast { !it.comingSoon })
+        // Every catalog card now ships — the "Coming Soon" section is empty.
+        assertTrue(sorted.none { it.comingSoon })
         val prootSorted = DistroRepository.sortForDistroPage(
             DistroRepository.supportedDistros.filter { it.prootSupported }
         )
-        assertTrue(prootSorted.none { it.id == "adelie" })
-        assertTrue(prootSorted.any { it.id == "artix" && it.comingSoon })
-        assertTrue(prootSorted.any { it.id == "rocky" && it.comingSoon })
+        assertTrue(prootSorted.any { it.id == "rocky" && !it.comingSoon })
+        assertTrue(prootSorted.any { it.id == "centos_stream" && !it.comingSoon })
+    }
+
+    @Test
+    fun removedComingSoonCards_areGone() {
+        val ids = DistroRepository.supportedDistros.map { it.id }.toSet()
+        listOf("adelie", "artix", "backbox", "gentoo", "openkylin").forEach { removed ->
+            assertFalse("$removed should be removed", ids.contains(removed))
+        }
+        assertTrue(DistroRepository.supportedDistros.none { it.comingSoon })
+    }
+
+    @Test
+    fun rockyAndCentosStream_areProotOnlyRpmCards() {
+        listOf("rocky" to "Rocky Linux", "centos_stream" to "CentOS Stream").forEach { (id, name) ->
+            val distro = DistroRepository.supportedDistros.first { it.id == id }
+            assertEquals(name, distro.name)
+            assertFalse(distro.comingSoon)
+            assertTrue(distro.prootSupported)
+            assertFalse(distro.chrootSupported)
+            val componentIds = distro.components.map { it.id }
+            assertEquals(listOf("xfce4_desktop", "hw_accel", "customization"), componentIds)
+            assertTrue(distro.components.none { it.id.contains("kde") })
+            assertEquals(
+                "rpm/common/setup/setup_rpm_family.sh",
+                distro.components.first { it.id == "xfce4_desktop" }.scriptName
+            )
+            val hw = distro.components.first { it.id == "hw_accel" }
+            assertTrue(hw.isMandatory)
+            assertEquals("common/setup/setup_hw_accel_guest.sh", hw.scriptName)
+        }
     }
 }
 

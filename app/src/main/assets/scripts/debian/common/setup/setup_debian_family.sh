@@ -23,7 +23,7 @@ command -v _flux_retry_pkg >/dev/null 2>&1 || _flux_retry_pkg() { "$@"; }
 
 DISTRO_NAME="${1:-debian}"
 
-echo "Foila: Configuring ${DISTRO_NAME} (Debian Family)..."
+echo "Bliss: Configuring ${DISTRO_NAME} (Debian Family)..."
 
 # 1. Update and Install Core Packages
 export DEBIAN_FRONTEND=noninteractive
@@ -45,7 +45,7 @@ DESKTOPS="$_norm"
 unset _norm
 if [ -z "${DESKTOPS##*xfce*}" ]; then
     if ! _flux_retry_pkg apt install -y xfce4 xfce4-goodies; then
-        echo "Foila: XFCE package install failed after 3 tries — check your network, then tap Retry Setup."
+        echo "Bliss: XFCE package install failed after 3 tries — check your network, then tap Retry Setup."
         exit 1
     fi
     # Phone niceties: Whisker panel menu + screenshot tool (best-effort).
@@ -72,7 +72,7 @@ DEBIAN_FRONTEND=noninteractive apt install -y --no-install-recommends \
     || true
 mkdir -p /etc/fluxlinux
 printf '%s\n' virgl > /etc/fluxlinux/gpu_mode
-echo "Foila: gpu_mode=virgl (first-paint; hw-accel may upgrade)"
+echo "Bliss: gpu_mode=virgl (first-paint; hw-accel may upgrade)"
 
 # 2. Create User 'flux'
 if ! id "flux" &>/dev/null; then
@@ -140,4 +140,4 @@ if [ -z "${DESKTOPS##*xfce*}" ] && command -v _flux_xfce_compact_defaults >/dev/
     _flux_xfce_compact_defaults || true
 fi
 
-echo "Foila: ${DISTRO_NAME} Setup Complete!"
+echo "Bliss: ${DISTRO_NAME} Setup Complete!"

@@ -5,7 +5,7 @@
 set -eu
 
 if [ "$(id -u)" -ne 0 ]; then
-    echo "Foila: ERROR: must run as root (got uid=$(id -u))."
+    echo "Bliss: ERROR: must run as root (got uid=$(id -u))."
     exit 1
 fi
 
@@ -24,7 +24,7 @@ if ! type flux_gpu_normalize >/dev/null 2>&1; then
     done
 fi
 if ! type flux_gpu_normalize >/dev/null 2>&1; then
-    echo "Foila: flux_gpu_common.sh missing — writing virgl and exiting 0"
+    echo "Bliss: flux_gpu_common.sh missing — writing virgl and exiting 0"
     printf '%s\n' virgl > /etc/fluxlinux/gpu_mode
     exit 0
 fi
@@ -34,7 +34,7 @@ if [ -r /tmp/flux_gpu_common.sh ]; then
     cp -f /tmp/flux_gpu_common.sh /usr/local/lib/fluxlinux/flux_gpu_common.sh 2>/dev/null || true
 fi
 
-echo "Foila: Hardware acceleration (guest)..."
+echo "Bliss: Hardware acceleration (guest)..."
 
 _pkg_add() {
     if grep -q '^ID="chimera"' /usr/lib/os-release 2>/dev/null \
@@ -65,12 +65,12 @@ _pkg_add() {
         DEBIAN_FRONTEND=noninteractive apt-get update >/dev/null 2>&1 || true
         DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "$@"
     else
-        echo "Foila: no supported package manager for hw accel"
+        echo "Bliss: no supported package manager for hw accel"
         return 1
     fi
 }
 
-echo "Foila: Installing stock Mesa..."
+echo "Bliss: Installing stock Mesa..."
 if command -v dnf >/dev/null 2>&1 || command -v dnf5 >/dev/null 2>&1; then
     _pkg_add mesa-dri-drivers mesa-libGL mesa-libEGL mesa-vulkan-drivers mesa-utils vulkan-tools curl \
         || _pkg_add mesa-dri-drivers mesa-libGL mesa-utils curl || true
@@ -114,7 +114,7 @@ _flux_gpu_pin_mesa() {
     if command -v apt-get >/dev/null 2>&1; then
         mkdir -p /etc/apt/preferences.d
         cat > /etc/apt/preferences.d/pin-mesa << 'PINEOF'
-# Foila: Mesa pinned — runtime upgraded via mesa-for-android-container
+# Bliss: Mesa pinned — runtime upgraded via mesa-for-android-container
 Package: libgl1-mesa-dri
 Pin: version *
 Pin-Priority: -1
@@ -143,13 +143,13 @@ Package: mesa-vulkan-drivers
 Pin: version *
 Pin-Priority: -1
 PINEOF
-        echo "Foila: Mesa packages pinned (apt)."
+        echo "Bliss: Mesa packages pinned (apt)."
     elif command -v dnf >/dev/null 2>&1 || command -v dnf5 >/dev/null 2>&1; then
         if command -v dnf >/dev/null 2>&1 && dnf versionlock --help >/dev/null 2>&1; then
             dnf versionlock add mesa-dri-drivers mesa-libGL mesa-libEGL mesa-vulkan-drivers 2>/dev/null \
-                || echo "Foila: dnf versionlock skipped"
+                || echo "Bliss: dnf versionlock skipped"
         else
-            echo "Foila: dnf versionlock plugin not present — skip pin"
+            echo "Bliss: dnf versionlock plugin not present — skip pin"
         fi
     fi
 }
@@ -190,8 +190,8 @@ elif [ "$NORMALIZED" = ask ]; then
     MODE=$(printf '%s' "$DET" | cut -d'|' -f1)
     VENDOR_HINT=$(printf '%s' "$DET" | cut -d'|' -f2)
     DETECT_HINTS=$(printf '%s' "$DET" | cut -d'|' -f3-)
-    echo "Foila: Auto-detected GPU mode=$MODE vendor=$VENDOR_HINT"
-    echo "Foila: hints: $DETECT_HINTS"
+    echo "Bliss: Auto-detected GPU mode=$MODE vendor=$VENDOR_HINT"
+    echo "Bliss: hints: $DETECT_HINTS"
 else
     MODE=$NORMALIZED
     if [ "$MODE" = turnip ]; then
@@ -199,12 +199,12 @@ else
     else
         [ "$VENDOR_HINT" = unknown ] && VENDOR_HINT=env-other
     fi
-    echo "Foila: FLUX_GPU=${RAW_FLUX_GPU} → mode=$MODE"
+    echo "Bliss: FLUX_GPU=${RAW_FLUX_GPU} → mode=$MODE"
 fi
 
 ARCH=$(flux_gpu_arch)
 if { [ "$MODE" = turnip ] || [ "$MODE" = panvk ]; } && [ "$ARCH" != arm64 ] && [ "$ARCH" != aarch64 ]; then
-    echo "Foila: [WARN] Turnip not available for arch=$ARCH — VirGL."
+    echo "Bliss: [WARN] Turnip not available for arch=$ARCH — VirGL."
     MODE=virgl
     VENDOR_HINT="${VENDOR_HINT}+arch-fallback"
 fi
@@ -223,7 +223,7 @@ if [ "$MODE" = turnip ]; then
         [ -n "$_spec" ] || continue
         # shellcheck disable=SC2086
         set -- $_spec
-        echo "Foila: Downloading Mesa/Turnip $1..."
+        echo "Bliss: Downloading Mesa/Turnip $1..."
         if _flux_gpu_fetch "$2" /tmp/turnip.tar.gz \
             && [ "$(sha256sum /tmp/turnip.tar.gz | cut -d' ' -f1)" = "$3" ] \
             && tar -zxf /tmp/turnip.tar.gz -C /; then
@@ -232,14 +232,14 @@ if [ "$MODE" = turnip ]; then
             TURNIP_OK=$1
             break
         fi
-        echo "Foila: [WARN] Mesa/Turnip $1 download, sha256 or extract failed."
+        echo "Bliss: [WARN] Mesa/Turnip $1 download, sha256 or extract failed."
     done
     rm -f /tmp/turnip.tar.gz
     if [ -n "$TURNIP_OK" ]; then
-        echo "Foila: Mesa/Turnip $TURNIP_OK installed."
+        echo "Bliss: Mesa/Turnip $TURNIP_OK installed."
         _flux_gpu_pin_mesa
     else
-        echo "Foila: ${FLUX_TURNIP_MSG:-GPU driver download failed — software rendering until you retry}"
+        echo "Bliss: ${FLUX_TURNIP_MSG:-GPU driver download failed — software rendering until you retry}"
         MODE=virgl
         VENDOR_HINT="${VENDOR_HINT}+turnip-unavailable"
     fi
@@ -256,7 +256,7 @@ _flux_panvk_deps() {
     _bad() { ldd -r "$_l" 2>&1 | grep -E 'not found|undefined symbol'; }
     [ -z "$(_bad)" ] && return 0
     command -v apt-get >/dev/null 2>&1 || return 1
-    echo "Foila: PanVK needs extra libs, building shim (gcc + spirv-tools)..."
+    echo "Bliss: PanVK needs extra libs, building shim (gcc + spirv-tools)..."
     _pkg_add spirv-tools gcc libc6-dev || return 1
     _m=$(gcc -print-multiarch 2>/dev/null || echo aarch64-linux-gnu)
     _wl=$(ls /usr/lib/$_m/libwayland-client.so.0 2>/dev/null | head -1)
@@ -297,7 +297,7 @@ if [ "$MODE" = panvk ]; then
             [ -n "$_spec" ] || continue
             # shellcheck disable=SC2086
             set -- $_spec
-            echo "Foila: Downloading PanVK $1..."
+            echo "Bliss: Downloading PanVK $1..."
             if _flux_gpu_fetch "$2" /tmp/panvk.so \
                 && [ "$(sha256sum /tmp/panvk.so | cut -d' ' -f1)" = "$3" ] \
                 && _flux_gpu_fetch "$4" /tmp/panvk.json \
@@ -316,7 +316,7 @@ if [ "$MODE" = panvk ]; then
                 FLUX_PANVK_MSG="PanVK driver cannot load on this distro (missing libs) — software rendering stays"
                 continue
             fi
-            echo "Foila: [WARN] PanVK $1 download or sha256 failed."
+            echo "Bliss: [WARN] PanVK $1 download or sha256 failed."
         done
         # Offline/failed re-run must not break a working install.
         if [ -z "$PANVK_OK" ] && [ -z "$PANVK_TOUCHED" ] && [ -r /etc/fluxlinux/panvk_version ]; then
@@ -325,9 +325,9 @@ if [ "$MODE" = panvk ]; then
     fi
     rm -f /tmp/panvk.so /tmp/panvk.json
     if [ -n "$PANVK_OK" ]; then
-        echo "Foila: PanVK $PANVK_OK installed."
+        echo "Bliss: PanVK $PANVK_OK installed."
     else
-        echo "Foila: ${FLUX_PANVK_MSG:-GPU driver download failed — software rendering until you retry}"
+        echo "Bliss: ${FLUX_PANVK_MSG:-GPU driver download failed — software rendering until you retry}"
         MODE=virgl
         VENDOR_HINT="${VENDOR_HINT}+panvk-unavailable"
     fi
@@ -339,7 +339,7 @@ if [ "$MODE" = turnip ] || [ "$MODE" = panvk ]; then
 fi
 
 if [ "$MODE" = virgl ]; then
-    echo "Foila: VirGL mode — guest uses GALLIUM_DRIVER=virpipe when the socket exists."
+    echo "Bliss: VirGL mode — guest uses GALLIUM_DRIVER=virpipe when the socket exists."
 fi
 
 flux_gpu_write_state "$MODE" "$VENDOR_HINT"

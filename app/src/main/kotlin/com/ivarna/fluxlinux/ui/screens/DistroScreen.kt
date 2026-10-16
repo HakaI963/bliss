@@ -100,7 +100,7 @@ private fun isLightweightDistro(distro: Distro): Boolean {
 
 private fun isSecurityDistro(distro: Distro): Boolean {
     val id = distro.id.lowercase()
-    if (listOf("kali", "parrot", "backbox").any { id.contains(it) }) return true
+    if (listOf("kali", "parrot").any { id.contains(it) }) return true
     return distro.components.any {
         it.id.contains("cybersec", ignoreCase = true) ||
             it.name.contains("cybersec", ignoreCase = true) ||

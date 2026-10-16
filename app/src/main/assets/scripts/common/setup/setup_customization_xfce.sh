@@ -1,6 +1,6 @@
 #!/bin/sh
 # setup_customization_xfce.sh
-# Foila XFCE branding for Fedora / Void / openSUSE / Deepin / Chimera / Manjaro.
+# Bliss XFCE branding for Fedora / Void / openSUSE / Deepin / Chimera / Manjaro.
 # Same theme/icon/font/xfconf path as Alpine; package manager auto-detected.
 
 CUSTOM_USER="flux"
@@ -11,7 +11,7 @@ ICON_DIR="/usr/share/icons"
 
 handle_error() {
     echo ""
-    echo "Foila Error: Script failed at step: $1"
+    echo "Bliss Error: Script failed at step: $1"
     echo "---------------------------------------------------"
     if [ -t 0 ]; then
         printf "Press Enter to acknowledge error and exit..."
@@ -21,10 +21,10 @@ handle_error() {
     exit 1
 }
 
-echo "Foila: Starting XFCE4 Customization..."
+echo "Bliss: Starting XFCE4 Customization..."
 
 if [ "$(id -u)" -ne 0 ]; then
-    echo "Foila: ERROR: must run as root inside the guest (got uid=$(id -u))."
+    echo "Bliss: ERROR: must run as root inside the guest (got uid=$(id -u))."
     handle_error "Not Root"
 fi
 
@@ -58,7 +58,7 @@ if command -v sudo >/dev/null 2>&1; then
         for _pam in /etc/pam.d/sudo /etc/pam.d/sudo-i; do
             cat > "$_pam" <<'PAM'
 #%PAM-1.0
-# Foila proot: pam_unix/audit cannot run → sudo asks for a password.
+# Bliss proot: pam_unix/audit cannot run → sudo asks for a password.
 auth       sufficient pam_permit.so
 account    sufficient pam_permit.so
 password   sufficient pam_permit.so
@@ -132,7 +132,7 @@ _flux_fetch() {
     fi
 }
 
-echo "Foila: Installing customization packages..."
+echo "Bliss: Installing customization packages..."
 # Never install `curl` on openSUSE — it replaces libcurl-mini and breaks zypper.
 if command -v zypper >/dev/null 2>&1; then
     _flux_pkg_add wget unzip fontconfig git zsh bash || handle_error "customization deps"
@@ -150,7 +150,7 @@ _flux_pkg_add fastfetch 2>/dev/null || _flux_pkg_add neofetch 2>/dev/null || tru
 # not shipped, so this is the only install path. Retry via the native PM
 # (Chimera apk v3 / Deepin apt / Manjaro pacman) before aborting.
 if ! command -v git >/dev/null 2>&1 || ! command -v zsh >/dev/null 2>&1; then
-    echo "Foila: git/zsh missing after first package pass — retrying"
+    echo "Bliss: git/zsh missing after first package pass — retrying"
     if grep -q '^ID="chimera"' /usr/lib/os-release 2>/dev/null \
         || grep -q '^ID=chimera' /etc/os-release 2>/dev/null \
         || { [ -d /usr/lib/apk ] && [ ! -d /lib/apk ]; }; then
@@ -164,11 +164,11 @@ if ! command -v git >/dev/null 2>&1 || ! command -v zsh >/dev/null 2>&1; then
     fi
 fi
 command -v git >/dev/null 2>&1 || handle_error "git missing (required for Oh My Zsh / pokemon)"
-command -v zsh >/dev/null 2>&1 || handle_error "zsh missing (required for Foila shell)"
+command -v zsh >/dev/null 2>&1 || handle_error "zsh missing (required for Bliss shell)"
 
 # pokemon-colorscripts install.sh needs a python interpreter.
 if ! command -v python3 >/dev/null 2>&1 && ! command -v python >/dev/null 2>&1; then
-    echo "Foila: Installing python for pokemon-colorscripts..."
+    echo "Bliss: Installing python for pokemon-colorscripts..."
     _flux_pkg_add python3 2>/dev/null || _flux_pkg_add python 2>/dev/null || true
 fi
 
@@ -235,7 +235,7 @@ if [ -n "$_pick" ]; then
 else
   unset LC_ALL
   export LANG=C
-  echo "Foila: WARNING: no UTF-8 locale in locale -a; zsh staying LANG=C" >&2
+  echo "Bliss: WARNING: no UTF-8 locale in locale -a; zsh staying LANG=C" >&2
 fi
 unset _have _c _pick
 EOF
@@ -243,7 +243,7 @@ EOF
     if locale -a 2>/dev/null | grep -qiE 'en_US\.(utf8|UTF-8)|C\.(utf8|UTF-8)'; then
         printf 'LANG=%s\n' "${LANG:-C.UTF-8}" > /etc/locale.conf
     else
-        echo "Foila: ERROR: no UTF-8 locale after generation (locale -a has neither en_US.utf8 nor C.utf8)"
+        echo "Bliss: ERROR: no UTF-8 locale after generation (locale -a has neither en_US.utf8 nor C.utf8)"
         handle_error "UTF-8 locale"
     fi
 fi
@@ -318,7 +318,7 @@ download_if_needed() {
 }
 
 if [ -n "${FLUX_THEME:-}" ]; then
-    echo "Foila: Auto-applying Theme: $FLUX_THEME"
+    echo "Bliss: Auto-applying Theme: $FLUX_THEME"
     if [ "$FLUX_THEME" = "light" ]; then
         THEME_CHOICE="2"
     else
@@ -365,29 +365,29 @@ papirus_xfce_ok() {
 }
 
 if [ "${FLUX_SKIP_THEME_ICONS:-0}" = "1" ]; then
-    echo "Foila: Themes/icons pre-installed on host — skip guest extract"
+    echo "Bliss: Themes/icons pre-installed on host — skip guest extract"
 elif theme_is_installed "$SEL_THEME" && papirus_xfce_ok && cursor_is_installed "$SEL_CURSOR"; then
-    echo "Foila: Theme+icons+cursor already installed — skip extract"
+    echo "Bliss: Theme+icons+cursor already installed — skip extract"
 else
     # Theme/icon/cursor failures must not abort before OMZ/pokemon.
     if ! theme_is_installed "$SEL_THEME"; then
-        echo "Foila: Installing theme $SEL_THEME..."
+        echo "Bliss: Installing theme $SEL_THEME..."
         TFILE="$(find_asset "$THEME_TAR" || true)"
         if [ -z "$TFILE" ]; then
             if download_if_needed "$BASE_URL/theme.zip" "/tmp/theme.zip"; then
                 unzip -q -o /tmp/theme.zip -d /tmp/flux_theme_zip
                 TFILE="$(find /tmp/flux_theme_zip -name "$THEME_TAR" 2>/dev/null | head -1)"
             else
-                echo "Foila: WARNING: theme download failed — continuing"
+                echo "Bliss: WARNING: theme download failed — continuing"
             fi
         fi
         if [ -n "$TFILE" ]; then
             extract_local_tar "$TFILE" "$THEME_DIR" \
-                || echo "Foila: WARNING: theme extract failed — continuing"
+                || echo "Bliss: WARNING: theme extract failed — continuing"
         fi
     fi
     if ! papirus_xfce_ok; then
-        echo "Foila: Installing icons $SEL_ICON..."
+        echo "Bliss: Installing icons $SEL_ICON..."
         IFILE="$(find_asset "$ICON_TAR" || find_asset "papirus-dark-only.tar.gz" || true)"
         if [ -z "$IFILE" ]; then
             if download_if_needed "$BASE_URL/icons.zip" "/tmp/icons.zip"; then
@@ -395,31 +395,31 @@ else
                 IFILE="$(find /tmp/flux_icons_zip -name "$ICON_TAR" 2>/dev/null | head -1)"
                 [ -n "$IFILE" ] || IFILE="$(find /tmp/flux_icons_zip -name "papirus-dark-only.tar.gz" 2>/dev/null | head -1)"
             else
-                echo "Foila: WARNING: icons download failed — continuing"
+                echo "Bliss: WARNING: icons download failed — continuing"
             fi
         fi
         if [ -z "$IFILE" ]; then
-            echo "Foila: WARNING: Papirus archive missing — continuing (OMZ/pokemon still run)"
+            echo "Bliss: WARNING: Papirus archive missing — continuing (OMZ/pokemon still run)"
         else
             extract_local_tar "$IFILE" "$ICON_DIR" "Papirus-Dark" 2>/dev/null || \
                 extract_local_tar "$IFILE" "$ICON_DIR" || \
-                echo "Foila: WARNING: icons extract failed — continuing"
+                echo "Bliss: WARNING: icons extract failed — continuing"
         fi
     fi
     if ! cursor_is_installed "$SEL_CURSOR"; then
-        echo "Foila: Installing cursor $SEL_CURSOR..."
+        echo "Bliss: Installing cursor $SEL_CURSOR..."
         CFILE="$(find_asset "$CURSOR_TAR" || true)"
         if [ -z "$CFILE" ]; then
             if download_if_needed "$BASE_URL/cursor.zip" "/tmp/cursor.zip"; then
                 unzip -q -o /tmp/cursor.zip -d /tmp/flux_cursor_zip
                 CFILE="$(find /tmp/flux_cursor_zip -name "$CURSOR_TAR" 2>/dev/null | head -1)"
             else
-                echo "Foila: WARNING: cursor download failed — continuing"
+                echo "Bliss: WARNING: cursor download failed — continuing"
             fi
         fi
         if [ -n "$CFILE" ]; then
             extract_local_tar "$CFILE" "$ICON_DIR" \
-                || echo "Foila: WARNING: cursor extract failed — continuing"
+                || echo "Bliss: WARNING: cursor extract failed — continuing"
         fi
     fi
 fi
@@ -470,7 +470,7 @@ _flux_rewrite_papirus_inherits() {
         { print }
         END { if (!done) print "Inherits=" inh }
     ' "$_idx" > "$_tmp" && mv "$_tmp" "$_idx"
-    echo "Foila: Papirus-Dark Inherits=$_inh"
+    echo "Bliss: Papirus-Dark Inherits=$_inh"
 }
 
 _flux_find_category_icon() {
@@ -522,7 +522,7 @@ _flux_rewrite_papirus_inherits
 CATFILE="$(find_asset "papirus-xfce-categories.tar.xz" || true)"
 if [ -n "$CATFILE" ] && ! papirus_xfce_ok; then
     extract_local_tar "$CATFILE" "$ICON_DIR" \
-        || echo "Foila: WARNING: category extras extract failed — continuing"
+        || echo "Bliss: WARNING: category extras extract failed — continuing"
 fi
 
 _flux_seed_papirus_categories
@@ -530,7 +530,7 @@ _flux_seed_papirus_categories
 # Offline extras/stub usually satisfy the gate. Only then try the huge
 # guest papirus-icon-theme package (Fedora ~100MiB).
 if ! papirus_xfce_ok; then
-    echo "Foila: category icons still missing — trying papirus-icon-theme"
+    echo "Bliss: category icons still missing — trying papirus-icon-theme"
     _flux_pkg_add papirus-icon-theme 2>/dev/null \
         || _flux_pkg_add papirus-icon-theme-dark 2>/dev/null || true
     _flux_fix_papirus_dangling
@@ -560,9 +560,9 @@ fi
 
 if papirus_xfce_ok; then
     SEL_ICON="Papirus-Dark"
-    echo "Foila: Icon theme Papirus-Dark (category icons present)"
+    echo "Bliss: Icon theme Papirus-Dark (category icons present)"
 else
-    echo "Foila: Papirus-Dark missing XFCE category icons — Adwaita fallback"
+    echo "Bliss: Papirus-Dark missing XFCE category icons — Adwaita fallback"
     SEL_ICON="Adwaita"
     mkdir -p "$ICON_DIR/Adwaita/24x24/categories"
     for n in applications-internet applications-accessories applications-system; do
@@ -596,7 +596,7 @@ _flux_chown "$CUSTOM_USER:$CUSTOM_GROUP" "$WALLPAPER_DIR"/* 2>/dev/null || true
 
 FONT_DIR="/usr/share/fonts/jetbrains-mono-nerd"
 if ! fc-list 2>/dev/null | grep -qi "JetBrainsMono Nerd"; then
-    echo "Foila: Installing JetBrains Mono Nerd Font..."
+    echo "Bliss: Installing JetBrains Mono Nerd Font..."
     mkdir -p "$FONT_DIR"
     TEMP_ZIP="/tmp/JetBrainsMono.zip"
     NERD_FONT_URL="https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.zip"
@@ -613,14 +613,14 @@ if fc-list 2>/dev/null | grep -qi "JetBrainsMono Nerd"; then
     _term_font="JetBrainsMono Nerd Font 10"
     _title_font="JetBrainsMono Nerd Font Bold 9"
 else
-    echo "Foila: JetBrainsMono Nerd not in fontconfig — VTE fallback DejaVu Sans Mono"
+    echo "Bliss: JetBrainsMono Nerd not in fontconfig — VTE fallback DejaVu Sans Mono"
     _gtk_font="DejaVu Sans Mono 9"
     _mono_font="DejaVu Sans Mono 10"
     _term_font="DejaVu Sans Mono 10"
     _title_font="DejaVu Sans Bold 9"
 fi
 
-echo "Foila: Applying XFCE4 Settings..."
+echo "Bliss: Applying XFCE4 Settings..."
 XFCONF_DIR="$USER_HOME/.config/xfce4/xfconf/xfce-perchannel-xml"
 mkdir -p "$XFCONF_DIR"
 WALLPAPER_PATH="$WALLPAPER_DIR/$SEL_WALLPAPER"
@@ -1147,7 +1147,7 @@ _flux_run() {
             sleep 1
             _i=$((_i + 1))
         done
-        echo "Foila: command timed out after ${_t}s"
+        echo "Bliss: command timed out after ${_t}s"
         kill "$_cmd" 2>/dev/null || true
         sleep 1
         kill -9 "$_cmd" 2>/dev/null || true
@@ -1175,27 +1175,27 @@ _flux_git_clone() {
     _flux_run "$_secs" git clone --depth 1 --single-branch "$_url" "$_dest"
 }
 
-echo "Foila: Installing Oh My Zsh..."
+echo "Bliss: Installing Oh My Zsh..."
 OMZ_OK=0
 if [ -f "$USER_HOME/.oh-my-zsh/oh-my-zsh.sh" ]; then
-    echo "Foila: Oh My Zsh already valid — skip install"
+    echo "Bliss: Oh My Zsh already valid — skip install"
     OMZ_OK=1
 else
     if [ -e "$USER_HOME/.oh-my-zsh" ]; then
-        echo "Foila: Incomplete Oh My Zsh detected — removing (bounded)…"
+        echo "Bliss: Incomplete Oh My Zsh detected — removing (bounded)…"
         _flux_safe_rm_tree "$USER_HOME/.oh-my-zsh"
     fi
     if [ "${FLUX_SKIP_OMZ:-0}" = "1" ]; then
-        echo "Foila: FLUX_SKIP_OMZ set but oh-my-zsh.sh missing — guest fallback"
+        echo "Bliss: FLUX_SKIP_OMZ set but oh-my-zsh.sh missing — guest fallback"
     fi
     if command -v git >/dev/null 2>&1; then
-        echo "Foila: Shallow git clone Oh My Zsh (timeout 120s)…"
+        echo "Bliss: Shallow git clone Oh My Zsh (timeout 120s)…"
         if _flux_git_clone "https://github.com/ohmyzsh/ohmyzsh.git" "$USER_HOME/.oh-my-zsh" 120 \
             && [ -f "$USER_HOME/.oh-my-zsh/oh-my-zsh.sh" ]; then
-            echo "Foila: Oh My Zsh installed"
+            echo "Bliss: Oh My Zsh installed"
             OMZ_OK=1
         else
-            echo "Foila: WARNING: Oh My Zsh clone failed or timed out — not treating as success"
+            echo "Bliss: WARNING: Oh My Zsh clone failed or timed out — not treating as success"
             # Never leave a half tree, but never rm a good oh-my-zsh.sh either.
             if [ ! -f "$USER_HOME/.oh-my-zsh/oh-my-zsh.sh" ]; then
                 _flux_safe_rm_tree "$USER_HOME/.oh-my-zsh"
@@ -1204,89 +1204,89 @@ else
             fi
         fi
     else
-        echo "Foila: WARNING: git unavailable — Oh My Zsh skipped"
+        echo "Bliss: WARNING: git unavailable — Oh My Zsh skipped"
     fi
 fi
 
 if [ "$OMZ_OK" = "1" ]; then
     ZSH_CUSTOM="$USER_HOME/.oh-my-zsh/custom"
     mkdir -p "$ZSH_CUSTOM/plugins" "$ZSH_CUSTOM/themes" 2>/dev/null || true
-    echo "Foila: Installing Zsh plugins (if missing)…"
+    echo "Bliss: Installing Zsh plugins (if missing)…"
     if [ ! -d "$ZSH_CUSTOM/plugins/zsh-autosuggestions/.git" ] \
         && [ ! -f "$ZSH_CUSTOM/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh" ]; then
-        echo "Foila: Shallow clone zsh-autosuggestions (timeout 60s)…"
+        echo "Bliss: Shallow clone zsh-autosuggestions (timeout 60s)…"
         if ! _flux_git_clone "https://github.com/zsh-users/zsh-autosuggestions.git" \
             "$ZSH_CUSTOM/plugins/zsh-autosuggestions" 60 \
             || [ ! -f "$ZSH_CUSTOM/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh" ]; then
-            echo "Foila: WARNING: zsh-autosuggestions clone failed or timed out"
+            echo "Bliss: WARNING: zsh-autosuggestions clone failed or timed out"
             [ -f "$ZSH_CUSTOM/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh" ] \
                 || _flux_safe_rm_tree "$ZSH_CUSTOM/plugins/zsh-autosuggestions"
         fi
     else
-        echo "Foila: zsh-autosuggestions already present — skip"
+        echo "Bliss: zsh-autosuggestions already present — skip"
     fi
     if [ ! -d "$ZSH_CUSTOM/plugins/zsh-syntax-highlighting/.git" ] \
         && [ ! -f "$ZSH_CUSTOM/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh" ]; then
-        echo "Foila: Shallow clone zsh-syntax-highlighting (timeout 60s)…"
+        echo "Bliss: Shallow clone zsh-syntax-highlighting (timeout 60s)…"
         if ! _flux_git_clone "https://github.com/zsh-users/zsh-syntax-highlighting.git" \
             "$ZSH_CUSTOM/plugins/zsh-syntax-highlighting" 60 \
             || [ ! -f "$ZSH_CUSTOM/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh" ]; then
-            echo "Foila: WARNING: zsh-syntax-highlighting clone failed or timed out"
+            echo "Bliss: WARNING: zsh-syntax-highlighting clone failed or timed out"
             [ -f "$ZSH_CUSTOM/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh" ] \
                 || _flux_safe_rm_tree "$ZSH_CUSTOM/plugins/zsh-syntax-highlighting"
         fi
     else
-        echo "Foila: zsh-syntax-highlighting already present — skip"
+        echo "Bliss: zsh-syntax-highlighting already present — skip"
     fi
     # Local monochrome prompt theme — no remote download (old colorful theme removed).
     rm -f "$ZSH_CUSTOM/themes/agnosterzak.zsh-theme" 2>/dev/null || true
     if [ ! -s "$ZSH_CUSTOM/themes/folio.zsh-theme" ]; then
-        echo "Foila: Installing folio prompt theme…"
+        echo "Bliss: Installing folio prompt theme…"
         cat > "$ZSH_CUSTOM/themes/folio.zsh-theme" <<'FOLIO_THEME_EOF'
-# folio.zsh-theme — Foila's minimal monochrome prompt.
+# folio.zsh-theme — Bliss's minimal monochrome prompt.
 # White/gray on black only; ASCII-safe (no powerline glyphs, no ANSI colors 31-44).
-# Segments:  time  foila  working-dir  input-char
-PROMPT='%F{240}%D{%H:%M}%f %F{255}foila%f %F{250}%~%f %F{255}%#%f '
+# Segments:  time  bliss  working-dir  input-char
+PROMPT='%F{240}%D{%H:%M}%f %F{255}bliss%f %F{250}%~%f %F{255}%#%f '
 PROMPT2='%F{240}> %f'
 FOLIO_THEME_EOF
         if [ ! -s "$ZSH_CUSTOM/themes/folio.zsh-theme" ]; then
-            echo "Foila: WARNING: folio prompt theme write failed — zsh keeps default prompt"
+            echo "Bliss: WARNING: folio prompt theme write failed — zsh keeps default prompt"
         fi
     else
-        echo "Foila: folio prompt theme already present — skip"
+        echo "Bliss: folio prompt theme already present — skip"
     fi
     _flux_chown_r "$CUSTOM_USER:$CUSTOM_GROUP" "$USER_HOME/.oh-my-zsh"
 else
-    echo "Foila: Skipping Zsh plugins (Oh My Zsh not installed)"
+    echo "Bliss: Skipping Zsh plugins (Oh My Zsh not installed)"
 fi
 
 # pokemon-colorscripts: try by default (60s budget). Skip only if explicitly 1.
 if [ "${FLUX_SKIP_POKEMON:-0}" = "1" ]; then
-    echo "Foila: pokemon-colorscripts skip (FLUX_SKIP_POKEMON=1)"
+    echo "Bliss: pokemon-colorscripts skip (FLUX_SKIP_POKEMON=1)"
 elif command -v pokemon-colorscripts >/dev/null 2>&1; then
-    echo "Foila: pokemon-colorscripts already present — skip"
+    echo "Bliss: pokemon-colorscripts already present — skip"
 elif ! command -v git >/dev/null 2>&1; then
-    echo "Foila: pokemon-colorscripts skip (git missing)"
+    echo "Bliss: pokemon-colorscripts skip (git missing)"
 else
-    echo "Foila: Installing pokemon-colorscripts (optional, 60s budget)…"
+    echo "Bliss: Installing pokemon-colorscripts (optional, 60s budget)…"
     POKEMON_TEMP="/tmp/pokemon-colorscripts.$$"
     _flux_safe_rm_tree "$POKEMON_TEMP"
     if _flux_git_clone "https://gitlab.com/phoneybadger/pokemon-colorscripts.git" "$POKEMON_TEMP" 60 \
         && [ -f "$POKEMON_TEMP/install.sh" ]; then
         (cd "$POKEMON_TEMP" && _flux_run 30 sh ./install.sh) \
-            || echo "Foila: WARNING: pokemon-colorscripts install.sh failed"
+            || echo "Bliss: WARNING: pokemon-colorscripts install.sh failed"
         if command -v pokemon-colorscripts >/dev/null 2>&1; then
-            echo "Foila: pokemon-colorscripts installed"
+            echo "Bliss: pokemon-colorscripts installed"
         else
-            echo "Foila: WARNING: pokemon-colorscripts not on PATH after install.sh"
+            echo "Bliss: WARNING: pokemon-colorscripts not on PATH after install.sh"
         fi
     else
-        echo "Foila: WARNING: pokemon-colorscripts skipped (clone timeout/fail)"
+        echo "Bliss: WARNING: pokemon-colorscripts skipped (clone timeout/fail)"
     fi
     _flux_safe_rm_tree "$POKEMON_TEMP"
 fi
 
-echo "Foila: Configuring .zshrc..."
+echo "Bliss: Configuring .zshrc..."
 ZSHRC="$USER_HOME/.zshrc"
 cat > "$ZSHRC" << 'ZSHEOF'
 # Guest PATH only — never inherit host PREFIX/bin (nested proot glue errors).
@@ -1305,7 +1305,7 @@ if [ -n "$_pick" ]; then
 else
   unset LC_ALL
   export LANG=C
-  echo "Foila: WARNING: no UTF-8 locale in locale -a; zsh staying LANG=C" >&2
+  echo "Bliss: WARNING: no UTF-8 locale in locale -a; zsh staying LANG=C" >&2
 fi
 unset _have _c _pick
 export PYTHONIOENCODING=UTF-8
@@ -1358,7 +1358,7 @@ if command -v sudo >/dev/null 2>&1; then
     apk() { command sudo apk "$@"; }
   fi
 fi
-# ── Foila launch sticker (random colored anime banner; opt out FLUX_NO_BANNER=1)
+# ── Bliss launch sticker (random truecolor anime banner; opt out FLUX_NO_BANNER=1)
 [ -r "$HOME/.config/folio/banner.sh" ] && . "$HOME/.config/folio/banner.sh"
 
 ZSHEOF
@@ -1370,7 +1370,7 @@ if [ ! -f "$ZPROFILE" ]; then
     _flux_chown "$CUSTOM_USER:$CUSTOM_GROUP" "$ZPROFILE"
 fi
 
-# ── Foila launch stickers: 8 colored anime ASCII designs (256-color) ────────
+# ── Bliss launch stickers: 5 truecolor anime half-block designs ─────────────
 # Installs ~/.config/folio/banner/*.txt (random pick per shell open) and
 # ~/.config/folio/banner.sh (the folio-banner function sourced by .zshrc).
 # Offline, idempotent (`.banner-rev` refreshes existing installs).
@@ -1380,113 +1380,115 @@ _flux_write_folio_banner() {
     _owner="${2:-}"
     [ -n "$_home" ] || return 0
     _bdir="$_home/.config/folio/banner"
-    _brev="3"
+    _brev="4"
     _need=0
     if [ "$(cat "$_bdir/.banner-rev" 2>/dev/null || true)" != "$_brev" ]; then
         _need=1
     fi
-    for _b in 01-catgirl 02-mecha 03-kitsune 04-shonen 05-chibi-star 06-robot-kitty 07-magical 08-samurai; do
+    for _b in 01-anime-girl 02-maid 03-kitsune 04-chibi 05-catgirl; do
         [ -s "$_bdir/$_b.txt" ] || _need=1
     done
     [ -s "$_home/.config/folio/banner.sh" ] || _need=1
     [ "$_need" = "1" ] || return 0
 
     mkdir -p "$_bdir" 2>/dev/null || return 0
+    rm -f "$_bdir"/*.txt 2>/dev/null || true
     cat > "$_bdir/.folio-banners.$$" <<'FOLIO_BANNER_ALL'
-==>01-catgirl
-\033[38;5;225m       ╱╲              ╱╲\033[0m
-\033[38;5;218m      ╱  ╲▄▄▄▄▄▄▄▄▄▄▄╱  ╲         nyah~\033[0m
-\033[38;5;212m     ╭╯ ░░░░░░░░░░░░░░░ ╰╮\033[0m
-\033[38;5;211m     │  ▄███▀▀   ▀▀███▄  │\033[0m
-\033[38;5;207m     │ ▐█████▌   ▐█████▌ │\033[0m
-\033[38;5;206m     │  ▀▀▀▀▀     ▀▀▀▀▀  │\033[0m
-\033[38;5;205m     │       ╭─────╮       │   =^.^=\033[0m
-\033[38;5;200m      ╲      ╰─────╯      ╱\033[0m
-\033[38;5;199m       ╰──────╮ ╭──────╯\033[0m
-\033[38;5;164m        ╰─────╯ ╰─────╯\033[0m
-\033[38;5;163m         ║▀▀▀▀▀▀▀▀▀║\033[0m
-\033[38;5;225m         ╰─────────╯\033[0m
-==>02-mecha
-\033[38;5;159m         _|_\033[0m
-\033[38;5;123m        ╱   ╲                UNIT-07\033[0m
-\033[38;5;117m    ╔═══╧═╤═╧═══╗\033[0m
-\033[38;5;111m    ║ ▄▄▄▄▄▄▄▄▄▄▄ ║\033[0m
-\033[38;5;75m    ║ █▀▀▀▀▀▀▀▀▀█ ║   ▐▌ ▐▌\033[0m
-\033[38;5;69m    ║ █ ▀▀▀▀▀▀▀ █ ║   ▐▌ ▐▌\033[0m
-\033[38;5;63m    ╚═╦═══════╦═╝\033[0m
-\033[38;5;39m       ║ ▒▒▒▒▒▒▒ ║\033[0m
-\033[38;5;33m      ╔╩═══════╩╗\033[0m
-\033[38;5;27m      ║  ▄▄▄▄▄  ║\033[0m
-\033[38;5;159m      ╚═════════╝\033[0m
+==>01-anime-girl
+\033[38;2;0;0;0;48;2;116;84;36m▀\033[38;2;116;84;44;48;2;124;92;44m▀\033[38;2;124;84;44;48;2;116;84;44m▀\033[48;2;124;84;44m                                 \033[38;2;108;76;36m▀\033[48;2;100;76;36m \033[38;2;116;84;44m▀\033[48;2;124;84;44m    \033[0m
+\033[48;2;124;84;44m \033[38;2;116;84;44m▀                                   \033[38;2;116;84;36m▀\033[48;2;100;76;36m \033[38;2;116;84;44;48;2;108;76;36m▀\033[48;2;124;84;44m   \033[0m
+\033[48;2;124;84;44m                 \033[38;2;124;84;44;48;2;116;84;36m▀▀\033[48;2;124;84;44m  \033[38;2;124;84;44;48;2;116;84;36m▀\033[38;2;116;84;36;48;2;124;84;44m▀\033[38;2;124;84;44;48;2;116;84;36m▀▀\033[48;2;124;84;44m           \033[48;2;116;84;44m \033[48;2;124;84;44m \033[38;2;100;76;36;48;2;108;76;36m▀\033[48;2;100;76;36m \033[48;2;124;84;44m \033[38;2;116;84;44m▀ \033[0m
+\033[48;2;124;84;44m \033[38;2;124;84;44;48;2;116;84;36m▀▀▀▀▀▀▀▀▀▀\033[48;2;124;84;44m \033[38;2;116;84;36;48;2;124;92;44m▀▀\033[38;2;124;84;44m▀ \033[38;2;116;84;36;48;2;108;76;36m▀\033[38;2;140;108;68;48;2;164;124;76m▀\033[38;2;148;116;68;48;2;252;196;148m▀\033[38;2;108;76;36;48;2;140;100;52m▀\033[38;2;124;84;44;48;2;116;84;36m▀\033[38;2;116;84;36;48;2;124;84;44m▀\033[38;2;140;100;52m▀\033[38;2;188;156;108;48;2;236;196;148m▀\033[38;2;116;84;36;48;2;188;156;108m▀\033[38;2;124;84;44;48;2;108;76;36m▀\033[48;2;124;92;44m▀\033[48;2;124;84;44m           \033[38;2;116;84;36;48;2;116;84;44m▀\033[48;2;100;76;36m \033[38;2;124;84;44;48;2;116;84;44m▀\033[48;2;124;84;44m  \033[0m
+\033[38;2;140;100;52;48;2;148;116;68m▀▀\033[38;2;124;92;44m▀\033[48;2;140;108;68m▀\033[48;2;164;124;76m▀\033[48;2;188;156;108m▀\033[48;2;140;108;68m▀\033[48;2;148;116;68m▀\033[48;2;140;108;68m▀\033[48;2;140;100;52m \033[38;2;140;100;52;48;2;124;92;44m▀\033[38;2;140;108;68;48;2;124;84;44m▀\033[38;2;140;100;52;48;2;116;84;36m▀\033[38;2;124;92;44m▀\033[48;2;124;84;44m  \033[48;2;108;76;36m \033[48;2;164;124;76m \033[38;2;252;236;172;48;2;252;228;172m▀\033[48;2;236;196;148m \033[38;2;108;76;36;48;2;188;156;108m▀\033[38;2;116;84;44;48;2;116;84;36m▀ \033[38;2;164;124;76;48;2;188;156;108m▀\033[38;2;212;188;140;48;2;252;236;180m▀\033[38;2;148;116;68;48;2;252;228;172m▀\033[38;2;108;76;36;48;2;140;100;52m▀\033[38;2;124;84;44;48;2;116;84;36m▀\033[48;2;124;84;44m          \033[48;2;116;84;44m \033[48;2;100;76;36m \033[38;2;116;84;44;48;2;124;84;44m▀  \033[0m
+\033[38;2;140;100;52;48;2;116;84;36m▀\033[48;2;124;84;44m▀\033[38;2;140;108;68m▀\033[38;2;140;100;52;48;2;108;76;36m▀\033[38;2;164;124;76;48;2;188;156;108m▀\033[38;2;252;228;172;48;2;252;236;172m▀\033[38;2;164;124;76;48;2;236;196;148m▀\033[48;2;116;84;36m \033[38;2;124;92;44m▀\033[38;2;116;84;36;48;2;124;92;44m▀\033[48;2;124;84;44m▀     \033[48;2;116;84;36m \033[38;2;164;116;68;48;2;148;116;68m▀\033[48;2;252;228;172m  \033[38;2;252;236;180m▀\033[38;2;188;156;108;48;2;252;236;180m▀\033[38;2;100;76;36;48;2;188;156;108m▀\033[38;2;164;124;76;48;2;140;100;52m▀\033[38;2;252;228;172;48;2;252;196;148m▀\033[38;2;252;236;172;48;2;252;244;188m▀\033[38;2;236;196;148m▀\033[38;2;116;84;36;48;2;188;156;108m▀\033[38;2;124;84;44;48;2;108;76;36m▀\033[48;2;124;84;44m         \033[48;2;116;84;44m \033[38;2;100;76;36;48;2;108;76;36m▀\033[48;2;124;84;44m   \033[0m
+\033[48;2;124;84;44m   \033[38;2;116;84;36;48;2;108;76;36m▀\033[38;2;164;124;76;48;2;188;156;108m▀\033[38;2;188;156;108;48;2;252;228;172m▀\033[38;2;212;188;140m▀\033[38;2;164;124;76m▀\033[38;2;108;76;36;48;2;140;100;52m▀\033[38;2;140;100;52;48;2;108;76;36m▀\033[38;2;164;124;76;48;2;228;172;124m▀\033[38;2;108;76;36;48;2;164;124;76m▀\033[38;2;124;84;44;48;2;108;76;36m▀\033[48;2;124;92;44m▀\033[48;2;124;84;44m  \033[38;2;116;84;36;48;2;116;84;44m▀\033[38;2;140;100;52;48;2;124;84;44m▀\033[38;2;236;196;148;48;2;228;172;124m▀\033[38;2;252;236;172;48;2;236;196;148m▀▀\033[38;2;252;244;188;48;2;156;140;108m▀\033[38;2;236;196;148;48;2;68;44;20m▀\033[38;2;100;76;44m▀\033[38;2;116;84;44;48;2;0;0;0m▀\033[38;2;140;108;68m▀\033[38;2;156;140;108m▀\033[38;2;236;196;148;48;2;68;44;20m▀\033[38;2;164;124;76;48;2;100;92;68m▀\033[38;2;116;84;36;48;2;124;84;44m▀        \033[48;2;108;76;36m▀ \033[48;2;124;84;44m   \033[0m
+\033[48;2;124;84;44m   \033[48;2;116;84;36m \033[38;2;228;172;124;48;2;188;156;108m▀\033[48;2;252;236;172m \033[38;2;252;228;172;48;2;252;236;180m▀\033[38;2;252;236;180;48;2;252;244;188m▀\033[38;2;212;188;140m▀\033[38;2;100;76;36;48;2;188;156;108m▀\033[38;2;188;156;108;48;2;140;100;52m▀\033[48;2;252;228;172m \033[38;2;140;108;68m▀\033[38;2;108;76;36;48;2;140;100;52m▀\033[38;2;124;92;44;48;2;116;84;36m▀\033[38;2;124;84;44;48;2;124;92;44m▀\033[48;2;124;84;44m \033[48;2;108;76;36m \033[38;2;188;156;108;48;2;164;124;76m▀\033[38;2;252;236;172;48;2;252;228;172m▀\033[38;2;140;108;68;48;2;100;92;68m▀\033[38;2;0;0;0;48;2;188;156;108m▀\033[38;2;156;140;108;48;2;252;252;252m▀\033[38;2;100;92;68;48;2;100;76;44m▀\033[38;2;0;0;0;48;2;68;44;20m▀\033[38;2;68;44;20;48;2;0;0;0m▀\033[48;2;68;44;20m \033[38;2;68;44;20;48;2;0;0;0m▀\033[48;2;100;92;68m▀▀\033[38;2;124;92;44;48;2;100;76;36m▀\033[38;2;116;84;36;48;2;124;92;44m▀\033[38;2;124;84;44;48;2;116;84;44m▀\033[48;2;124;84;44m   \033[38;2;116;84;44m▀\033[38;2;124;84;44;48;2;116;84;36m▀\033[38;2;108;76;36;48;2;100;76;36m▀\033[38;2;116;84;36;48;2;124;84;44m▀\033[38;2;124;84;44;48;2;116;84;44m▀\033[48;2;124;84;44m  \033[0m
+\033[48;2;124;84;44m   \033[38;2;108;76;36;48;2;116;84;36m▀\033[38;2;228;172;124;48;2;188;156;108m▀\033[38;2;252;228;172;48;2;100;76;44m▀\033[38;2;188;156;108;48;2;0;0;0m▀\033[38;2;140;108;68;48;2;100;92;68m▀\033[48;2;68;44;20m▀\033[38;2;188;156;108;48;2;0;0;0m▀\033[38;2;140;108;68;48;2;68;44;20m▀\033[38;2;228;172;124;48;2;164;124;76m▀\033[38;2;252;236;180;48;2;252;228;172m▀\033[38;2;236;196;148;48;2;252;236;180m▀\033[38;2;140;100;52;48;2;236;196;148m▀\033[38;2;108;76;36;48;2;140;100;52m▀\033[38;2;124;92;44;48;2;108;76;36m▀\033[38;2;116;84;36;48;2;124;92;44m▀\033[38;2;140;100;52;48;2;116;84;36m▀\033[38;2;236;196;148;48;2;228;172;124m▀\033[38;2;252;228;172;48;2;252;236;172m▀\033[38;2;244;244;204;48;2;252;236;180m▀\033[48;2;252;252;252m \033[38;2;68;44;20;48;2;100;92;68m▀\033[48;2;0;0;0m \033[38;2;0;0;0;48;2;68;44;20m▀\033[38;2;68;44;20;48;2;0;0;0m▀\033[38;2;0;0;0;48;2;156;140;108m▀\033[38;2;100;76;44m▀\033[48;2;212;204;188m \033[38;2;68;44;20;48;2;108;76;36m▀\033[38;2;124;92;44;48;2;116;84;44m▀\033[38;2;116;84;44;48;2;124;84;44m▀ \033[38;2;124;84;44;48;2;116;84;36m▀\033[48;2;108;76;36m▀\033[48;2;124;92;44m \033[38;2;100;76;36;48;2;68;44;20m▀\033[48;2;0;0;0m \033[38;2;116;84;44;48;2;68;44;20m▀\033[38;2;124;84;44;48;2;124;92;44m▀\033[48;2;116;84;36m▀\033[48;2;124;84;44m \033[0m
+\033[48;2;124;84;44m  \033[48;2;116;84;44m \033[38;2;108;76;36;48;2;124;92;44m▀\033[48;2;68;44;20m \033[38;2;68;44;20;48;2;140;108;68m▀\033[38;2;212;204;188;48;2;252;252;252m▀\033[48;2;212;204;188m \033[38;2;68;44;20;48;2;0;0;0m▀\033[48;2;68;44;20m \033[48;2;0;0;0m \033[38;2;100;76;44m▀\033[38;2;252;228;172;48;2;212;188;140m▀\033[48;2;252;236;172m▀\033[38;2;252;236;172;48;2;252;228;172m▀\033[38;2;252;228;172;48;2;252;236;172m▀\033[38;2;148;116;68m▀\033[38;2;108;76;36;48;2;188;156;108m▀\033[48;2;108;76;36m \033[38;2;164;124;76;48;2;124;84;44m▀\033[38;2;252;228;172;48;2;252;196;148m▀\033[48;2;252;228;172m \033[38;2;252;252;252;48;2;244;244;204m▀\033[38;2;156;140;108;48;2;212;204;188m▀\033[38;2;0;0;0;48;2;68;44;20m▀ ▀\033[38;2;156;140;108;48;2;0;0;0m▀\033[38;2;212;204;188;48;2;100;92;68m▀\033[48;2;212;204;188m \033[38;2;116;84;36;48;2;108;76;36m▀\033[48;2;124;84;44m  \033[38;2;116;84;36;48;2;108;76;36m▀\033[38;2;140;108;68;48;2;188;156;108m▀\033[38;2;164;124;76;48;2;252;236;180m▀\033[38;2;100;76;36;48;2;68;44;20m▀\033[48;2;0;0;0m   \033[38;2;124;84;44;48;2;100;76;36m▀\033[48;2;124;92;44m▀\033[48;2;116;84;44m▀\033[0m
+\033[48;2;124;84;44m  \033[38;2;116;84;44m▀\033[38;2;124;92;44m▀\033[38;2;100;76;36;48;2;116;84;36m▀\033[38;2;156;140;108;48;2;188;156;108m▀\033[48;2;252;252;252m \033[38;2;244;244;236m▀\033[38;2;68;44;20;48;2;100;92;68m▀\033[48;2;0;0;0m  \033[48;2;100;92;68m \033[48;2;212;204;188m \033[38;2;252;236;172;48;2;252;228;172m▀   \033[38;2;252;236;180m▀\033[38;2;236;196;148;48;2;252;236;180m▀\033[38;2;140;108;68;48;2;252;228;172m▀\033[38;2;188;156;108;48;2;236;196;148m▀\033[48;2;252;228;172m  \033[38;2;244;244;236;48;2;252;236;172m▀\033[38;2;100;92;68;48;2;236;196;148m▀\033[38;2;0;0;0;48;2;100;92;68m▀\033[38;2;68;44;20;48;2;100;76;44m▀\033[38;2;0;0;0;48;2;140;108;68m▀\033[38;2;188;156;108;48;2;252;196;148m▀\033[48;2;164;124;76m▀\033[48;2;108;76;36m \033[48;2;124;84;44m  \033[48;2;108;76;36m \033[38;2;188;156;108;48;2;236;196;148m▀\033[38;2;252;236;180;48;2;212;188;140m▀\033[38;2;68;44;20;48;2;0;0;0m▀   \033[48;2;68;44;20m \033[48;2;124;92;44m \033[48;2;116;84;36m \033[0m
+\033[38;2;116;84;44;48;2;124;92;44m▀\033[38;2;124;84;44;48;2;116;84;36m▀\033[48;2;124;84;44m  \033[38;2;116;84;36m▀\033[38;2;164;116;68;48;2;116;84;36m▀\033[38;2;252;228;172;48;2;228;172;124m▀\033[38;2;252;252;252;48;2;252;236;180m▀\033[38;2;212;204;188;48;2;252;252;252m▀\033[38;2;68;44;20;48;2;156;140;108m▀\033[48;2;0;0;0m▀ \033[38;2;100;92;68;48;2;156;140;108m▀\033[48;2;252;244;188m \033[48;2;252;228;172m      \033[38;2;252;236;172m▀   \033[48;2;252;236;172m \033[38;2;252;236;172;48;2;252;196;148m▀  \033[38;2;252;196;148;48;2;228;172;124m▀\033[38;2;140;100;52;48;2;124;84;44m▀\033[38;2;124;84;44;48;2;164;124;76m▀\033[48;2;116;84;36m▀ \033[48;2;140;108;68m▀\033[38;2;252;228;172;48;2;100;92;68m▀\033[38;2;100;76;44;48;2;0;0;0m▀    \033[38;2;68;44;20;48;2;100;76;36m▀\033[48;2;124;92;44m \033[38;2;116;84;36;48;2;116;84;44m▀\033[0m
+\033[38;2;100;76;36;48;2;0;0;0m▀\033[38;2;124;92;44;48;2;100;76;36m▀\033[38;2;116;84;36;48;2;124;92;44m▀\033[38;2;124;84;44;48;2;116;84;36m▀\033[48;2;124;84;44m \033[38;2;116;84;36m▀\033[38;2;148;116;68;48;2;124;92;44m▀\033[38;2;252;196;148;48;2;188;156;108m▀\033[38;2;252;228;172;48;2;252;196;148m▀▀\033[38;2;140;108;68;48;2;252;228;172m▀\033[38;2;156;140;108;48;2;252;244;188m▀\033[48;2;252;228;172m              \033[38;2;252;196;148;48;2;252;236;172m▀\033[48;2;252;228;172m▀\033[48;2;164;124;76m \033[38;2;164;116;68;48;2;252;196;148m▀\033[38;2;228;172;124;48;2;212;188;140m▀\033[38;2;164;124;76;48;2;140;108;68m▀\033[38;2;124;84;44;48;2;124;92;44m▀\033[48;2;68;44;20m \033[48;2;0;0;0m     \033[38;2;0;0;0;48;2;68;44;20m▀\033[38;2;108;76;36;48;2;124;92;44m▀\033[38;2;124;92;44;48;2;116;84;44m▀\033[38;2;68;44;20;48;2;0;0;0m▀\033[0m
+\033[48;2;0;0;0m  \033[38;2;100;76;36m▀\033[38;2;124;92;44;48;2;100;76;36m▀\033[38;2;116;84;44;48;2;124;92;44m▀\033[48;2;116;84;36m \033[38;2;164;116;68;48;2;124;92;44m▀\033[38;2;228;172;124;48;2;252;196;148m▀ \033[38;2;252;196;148;48;2;252;228;172m▀▀               \033[38;2;252;236;172m▀\033[38;2;236;196;148m▀\033[38;2;252;196;148;48;2;252;244;188m▀\033[38;2;252;236;180;48;2;156;140;108m▀\033[38;2;68;44;20;48;2;0;0;0m▀\033[48;2;68;44;20m \033[38;2;124;92;44;48;2;108;76;36m▀\033[48;2;0;0;0m \033[38;2;0;0;0;48;2;100;92;68m▀\033[38;2;236;196;148;48;2;252;244;188m▀\033[38;2;188;156;108;48;2;212;188;140m▀\033[48;2;0;0;0m \033[38;2;0;0;0;48;2;68;44;20m▀\033[38;2;100;76;36;48;2;140;100;52m▀\033[38;2;140;100;52;48;2;68;44;20m▀\033[38;2;68;44;20;48;2;0;0;0m▀\033[0m
+\033[48;2;0;0;0m    \033[38;2;100;76;36m▀\033[38;2;116;84;36;48;2;68;44;20m▀\033[48;2;124;92;44m▀\033[38;2;188;156;108m▀\033[38;2;252;236;172;48;2;236;196;148m▀\033[38;2;252;228;172;48;2;252;236;172m▀\033[48;2;252;228;172m       \033[38;2;252;228;172;48;2;252;236;172m▀▀\033[38;2;252;236;172;48;2;252;228;172m▀\033[38;2;252;228;172;48;2;252;196;148m▀\033[48;2;252;228;172m      \033[38;2;252;228;172;48;2;252;236;172m▀\033[48;2;236;196;148m▀\033[38;2;68;44;20;48;2;0;0;0m▀ \033[48;2;100;76;36m \033[38;2;68;44;20;48;2;0;0;0m▀ \033[38;2;148;116;68;48;2;140;108;68m▀\033[48;2;252;244;188m \033[48;2;188;156;108m \033[38;2;0;0;0;48;2;68;44;20m▀\033[38;2;116;84;44m▀\033[38;2;68;44;20;48;2;0;0;0m▀\033[0m
+\033[48;2;0;0;0m      \033[38;2;108;76;36m▀\033[48;2;140;100;52m▀\033[38;2;100;92;68;48;2;68;44;20m▀\033[38;2;252;236;180;48;2;100;92;68m▀\033[38;2;252;228;172;48;2;252;244;188m▀\033[48;2;252;236;180m▀\033[48;2;252;228;172m    \033[38;2;252;196;148m▀▀▀\033[48;2;252;236;172m▀\033[48;2;252;228;172m     \033[38;2;252;228;172;48;2;252;236;172m▀\033[38;2;252;236;172;48;2;252;196;148m▀\033[38;2;252;196;148;48;2;228;172;124m▀\033[38;2;228;172;124;48;2;252;228;172m▀\033[48;2;68;44;20m \033[48;2;0;0;0m \033[48;2;68;44;20m \033[48;2;0;0;0m  \033[48;2;100;92;68m \033[48;2;252;244;188m \033[48;2;188;156;108m \033[48;2;0;0;0m     \033[38;2;0;0;0;48;2;68;44;20m▀\033[0m
+\033[48;2;0;0;0m       \033[38;2;68;44;20m▀\033[38;2;124;92;44;48;2;100;76;36m▀\033[38;2;0;0;0;48;2;68;44;20m▀\033[38;2;68;44;20;48;2;0;0;0m▀\033[38;2;212;188;140;48;2;156;140;108m▀\033[38;2;252;236;172;48;2;252;196;148m▀\033[48;2;252;228;172m  \033[38;2;252;228;172;48;2;252;236;172m▀▀\033[48;2;252;228;172m     \033[38;2;252;228;172;48;2;252;236;172m▀\033[48;2;252;228;172m \033[38;2;252;228;172;48;2;236;196;148m▀\033[38;2;252;196;148m▀\033[38;2;228;172;124;48;2;252;228;172m▀ \033[38;2;252;244;188;48;2;252;236;172m▀\033[38;2;140;108;68;48;2;252;228;172m▀\033[38;2;0;0;0;48;2;140;108;68m▀\033[48;2;100;92;68m▀▀▀\033[38;2;68;44;20;48;2;156;140;108m▀\033[38;2;252;244;188;48;2;252;236;172m▀\033[38;2;236;196;148m▀\033[38;2;0;0;0;48;2;140;108;68m▀\033[48;2;100;76;44m▀▀\033[48;2;68;44;20m▀▀\033[38;2;68;44;20;48;2;116;84;36m▀\033[0m
+\033[48;2;0;0;0m         \033[38;2;100;76;36;48;2;212;188;140m▀\033[38;2;236;196;148;48;2;252;228;172m▀\033[38;2;252;244;188m▀ \033[38;2;252;196;148m▀\033[48;2;252;236;172m▀\033[48;2;228;172;124m▀\033[48;2;252;36;36m▀\033[38;2;252;236;172;48;2;252;196;148m▀\033[48;2;236;196;148m▀▀▀\033[38;2;252;228;172;48;2;228;172;124m▀\033[38;2;252;196;148;48;2;236;196;148m▀\033[38;2;228;172;124;48;2;252;196;148m▀\033[38;2;236;196;148;48;2;252;228;172m▀    \033[38;2;252;236;172m▀\033[38;2;252;228;172;48;2;236;196;148m▀\033[38;2;252;236;172;48;2;252;228;172m▀\033[38;2;252;236;180;48;2;252;236;172m▀\033[38;2;252;228;172;48;2;236;196;148m▀\033[38;2;252;236;172;48;2;252;196;148m▀\033[38;2;252;228;172;48;2;252;236;172m▀\033[48;2;252;196;148m▀\033[48;2;252;228;172m \033[38;2;252;236;172m▀▀\033[38;2;252;196;148;48;2;236;196;148m▀\033[38;2;140;100;52;48;2;148;116;68m▀\033[48;2;116;84;36m \033[0m
+\033[48;2;0;0;0m        \033[38;2;140;108;68;48;2;188;156;108m▀\033[38;2;252;244;188;48;2;252;236;180m▀\033[48;2;252;228;172m    \033[38;2;252;244;188;48;2;252;236;180m▀\033[48;2;228;172;124m \033[48;2;252;28;36m \033[38;2;252;196;148;48;2;252;228;172m▀\033[38;2;236;196;148;48;2;252;236;180m▀\033[38;2;228;172;124;48;2;236;196;148m▀\033[38;2;236;196;148;48;2;252;228;172m▀\033[38;2;252;228;172;48;2;252;236;172m▀\033[48;2;252;228;172m \033[38;2;252;236;172m▀     \033[38;2;252;228;172;48;2;252;236;172m▀\033[48;2;252;196;148m \033[48;2;252;228;172m \033[48;2;252;236;172m \033[38;2;252;196;148;48;2;252;228;172m▀   \033[38;2;252;236;172m▀\033[38;2;252;228;172;48;2;252;196;148m▀\033[48;2;252;228;172m \033[38;2;252;236;172m▀\033[38;2;252;236;180m▀\033[38;2;212;188;140m▀\033[0m
+==>02-maid
+\033[48;2;0;0;0m           \033[38;2;0;0;0;48;2;38;42;46m▀\033[48;2;22;22;22m▀\033[48;2;0;0;0m         \033[38;2;0;0;0;48;2;22;22;22m▀\033[48;2;30;38;46m▀\033[0m
+\033[48;2;0;0;0m         \033[38;2;0;0;0;48;2;38;42;46m▀\033[38;2;38;42;46;48;2;94;94;98m▀\033[38;2;54;62;70m▀\033[38;2;30;38;46;48;2;78;74;74m▀\033[48;2;22;22;22m \033[48;2;0;0;0m      \033[38;2;22;22;22;48;2;54;50;54m▀▀\033[38;2;30;38;46;48;2;78;74;74m▀\033[38;2;54;50;54;48;2;94;94;98m▀\033[38;2;22;22;22;48;2;30;38;46m▀\033[0m
+\033[48;2;0;0;0m       \033[38;2;0;0;0;48;2;30;38;46m▀\033[38;2;38;42;46;48;2;98;106;114m▀\033[38;2;94;94;98;48;2;118;114;118m▀\033[38;2;118;114;118;48;2;142;138;138m▀ \033[38;2;98;106;114m▀\033[38;2;54;50;54;48;2;98;106;114m▀\033[38;2;0;0;0;48;2;38;42;46m▀\033[38;2;22;22;22;48;2;0;0;0m▀\033[48;2;30;38;46m▀\033[48;2;0;0;0m   \033[38;2;54;50;54;48;2;78;74;74m▀\033[38;2;54;62;70m▀\033[38;2;94;94;98;48;2;98;106;114m▀\033[38;2;142;138;138;48;2;162;158;162m▀\033[38;2;94;94;98;48;2;142;138;138m▀\033[38;2;30;38;46;48;2;78;74;74m▀\033[38;2;22;22;22;48;2;54;50;54m▀\033[38;2;0;0;0;48;2;22;22;22m▀▀\033[0m
+\033[48;2;0;0;0m     \033[38;2;0;0;0;48;2;22;22;22m▀ \033[38;2;54;50;54m▀\033[48;2;54;50;54m \033[38;2;54;50;54;48;2;22;22;22m▀\033[38;2;78;74;74m▀\033[38;2;118;114;118;48;2;30;38;46m▀\033[38;2;178;154;150;48;2;78;74;74m▀\033[38;2;162;158;162;48;2;174;174;178m▀\033[38;2;142;138;138;48;2;254;242;238m▀\033[38;2;22;22;22;48;2;174;174;178m▀\033[38;2;54;50;54;48;2;94;94;98m▀\033[38;2;30;38;46m▀\033[48;2;22;22;22m \033[38;2;22;22;22;48;2;142;138;138m▀\033[38;2;78;74;74;48;2;94;94;98m▀\033[38;2;118;114;118;48;2;178;154;150m▀\033[38;2;98;106;114;48;2;78;74;74m▀\033[38;2;174;174;178m▀\033[38;2;162;158;162;48;2;54;50;54m▀\033[38;2;118;114;118;48;2;78;74;74m▀\033[38;2;78;74;74;48;2;38;42;46m▀\033[48;2;94;94;98m▀\033[38;2;22;22;22;48;2;54;62;70m▀\033[0m
+\033[48;2;0;0;0m     \033[38;2;22;22;22;48;2;38;42;46m▀\033[48;2;94;94;98m▀\033[48;2;142;138;138m \033[38;2;118;114;118m▀\033[38;2;30;38;46;48;2;38;62;94m▀\033[38;2;38;62;94;48;2;94;138;178m▀\033[38;2;46;86;142m▀\033[38;2;134;154;174;48;2;74;118;166m▀\033[38;2;174;174;178;48;2;194;194;202m▀\033[38;2;246;218;214;48;2;254;242;238m▀ ▀\033[38;2;202;178;174m▀\033[38;2;118;114;118m▀\033[38;2;202;178;174m▀\033[38;2;246;218;214m▀\033[38;2;94;94;98;48;2;246;218;214m▀\033[38;2;54;62;70;48;2;46;86;142m▀\033[38;2;38;62;94m▀▀▀\033[38;2;54;50;54;48;2;90;114;142m▀\033[38;2;22;22;22;48;2;142;138;138m▀\033[38;2;54;50;54;48;2;0;0;0m▀\033[48;2;22;22;22m \033[0m
+\033[48;2;0;0;0m \033[38;2;0;0;0;48;2;22;22;22m▀\033[48;2;0;0;0m   \033[38;2;38;42;46;48;2;30;38;46m▀\033[48;2;142;138;138m \033[38;2;162;158;162;48;2;202;178;174m▀\033[38;2;194;194;202;48;2;246;206;198m▀\033[38;2;142;178;202;48;2;194;194;202m▀\033[38;2;154;226;250;48;2;138;186;222m▀\033[48;2;154;226;250m \033[38;2;130;194;234;48;2;142;178;202m▀\033[38;2;246;218;214;48;2;254;242;238m▀        \033[38;2;90;114;142;48;2;170;198;226m▀\033[38;2;90;170;222;48;2;154;226;250m▀\033[38;2;94;138;178;48;2;174;218;246m▀\033[38;2;90;170;222;48;2;130;194;234m▀\033[38;2;106;138;162;48;2;194;194;202m▀\033[38;2;162;158;162;48;2;202;178;174m▀\033[38;2;78;74;74;48;2;178;154;150m▀\033[48;2;38;42;46m \033[48;2;0;0;0m  \033[38;2;22;22;22;48;2;30;38;46m▀\033[48;2;38;42;46m▀\033[38;2;0;0;0;48;2;22;22;22m▀\033[0m
+\033[48;2;0;0;0m \033[38;2;22;22;22;48;2;30;38;46m▀\033[38;2;0;0;0;48;2;22;22;22m▀\033[48;2;0;0;0m  \033[48;2;30;38;46m \033[38;2;142;138;138;48;2;162;158;162m▀\033[48;2;202;178;174m \033[38;2;242;194;182;48;2;246;206;198m▀ \033[38;2;246;206;198;48;2;246;218;214m▀▀▀\033[48;2;254;242;238m        \033[38;2;254;242;238;48;2;246;218;214m▀ \033[38;2;174;174;178;48;2;246;206;198m▀\033[48;2;242;194;182m▀\033[48;2;246;206;198m▀\033[38;2;246;218;214m▀ \033[38;2;142;138;138;48;2;118;114;118m▀\033[38;2;22;22;22;48;2;0;0;0m▀  \033[38;2;38;42;46;48;2;54;62;70m▀\033[38;2;54;50;54m▀\033[48;2;22;22;22m \033[0m
+\033[38;2;0;0;0;48;2;22;22;22m▀\033[38;2;30;38;46;48;2;38;42;46m▀\033[48;2;22;22;22m \033[48;2;0;0;0m  \033[38;2;22;22;22m▀\033[38;2;174;174;178;48;2;162;158;162m▀\033[38;2;202;178;174;48;2;194;194;202m▀\033[38;2;246;206;198;48;2;246;218;214m▀▀\033[48;2;246;206;198m  \033[48;2;246;218;214m  \033[48;2;254;242;238m      \033[48;2;246;218;214m  \033[48;2;246;206;198m    \033[38;2;246;206;198;48;2;246;218;214m▀\033[48;2;242;194;182m▀\033[38;2;78;74;74;48;2;30;38;46m▀\033[48;2;0;0;0m   \033[48;2;78;74;74m \033[38;2;54;62;70m▀\033[48;2;30;38;46m \033[0m
+\033[48;2;22;22;22m \033[48;2;38;42;46m \033[38;2;30;38;46m▀\033[48;2;0;0;0m   \033[38;2;134;154;174;48;2;106;138;162m▀\033[38;2;194;194;202;48;2;182;210;230m▀\033[38;2;246;218;214;48;2;194;194;202m▀\033[48;2;254;242;238m▀\033[48;2;246;218;214m  \033[38;2;246;218;214;48;2;254;242;238m▀ \033[48;2;246;206;198m▀\033[38;2;246;206;198;48;2;246;186;166m▀\033[38;2;246;218;214m▀▀▀\033[38;2;254;242;238;48;2;242;194;182m▀\033[48;2;254;242;238m \033[38;2;246;218;214m▀\033[48;2;246;218;214m \033[38;2;246;206;198m▀▀\033[38;2;246;218;214;48;2;254;242;238m▀\033[48;2;246;218;214m \033[38;2;174;174;178;48;2;194;194;202m▀\033[38;2;38;42;46;48;2;30;38;46m▀\033[48;2;0;0;0m  \033[38;2;0;0;0;48;2;22;22;22m▀\033[48;2;94;94;98m \033[38;2;78;74;74;48;2;54;62;70m▀\033[48;2;38;42;46m \033[0m
+\033[38;2;22;22;22;48;2;0;0;0m▀\033[48;2;38;42;46m  \033[38;2;22;22;22;48;2;54;50;54m▀\033[48;2;0;0;0m \033[48;2;30;38;46m \033[48;2;74;98;118m \033[38;2;170;198;226;48;2;142;178;202m▀\033[38;2;182;210;230;48;2;174;218;246m▀\033[38;2;246;218;214m▀\033[38;2;254;242;238;48;2;182;210;230m▀\033[48;2;246;218;214m▀\033[48;2;254;242;238m   \033[38;2;246;206;198m▀\033[38;2;246;186;166;48;2;246;206;198m▀▀\033[48;2;246;218;214m▀\033[38;2;246;218;214;48;2;254;242;238m▀   \033[38;2;254;242;238;48;2;246;218;214m▀\033[48;2;182;210;230m▀\033[38;2;246;218;214m▀\033[38;2;182;210;230;48;2;174;218;246m▀\033[38;2;142;178;202;48;2;90;114;142m▀\033[48;2;0;0;0m   \033[38;2;54;50;54;48;2;54;62;70m▀\033[38;2;94;94;98;48;2;78;74;74m▀\033[38;2;54;62;70;48;2;54;50;54m▀\033[38;2;30;38;46;48;2;22;22;22m▀\033[0m
+\033[48;2;0;0;0m \033[38;2;30;38;46;48;2;22;22;22m▀\033[38;2;38;42;46;48;2;30;38;46m▀\033[38;2;62;78;94;48;2;78;74;74m▀\033[38;2;30;38;46;48;2;54;62;70m▀\033[38;2;22;22;22;48;2;30;38;46m▀\033[38;2;90;114;142;48;2;74;98;118m▀\033[48;2;106;138;162m \033[38;2;170;198;226;48;2;134;154;174m▀\033[48;2;174;218;246m  \033[38;2;182;210;230m▀\033[38;2;194;194;202m▀\033[38;2;254;242;238;48;2;194;194;202m▀\033[48;2;242;194;182m▀\033[48;2;254;242;238m    \033[38;2;254;242;238;48;2;246;206;198m▀\033[48;2;202;150;138m▀\033[38;2;246;218;214;48;2;162;158;162m▀\033[38;2;194;194;202;48;2;174;218;246m▀\033[38;2;170;198;226m▀▀\033[38;2;174;218;246;48;2;182;210;230m▀\033[38;2;182;210;230;48;2;142;178;202m▀\033[48;2;62;78;94m \033[48;2;0;0;0m  \033[48;2;22;22;22m \033[48;2;62;78;94m \033[48;2;54;62;70m \033[38;2;38;42;46;48;2;30;38;46m▀\033[48;2;22;22;22m \033[0m
+\033[48;2;0;0;0m \033[38;2;22;22;22m▀\033[38;2;30;38;46;48;2;22;22;22m▀\033[38;2;54;50;54;48;2;30;38;46m▀\033[38;2;54;62;70;48;2;38;42;46m▀\033[38;2;62;78;94;48;2;66;94;114m▀\033[38;2;38;62;94m▀\033[38;2;106;138;162m▀\033[38;2;134;154;174;48;2;106;138;162m▀\033[48;2;142;178;202m \033[38;2;170;198;226;48;2;154;194;226m▀▀\033[48;2;94;94;98m▀\033[38;2;142;178;202;48;2;118;114;118m▀\033[48;2;202;150;138m  \033[38;2;202;178;174m▀▀ \033[38;2;202;150;138;48;2;222;158;146m▀\033[48;2;242;194;182m▀\033[38;2;174;174;178;48;2;202;178;174m▀\033[38;2;154;194;226;48;2;174;174;178m▀\033[38;2;174;218;246;48;2;142;178;202m▀\033[38;2;170;198;226;48;2;138;186;222m▀\033[38;2;142;178;202m▀\033[48;2;106;138;162m▀\033[38;2;38;42;46;48;2;30;38;46m▀\033[48;2;0;0;0m  \033[38;2;30;38;46;48;2;38;42;46m▀\033[38;2;62;78;94;48;2;54;62;70m▀\033[38;2;54;50;54;48;2;38;42;46m▀\033[38;2;30;38;46;48;2;22;22;22m▀\033[0m
+\033[48;2;0;0;0m  \033[38;2;22;22;22m▀\033[38;2;30;38;46;48;2;22;22;22m▀\033[48;2;30;38;46m \033[38;2;62;78;94;48;2;38;42;46m▀\033[38;2;74;98;118;48;2;62;78;94m▀\033[38;2;90;114;142;48;2;74;98;118m▀▀\033[38;2;106;138;162;48;2;22;22;22m▀\033[38;2;90;114;142m▀\033[38;2;94;94;98;48;2;0;0;0m▀ \033[38;2;30;38;46m▀\033[38;2;202;150;138;48;2;94;94;98m▀\033[48;2;222;158;146m▀\033[48;2;202;150;138m \033[38;2;202;150;138;48;2;222;158;146m▀\033[38;2;222;158;146;48;2;246;186;166m▀\033[38;2;246;186;166;48;2;242;194;182m▀\033[38;2;246;206;198;48;2;202;178;174m▀\033[38;2;202;178;174;48;2;194;194;202m▀  \033[38;2;142;178;202;48;2;54;62;70m▀\033[48;2;66;94;114m▀\033[48;2;90;114;142m \033[48;2;30;38;46m \033[48;2;0;0;0m \033[38;2;22;22;22;48;2;30;38;46m▀\033[48;2;54;62;70m \033[38;2;38;42;46;48;2;30;38;46m▀\033[48;2;22;22;22m \033[0m
+\033[48;2;0;0;0m    \033[38;2;22;22;22m▀\033[48;2;38;42;46m \033[48;2;78;74;74m \033[38;2;94;94;98m▀\033[38;2;38;42;46;48;2;0;0;0m▀ \033[48;2;22;22;22m \033[48;2;0;0;0m    \033[38;2;94;94;98m▀\033[38;2;222;158;146;48;2;118;114;118m▀\033[38;2;246;186;166;48;2;178;154;150m▀\033[38;2;202;178;174;48;2;162;158;162m▀\033[38;2;174;174;178m▀▀▀▀\033[48;2;142;138;138m▀\033[38;2;22;22;22;48;2;0;0;0m▀ \033[38;2;62;78;94;48;2;30;38;46m▀\033[38;2;22;22;22;48;2;0;0;0m▀\033[38;2;0;0;0;48;2;22;22;22m▀\033[48;2;38;42;46m \033[38;2;38;42;46;48;2;22;22;22m▀\033[38;2;22;22;22;48;2;0;0;0m▀\033[0m
+\033[48;2;0;0;0m     \033[38;2;22;22;22m▀\033[38;2;54;50;54;48;2;22;22;22m▀\033[38;2;22;22;22;48;2;0;0;0m▀  ▀\033[48;2;22;22;22m \033[38;2;0;0;0m▀▀\033[38;2;22;22;22;48;2;30;38;46m▀\033[38;2;54;50;54;48;2;38;42;46m▀\033[48;2;98;106;114m \033[38;2;118;114;118m▀\033[48;2;54;50;54m▀\033[38;2;142;138;138;48;2;54;62;70m▀\033[48;2;118;114;118m▀\033[48;2;98;106;114m▀\033[48;2;118;114;118m▀\033[38;2;94;94;98;48;2;38;42;46m▀\033[48;2;0;0;0m   \033[38;2;22;22;22;48;2;30;38;46m▀\033[38;2;38;42;46;48;2;22;22;22m▀\033[38;2;22;22;22;48;2;0;0;0m▀\033[0m
+\033[48;2;0;0;0m          \033[38;2;22;22;22m▀\033[38;2;0;0;0;48;2;22;22;22m▀\033[38;2;38;42;46m▀\033[48;2;0;0;0m▀ \033[48;2;22;22;22m▀\033[38;2;54;50;54m▀\033[38;2;30;38;46m▀\033[48;2;0;0;0m▀ \033[38;2;54;50;54m▀\033[38;2;94;94;98;48;2;38;42;46m▀\033[48;2;30;38;46m▀\033[48;2;0;0;0m    \033[38;2;22;22;22m▀\033[0m
 ==>03-kitsune
-\033[38;5;223m         ╱╲          ╱╲\033[0m
-\033[38;5;222m        ╱  ╲________╱  ╲      kon!\033[0m
-\033[38;5;221m       ╭╯▄▄▄▄▄▄▄▄▄▄▄▄▄╰╮\033[0m
-\033[38;5;220m       │ ▄▀▀▀▀▀▀▀▀▀▀▀▄ │\033[0m
-\033[38;5;215m       │ ███▄   ▄███ │    . o O\033[0m
-\033[38;5;214m       │ ██▀     ▀██ │\033[0m
-\033[38;5;208m       │  ▀▄▄ ▄ ▄▄▀  │\033[0m
-\033[38;5;202m        ╲    ╰───╯    ╱\033[0m
-\033[38;5;166m         ╰──╮     ╭──╯\033[0m
-\033[38;5;223m     (((     ╰───╯     )))\033[0m
-==>04-shonen
-\033[38;5;33m        ╱▔▔▔▔▔▔▔▔▔╲         FIGHT!\033[0m
-\033[38;5;39m      ╱▔▔▔▔▔▔▔▔▔▔▔▔▔╲\033[0m
-\033[38;5;45m     │  ╱╲ ╱╲ ╱╲ ╱╲  │       /!\033[0m
-\033[38;5;75m     │  ████   ████  │\033[0m
-\033[38;5;111m     │  ██▒█   █▒██  │      o O\033[0m
-\033[38;5;117m     │   ▀▀     ▀▀   │\033[0m
-\033[38;5;153m     │     ╭───╮     │\033[0m
-\033[38;5;159m      ╲    ╰───╯    ╱\033[0m
-\033[38;5;195m       ╰─────╮╭─────╯\033[0m
-\033[38;5;231m        ╰────╯╰────╯\033[0m
-\033[38;5;33m       ╔═╗        ╔═╗\033[0m
-\033[38;5;39m       ╚═╝        ╚═╝\033[0m
-==>05-chibi-star
-\033[38;5;157m       *        .        *\033[0m
-\033[38;5;121m          ╭───────╮\033[0m
-\033[38;5;86m     .   ╱ ▄▄▄▄▄▄▄ ╲   .\033[0m
-\033[38;5;85m        │  ██   ██  │        *\033[0m
-\033[38;5;84m     *  │  ██   ██  │\033[0m
-\033[38;5;79m        │   ╰───╯   │   .\033[0m
-\033[38;5;78m     .   ╲  ╰───╯  ╱\033[0m
-\033[38;5;45m          ╰───────╯        *\033[0m
-\033[38;5;51m       *       .       *\033[0m
-==>06-robot-kitty
-\033[38;5;252m        ╱▔▔╲____╱▔▔╲\033[0m
-\033[38;5;249m       │ ▓▓│    │▓▓ │        beep\033[0m
-\033[38;5;245m       ╰──╯▄▄▄▄╰──╯\033[0m
-\033[38;5;117m      ╭───╮ ▀▀ ╭───╮        boop\033[0m
-\033[38;5;111m      │  ▄▄▄▄▄▄▄▄▄▄▄  │\033[0m
-\033[38;5;75m      │ ██▀▀     ▀▀██ │\033[0m
-\033[38;5;74m      │ ▀▀         ▀▀ │\033[0m
-\033[38;5;68m      │   ▄▄▄▄▄▄▄▄▄   │\033[0m
-\033[38;5;37m      ╰─╮ ▒▒▒▒▒▒▒ ╭─╯\033[0m
-\033[38;5;252m        ╰─────────╯\033[0m
-==>07-magical
-\033[38;5;183m    *       ╱╲        *      *\033[0m
-\033[38;5;177m         ╭──╯  ╰──╮\033[0m
-\033[38;5;141m    *    │ ░░░░░░░ │      *\033[0m
-\033[38;5;135m         │ ██▀ ▀██ │   HENSHIN!\033[0m
-\033[38;5;171m         │ ▀   ▀  │\033[0m
-\033[38;5;207m         │  ╰───╯  │   *\033[0m
-\033[38;5;213m    *     ╲ ▄▄▄▄▄ ╱      *\033[0m
-\033[38;5;219m           ╰─────╯    ╱╲\033[0m
-\033[38;5;183m     *        ╱─────╱  ╲   *\033[0m
-\033[38;5;177m              ╲─────╲  ╱\033[0m
-\033[38;5;141m                 ╰───╯\033[0m
-==>08-samurai
-\033[38;5;17m          ╱╲╱╲\033[0m
-\033[38;5;18m         ╱  ╰╯  ╲           kabuto\033[0m
-\033[38;5;19m        ╭╯▄▄▄▄▄▄▄▄▄╰╮\033[0m
-\033[38;5;61m        │ ▄▄▄▄▄▄▄▄▄ │\033[0m
-\033[38;5;67m       ╭╯ ██▄ ▄██ ╰╮\033[0m
-\033[38;5;104m       │  ███ ███  │        -  -\033[0m
-\033[38;5;146m       │   ▀   ▀   │\033[0m
-\033[38;5;195m       │  ╭─────╮  │\033[0m
-\033[38;5;231m        ╲ ╰─────╯ ╱\033[0m
-\033[38;5;17m         ╰───────╯\033[0m
-\033[38;5;18m          ││   ││\033[0m
+\033[48;2;0;0;0m         \033[38;2;0;0;0;48;2;9;15;21m▀\033[38;2;9;15;21;48;2;0;0;0m▀▀▀ \033[48;2;39;9;2m▀▀\033[48;2;63;21;15m▀\033[48;2;99;9;2m▀▀▀\033[38;2;0;0;0;48;2;63;21;15m▀\033[38;2;9;15;21;48;2;39;9;2m▀▀\033[48;2;0;0;0m▀\033[38;2;39;27;27;48;2;9;15;21m▀\033[38;2;9;15;21;48;2;0;0;0m▀  \033[38;2;0;0;0;48;2;9;15;21m▀\033[48;2;63;21;15m▀\033[48;2;39;9;2m▀\033[0m
+\033[48;2;0;0;0m          \033[38;2;0;0;0;48;2;63;21;15m▀\033[38;2;39;9;2;48;2;99;9;2m▀\033[38;2;63;21;15;48;2;153;15;5m▀\033[38;2;99;9;2m▀         \033[38;2;105;27;15m▀\033[38;2;63;21;15;48;2;105;27;15m▀\033[38;2;0;0;0;48;2;63;21;15m▀\033[48;2;171;63;27m▀\033[38;2;105;27;15;48;2;177;135;21m▀\033[38;2;123;87;33;48;2;171;63;27m▀\033[38;2;171;63;27;48;2;105;27;15m▀\033[48;2;39;9;2m \033[0m
+\033[48;2;0;0;0m         \033[48;2;99;9;2m \033[38;2;99;9;2;48;2;153;15;5m▀   \033[38;2;153;15;5;48;2;219;9;4m▀▀        ▀▀\033[38;2;171;63;27;48;2;153;15;5m▀\033[48;2;57;57;39m▀\033[38;2;117;57;33;48;2;195;195;195m▀\033[38;2;105;27;15;48;2;141;105;93m▀\033[48;2;39;9;2m \033[0m
+\033[48;2;0;0;0m         \033[38;2;99;9;2;48;2;153;15;5m▀ \033[38;2;153;15;5;48;2;219;9;4m▀        \033[38;2;219;9;4;48;2;243;93;57m▀\033[48;2;219;9;4m  \033[38;2;219;9;4;48;2;213;63;33m▀\033[48;2;171;63;27m▀\033[48;2;153;15;5m▀\033[48;2;219;9;4m  \033[38;2;117;57;33m▀\033[38;2;195;195;195;48;2;117;57;33m▀\033[48;2;57;57;39m \033[0m
+\033[48;2;0;0;0m         \033[48;2;153;15;5m \033[48;2;219;9;4m   \033[38;2;219;9;4;48;2;213;63;33m▀\033[48;2;219;9;4m  \033[38;2;219;9;4;48;2;237;129;87m▀\033[48;2;243;93;57m▀\033[48;2;219;9;4m \033[38;2;213;63;33;48;2;243;93;57m▀\033[38;2;237;129;87;48;2;183;93;45m▀\033[38;2;243;93;57;48;2;249;177;135m▀\033[38;2;219;9;4;48;2;243;93;57m▀\033[48;2;219;9;4m \033[38;2;243;93;57m▀\033[38;2;183;93;45;48;2;243;93;57m▀\033[38;2;99;9;2;48;2;225;111;51m▀\033[48;2;153;15;5m \033[38;2;219;9;4m▀\033[38;2;153;15;5;48;2;219;9;4m▀\033[38;2;9;15;21;48;2;39;9;2m▀\033[0m
+\033[48;2;0;0;0m         \033[38;2;171;63;27;48;2;183;93;45m▀\033[38;2;225;111;51;48;2;249;177;135m▀\033[48;2;219;9;4m \033[38;2;219;9;4;48;2;243;93;57m▀\033[38;2;249;177;135;48;2;225;111;51m▀\033[38;2;243;93;57m▀\033[38;2;219;9;4;48;2;243;93;57m▀\033[38;2;237;129;87;48;2;225;111;51m▀\033[48;2;153;15;5m▀\033[38;2;243;93;57;48;2;249;177;135m▀\033[38;2;213;63;33;48;2;171;63;27m▀\033[38;2;117;57;33;48;2;153;15;5m▀\033[38;2;225;111;51;48;2;171;63;27m▀\033[38;2;243;93;57m▀\033[38;2;237;129;87;48;2;249;177;135m▀\033[48;2;213;63;33m▀\033[38;2;219;9;4;48;2;237;129;87m▀ \033[38;2;213;63;33;48;2;225;111;51m▀\033[38;2;105;27;15;48;2;153;15;5m▀\033[38;2;219;9;4m▀\033[48;2;63;21;15m \033[0m
+\033[48;2;0;0;0m        \033[48;2;9;15;21m \033[38;2;183;93;45;48;2;171;63;27m▀\033[38;2;237;129;87;48;2;213;63;33m▀\033[38;2;243;93;57;48;2;249;177;135m▀\033[48;2;237;129;87m \033[48;2;219;9;4m \033[38;2;213;63;33m▀\033[38;2;249;177;135;48;2;237;129;87m▀\033[38;2;213;63;33;48;2;171;63;27m▀\033[38;2;99;9;2;48;2;117;57;33m▀\033[38;2;213;63;33;48;2;171;63;27m▀\033[48;2;153;15;5m \033[48;2;105;27;15m \033[38;2;153;15;5m▀\033[48;2;99;9;2m▀\033[38;2;237;129;87;48;2;171;63;27m▀\033[38;2;213;63;33m▀\033[38;2;153;15;5;48;2;99;9;2m▀\033[38;2;249;177;135;48;2;171;63;27m▀\033[48;2;237;129;87m \033[38;2;153;15;5;48;2;171;63;27m▀\033[48;2;105;27;15m \033[38;2;63;21;15;48;2;39;9;2m▀\033[0m
+\033[48;2;0;0;0m         \033[48;2;153;15;5m \033[38;2;153;15;5;48;2;99;9;2m▀\033[38;2;237;129;87;48;2;171;63;27m▀\033[38;2;225;111;51;48;2;213;63;33m▀\033[48;2;153;15;5m \033[38;2;153;15;5;48;2;105;27;15m▀\033[48;2;213;63;33m \033[48;2;153;15;5m \033[38;2;183;93;45;48;2;189;129;99m▀\033[48;2;183;165;153m▀\033[48;2;105;27;15m \033[38;2;189;129;99;48;2;237;129;87m▀\033[38;2;183;93;45;48;2;189;129;99m▀\033[38;2;171;63;27m▀\033[48;2;153;15;5m  \033[48;2;99;9;2m \033[48;2;105;27;15m \033[38;2;171;63;27;48;2;153;15;5m▀▀\033[38;2;105;27;15m▀\033[48;2;39;9;2m \033[0m
+\033[48;2;0;0;0m        \033[38;2;0;0;0;48;2;39;9;2m▀\033[38;2;99;9;2;48;2;141;105;93m▀\033[48;2;117;57;33m \033[38;2;117;57;33;48;2;123;87;33m▀\033[48;2;153;15;5m  \033[38;2;117;57;33;48;2;183;93;45m▀\033[38;2;153;15;5;48;2;105;27;15m▀\033[48;2;117;57;33m▀\033[38;2;189;129;99;48;2;249;207;183m▀\033[38;2;249;207;183;48;2;141;105;93m▀\033[38;2;57;57;39;48;2;135;129;129m▀▀\033[38;2;39;9;2;48;2;105;27;15m▀\033[38;2;57;57;39;48;2;99;9;2m▀\033[38;2;63;21;15;48;2;39;9;2m▀\033[38;2;153;15;5m▀\033[38;2;105;27;15;48;2;99;9;2m▀\033[48;2;153;15;5m \033[38;2;99;9;2;48;2;105;27;15m▀\033[48;2;153;15;5m  \033[38;2;39;9;2;48;2;0;0;0m▀\033[0m
+\033[38;2;9;15;21;48;2;0;0;0m▀\033[48;2;9;15;21m  \033[48;2;39;9;2m \033[48;2;99;9;2m \033[38;2;39;9;2;48;2;9;15;21m▀\033[48;2;99;9;2m \033[38;2;99;9;2;48;2;105;27;15m▀\033[38;2;117;57;33;48;2;39;9;2m▀\033[38;2;189;129;99;48;2;87;87;87m▀\033[38;2;39;33;33;48;2;249;231;207m▀\033[38;2;39;9;2;48;2;105;27;15m▀\033[38;2;63;21;15;48;2;87;87;87m▀\033[38;2;99;9;2;48;2;141;105;93m▀\033[38;2;189;129;99;48;2;183;165;153m▀\033[38;2;57;57;39m▀\033[38;2;189;129;99;48;2;249;207;183m▀ \033[38;2;141;105;93;48;2;249;231;207m▀\033[38;2;135;129;129;48;2;141;105;93m▀\033[38;2;249;231;207;48;2;153;15;5m▀\033[38;2;189;129;99;48;2;99;9;2m▀\033[48;2;153;15;5m \033[38;2;99;9;2m▀\033[38;2;0;0;0;48;2;9;15;21m▀\033[38;2;99;9;2;48;2;123;87;33m▀\033[38;2;153;15;5;48;2;171;63;27m▀\033[48;2;153;15;5m \033[38;2;99;9;2;48;2;105;27;15m▀\033[38;2;153;15;5m▀\033[38;2;9;15;21;48;2;39;27;27m▀\033[0m
+\033[38;2;0;0;0;48;2;9;15;21m▀ \033[38;2;9;15;21;48;2;39;27;27m▀\033[48;2;9;15;21m \033[38;2;63;21;15;48;2;39;9;2m▀\033[38;2;9;15;21;48;2;0;0;0m▀\033[38;2;63;21;15;48;2;9;15;21m▀\033[38;2;153;15;5;48;2;105;27;15m▀\033[48;2;99;9;2m \033[38;2;141;105;93;48;2;189;129;99m▀\033[38;2;189;129;99;48;2;141;105;93m▀\033[38;2;99;9;2;48;2;153;15;5m▀\033[38;2;141;105;93;48;2;123;87;33m▀\033[48;2;249;231;207m \033[48;2;249;207;183m \033[38;2;249;231;207m▀  \033[48;2;249;231;207m \033[38;2;135;129;129;48;2;195;195;195m▀\033[38;2;171;63;27;48;2;123;87;33m▀\033[38;2;213;63;33;48;2;225;111;51m▀\033[48;2;177;135;21m▀\033[38;2;171;63;27;48;2;141;105;93m▀\033[38;2;87;87;87;48;2;237;129;87m▀\033[38;2;183;93;45;48;2;171;63;27m▀\033[38;2;213;63;33;48;2;225;111;51m▀\033[38;2;153;15;5m▀\033[48;2;141;105;93m \033[38;2;87;87;87;48;2;195;195;195m▀\033[38;2;39;9;2;48;2;39;33;33m▀\033[0m
+\033[38;2;9;15;21;48;2;0;0;0m▀\033[48;2;9;15;21m \033[38;2;39;27;27m▀ \033[38;2;9;15;21;48;2;39;27;27m▀\033[38;2;0;0;0;48;2;39;33;33m▀\033[48;2;0;0;0m \033[38;2;9;15;21m▀\033[48;2;39;9;2m \033[38;2;183;165;153;48;2;189;129;99m▀\033[48;2;249;177;135m▀\033[38;2;153;15;5;48;2;123;87;33m▀\033[38;2;141;105;93;48;2;183;165;153m▀\033[48;2;249;231;207m \033[48;2;249;207;183m   \033[38;2;249;207;183;48;2;249;231;207m▀\033[48;2;249;207;183m  \033[38;2;237;129;87;48;2;249;177;135m▀\033[38;2;189;129;99m▀\033[38;2;183;93;45m▀\033[38;2;243;93;57;48;2;237;129;87m▀\033[38;2;225;111;51;48;2;183;93;45m▀\033[48;2;153;15;5m \033[38;2;249;177;135;48;2;237;129;87m▀\033[38;2;189;129;99;48;2;117;57;33m▀\033[38;2;57;57;39;48;2;33;33;39m▀\033[38;2;183;165;153;48;2;141;105;93m▀\033[48;2;87;87;87m \033[0m
+\033[48;2;0;0;0m \033[48;2;9;15;21m  \033[48;2;39;33;33m  \033[48;2;39;27;27m  \033[38;2;9;15;21;48;2;57;57;39m▀\033[38;2;63;21;15;48;2;117;57;33m▀\033[38;2;183;93;45m▀\033[38;2;249;177;135;48;2;183;165;153m▀\033[48;2;249;231;207m▀\033[38;2;249;207;183m▀▀\033[48;2;183;165;153m▀\033[48;2;141;105;93m▀\033[48;2;189;129;99m▀\033[38;2;183;165;153;48;2;183;93;45m▀\033[38;2;249;207;183;48;2;183;165;153m▀\033[48;2;249;207;183m  \033[38;2;249;207;183;48;2;249;177;135m▀ \033[38;2;237;129;87;48;2;183;93;45m▀\033[38;2;171;63;27;48;2;153;15;5m▀\033[48;2;219;9;4m▀\033[38;2;213;63;33;48;2;117;57;33m▀\033[38;2;117;57;33;48;2;135;129;129m▀\033[38;2;9;15;21;48;2;0;0;0m▀\033[38;2;87;87;87;48;2;57;57;39m▀▀\033[0m
+\033[48;2;0;0;0m \033[48;2;9;15;21m \033[38;2;9;15;21;48;2;39;33;33m▀\033[38;2;39;33;33;48;2;57;57;39m▀\033[48;2;87;87;87m▀▀\033[38;2;0;0;0;48;2;9;15;21m▀\033[38;2;9;15;21;48;2;0;0;0m▀\033[38;2;57;57;39;48;2;63;21;15m▀\033[48;2;189;129;99m \033[38;2;117;57;33;48;2;171;63;27m▀\033[38;2;87;87;87;48;2;0;0;0m▀\033[38;2;183;165;153m▀\033[38;2;249;207;183;48;2;57;57;39m▀\033[38;2;249;231;207;48;2;141;105;93m▀\033[38;2;237;129;87m▀\033[48;2;171;63;27m▀\033[48;2;123;87;33m▀\033[38;2;249;207;183;48;2;141;105;93m▀▀\033[38;2;249;177;135;48;2;183;165;153m▀\033[38;2;189;129;99;48;2;57;57;39m▀\033[38;2;123;87;33;48;2;0;0;0m▀\033[38;2;105;27;15;48;2;171;63;27m▀\033[38;2;219;9;4;48;2;117;57;33m▀\033[38;2;105;27;15;48;2;195;195;195m▀\033[38;2;195;195;195;48;2;183;165;153m▀\033[38;2;87;87;87;48;2;0;0;0m▀ \033[38;2;9;15;21m▀\033[38;2;39;27;27m▀\033[0m
+\033[48;2;0;0;0m \033[38;2;9;15;21m▀\033[38;2;39;27;27;48;2;9;15;21m▀\033[38;2;57;57;39m▀▀\033[48;2;33;33;39m \033[38;2;33;33;39;48;2;57;57;39m▀\033[48;2;33;33;39m \033[48;2;63;21;15m \033[38;2;171;63;27;48;2;153;15;5m▀\033[38;2;105;27;15;48;2;39;9;2m▀\033[38;2;9;15;93;48;2;9;15;51m▀\033[48;2;27;33;93m▀\033[38;2;9;15;51;48;2;9;15;93m▀\033[38;2;33;33;39;48;2;57;57;39m▀\033[38;2;195;195;195;48;2;249;231;207m▀\033[48;2;27;33;57m \033[38;2;9;15;21m▀\033[38;2;135;129;129;48;2;87;87;87m▀\033[38;2;141;105;93;48;2;243;219;0m▀\033[38;2;183;165;153;48;2;177;135;21m▀\033[38;2;87;87;87;48;2;201;171;0m▀\033[38;2;99;9;2m▀\033[38;2;63;21;15;48;2;123;87;33m▀\033[38;2;87;87;87;48;2;243;219;0m▀\033[38;2;141;105;93;48;2;201;171;0m▀\033[48;2;57;57;39m \033[0m
+\033[48;2;0;0;0m    \033[38;2;39;27;27m▀\033[48;2;39;27;27m \033[38;2;123;87;33;48;2;57;57;39m▀ \033[48;2;63;21;15m \033[38;2;99;9;2;48;2;123;87;33m▀\033[38;2;39;27;27;48;2;177;135;21m▀\033[38;2;39;9;2;48;2;123;87;33m▀\033[48;2;9;15;51m \033[38;2;9;15;93m▀\033[48;2;27;33;93m \033[48;2;249;231;207m \033[38;2;195;195;195m▀▀\033[38;2;123;87;33;48;2;177;135;21m▀\033[48;2;243;219;0m \033[38;2;201;171;0;48;2;123;87;33m▀▀\033[48;2;153;15;5m▀\033[38;2;177;135;21m▀\033[38;2;243;219;0;48;2;177;135;21m▀\033[48;2;201;171;0m▀\033[48;2;57;57;39m \033[0m
+\033[48;2;0;0;0m     \033[48;2;39;9;2m \033[38;2;63;21;15m▀▀\033[38;2;57;57;39m▀\033[38;2;123;87;33;48;2;63;21;15m▀\033[38;2;177;135;21;48;2;117;57;33m▀\033[38;2;63;21;15;48;2;0;0;0m▀\033[48;2;9;15;21m \033[48;2;9;15;51m \033[38;2;27;33;57m▀\033[38;2;195;195;195;48;2;87;87;87m▀▀\033[38;2;183;165;153m▀\033[38;2;57;57;39;48;2;135;129;129m▀\033[38;2;105;27;15;48;2;57;57;39m▀\033[38;2;189;129;99;48;2;183;93;45m▀\033[38;2;225;111;51;48;2;171;63;27m▀\033[48;2;213;63;33m \033[48;2;219;9;4m \033[38;2;57;57;39;48;2;63;21;15m▀\033[48;2;33;33;39m▀\033[38;2;39;33;33;48;2;0;0;0m▀\033[0m
+\033[48;2;0;0;0m      \033[38;2;39;9;2m▀\033[48;2;39;9;2m \033[38;2;63;21;15m▀ \033[38;2;9;15;21;48;2;33;33;39m▀\033[38;2;57;57;39;48;2;87;87;87m▀  \033[38;2;27;33;57m▀ \033[38;2;135;129;129m▀\033[48;2;9;15;21m▀\033[38;2;183;165;153;48;2;33;33;39m▀\033[38;2;87;87;87;48;2;57;57;39m▀\033[38;2;171;63;27;48;2;105;27;15m▀\033[38;2;153;15;5m▀\033[38;2;171;63;27;48;2;153;15;5m▀\033[38;2;153;15;5;48;2;105;27;15m▀\033[38;2;105;27;15;48;2;99;9;2m▀\033[48;2;33;33;39m \033[0m
+\033[48;2;0;0;0m        \033[38;2;39;9;2m▀▀\033[38;2;33;33;39;48;2;9;15;21m▀\033[38;2;57;57;39;48;2;39;27;27m▀\033[48;2;39;33;33m▀▀\033[38;2;87;87;87m▀\033[48;2;57;57;39m▀\033[48;2;39;33;33m \033[48;2;0;0;0m  \033[38;2;39;27;27m▀\033[38;2;39;33;33;48;2;9;15;21m▀▀\033[38;2;99;9;2;48;2;39;9;2m▀▀\033[48;2;39;27;27m▀ \033[48;2;9;15;21m \033[0m
+==>04-chibi
+\033[48;2;0;0;0m             \033[38;2;0;0;0;48;2;33;33;39m▀▀▀▀▀▀▀▀▀▀▀\033[0m
+\033[48;2;0;0;0m         \033[38;2;0;0;0;48;2;33;33;39m▀\033[48;2;45;51;51m▀\033[38;2;33;33;39m▀\033[48;2;63;63;63m▀\033[38;2;45;51;51;48;2;69;75;75m▀▀\033[38;2;63;63;63;48;2;81;87;87m▀▀\033[48;2;87;93;99m▀▀▀▀\033[48;2;81;87;87m▀\033[38;2;45;51;51m▀\033[48;2;69;75;75m▀\033[38;2;33;33;39;48;2;63;63;63m▀▀\033[48;2;45;51;51m▀\033[38;2;0;0;0;48;2;33;33;39m▀▀\033[0m
+\033[48;2;0;0;0m      \033[38;2;0;0;0;48;2;33;33;39m▀\033[38;2;33;33;39;48;2;45;51;51m▀\033[48;2;63;63;63m▀\033[38;2;45;51;51;48;2;69;75;75m▀\033[38;2;63;63;63;48;2;93;93;99m▀\033[38;2;69;75;75;48;2;99;99;99m▀\033[38;2;81;87;87;48;2;117;117;117m▀\033[38;2;99;99;99;48;2;123;129;129m▀▀\033[38;2;105;111;117;48;2;135;141;147m▀▀▀\033[38;2;117;117;117;48;2;135;147;153m▀▀\033[48;2;135;141;147m▀▀\033[38;2;105;111;117m▀\033[38;2;99;99;99;48;2;123;129;129m▀\033[38;2;93;93;99;48;2;117;117;117m▀\033[38;2;81;87;87;48;2;105;111;117m▀\033[38;2;69;75;75;48;2;93;93;99m▀\033[38;2;63;63;63;48;2;81;87;87m▀\033[38;2;45;51;51;48;2;63;63;63m▀\033[38;2;33;33;39;48;2;45;51;51m▀\033[38;2;0;0;0;48;2;33;33;39m▀\033[0m
+\033[48;2;0;0;0m    \033[38;2;0;0;0;48;2;33;33;39m▀\033[38;2;33;33;39;48;2;45;51;51m▀\033[38;2;45;51;51;48;2;63;63;63m▀\033[38;2;63;63;63;48;2;81;87;87m▀\033[38;2;81;87;87;48;2;99;99;99m▀\033[38;2;99;99;99;48;2;117;117;117m▀\033[38;2;117;117;117;48;2;135;141;147m▀\033[38;2;123;129;129;48;2;153;153;153m▀\033[38;2;135;141;147;48;2;147;153;159m▀\033[38;2;135;147;153;48;2;165;177;177m▀\033[38;2;147;153;159;48;2;183;183;183m▀\033[38;2;159;165;171;48;2;183;189;189m▀\033[48;2;171;189;195m▀▀▀\033[38;2;165;177;177;48;2;189;201;201m▀\033[38;2;159;165;171;48;2;171;189;195m▀▀\033[48;2;183;189;189m▀\033[38;2;153;153;153;48;2;183;183;183m▀\033[38;2;135;141;147;48;2;159;165;171m▀\033[38;2;123;129;129;48;2;153;153;153m▀\033[38;2;117;117;117;48;2;135;141;147m▀\033[38;2;99;99;99;48;2;123;129;129m▀\033[38;2;81;87;87;48;2;105;111;117m▀\033[38;2;69;75;75;48;2;93;93;99m▀\033[38;2;45;51;51;48;2;69;75;75m▀\033[38;2;33;33;39;48;2;45;51;51m▀\033[38;2;0;0;0;48;2;33;33;39m▀\033[0m
+\033[48;2;0;0;0m   \033[48;2;33;33;39m \033[38;2;45;51;51;48;2;63;63;63m▀\033[38;2;63;63;63;48;2;81;87;87m▀\033[38;2;81;87;87;48;2;99;99;99m▀\033[38;2;99;99;99;48;2;123;129;129m▀\033[38;2;123;129;129;48;2;135;141;147m▀\033[38;2;135;141;147;48;2;147;153;159m▀\033[38;2;147;153;159;48;2;165;177;177m▀\033[38;2;159;165;171;48;2;171;189;195m▀\033[38;2;165;177;177;48;2;189;201;201m▀\033[38;2;171;189;195;48;2;201;225;231m▀\033[38;2;201;207;207;48;2;213;237;243m▀\033[38;2;207;213;213;48;2;219;243;243m▀\033[38;2;201;225;231;48;2;231;249;249m▀▀\033[48;2;249;255;255m▀\033[48;2;231;249;249m▀▀▀\033[38;2;207;213;213;48;2;219;243;243m▀\033[38;2;201;207;207;48;2;219;219;219m▀\033[38;2;183;189;189m▀\033[38;2;183;183;183;48;2;201;207;207m▀\033[38;2;159;165;171;48;2;183;189;189m▀\033[38;2;153;153;153;48;2;159;165;171m▀\033[38;2;123;129;129;48;2;153;153;153m▀\033[38;2;105;111;117;48;2;123;129;129m▀\033[38;2;93;93;99;48;2;105;111;117m▀\033[38;2;69;75;75;48;2;93;93;99m▀\033[38;2;45;51;51;48;2;63;63;63m▀\033[38;2;33;33;39;48;2;45;51;51m▀\033[38;2;0;0;0;48;2;33;33;39m▀\033[0m
+\033[48;2;0;0;0m \033[38;2;0;0;0;48;2;33;33;39m▀\033[38;2;33;33;39;48;2;45;51;51m▀\033[38;2;45;51;51;48;2;69;75;75m▀ \033[38;2;99;99;99;48;2;81;87;87m▀\033[38;2;117;117;117;48;2;135;141;147m▀\033[38;2;135;141;147;48;2;147;153;159m▀\033[38;2;147;153;159;48;2;165;177;177m▀\033[38;2;165;177;177;48;2;171;189;195m▀\033[38;2;171;189;195;48;2;201;225;231m▀\033[38;2;207;213;213;48;2;213;237;243m▀\033[38;2;201;225;231;48;2;219;243;243m▀\033[38;2;231;249;249;48;2;249;255;255m▀\033[48;2;231;249;249m     \033[38;2;249;255;255m▀▀ \033[38;2;231;249;249;48;2;219;243;243m▀\033[38;2;249;255;255;48;2;231;249;249m▀\033[38;2;231;249;249;48;2;249;255;255m▀\033[38;2;219;219;219m▀\033[38;2;201;207;207;48;2;219;219;219m▀\033[38;2;183;189;189;48;2;201;207;207m▀\033[38;2;165;177;177;48;2;183;189;189m▀\033[38;2;153;153;153;48;2;159;165;171m▀\033[38;2;123;129;129;48;2;135;141;147m▀\033[38;2;111;99;99;48;2;117;117;117m▀\033[38;2;81;87;87;48;2;87;93;99m▀\033[38;2;63;63;63;48;2;45;51;51m▀\033[38;2;0;0;0;48;2;33;33;39m▀▀\033[0m
+\033[48;2;0;0;0m \033[48;2;33;33;39m \033[38;2;45;51;51;48;2;63;63;63m▀\033[38;2;81;87;87;48;2;87;93;99m▀\033[38;2;99;99;99;48;2;105;111;117m▀\033[38;2;63;63;63;48;2;123;129;129m▀\033[38;2;135;141;147;48;2;147;153;159m▀\033[38;2;159;165;171;48;2;171;189;195m▀\033[38;2;171;189;195;48;2;207;213;213m▀\033[38;2;207;213;213;48;2;219;243;243m▀\033[38;2;231;249;249;48;2;249;255;255m▀\033[38;2;219;243;243;48;2;231;249;249m▀\033[38;2;231;249;249;48;2;249;255;255m▀      ▀▀\033[48;2;231;249;249m  \033[38;2;219;243;243m▀ \033[38;2;249;255;255m▀\033[38;2;231;249;249;48;2;249;255;255m▀\033[38;2;219;219;219m▀\033[38;2;201;207;207;48;2;207;213;213m▀\033[38;2;165;177;177;48;2;189;201;201m▀\033[38;2;147;153;159;48;2;165;177;177m▀\033[38;2;123;129;129;48;2;153;153;153m▀\033[38;2;99;99;99;48;2;123;129;129m▀\033[38;2;81;87;87;48;2;99;99;99m▀\033[38;2;63;63;63;48;2;69;75;75m▀\033[38;2;33;33;39;48;2;45;51;51m▀\033[38;2;0;0;0;48;2;33;33;39m▀\033[0m
+\033[48;2;33;33;39m \033[48;2;45;51;51m \033[38;2;69;75;75;48;2;81;87;87m▀\033[38;2;99;99;99;48;2;105;111;117m▀\033[48;2;123;129;129m \033[38;2;135;147;153;48;2;147;153;159m▀\033[38;2;165;177;177;48;2;183;189;189m▀\033[38;2;201;207;207;48;2;207;213;213m▀\033[38;2;219;219;219;48;2;231;249;249m▀\033[38;2;249;255;255;48;2;219;243;243m▀\033[38;2;231;249;249m▀\033[48;2;249;255;255m           \033[48;2;231;249;249m  \033[48;2;249;255;255m \033[38;2;249;255;255;48;2;231;249;249m▀\033[48;2;105;111;117m▀\033[38;2;183;189;189;48;2;201;207;207m▀\033[38;2;219;219;219;48;2;249;255;255m▀\033[38;2;207;213;213;48;2;219;219;219m▀\033[38;2;183;183;183;48;2;189;201;201m▀\033[38;2;153;153;153;48;2;165;177;177m▀\033[48;2;135;141;147m \033[38;2;105;111;117;48;2;117;117;117m▀\033[38;2;81;87;87;48;2;93;93;99m▀\033[48;2;63;63;63m \033[48;2;33;33;39m \033[0m
+\033[48;2;33;33;39m \033[48;2;63;63;63m \033[38;2;81;87;87;48;2;87;93;99m▀\033[48;2;117;117;117m \033[48;2;135;141;147m \033[48;2;165;177;177m \033[48;2;189;201;201m \033[38;2;219;219;219;48;2;201;225;231m▀\033[48;2;219;243;243m \033[38;2;219;243;243;48;2;231;249;249m▀\033[38;2;231;249;249;48;2;219;243;243m▀\033[48;2;249;255;255m           \033[48;2;231;249;249m \033[38;2;231;249;249;48;2;249;255;255m▀\033[38;2;249;255;255;48;2;231;249;249m▀\033[38;2;219;219;219;48;2;249;255;255m▀\033[38;2;183;183;183m▀\033[38;2;249;255;255;48;2;231;249;249m▀ \033[48;2;219;243;243m \033[48;2;201;207;207m \033[38;2;165;177;177;48;2;183;183;183m▀\033[38;2;147;153;159;48;2;153;153;153m▀\033[48;2;123;129;129m \033[38;2;99;99;99;48;2;93;93;99m▀\033[38;2;63;63;63;48;2;69;75;75m▀\033[38;2;33;33;39;48;2;45;51;51m▀\033[38;2;0;0;0;48;2;33;33;39m▀\033[0m
+\033[38;2;33;33;39;48;2;0;0;0m▀\033[38;2;69;75;75;48;2;63;63;63m▀\033[38;2;93;93;99;48;2;99;99;99m▀\033[38;2;117;117;117;48;2;123;129;129m▀\033[38;2;135;147;153;48;2;153;153;153m▀\033[38;2;165;177;177;48;2;183;183;183m▀\033[38;2;189;201;201;48;2;201;207;207m▀\033[38;2;213;237;243;48;2;219;243;243m▀\033[38;2;249;255;255;48;2;183;159;159m▀▀\033[48;2;243;207;207m▀\033[38;2;231;249;249;48;2;249;255;255m▀        \033[38;2;249;255;255;48;2;231;249;249m▀\033[48;2;219;243;243m \033[38;2;249;255;255;48;2;231;249;249m▀\033[48;2;249;255;255m \033[48;2;231;249;249m \033[38;2;249;255;255m▀ \033[48;2;219;243;243m▀\033[48;2;231;249;249m▀\033[38;2;231;249;249;48;2;213;237;243m▀\033[38;2;207;213;213;48;2;201;207;207m▀\033[38;2;183;183;183;48;2;165;177;177m▀\033[38;2;153;153;153;48;2;135;147;153m▀\033[48;2;123;129;129m \033[38;2;87;93;99;48;2;99;99;99m▀\033[48;2;69;75;75m \033[48;2;45;51;51m \033[48;2;33;33;39m \033[0m
+\033[48;2;0;0;0m \033[38;2;45;51;51;48;2;33;33;39m▀\033[38;2;99;99;99;48;2;93;93;99m▀\033[48;2;123;129;129m \033[48;2;153;153;153m \033[48;2;183;183;183m \033[38;2;207;213;213;48;2;201;207;207m▀\033[48;2;207;213;213m \033[38;2;117;117;117;48;2;177;207;231m▀\033[38;2;123;129;129;48;2;129;219;249m▀\033[38;2;99;99;99;48;2;177;207;231m▀\033[48;2;183;159;159m \033[38;2;249;255;255;48;2;201;207;207m▀\033[48;2;249;255;255m    \033[38;2;249;255;255;48;2;231;249;249m▀\033[48;2;249;255;255m \033[38;2;231;249;249m▀\033[38;2;249;255;255;48;2;243;207;207m▀▀\033[48;2;219;243;243m \033[38;2;249;255;255;48;2;231;249;249m▀\033[48;2;249;255;255m  \033[48;2;231;249;249m \033[48;2;219;243;243m \033[48;2;231;249;249m \033[48;2;213;237;243m \033[38;2;177;207;231;48;2;189;201;201m▀\033[38;2;171;189;195;48;2;165;177;177m▀\033[38;2;129;153;165;48;2;135;147;153m▀\033[48;2;123;129;129m \033[38;2;99;99;99;48;2;87;93;99m▀\033[48;2;69;75;75m \033[48;2;45;51;51m \033[48;2;33;33;39m \033[0m
+\033[48;2;33;33;39m  \033[48;2;81;87;87m \033[48;2;117;117;117m \033[38;2;153;153;153;48;2;135;141;147m▀\033[48;2;165;177;177m \033[38;2;189;201;201;48;2;153;153;153m▀\033[38;2;183;159;159;48;2;123;129;129m▀\033[38;2;129;219;249;48;2;189;201;201m▀\033[48;2;177;207;231m▀\033[48;2;171;189;195m▀\033[38;2;249;255;255;48;2;243;207;207m▀\033[38;2;201;207;207;48;2;219;243;243m▀\033[48;2;249;255;255m \033[38;2;231;249;249m▀▀  \033[38;2;249;255;255;48;2;165;177;177m▀\033[38;2;153;153;153;48;2;129;153;165m▀\033[38;2;111;99;99;48;2;219;219;219m▀\033[48;2;201;207;207m▀\033[38;2;201;207;207;48;2;207;213;213m▀\033[38;2;231;249;249;48;2;249;255;255m▀\033[48;2;231;249;249m \033[38;2;249;255;255;48;2;213;237;243m▀\033[48;2;231;249;249m \033[38;2;219;243;243m▀\033[48;2;219;243;243m \033[48;2;201;225;231m \033[48;2;189;201;201m \033[38;2;165;177;177;48;2;159;165;171m▀\033[38;2;135;147;153;48;2;135;141;147m▀\033[48;2;105;111;117m \033[48;2;87;93;99m \033[38;2;69;75;75;48;2;63;63;63m▀\033[38;2;45;51;51;48;2;33;33;39m▀\033[38;2;33;33;39;48;2;0;0;0m▀\033[0m
+\033[38;2;33;33;39;48;2;0;0;0m▀\033[48;2;33;33;39m \033[38;2;81;87;87;48;2;69;75;75m▀\033[38;2;111;99;99;48;2;93;93;99m▀\033[48;2;123;129;129m \033[38;2;153;153;153;48;2;81;87;87m▀\033[38;2;63;63;63;48;2;33;33;39m▀\033[38;2;159;165;171;48;2;153;153;153m▀\033[38;2;183;183;183;48;2;219;219;219m▀\033[38;2;243;207;207m▀\033[48;2;249;255;255m▀      \033[48;2;219;243;243m \033[48;2;129;219;249m \033[38;2;129;219;249;48;2;177;207;231m▀\033[48;2;243;207;207m \033[38;2;249;255;255;48;2;201;225;231m▀\033[48;2;249;255;255m  \033[48;2;231;249;249m \033[48;2;219;243;243m \033[38;2;219;243;243;48;2;231;249;249m▀\033[38;2;231;249;249;48;2;219;243;243m▀\033[38;2;213;237;243;48;2;201;225;231m▀\033[38;2;207;213;213;48;2;189;201;201m▀\033[38;2;171;189;195;48;2;165;177;177m▀\033[38;2;159;165;171;48;2;135;147;153m▀\033[48;2;123;129;129m \033[38;2;105;111;117;48;2;93;93;99m▀\033[38;2;81;87;87;48;2;69;75;75m▀\033[38;2;63;63;63;48;2;45;51;51m▀\033[48;2;33;33;39m \033[0m
+\033[48;2;0;0;0m \033[48;2;33;33;39m \033[38;2;63;63;63;48;2;45;51;51m▀\033[38;2;93;93;99;48;2;63;63;63m▀\033[38;2;81;87;87;48;2;33;33;39m▀\033[38;2;33;33;39;48;2;105;111;117m▀\033[48;2;45;51;51m▀\033[38;2;93;93;99;48;2;33;33;39m▀\033[38;2;219;219;219;48;2;135;147;153m▀\033[38;2;219;243;243;48;2;219;219;219m▀\033[38;2;249;255;255;48;2;219;243;243m▀\033[48;2;249;255;255m    \033[38;2;249;255;255;48;2;243;207;207m▀\033[48;2;249;255;255m  \033[38;2;243;207;207m▀\033[48;2;231;249;249m▀\033[38;2;183;183;183;48;2;219;219;219m▀\033[38;2;189;201;201;48;2;249;255;255m▀  \033[48;2;231;249;249m \033[48;2;219;243;243m \033[38;2;219;243;243;48;2;213;237;243m▀\033[38;2;213;237;243;48;2;207;213;213m▀\033[38;2;201;207;207;48;2;189;201;201m▀\033[38;2;183;189;189;48;2;165;177;177m▀\033[38;2;159;165;171;48;2;147;153;159m▀\033[38;2;135;141;147;48;2;117;117;117m▀\033[38;2;105;111;117;48;2;93;93;99m▀\033[38;2;81;87;87;48;2;63;81;87m▀\033[38;2;63;63;63;48;2;45;51;51m▀\033[38;2;45;51;51;48;2;33;33;39m▀\033[38;2;33;33;39;48;2;0;0;0m▀\033[0m
+\033[48;2;0;0;0m  \033[48;2;33;33;39m  \033[48;2;69;75;75m \033[38;2;117;117;117;48;2;87;93;99m▀\033[38;2;81;87;87;48;2;105;111;117m▀\033[38;2;33;33;39;48;2;87;93;99m▀\033[38;2;123;129;129;48;2;147;153;159m▀\033[38;2;189;201;201;48;2;159;165;171m▀\033[38;2;207;213;213;48;2;171;189;195m▀\033[38;2;219;243;243;48;2;207;213;213m▀\033[38;2;249;255;255;48;2;219;219;219m▀\033[48;2;231;249;249m▀\033[48;2;249;255;255m     \033[38;2;249;255;255;48;2;159;165;171m▀\033[48;2;207;213;213m▀\033[48;2;249;255;255m  \033[38;2;249;255;255;48;2;213;237;243m▀\033[38;2;219;243;243;48;2;201;225;231m▀\033[38;2;213;237;243;48;2;201;207;207m▀\033[38;2;201;225;231;48;2;189;201;201m▀\033[38;2;189;201;201;48;2;165;177;177m▀\033[38;2;165;177;177;48;2;159;165;171m▀\033[38;2;153;153;153;48;2;135;141;147m▀\033[38;2;123;129;129;48;2;105;111;117m▀\033[38;2;105;111;117;48;2;87;93;99m▀\033[38;2;81;87;87;48;2;69;75;75m▀\033[38;2;63;63;63;48;2;45;51;51m▀\033[38;2;45;51;51;48;2;33;33;39m▀\033[38;2;33;33;39;48;2;0;0;0m▀\033[0m
+\033[48;2;0;0;0m   \033[38;2;33;33;39m▀\033[38;2;45;51;51;48;2;33;33;39m▀\033[38;2;69;75;75;48;2;63;63;63m▀\033[38;2;87;93;99;48;2;69;75;75m▀\033[38;2;117;117;117;48;2;87;93;99m▀\033[38;2;123;129;129;48;2;105;111;117m▀\033[38;2;135;147;153;48;2;123;129;129m▀\033[38;2;159;165;171;48;2;135;147;153m▀\033[38;2;123;129;129;48;2;63;63;63m▀\033[38;2;171;189;195;48;2;45;51;51m▀\033[38;2;219;219;219;48;2;105;111;117m▀\033[48;2;147;153;159m▀\033[38;2;219;243;243;48;2;63;81;87m▀\033[38;2;219;219;219m▀\033[38;2;249;255;255;48;2;165;177;177m▀\033[38;2;123;129;129;48;2;45;51;51m▀\033[38;2;81;87;87;48;2;135;147;153m▀\033[38;2;249;255;255;48;2;231;249;249m▀\033[48;2;165;177;177m▀\033[38;2;219;219;219;48;2;183;189;189m▀\033[38;2;201;207;207;48;2;171;189;195m▀\033[38;2;189;201;201;48;2;165;177;177m▀\033[38;2;171;189;195;48;2;153;153;153m▀\033[38;2;165;177;177;48;2;135;141;147m▀\033[38;2;153;153;153m▀\033[38;2;135;141;147;48;2;117;117;117m▀\033[38;2;105;111;117;48;2;87;93;99m▀\033[38;2;87;93;99;48;2;63;81;87m▀\033[38;2;63;81;87;48;2;63;63;63m▀\033[38;2;63;63;63;48;2;33;33;39m▀ \033[0m
+\033[48;2;0;0;0m    \033[38;2;33;33;39m▀\033[48;2;33;33;39m \033[38;2;45;51;51m▀\033[38;2;63;63;63m▀\033[38;2;45;51;51;48;2;0;0;0m▀\033[38;2;69;75;75;48;2;33;33;39m▀\033[38;2;81;87;87m▀\033[38;2;45;51;51m▀  ▀\033[48;2;45;51;51m  \033[38;2;69;75;75m▀\033[38;2;45;51;51;48;2;87;93;99m▀\033[38;2;183;189;189;48;2;165;177;177m▀\033[38;2;123;129;129;48;2;87;93;99m▀\033[38;2;93;93;99;48;2;135;141;147m▀\033[38;2;183;189;189;48;2;153;153;153m▀\033[38;2;159;165;171;48;2;111;99;99m▀\033[38;2;153;153;153;48;2;63;63;63m▀\033[38;2;117;117;117;48;2;63;81;87m▀\033[38;2;87;93;99m▀\033[38;2;105;111;117m▀\033[38;2;87;93;99;48;2;69;75;75m▀\033[38;2;63;81;87;48;2;63;63;63m▀\033[38;2;63;63;63;48;2;45;51;51m▀\033[38;2;45;51;51;48;2;33;33;39m▀\033[38;2;33;33;39;48;2;0;0;0m▀\033[0m
+\033[48;2;0;0;0m        \033[48;2;33;33;39m  \033[38;2;33;33;39;48;2;0;0;0m▀\033[48;2;33;33;39m \033[38;2;33;33;39;48;2;63;63;63m▀\033[48;2;45;51;51m▀\033[48;2;33;33;39m \033[38;2;33;33;39;48;2;93;93;99m▀\033[38;2;45;51;51;48;2;69;75;75m▀\033[48;2;45;51;51m \033[38;2;123;129;129;48;2;117;117;117m▀\033[38;2;135;141;147;48;2;99;99;99m▀\033[38;2;99;99;99;48;2;69;75;75m▀\033[38;2;117;117;117;48;2;63;63;63m▀\033[38;2;81;87;87;48;2;45;51;51m▀\033[38;2;45;51;51;48;2;63;81;87m▀\033[38;2;63;81;87;48;2;81;87;87m▀\033[38;2;87;93;99;48;2;69;75;75m▀\033[38;2;81;87;87;48;2;63;63;63m▀\033[38;2;63;63;63;48;2;45;51;51m▀\033[38;2;45;51;51;48;2;33;33;39m▀\033[38;2;33;33;39;48;2;0;0;0m▀▀\033[0m
+==>05-catgirl
+\033[48;2;0;0;0m     \033[38;2;0;0;0;48;2;21;21;15m▀▀  ▀\033[48;2;57;45;27m▀▀▀▀\033[48;2;21;21;15m▀▀▀▀▀\033[48;2;57;45;27m▀\033[48;2;105;81;39m▀\033[48;2;111;99;75m▀\033[48;2;87;87;69m▀\033[48;2;57;63;57m▀\033[48;2;21;21;15m▀\033[48;2;57;45;27m▀▀\033[0m
+\033[48;2;0;0;0m    \033[48;2;21;21;15m   \033[38;2;57;63;57;48;2;57;45;27m▀\033[48;2;105;45;15m▀\033[38;2;57;45;27;48;2;147;93;27m▀\033[38;2;105;81;39;48;2;105;45;15m▀  \033[38;2;105;45;15;48;2;153;51;9m▀\033[38;2;153;51;9;48;2;171;93;27m▀\033[48;2;189;93;21m▀\033[38;2;171;93;27m▀▀\033[38;2;135;99;69;48;2;153;51;9m▀\033[38;2;153;129;87;48;2;213;99;21m▀\033[38;2;159;177;171;48;2;159;165;141m▀\033[38;2;135;183;195;48;2;105;135;153m▀\033[38;2;129;147;147;48;2;57;63;57m▀\033[38;2;57;87;111;48;2;51;69;81m▀\033[38;2;51;69;81;48;2;57;87;111m▀▀▀\033[0m
+\033[48;2;0;0;0m    \033[48;2;21;21;15m \033[48;2;57;63;57m \033[38;2;21;21;15;48;2;57;45;27m▀\033[38;2;57;45;27;48;2;105;81;39m▀\033[48;2;147;93;27m  \033[38;2;105;45;15;48;2;153;51;9m▀\033[38;2;153;51;9;48;2;207;123;39m▀\033[38;2;189;93;21m▀\033[38;2;207;123;39;48;2;213;153;81m▀\033[48;2;189;93;21m▀\033[38;2;225;129;33;48;2;213;99;21m▀\033[48;2;225;129;33m  \033[38;2;225;129;33;48;2;237;159;69m▀\033[38;2;153;51;9;48;2;213;99;21m▀\033[48;2;153;51;9m \033[38;2;105;45;15m▀\033[38;2;153;51;9;48;2;105;45;15m▀\033[38;2;105;81;39;48;2;153;51;9m▀\033[38;2;57;87;111;48;2;123;129;123m▀\033[48;2;105;135;153m▀\033[38;2;51;69;81;48;2;57;63;57m▀\033[0m
+\033[48;2;0;0;0m    \033[48;2;21;21;15m \033[38;2;57;63;57;48;2;57;45;27m▀\033[38;2;57;45;27;48;2;105;81;39m▀\033[38;2;147;93;27;48;2;171;93;27m▀ \033[38;2;171;93;27;48;2;189;93;21m▀\033[38;2;207;123;39;48;2;225;129;33m▀\033[48;2;189;93;21m▀\033[48;2;225;129;33m \033[38;2;207;123;39;48;2;189;93;21m▀\033[38;2;213;99;21;48;2;171;93;27m▀\033[38;2;207;123;39;48;2;219;141;81m▀\033[48;2;225;129;33m \033[38;2;225;129;33;48;2;207;123;39m▀\033[38;2;237;159;69;48;2;225;129;33m▀\033[48;2;237;159;69m \033[38;2;213;99;21;48;2;225;129;33m▀\033[38;2;153;51;9m▀\033[48;2;189;93;21m▀\033[48;2;153;51;9m \033[38;2;123;129;123;48;2;123;117;93m▀\033[48;2;57;87;111m \033[48;2;21;21;15m \033[0m
+\033[48;2;0;0;0m    \033[38;2;0;0;0;48;2;21;21;15m▀\033[38;2;57;45;27;48;2;57;63;57m▀\033[38;2;147;93;27;48;2;135;99;69m▀\033[38;2;171;93;27;48;2;189;93;21m▀\033[38;2;207;123;39;48;2;213;153;81m▀\033[48;2;207;123;39m \033[38;2;213;99;21;48;2;189;93;21m▀\033[38;2;189;93;21;48;2;207;123;39m▀\033[38;2;207;123;39;48;2;189;129;75m▀\033[38;2;153;51;9;48;2;135;99;69m▀\033[38;2;135;99;69;48;2;153;129;87m▀\033[38;2;219;141;81;48;2;153;51;9m▀\033[38;2;225;129;33;48;2;213;99;21m▀\033[38;2;189;93;21;48;2;189;129;75m▀\033[38;2;213;99;21;48;2;189;93;21m▀\033[38;2;225;129;33;48;2;171;93;27m▀\033[48;2;207;123;39m▀\033[48;2;225;129;33m \033[38;2;171;93;27;48;2;207;123;39m▀\033[38;2;189;93;21;48;2;171;93;27m▀\033[48;2;135;99;69m \033[38;2;51;69;81;48;2;21;21;15m▀\033[0m
+\033[48;2;0;0;0m  \033[48;2;21;21;15m \033[38;2;0;0;0m▀\033[48;2;57;45;27m▀\033[38;2;57;63;57;48;2;105;81;39m▀\033[38;2;189;129;75;48;2;171;93;27m▀\033[48;2;189;93;21m \033[38;2;207;123;39;48;2;225;129;33m▀\033[48;2;189;93;21m▀\033[48;2;105;81;39m▀\033[38;2;171;93;27;48;2;21;21;15m▀\033[38;2;153;129;87;48;2;129;147;147m▀▀\033[38;2;189;129;75;48;2;111;99;75m▀\033[38;2;153;51;9;48;2;171;93;27m▀\033[38;2;213;153;81;48;2;213;165;117m▀\033[38;2;213;165;117;48;2;249;213;171m▀\033[38;2;147;93;27;48;2;153;129;87m▀\033[48;2;171;93;27m \033[38;2;171;93;27;48;2;207;123;39m▀ \033[38;2;189;93;21;48;2;153;51;9m▀\033[48;2;207;123;39m▀\033[48;2;87;87;69m \033[0m
+\033[48;2;0;0;0m  \033[38;2;0;0;0;48;2;21;21;15m▀\033[48;2;57;45;27m \033[48;2;51;69;81m \033[38;2;105;81;39;48;2;105;45;15m▀\033[48;2;189;93;21m  \033[48;2;225;129;33m \033[38;2;207;123;39;48;2;213;153;81m▀\033[38;2;159;153;123;48;2;213;165;117m▀\033[38;2;57;87;111;48;2;105;135;153m▀\033[38;2;21;21;15;48;2;57;87;111m▀\033[38;2;135;183;195;48;2;159;177;171m▀\033[38;2;213;219;177;48;2;249;213;171m▀\033[38;2;213;165;117m▀ \033[38;2;159;153;123;48;2;105;135;153m▀\033[38;2;123;129;123;48;2;57;87;111m▀\033[38;2;123;117;93;48;2;129;147;147m▀\033[38;2;189;93;21;48;2;171;93;27m▀\033[38;2;207;123;39;48;2;189;93;21m▀\033[38;2;153;51;9m▀\033[38;2;189;129;75;48;2;153;129;87m▀\033[38;2;57;63;57;48;2;0;0;0m▀\033[0m
+\033[48;2;0;0;0m \033[38;2;21;21;15;48;2;57;45;27m▀ \033[38;2;57;45;27;48;2;57;63;57m▀\033[38;2;51;69;81m▀\033[38;2;57;45;27;48;2;105;45;15m▀\033[38;2;189;93;21;48;2;153;51;9m▀\033[38;2;171;93;27m▀\033[48;2;189;93;21m \033[38;2;189;129;75;48;2;171;93;27m▀\033[48;2;213;165;117m \033[38;2;213;165;117;48;2;225;183;141m▀\033[38;2;189;183;147;48;2;249;213;171m▀    \033[38;2;129;147;147m▀\033[38;2;105;135;153m▀\033[38;2;225;183;141;48;2;213;165;117m▀\033[38;2;189;93;21;48;2;153;51;9m▀\033[38;2;171;93;27;48;2;147;93;27m▀\033[38;2;207;123;39;48;2;111;99;75m▀\033[38;2;87;87;69;48;2;21;21;15m▀\033[0m
+\033[48;2;21;21;15m \033[48;2;57;45;27m \033[38;2;57;45;27;48;2;21;21;15m▀\033[38;2;21;21;15;48;2;57;45;27m▀\033[38;2;105;81;39;48;2;147;93;27m▀\033[38;2;147;93;27;48;2;105;45;15m▀ \033[38;2;153;51;9m▀\033[48;2;135;99;69m▀\033[38;2;171;93;27;48;2;189;129;75m▀\033[38;2;189;129;75;48;2;153;129;87m▀\033[38;2;213;165;117;48;2;189;129;75m▀\033[48;2;225;183;141m \033[48;2;249;213;171m \033[38;2;213;165;117;48;2;225;183;141m▀\033[38;2;219;141;81m▀\033[48;2;249;213;171m \033[38;2;249;213;171;48;2;225;183;141m▀\033[38;2;225;183;141;48;2;111;99;75m▀\033[38;2;153;129;87;48;2;21;21;15m▀\033[38;2;123;129;123;48;2;57;63;57m▀\033[38;2;57;87;111;48;2;105;135;153m▀\033[48;2;87;87;69m▀\033[0m
+\033[38;2;21;21;15;48;2;0;0;0m▀\033[48;2;21;21;15m \033[48;2;57;45;27m \033[38;2;105;81;39m▀\033[48;2;105;45;15m \033[38;2;105;45;15;48;2;153;51;9m▀\033[48;2;105;45;15m \033[38;2;105;45;15;48;2;159;165;141m▀\033[38;2;159;153;123;48;2;213;219;177m▀\033[38;2;189;183;147m▀\033[38;2;213;219;177;48;2;231;249;213m▀\033[38;2;213;225;207;48;2;243;249;231m▀\033[38;2;189;183;147m▀\033[38;2;225;183;141;48;2;189;183;147m▀\033[38;2;249;213;171;48;2;213;99;21m▀\033[38;2;213;165;117m▀\033[38;2;207;123;39;48;2;135;99;69m▀\033[38;2;57;45;27;48;2;21;21;15m▀\033[38;2;0;0;0m▀▀▀\033[38;2;87;87;69;48;2;51;69;81m▀\033[38;2;57;63;57;48;2;21;21;15m▀\033[38;2;0;0;0;48;2;57;63;57m▀\033[48;2;111;99;75m▀\033[48;2;105;81;39m▀▀▀\033[48;2;57;45;27m▀\033[48;2;0;0;0m       \033[38;2;0;0;0;48;2;21;21;15m▀ \033[0m
+\033[48;2;0;0;0m \033[48;2;21;21;15m \033[38;2;57;45;27m▀\033[48;2;57;45;27m \033[48;2;105;45;15m \033[38;2;105;45;15;48;2;105;81;39m▀\033[38;2;123;129;123;48;2;159;153;123m▀\033[38;2;159;165;141m▀\033[48;2;189;183;147m \033[48;2;213;219;177m \033[38;2;231;249;213m▀\033[48;2;231;249;213m \033[38;2;243;249;231m▀\033[38;2;231;249;213;48;2;243;249;231m▀\033[38;2;213;153;81;48;2;231;249;213m▀\033[38;2;213;99;21;48;2;213;165;117m▀\033[48;2;213;99;21m \033[38;2;207;123;39m▀\033[38;2;189;129;75;48;2;207;123;39m▀\033[38;2;213;153;81;48;2;219;141;81m▀\033[38;2;213;165;117m▀\033[38;2;189;183;147;48;2;213;165;117m▀\033[48;2;249;213;171m▀\033[38;2;225;183;141;48;2;243;249;231m▀\033[38;2;249;213;171m▀\033[38;2;213;225;207m▀\033[38;2;249;213;171m▀\033[38;2;225;183;141m▀\033[38;2;213;153;81;48;2;213;225;207m▀\033[38;2;111;99;75;48;2;237;159;69m▀\033[38;2;0;0;0;48;2;87;87;69m▀\033[0m
+\033[48;2;0;0;0m \033[38;2;21;21;15m▀\033[48;2;21;21;15m \033[48;2;57;45;27m \033[38;2;57;45;27;48;2;57;63;57m▀\033[38;2;111;99;75;48;2;87;87;69m▀\033[38;2;123;129;123;48;2;123;117;93m▀\033[38;2;159;153;123m▀\033[38;2;159;165;141;48;2;159;153;123m▀\033[38;2;189;183;147;48;2;159;165;141m▀\033[38;2;213;219;177;48;2;189;183;147m▀\033[48;2;213;219;177m \033[38;2;231;249;213m▀\033[48;2;231;249;213m \033[38;2;243;249;231m▀▀\033[38;2;225;183;141;48;2;243;249;231m▀\033[38;2;213;99;21;48;2;249;213;171m▀\033[38;2;225;129;33;48;2;225;183;141m▀\033[48;2;213;165;117m▀\033[38;2;213;165;117;48;2;213;99;21m▀\033[38;2;225;183;141;48;2;237;159;69m▀\033[38;2;219;141;81;48;2;243;249;231m▀\033[38;2;207;123;39;48;2;123;129;123m▀\033[38;2;237;159;69;48;2;105;81;39m▀\033[38;2;225;183;141;48;2;171;93;27m▀\033[38;2;213;225;207;48;2;219;141;81m▀\033[38;2;243;249;231;48;2;213;165;117m▀\033[48;2;213;219;177m▀\033[38;2;225;183;141;48;2;213;165;117m▀\033[38;2;171;93;27;48;2;189;129;75m▀\033[48;2;21;21;15m \033[0m
+\033[48;2;0;0;0m  \033[38;2;21;21;15m▀\033[38;2;57;45;27;48;2;21;21;15m▀\033[38;2;57;63;57;48;2;57;45;27m▀\033[38;2;87;87;69;48;2;57;63;57m▀\033[48;2;87;87;69m \033[38;2;123;117;93;48;2;111;99;75m▀\033[48;2;123;117;93m \033[38;2;159;153;123;48;2;123;129;123m▀\033[38;2;189;183;147;48;2;159;165;141m▀\033[48;2;189;183;147m \033[38;2;213;219;177m▀\033[48;2;213;219;177m \033[38;2;231;249;213m▀▀\033[38;2;243;249;231;48;2;231;249;213m▀\033[48;2;243;249;231m \033[38;2;231;249;213m▀\033[38;2;243;249;231;48;2;213;225;207m▀\033[38;2;213;219;177m▀\033[38;2;219;141;81m▀\033[38;2;243;249;231;48;2;249;213;171m▀\033[38;2;213;219;177;48;2;231;249;213m▀\033[38;2;57;63;57;48;2;237;159;69m▀\033[48;2;123;117;93m▀\033[38;2;111;99;75;48;2;0;0;0m▀\033[38;2;213;153;81;48;2;21;21;15m▀\033[38;2;213;165;117;48;2;153;129;87m▀\033[38;2;207;123;39;48;2;135;99;69m▀\033[38;2;153;129;87;48;2;87;87;69m▀\033[38;2;21;21;15m▀\033[0m
+\033[48;2;0;0;0m   \033[38;2;21;21;15m▀\033[38;2;57;45;27;48;2;21;21;15m▀\033[38;2;57;63;57;48;2;57;45;27m▀\033[48;2;57;63;57m \033[38;2;87;87;69m▀\033[38;2;111;99;75;48;2;105;81;39m▀\033[38;2;123;117;93m▀\033[38;2;159;153;123;48;2;111;99;75m▀\033[48;2;135;99;69m▀\033[38;2;189;183;147;48;2;153;129;87m▀▀\033[38;2;213;219;177;48;2;159;153;123m▀\033[38;2;213;225;207;48;2;189;183;147m▀▀\033[38;2;231;249;213m▀▀\033[38;2;213;219;177m▀\033[38;2;213;225;207;48;2;213;219;177m▀\033[48;2;213;225;207m \033[38;2;249;213;171;48;2;213;219;177m▀\033[48;2;189;183;147m▀\033[38;2;207;123;39;48;2;159;177;171m▀\033[38;2;237;159;69;48;2;171;93;27m▀\033[38;2;123;117;93;48;2;189;129;75m▀\033[38;2;57;45;27;48;2;51;69;81m▀\033[38;2;87;87;69;48;2;0;0;0m▀\033[48;2;21;21;15m▀ \033[38;2;57;63;57m▀\033[38;2;21;21;15;48;2;0;0;0m▀\033[0m
+\033[48;2;0;0;0m     \033[38;2;21;21;15m▀\033[38;2;57;45;27;48;2;21;21;15m▀\033[48;2;57;45;27m \033[38;2;57;63;57m▀\033[38;2;87;87;69;48;2;57;63;57m▀\033[38;2;111;99;75;48;2;105;81;39m▀\033[38;2;123;117;93m▀\033[48;2;111;99;75m▀\033[38;2;159;153;123;48;2;135;99;69m▀\033[48;2;123;117;93m▀\033[48;2;159;153;123m \033[48;2;159;165;141m \033[38;2;159;165;141;48;2;159;177;171m▀\033[48;2;159;165;141m \033[38;2;189;183;147m▀\033[38;2;159;177;171m▀\033[48;2;159;153;123m▀\033[38;2;189;183;147;48;2;153;129;87m▀\033[38;2;123;129;123;48;2;57;63;57m▀\033[38;2;135;183;195;48;2;129;147;147m▀\033[38;2;123;129;123;48;2;105;135;153m▀\033[38;2;171;93;27;48;2;105;81;39m▀\033[38;2;57;63;57;48;2;57;45;27m▀\033[0m
+\033[48;2;0;0;0m       \033[38;2;21;21;15m▀\033[48;2;21;21;15m \033[38;2;57;45;27m▀\033[48;2;57;45;27m \033[38;2;57;45;27;48;2;57;63;57m▀\033[38;2;105;81;39m▀\033[48;2;87;87;69m▀\033[38;2;111;99;75m▀\033[38;2;123;117;93;48;2;111;99;75m▀\033[38;2;123;129;123m▀\033[38;2;123;117;93m▀\033[38;2;123;129;123;48;2;123;117;93m▀▀▀\033[38;2;159;153;123m▀\033[38;2;123;117;93;48;2;87;87;69m▀\033[38;2;57;45;27;48;2;21;21;15m▀\033[38;2;123;129;123;48;2;57;87;111m▀\033[48;2;87;87;69m▀\033[38;2;105;81;39;48;2;21;21;15m▀\033[38;2;21;21;15;48;2;0;0;0m▀\033[0m
+\033[48;2;0;0;0m         \033[38;2;21;21;15m▀▀\033[38;2;57;45;27;48;2;21;21;15m▀▀\033[38;2;57;63;57;48;2;57;45;27m▀▀▀\033[38;2;87;87;69m▀▀\033[48;2;57;63;57m▀▀\033[48;2;57;45;27m▀\033[38;2;105;81;39m▀\033[38;2;87;87;69m▀\033[38;2;21;21;15;48;2;0;0;0m▀\033[38;2;57;63;57;48;2;21;21;15m▀ \033[38;2;0;0;0m▀\033[38;2;21;21;15;48;2;0;0;0m▀▀\033[38;2;0;0;0;48;2;21;21;15m▀\033[38;2;21;21;15;48;2;0;0;0m▀\033[0m
+\033[48;2;0;0;0m             \033[38;2;21;21;15m▀▀   ▀\033[38;2;57;45;27m▀\033[48;2;21;21;15m▀▀\033[38;2;21;21;15;48;2;0;0;0m▀\033[0m
 FOLIO_BANNER_ALL
     awk -v dir="$_bdir" '
         /^==> ?[0-9A-Za-z._-]+$/ { name=substr($0,4); gsub(/^[ \t]+|[ \t]+$/, "", name); file=dir "/" name ".txt"; next }
@@ -1496,11 +1498,11 @@ FOLIO_BANNER_ALL
     printf '%s\n' "$_brev" > "$_bdir/.banner-rev" 2>/dev/null || true
 
     cat > "$_home/.config/folio/banner.sh" <<'FOLIO_BANNER_SH'
-# folio-banner.sh — Foila launch sticker. Colored 256-color ASCII art (no
-# emoji), offline, random design per interactive shell. Opt out FLUX_NO_BANNER=1.
+# folio-banner.sh — Bliss launch sticker. Truecolor half-block anime art
+# (no emoji), offline, random design per interactive shell. Opt out FLUX_NO_BANNER=1.
 folio-banner-art() {
   # Prints one randomly picked design from ~/.config/folio/banner/*.txt.
-  # The designs carry literal \033 256-color escapes -> rendered with printf %b.
+  # The designs carry literal \033 truecolor escapes -> rendered with printf %b.
   setopt localoptions nullglob 2>/dev/null || true
   local -a _bans
   _bans=( "$HOME"/.config/folio/banner/*.txt )
@@ -1516,7 +1518,7 @@ folio-banner() {
   [ "${FLUX_NO_BANNER:-0}" = "1" ] && return 0
   case $- in *i*) ;; *) return 0;; esac
   folio-banner-art
-  # Header: exactly one line, "foila@<id>" (distro id only — no host,
+  # Header: exactly one line, "bliss@<id>" (distro id only — no host,
   # version or time). ID= from /etc/os-release; fallbacks: first word of
   # PRETTY_NAME (lowercased), then "linux".
   local _fid=""
@@ -1527,7 +1529,7 @@ folio-banner() {
     fi
   fi
   [ -n "$_fid" ] || _fid="linux"
-  printf '%s\n' "foila@$_fid"
+  printf '%s\n' "bliss@$_fid"
   unset _fid
 }
 folio-banner
@@ -1553,7 +1555,7 @@ fi
 
 _flux_chown_r "$CUSTOM_USER:$CUSTOM_GROUP" "$USER_HOME" 2>/dev/null || true
 
-# ── Foila Linux appearance (wallpaper/colors/terminal) ───────────────────────
+# ── Bliss Linux appearance (wallpaper/colors/terminal) ───────────────────────
 # Re-apply the app-staged appearance config. Runs last (after the compact
 # defaults + theme setup) and forces one pass so a re-run always wins.
 if [ -r "$USER_HOME/.config/folio/appearance-apply.sh" ]; then
@@ -1575,5 +1577,5 @@ if [ -n "$_ref_u" ]; then
     done
 fi
 
-echo "Foila: XFCE4 Customization complete!"
+echo "Bliss: XFCE4 Customization complete!"
 exit 0

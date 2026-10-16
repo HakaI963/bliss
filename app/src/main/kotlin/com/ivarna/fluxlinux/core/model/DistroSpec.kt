@@ -129,5 +129,19 @@ enum class SupportedDistro(
         family = DistroFamily.ARCH,
         packageManager = PackageManager.PACMAN,
         releaseType = ReleaseType.ROLLING
+    ),
+
+    ROCKY(
+        id = "rocky",
+        family = DistroFamily.FEDORA, // RHEL-family (dnf/EPEL) grouped with Fedora
+        packageManager = PackageManager.DNF,
+        releaseType = ReleaseType.FIXED
+    ),
+
+    CENTOS_STREAM(
+        id = "centos_stream",
+        family = DistroFamily.FEDORA, // EL9 Stream (dnf/EPEL)
+        packageManager = PackageManager.DNF,
+        releaseType = ReleaseType.SEMI_ROLLING
     )
 }

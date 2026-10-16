@@ -12,17 +12,17 @@ NEW="$PREFIX/var/lib/proot-distro/containers/$ID"
 
 echo "Attempting to remove $ID..."
 if proot-distro remove "$ID" 2>/dev/null; then
-    echo "Foila: $ID Uninstalled."
+    echo "Bliss: $ID Uninstalled."
 else
     echo "First attempt failed, retrying..."
     sleep 1
     if proot-distro remove "$ID" 2>/dev/null; then
-        echo "Foila: $ID Uninstalled."
+        echo "Bliss: $ID Uninstalled."
     else
         echo "proot-distro command failed, using manual removal..."
         rm -rf "$OLD"
         rm -rf "$NEW"
-        echo "Foila: $ID manually removed."
+        echo "Bliss: $ID manually removed."
     fi
 fi
 # proot-distro remove can leave a dir; sweep both names (Termux PREFIX only)
@@ -33,7 +33,7 @@ if [ ! -e "$OLD" ] && [ ! -e "$NEW" ]; then
     am start -a android.intent.action.VIEW \
       -d "fluxlinux://callback?result=success&name=legacy_termux_uninstall_${ID}"
 else
-    echo "Foila: $ID still present after remove."
+    echo "Bliss: $ID still present after remove."
     am start -a android.intent.action.VIEW \
       -d "fluxlinux://callback?result=error&name=legacy_termux_uninstall_${ID}&reason=unknown"
 fi

@@ -4,7 +4,7 @@
 # Usage:
 #   ./scripts/package_host_assets.sh com.ivarna.fluxlinux
 #   ./scripts/package_host_assets.sh com.zenithblue.fluxlinux
-#   ./scripts/package_host_assets.sh com.nopiece.folio
+#   ./scripts/package_host_assets.sh com.nopiece.bliss
 #   ./scripts/package_host_assets.sh --all
 #
 # Actions:
@@ -25,7 +25,7 @@ APP_SRC="$ROOT/app/src"
 declare -A FLAVOR_FOR_ID=(
   [com.ivarna.fluxlinux]=ivarna
   [com.zenithblue.fluxlinux]=zenithblue
-  [com.nopiece.folio]=folio
+  [com.nopiece.bliss]=bliss
 )
 
 usage() {
@@ -45,7 +45,7 @@ stage_app_id() {
   local app_id="$1"
   local flavor="${FLAVOR_FOR_ID[$app_id]:-}"
   if [ -z "$flavor" ]; then
-    echo "ERROR: unknown application id '$app_id' (expected com.ivarna.fluxlinux | com.zenithblue.fluxlinux | com.nopiece.folio)" >&2
+    echo "ERROR: unknown application id '$app_id' (expected com.ivarna.fluxlinux | com.zenithblue.fluxlinux | com.nopiece.bliss)" >&2
     exit 2
   fi
 

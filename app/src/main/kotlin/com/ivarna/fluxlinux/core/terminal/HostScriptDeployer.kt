@@ -102,6 +102,8 @@ object HostScriptDeployer {
             required = false
         ),
         HostScript("setup_fedora_family.sh", "scripts/fedora/common/setup/setup_fedora_family.sh"),
+        // RHEL-family (rpm) family script — shared by rocky / centos_stream.
+        HostScript("setup_rpm_family.sh", "scripts/rpm/common/setup/setup_rpm_family.sh"),
         HostScript("setup_void_family.sh", "scripts/void/common/setup/setup_void_family.sh"),
         HostScript(
             "setup_opensuse_family.sh",

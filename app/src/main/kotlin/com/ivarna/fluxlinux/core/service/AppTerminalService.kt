@@ -71,7 +71,7 @@ class AppTerminalService : Service() {
         )
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Foila Linux — Terminal")
+            .setContentTitle("Bliss — Terminal")
             .setContentText(
                 if (count == 1) "1 terminal session running"
                 else "$count terminal sessions running"
@@ -91,7 +91,7 @@ class AppTerminalService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                "Foila Linux Terminal Sessions",
+                "Bliss Terminal Sessions",
                 NotificationManager.IMPORTANCE_DEFAULT
             ).apply {
                 description = "Shows while in-app terminal sessions stay alive in the background"

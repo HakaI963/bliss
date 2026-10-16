@@ -26,9 +26,9 @@ PKGS=(
 
 # ─── UNINSTALL MODE ──────────────────────────────────────────────────────
 # If invoked with "uninstall" as the first argument, remove what we installed
-# and exit. Called by Foila app from DistroSettings → Component → Uninstall.
+# and exit. Called by Bliss app from DistroSettings → Component → Uninstall.
 if [ "$1" = "uninstall" ]; then
-    echo "Foila: Uninstalling Web Development Environment..."
+    echo "Bliss: Uninstalling Web Development Environment..."
 
     export DEBIAN_FRONTEND=noninteractive
 
@@ -71,7 +71,7 @@ if [ "$1" = "uninstall" ]; then
         fi
     done
 
-    echo "Foila: Web Development Environment Uninstalled."
+    echo "Bliss: Web Development Environment Uninstalled."
     exit 0
 fi
 # ─── END UNINSTALL MODE ──────────────────────────────────────────────────
@@ -79,7 +79,7 @@ fi
 # Error Handler Function to pause and let user read logs
 handle_error() {
     echo ""
-    echo "❌ Foila Error: Script failed at step: $1"
+    echo "❌ Bliss Error: Script failed at step: $1"
     echo "---------------------------------------------------"
     echo "Please check the error message above."
     echo "You can copy the error output to share with support."
@@ -88,7 +88,7 @@ handle_error() {
     exit 1
 }
 
-echo "Foila: Setting up Web Development Environment..."
+echo "Bliss: Setting up Web Development Environment..."
 
 # PRE-FLIGHT CHECK: Clean up broken VS Code repo if present
 # This prevents 'apt update' from failing immediately due to parsing errors
@@ -96,7 +96,7 @@ rm -f /etc/apt/sources.list.d/vscode.list
 
 # PRE-FLIGHT CHECK: Clean up old NodeSource repo and keys
 # The NodeSource repository signature is invalid and causes apt update to fail
-echo "Foila: Cleaning up old NodeSource repository..."
+echo "Bliss: Cleaning up old NodeSource repository..."
 rm -f /etc/apt/sources.list.d/nodesource.list
 rm -f /etc/apt/sources.list.d/nodesource.list.save
 rm -f /usr/share/keyrings/nodesource.gpg
@@ -109,7 +109,7 @@ apt update -y || handle_error "System Update"
 apt install -y curl wget git build-essential gnupg || handle_error "Basic Tools Installation"
 
 # 2. Install Browsers (Firefox Latest & Chromium)
-echo "Foila: Installing Latest Firefox (Mozilla Repo)..."
+echo "Bliss: Installing Latest Firefox (Mozilla Repo)..."
 
 # Setup Mozilla Official Repo (Supports ARM64)
 mkdir -p /etc/apt/keyrings
@@ -129,10 +129,10 @@ apt install -y "${PKGS[@]}" || handle_error "Browser Installation"
 
 # Fix Firefox sandbox crashes in PRoot (no user namespaces, /dev is Android bind-mount)
 # Wrapper at /usr/local/bin/firefox takes priority over /usr/bin/firefox via PATH
-echo "Foila: Applying Firefox proot sandbox fix..."
+echo "Bliss: Applying Firefox proot sandbox fix..."
 cat > /usr/local/bin/firefox << 'EOF'
 #!/bin/bash
-# Foila: Firefox sandbox wrapper for PRoot/chroot on Android
+# Bliss: Firefox sandbox wrapper for PRoot/chroot on Android
 # Firefox's sandbox requires user namespaces + a real /dev — neither available in proot.
 # Disabling all sandbox layers prevents child process SIGSEGV (signal 11) crashes.
 export MOZ_DISABLE_CONTENT_SANDBOX=1
@@ -158,16 +158,16 @@ MimeType=text/html;text/xml;application/xhtml+xml;application/vnd.mozilla.xul+xm
 StartupNotify=true
 Categories=Network;WebBrowser;
 EOF
-echo "Foila: Firefox wrapper applied."
+echo "Bliss: Firefox wrapper applied."
 
 # Fix Chromium GPU/sandbox crashes in PRoot
 # --no-sandbox: no user namespaces in proot
 # --disable-gpu: GPU process crashes (no /proc/bus/pci, no udev, no usable GPU device)
 # --use-gl=swiftshader: software WebGL renderer so pages still render correctly
-echo "Foila: Applying Chromium proot sandbox/GPU fix..."
+echo "Bliss: Applying Chromium proot sandbox/GPU fix..."
 cat > /usr/local/bin/chromium << 'EOF'
 #!/bin/bash
-# Foila: Chromium wrapper for PRoot/chroot on Android
+# Bliss: Chromium wrapper for PRoot/chroot on Android
 # Chromium's GPU process exits with SIGABRT (exit code 256) inside proot because
 # /proc/bus/pci/devices is missing, no udev, and no user namespaces for sandbox.
 exec /usr/bin/chromium --no-sandbox --disable-gpu --use-gl=swiftshader "$@"
@@ -192,7 +192,7 @@ StartupNotify=true
 Categories=Network;WebBrowser;
 EOF
 chown -R flux:users "$FLUX_LOCAL_APPS" 2>/dev/null || true
-echo "Foila: Chromium wrapper applied."
+echo "Bliss: Chromium wrapper applied."
 
 
 # 3. Install Node.js (v25) -- Manual Install for ARM64 & Global Path fix
@@ -201,7 +201,7 @@ NODE_VER="v25.5.0"
 NODE_DIST="node-${NODE_VER}-linux-arm64"
 NODE_URL="https://nodejs.org/dist/${NODE_VER}/${NODE_DIST}.tar.xz"
 
-echo "Foila: Installing/Checking Node.js ${NODE_VER}..."
+echo "Bliss: Installing/Checking Node.js ${NODE_VER}..."
 INSTALL_NODE=false
 
 # Check if installed
@@ -239,7 +239,7 @@ if [ "$INSTALL_NODE" = true ]; then
 fi
 
 # Fix Global NPM Path (Ensure modules are found)
-echo "Foila: Configuring Node.js Environment..."
+echo "Bliss: Configuring Node.js Environment..."
 
 # Update .bashrc for current user
 BASHRC="/home/flux/.bashrc"
@@ -255,14 +255,14 @@ echo 'export PATH=$PATH:/opt/nodejs/bin' > /etc/profile.d/nodejs.sh
 chmod 644 /etc/profile.d/nodejs.sh
 
 # 4. Install Python
-echo "Foila: Installing Python..."
+echo "Bliss: Installing Python..."
 apt install -y python3 python3-pip python3-venv || handle_error "Python Installation"
 
 # 5. Install VS Code (Official Tarball)
 # We use the tarball method to avoid 'dpkg' crashes (double free) likely caused by 
 # Debian Trixie's new glibc/dpkg version running under Proot.
 if ! command -v code &> /dev/null; then
-    echo "Foila: Installing VS Code (Tarball Method)..."
+    echo "Bliss: Installing VS Code (Tarball Method)..."
     
     # Clean up broken repo config/files
     rm -f /etc/apt/sources.list.d/vscode.list
@@ -279,7 +279,7 @@ if ! command -v code &> /dev/null; then
     mkdir -p /usr/share/code
     
     # Extract
-    echo "Foila: Extracting VS Code..."
+    echo "Bliss: Extracting VS Code..."
     tar -xzf /tmp/vscode.tar.gz -C /usr/share/code --strip-components=1 || handle_error "VS Code Extraction"
     
     # Link binary
@@ -315,12 +315,12 @@ EOF
     # We'll just rely on system fallback or generic icon if missing, downloading icons manually is flaky.
     
 else
-    echo "Foila: VS Code already installed."
+    echo "Bliss: VS Code already installed."
 fi
 
 # Configure VS Code settings to disable extension signature verification
 # This runs every time to ensure settings are always applied
-echo "Foila: Configuring VS Code settings..."
+echo "Bliss: Configuring VS Code settings..."
 mkdir -p /home/flux/.config/Code/User
 cat <<'VSCODE_SETTINGS' > /home/flux/.config/Code/User/settings.json
 {
@@ -331,5 +331,5 @@ chown -R flux:$(id -gn flux 2>/dev/null || echo "flux") /home/flux/.config
 
 
 
-echo "Foila: Web Development Setup Complete!"
+echo "Bliss: Web Development Setup Complete!"
 echo "Note: Launch VS Code with 'code' in terminal (alias added)."

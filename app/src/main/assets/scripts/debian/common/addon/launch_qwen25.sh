@@ -4,7 +4,7 @@
 
 handle_error() {
     echo ""
-    echo "❌ Foila Error: $1"
+    echo "❌ Bliss Error: $1"
     echo "---------------------------------------------------"
     read -p "Press Enter to exit..."
     exit 1
@@ -12,7 +12,7 @@ handle_error() {
 
 MODEL_PATH="/root/models/Qwen2.5-1.5B-Instruct-Q4_0.gguf"
 
-echo "Foila: Running Qwen2.5-1.5B-Instruct..."
+echo "Bliss: Running Qwen2.5-1.5B-Instruct..."
 echo ""
 
 # --- Check model ---

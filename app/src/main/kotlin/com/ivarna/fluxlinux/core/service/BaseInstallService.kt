@@ -153,7 +153,7 @@ class BaseInstallService : Service() {
             NotificationManager.IMPORTANCE_DEFAULT
         ).apply {
             description =
-                "Shows while Debian rootfs / XFCE install is running so the system does not kill Foila Linux"
+                "Shows while Debian rootfs / XFCE install is running so the system does not kill Bliss"
             setShowBadge(false)
         }
         nm.createNotificationChannel(channel)

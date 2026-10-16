@@ -72,7 +72,9 @@ class DistroInstallProfileTest {
         assertTrue(names.contains(DistroInstallProfile.KALI_ROOTFS_NAME))
         assertTrue(names.contains(DistroInstallProfile.PARROT_ROOTFS_NAME))
         assertTrue(names.contains(DistroInstallProfile.ARCH_ROOTFS_NAME))
-        assertEquals(12, names.size)
+        assertTrue(names.contains(DistroInstallProfile.ROCKY_ROOTFS_NAME))
+        assertTrue(names.contains(DistroInstallProfile.CENTOS_STREAM_ROOTFS_NAME))
+        assertEquals(14, names.size)
     }
 
     @Test
@@ -125,6 +127,8 @@ class DistroInstallProfileTest {
         assertTrue(DistroInstallProfile.isInstallable("parrot_chroot"))
         assertTrue(DistroInstallProfile.isInstallable("archlinux"))
         assertTrue(DistroInstallProfile.isInstallable("archlinux_chroot"))
+        assertTrue(DistroInstallProfile.isInstallable("rocky"))
+        assertTrue(DistroInstallProfile.isInstallable("centos_stream"))
         assertFalse(DistroInstallProfile.isInstallable("openbsd"))
     }
 
@@ -178,7 +182,9 @@ class DistroInstallProfileTest {
             DistroInstallProfile.UBUNTU_ROOTFS_SHA256,
             DistroInstallProfile.KALI_ROOTFS_SHA256,
             DistroInstallProfile.PARROT_ROOTFS_SHA256,
-            DistroInstallProfile.ARCH_ROOTFS_SHA256
+            DistroInstallProfile.ARCH_ROOTFS_SHA256,
+            DistroInstallProfile.ROCKY_ROOTFS_SHA256,
+            DistroInstallProfile.CENTOS_STREAM_ROOTFS_SHA256
         ).forEach { sha ->
             assertEquals(64, sha.length)
             assertTrue(sha.matches(Regex("[0-9a-f]{64}")))
@@ -270,7 +276,7 @@ class DistroInstallProfileTest {
             "chimera", "chimera_chroot",
             "manjaro", "manjaro_chroot"
         ).forEach { assertTrue(ids.contains(it)) }
-        assertEquals(24, ids.size)
+        assertEquals(26, ids.size)
     }
 
     @Test
@@ -319,6 +325,41 @@ class DistroInstallProfileTest {
             "parrot", "parrot_chroot",
             "archlinux", "archlinux_chroot"
         ).forEach { assertTrue(ids.contains(it)) }
-        assertEquals(24, ids.size)
+        assertEquals(26, ids.size)
+    }
+
+    @Test
+    fun rocky_centosStream_proot_profiles() {
+        val rocky = DistroInstallProfile.require("rocky")
+        assertEquals("proot", rocky.method)
+        assertEquals("rocky", rocky.prootName)
+        assertEquals(DistroInstallProfile.ROCKY_ROOTFS_NAME, rocky.rootfsFileName)
+        assertEquals(DistroInstallProfile.ROCKY_ROOTFS_SHA256, rocky.rootfsSha256)
+        assertTrue(rocky.rootfsMinBytes >= 40L * 1024L * 1024L)
+        assertEquals(
+            "https://github.com/HakaI963/folio/releases/download/rootfs/rocky_9_aarch64_plain.tar.xz",
+            rocky.rootfsUrl
+        )
+        assertEquals("rpm/common/setup/setup_rpm_family.sh", rocky.familyScript)
+        assertEquals("common/setup/setup_customization_xfce.sh", rocky.customizationScript)
+        assertEquals("common/setup/setup_hw_accel_guest.sh", rocky.hwAccelScript)
+        assertNull(rocky.chrootPath)
+
+        val centos = DistroInstallProfile.require("centos_stream")
+        assertEquals("proot", centos.method)
+        assertEquals("centos_stream", centos.prootName)
+        assertEquals(DistroInstallProfile.CENTOS_STREAM_ROOTFS_NAME, centos.rootfsFileName)
+        assertEquals(DistroInstallProfile.CENTOS_STREAM_ROOTFS_SHA256, centos.rootfsSha256)
+        assertTrue(centos.rootfsMinBytes >= 30L * 1024L * 1024L)
+        assertEquals(
+            "https://github.com/HakaI963/folio/releases/download/rootfs/centos_stream_9_aarch64_plain.tar.xz",
+            centos.rootfsUrl
+        )
+        assertEquals("rpm/common/setup/setup_rpm_family.sh", centos.familyScript)
+        assertNull(centos.chrootPath)
+
+        // No chroot variants ship for the EL9 cards this round.
+        assertFalse(DistroInstallProfile.isInstallable("rocky_chroot"))
+        assertFalse(DistroInstallProfile.isInstallable("centos_stream_chroot"))
     }
 }

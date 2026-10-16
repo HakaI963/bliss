@@ -211,7 +211,7 @@ fun HomeScreen(
         if (isChrootRow && !rootAvailable) {
             android.widget.Toast.makeText(
                 context,
-                "Grant superuser to Foila Linux first",
+                "Grant superuser to Bliss first",
                 android.widget.Toast.LENGTH_SHORT
             ).show()
             return
@@ -341,7 +341,7 @@ fun HomeScreen(
                                     if (needsRoot && !rootAvailable) {
                                         android.widget.Toast.makeText(
                                             context,
-                                            "Grant superuser to Foila Linux first",
+                                            "Grant superuser to Bliss first",
                                             android.widget.Toast.LENGTH_SHORT
                                         ).show()
                                     } else {
@@ -400,7 +400,7 @@ fun HomeScreen(
                                     if (!rootAvailable) {
                                         android.widget.Toast.makeText(
                                             context,
-                                            "Grant superuser to Foila Linux first",
+                                            "Grant superuser to Bliss first",
                                             android.widget.Toast.LENGTH_SHORT
                                         ).show()
                                     } else {
@@ -411,7 +411,7 @@ fun HomeScreen(
                                     if (!rootAvailable) {
                                         android.widget.Toast.makeText(
                                             context,
-                                            "Grant superuser to Foila Linux first",
+                                            "Grant superuser to Bliss first",
                                             android.widget.Toast.LENGTH_SHORT
                                         ).show()
                                     } else if (session != null && session.distroId != distro.id) {
@@ -735,7 +735,7 @@ fun HomeScreen(
     }
 }
 
-// ─── Foila installed environment row ─────────────────────────────────────────
+// ─── Bliss installed environment row ─────────────────────────────────────────
 // Grouped frost row: icon + name + env-type muted + Shell/desktop pills + gear.
 // Row tap opens the launch-mode dialog (shell / root / desktop); Shell pill is a
 // quick Shell open; XFCE/KDE pills launch the desktop directly (KDE via the GPU
@@ -961,7 +961,7 @@ private fun EnvDesktopPill(
     }
 }
 
-// ─── Desktop start/stop log dialog (Foila monochrome) ────────────────────────
+// ─── Desktop start/stop log dialog (Bliss monochrome) ────────────────────────
 @Composable
 private fun DesktopLogsDialog(
     logText: String,
@@ -1117,7 +1117,7 @@ private fun DesktopLogsDialog(
     }
 }
 
-// ─── Launch mode action row (Foila: white primary or frost ghost) ─────────────
+// ─── Launch mode action row (Bliss: white primary or frost ghost) ─────────────
 @Composable
 private fun LaunchModeAction(
     icon: ImageVector,
@@ -1208,7 +1208,7 @@ private fun LaunchModeActionContent(
     }
 }
 
-// ─── KDE GPU Picker Dialog (Foila monochrome) ─────────────────────────────────
+// ─── KDE GPU Picker Dialog (Bliss monochrome) ─────────────────────────────────
 @Composable
 private fun KdeGpuPickerDialog(
     distro: com.ivarna.fluxlinux.core.data.Distro,
@@ -1333,7 +1333,7 @@ private fun KdeGpuPickerDialog(
     }
 }
 
-// ─── Reusable GPU Option Card (Foila frost, no neon) ───────────────────────────
+// ─── Reusable GPU Option Card (Bliss frost, no neon) ───────────────────────────
 @Composable
 private fun GpuOptionCard(
     modifier: Modifier = Modifier,

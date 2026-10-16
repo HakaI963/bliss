@@ -253,7 +253,7 @@ fun LegacyTermuxSettingsScreen(
         if (row.id == "termux") return
 
         if (embeddedDesktopActive) {
-            Toast.makeText(context, "Stop the Foila Linux desktop first.", Toast.LENGTH_LONG).show()
+            Toast.makeText(context, "Stop the Bliss desktop first.", Toast.LENGTH_LONG).show()
             return
         }
         if (!termuxX11Installed) {
@@ -600,7 +600,7 @@ fun LegacyTermuxSettingsScreen(
                             color = TextPrimary
                         )
                         Text(
-                            "The Termux app is not installed. Leftover Foila Linux ≤ v1.8.0 containers lived there.",
+                            "The Termux app is not installed. Leftover containers from app versions ≤ v1.8.0 lived there.",
                             fontSize = 12.sp,
                             color = TextMuted,
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center
@@ -700,12 +700,12 @@ fun LegacyTermuxSettingsScreen(
             },
             text = {
                 val promptText = if (targetToConfirm.id == "debian") {
-                    "Delete the legacy Foila Linux ≤ v1.8 Termux container 'debian'?"
+                    "Delete the legacy Termux container 'debian' (installed by app versions ≤ v1.8)?"
                 } else {
-                    "Delete the Termux proot-distro container '${targetToConfirm.id}' (not installed by Foila Linux ≤ v1.8)?"
+                    "Delete the Termux proot-distro container '${targetToConfirm.id}' (not installed by app versions ≤ v1.8)?"
                 }
                 Text(
-                    "$promptText$pathText\n\nThis removes the container from Termux and does not touch Foila Linux app-storage (Settings → PRoot).",
+                    "$promptText$pathText\n\nThis removes the container from Termux and does not touch Bliss app-storage (Settings → PRoot).",
                     fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -919,10 +919,10 @@ private fun LeftoverRowCard(
             // Muted note (conflict / native / start guidance)
             Text(
                 when {
-                    embeddedDesktopActive -> "Stop the Foila Linux desktop first. Leftover Termux:X11 and embedded XFCE should not run together (Pulse TCP 127.0.0.1:4713)."
+                    embeddedDesktopActive -> "Stop the Bliss desktop first. Leftover Termux:X11 and embedded XFCE should not run together (Pulse TCP 127.0.0.1:4713)."
                     isNativeTermux -> "Termux native container management is not supported."
                     isDebianLeftover -> "Start: XFCE in Termux:X11 (v1.8 protocol). KDE leftovers are not supported."
-                    else -> "Termux container (not installed by Foila Linux ≤ v1.8). Start: XFCE in Termux:X11 if installed inside container."
+                    else -> "Termux container (not installed by app versions ≤ v1.8). Start: XFCE in Termux:X11 if installed inside container."
                 },
                 fontSize = 11.sp,
                 lineHeight = 15.sp,

@@ -52,7 +52,7 @@ object TermuxIntentFactory {
      * A simple "Ping" command to check if connection works.
      */
     fun buildTestConnectionIntent(): Intent {
-        return buildRunCommandIntent("echo 'Foila: Connection Established!' && sleep 2")
+        return buildRunCommandIntent("echo 'Bliss: Connection Established!' && sleep 2")
     }
 
     /**
@@ -117,7 +117,7 @@ object TermuxIntentFactory {
         
         val command = when {
             distroId == "termux" -> {
-                "pkg uninstall -y xfce4 xfce4-terminal tigervnc && echo 'Foila: Termux Native Desktop Removed.' && sleep 1 && am start -a android.intent.action.VIEW -d \"$callbackUrl\""
+                "pkg uninstall -y xfce4 xfce4-terminal tigervnc && echo 'Bliss: Termux Native Desktop Removed.' && sleep 1 && am start -a android.intent.action.VIEW -d \"$callbackUrl\""
             }
             distroId == "debian13_chroot" -> {
                 // Chroot: Inline uninstall logic (unmount, remove, callback)
@@ -163,12 +163,12 @@ object TermuxIntentFactory {
                 """
                 echo "Attempting to remove $distroId..."
                 if proot-distro remove $distroId 2>/dev/null; then
-                    echo "Foila: $distroId Uninstalled."
+                    echo "Bliss: $distroId Uninstalled."
                 else
                     echo "First attempt failed, retrying..."
                     sleep 1
                     if proot-distro remove $distroId 2>/dev/null; then
-                        echo "Foila: $distroId Uninstalled."
+                        echo "Bliss: $distroId Uninstalled."
                     else
                         echo "proot-distro command failed, using manual removal..."
                         rm -rf ${'$'}PREFIX/var/lib/proot-distro/containers/$distroId \
@@ -178,7 +178,7 @@ object TermuxIntentFactory {
                                 /system/bin/su -c "rm -rf ${'$'}PREFIX/var/lib/proot-distro/containers/$distroId" </dev/null
                             fi
                         fi
-                        echo "Foila: $distroId manually removed."
+                        echo "Bliss: $distroId manually removed."
                     fi
                 fi
                 sleep 2
@@ -333,7 +333,7 @@ object TermuxIntentFactory {
         runnerScript.append("if [ $? -eq 0 ]; then\n")
         runnerScript.append("    am start -a android.intent.action.VIEW -d \"$callbackUrl\"\n")
         runnerScript.append("else\n")
-        runnerScript.append("    echo \"Foila: Installation Failed!\"\n")
+        runnerScript.append("    echo \"Bliss: Installation Failed!\"\n")
         runnerScript.append("    am start -a android.intent.action.VIEW -d \"$errorUrl\"\n")
         runnerScript.append("fi\n")
         
@@ -573,7 +573,7 @@ object TermuxIntentFactory {
         val scriptB64 = android.util.Base64.encodeToString(safeScript.toByteArray(), android.util.Base64.NO_WRAP)
         
         // Write to the staging dir, execute, then remove.
-        // The Foila staging dir is writable by shell and accessible by root.
+        // The Bliss staging dir is writable by shell and accessible by root.
         val command = """
             su -c '
             mkdir -p ${ChrootPaths.STAGING_DIR};

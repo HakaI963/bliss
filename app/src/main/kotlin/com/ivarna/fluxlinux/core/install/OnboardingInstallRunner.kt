@@ -177,7 +177,7 @@ class OnboardingInstallRunner(private val ctx: Context) {
         try {
             BaseInstallService.start(
                 appCtx,
-                title = "Foila Linux — Installing",
+                title = "Bliss — Installing",
                 text = sessionTaskName,
                 percent = 0
             )
@@ -561,7 +561,7 @@ class OnboardingInstallRunner(private val ctx: Context) {
         if (!RootShell.isRootAvailable()) {
             postFail(
                 onProgress, phases,
-                "Root not available. Grant superuser to Foila Linux, then retry."
+                "Root not available. Grant superuser to Bliss, then retry."
             )
             return
         }
@@ -1239,7 +1239,7 @@ class OnboardingInstallRunner(private val ctx: Context) {
         try {
             BaseInstallService.update(
                 appCtx,
-                title = "Foila Linux — $label",
+                title = "Bliss — $label",
                 text = detail,
                 percent = percent
             )

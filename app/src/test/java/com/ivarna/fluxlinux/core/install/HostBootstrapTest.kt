@@ -35,6 +35,15 @@ class HostBootstrapTest {
             HostBootstrap.ZENITHBLUE,
             HostBootstrap.forApplicationId(HostBootstrap.ZENITHBLUE_PACKAGE)
         )
+        assertEquals(
+            HostBootstrap.FOLIO,
+            HostBootstrap.forApplicationId(HostBootstrap.BLISS_PACKAGE)
+        )
+        // Legacy pre-rename applicationId keeps resolving to the same pin.
+        assertEquals(
+            HostBootstrap.FOLIO,
+            HostBootstrap.forApplicationId(HostBootstrap.FOLIO_PACKAGE)
+        )
         assertEquals(HostBootstrap.IVARNA, HostBootstrap.forApplicationId("unknown"))
     }
 

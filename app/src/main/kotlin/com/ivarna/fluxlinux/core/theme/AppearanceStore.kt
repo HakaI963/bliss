@@ -21,7 +21,7 @@ import java.io.File
 import java.io.FileOutputStream
 
 /**
- * Foila Linux per-distro appearance (wallpaper / accent / terminal colors /
+ * Bliss per-distro appearance (wallpaper / accent / terminal colors /
  * optional video wallpaper).
  *
  * Storage: one JSON string per distro in SharedPreferences [PREFS]
@@ -65,7 +65,7 @@ object AppearanceStore {
     const val STYLE_CENTERED = "centered"
     val WALLPAPER_STYLES = listOf(STYLE_ZOOM, STYLE_STRETCHED, STYLE_CENTERED)
 
-    /** Solid desktop color used when no wallpaper image is set (Foila carbon). */
+    /** Solid desktop color used when no wallpaper image is set (Bliss carbon). */
     const val SOLID_COLOR = "#0B0B0D"
 
     // ── guest paths ──────────────────────────────────────────────────────────
@@ -113,20 +113,20 @@ object AppearanceStore {
         val promptColor: String
     )
 
-    /** Shipped presets (the three originals + three Foila presets + 7 new). */
+    /** Shipped presets (the three originals + three Bliss presets + 7 new). */
     val WALLPAPER_PRESETS: List<WallpaperPreset> = listOf(
         WallpaperPreset(
-            "folio-dark", "Foila Linux Dark",
+            "folio-dark", "Bliss Dark",
             "xfce4/wallpaper/fluxlinux-dark.png", "wallpaper-folio-dark.png",
             R.drawable.folio_wall_dark
         ),
         WallpaperPreset(
-            "folio-light", "Foila Linux Light",
+            "folio-light", "Bliss Light",
             "xfce4/wallpaper/fluxlinux-light.png", "wallpaper-folio-light.png",
             R.drawable.folio_wall_light
         ),
         WallpaperPreset(
-            "folio-shard", "Foila Linux Shard",
+            "folio-shard", "Bliss Shard",
             "xfce4/wallpaper/folio-dark.svg", "wallpaper-folio-shard.svg",
             R.drawable.folio_wall_shard
         ),
@@ -146,37 +146,37 @@ object AppearanceStore {
             R.drawable.folio_wall_density
         ),
         WallpaperPreset(
-            "folio-amoled", "Foila Linux AMOLED",
+            "folio-amoled", "Bliss AMOLED",
             "xfce4/wallpaper/presets/folio-amoled.png", "wallpaper-folio-amoled.png",
             R.drawable.folio_wall_amoled
         ),
         WallpaperPreset(
-            "folio-mesh", "Foila Linux Mesh",
+            "folio-mesh", "Bliss Mesh",
             "xfce4/wallpaper/presets/folio-mesh.png", "wallpaper-folio-mesh.png",
             R.drawable.folio_wall_mesh
         ),
         WallpaperPreset(
-            "folio-silk", "Foila Linux Silk",
+            "folio-silk", "Bliss Silk",
             "xfce4/wallpaper/presets/folio-silk.png", "wallpaper-folio-silk.png",
             R.drawable.folio_wall_silk
         ),
         WallpaperPreset(
-            "folio-dither", "Foila Linux Dither",
+            "folio-dither", "Bliss Dither",
             "xfce4/wallpaper/presets/folio-dither.png", "wallpaper-folio-dither.png",
             R.drawable.folio_wall_dither
         ),
         WallpaperPreset(
-            "folio-waves", "Foila Linux Waves",
+            "folio-waves", "Bliss Waves",
             "xfce4/wallpaper/presets/folio-waves.png", "wallpaper-folio-waves.png",
             R.drawable.folio_wall_waves
         ),
         WallpaperPreset(
-            "folio-beams", "Foila Linux Beams",
+            "folio-beams", "Bliss Beams",
             "xfce4/wallpaper/presets/folio-beams.png", "wallpaper-folio-beams.png",
             R.drawable.folio_wall_beams
         ),
         WallpaperPreset(
-            "folio-sakura", "Foila Linux Sakura",
+            "folio-sakura", "Bliss Sakura",
             "xfce4/wallpaper/presets/folio-sakura.png", "wallpaper-folio-sakura.png",
             R.drawable.folio_wall_sakura
         )
@@ -194,7 +194,7 @@ object AppearanceStore {
 
     /** Terminal color schemes (ids are persisted; colors are resolved app-side). */
     val TERMINAL_SCHEMES: List<TerminalScheme> = listOf(
-        TerminalScheme("folio-mono", "Foila Linux Mono", "#F4F4F5", "#09090B", "#A1A1AA", "#27272A", "255"),
+        TerminalScheme("folio-mono", "Bliss Mono", "#F4F4F5", "#09090B", "#A1A1AA", "#27272A", "255"),
         TerminalScheme("white-black", "White on Black", "#FFFFFF", "#000000", "#FFFFFF", "#333333", "255"),
         TerminalScheme("amber-crt", "Amber CRT", "#FFB000", "#0A0500", "#FFB000", "#3A2600", "214"),
         TerminalScheme("ice", "Ice", "#D6EEFF", "#060B12", "#7FD4FF", "#14304A", "117"),
@@ -976,8 +976,8 @@ object AppearanceStore {
         "[Desktop Entry]\n" +
             "Type=Application\n" +
             "Version=1.0\n" +
-            "Name=Foila Linux appearance\n" +
-            "Comment=Applies your Foila Linux wallpaper, colors and terminal settings at login.\n" +
+            "Name=Bliss appearance\n" +
+            "Comment=Applies your Bliss wallpaper, colors and terminal settings at login.\n" +
             "Exec=sh $GUEST_CFG/$GUEST_APPLY_SCRIPT\n" +
             "Terminal=false\n" +
             "StartupNotify=false\n" +

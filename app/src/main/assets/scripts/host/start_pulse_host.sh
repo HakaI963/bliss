@@ -83,7 +83,7 @@ else
 fi
 
 audio_fail() {
-  echo "Foila: [AUDIO] FAIL $*"
+  echo "Bliss: [AUDIO] FAIL $*"
   exit 0
 }
 
@@ -223,7 +223,7 @@ already_good() {
 }
 
 if already_good; then
-  echo "Foila: [AUDIO] already running sink=$(sink_name) tcp=127.0.0.1:4713"
+  echo "Bliss: [AUDIO] already running sink=$(sink_name) tcp=127.0.0.1:4713"
   exit 0
 fi
 
@@ -272,5 +272,5 @@ if ! tcp_bound_localhost_only || ! tcp_ok; then
   audio_fail "sink=$(sink_name) but tcp:127.0.0.1:4713 not reachable${TCP_LOAD_ERR:+ load=$TCP_LOAD_ERR}"
 fi
 
-echo "Foila: [AUDIO] sink=$(sink_name) tcp=127.0.0.1:4713"
+echo "Bliss: [AUDIO] sink=$(sink_name) tcp=127.0.0.1:4713"
 exit 0

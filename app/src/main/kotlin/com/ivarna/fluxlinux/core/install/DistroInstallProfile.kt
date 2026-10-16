@@ -146,7 +146,27 @@ data class DistroInstallProfile(
         const val ARCH_ROOTFS_MIN_BYTES = 40L * 1024L * 1024L
         const val ARCH_ROOTFS_URL = "$ROOTFS_RELEASE_BASE/$ARCH_ROOTFS_NAME"
 
+        // Rocky Linux 9 / CentOS Stream 9: official aarch64 container bases
+        // converted to plain rootfs and hosted on the HakaI963/folio `rootfs`
+        // release tag (sizes + sha256 verified against the hosted files).
+        const val RPM_ROOTFS_RELEASE_BASE =
+            "https://github.com/HakaI963/folio/releases/download/rootfs"
+
+        const val ROCKY_ROOTFS_NAME = "rocky_9_aarch64_plain.tar.xz"
+        const val ROCKY_ROOTFS_SHA256 =
+            "7af07eade178c80ad3d322940ec6064c566dd34a8cb7e931fcbf4a5e44c18611"
+        const val ROCKY_ROOTFS_MIN_BYTES = 40L * 1024L * 1024L
+        const val ROCKY_ROOTFS_URL = "$RPM_ROOTFS_RELEASE_BASE/$ROCKY_ROOTFS_NAME"
+
+        const val CENTOS_STREAM_ROOTFS_NAME = "centos_stream_9_aarch64_plain.tar.xz"
+        const val CENTOS_STREAM_ROOTFS_SHA256 =
+            "d9ba19e6647c99d0c4d1424dc4a7717f350943c485116423445a64b1faa65f9a"
+        const val CENTOS_STREAM_ROOTFS_MIN_BYTES = 30L * 1024L * 1024L
+        const val CENTOS_STREAM_ROOTFS_URL =
+            "$RPM_ROOTFS_RELEASE_BASE/$CENTOS_STREAM_ROOTFS_NAME"
+
         private const val XFCE_CUSTOM = "common/setup/setup_customization_xfce.sh"
+        private const val RPM_FAMILY = "rpm/common/setup/setup_rpm_family.sh"
         private const val HW_ACCEL_GUEST = "common/setup/setup_hw_accel_guest.sh"
         private const val GUEST_CHROOT_SETUP = "scripts/chroot/setup_guest_chroot.sh"
         private const val GUEST_CHROOT_UNINSTALL = "scripts/chroot/uninstall_guest_chroot.sh"
@@ -571,6 +591,36 @@ data class DistroInstallProfile(
             displayName = "Arch (Rooted)",
         )
 
+        private val ROCKY_PROOT = DistroInstallProfile(
+            distroId = "rocky",
+            prootName = "rocky",
+            method = "proot",
+            rootfsAsset = "rootfs/$ROCKY_ROOTFS_NAME",
+            rootfsFileName = ROCKY_ROOTFS_NAME,
+            rootfsSha256 = ROCKY_ROOTFS_SHA256,
+            rootfsMinBytes = ROCKY_ROOTFS_MIN_BYTES,
+            rootfsUrl = ROCKY_ROOTFS_URL,
+            familyScript = RPM_FAMILY,
+            customizationScript = XFCE_CUSTOM,
+            hwAccelScript = HW_ACCEL_GUEST,
+            displayName = "Rocky Linux",
+        )
+
+        private val CENTOS_STREAM_PROOT = DistroInstallProfile(
+            distroId = "centos_stream",
+            prootName = "centos_stream",
+            method = "proot",
+            rootfsAsset = "rootfs/$CENTOS_STREAM_ROOTFS_NAME",
+            rootfsFileName = CENTOS_STREAM_ROOTFS_NAME,
+            rootfsSha256 = CENTOS_STREAM_ROOTFS_SHA256,
+            rootfsMinBytes = CENTOS_STREAM_ROOTFS_MIN_BYTES,
+            rootfsUrl = CENTOS_STREAM_ROOTFS_URL,
+            familyScript = RPM_FAMILY,
+            customizationScript = XFCE_CUSTOM,
+            hwAccelScript = HW_ACCEL_GUEST,
+            displayName = "CentOS Stream",
+        )
+
         private val BY_ID: Map<String, DistroInstallProfile> = mapOf(
             "debian" to DEBIAN_PROOT,
             "debian13_chroot" to DEBIAN_CHROOT,
@@ -597,6 +647,8 @@ data class DistroInstallProfile(
             "parrot_chroot" to PARROT_CHROOT,
             "archlinux" to ARCH_PROOT,
             "archlinux_chroot" to ARCH_CHROOT,
+            "rocky" to ROCKY_PROOT,
+            "centos_stream" to CENTOS_STREAM_PROOT,
         )
 
         /** All profiles that ship a distinct rootfs archive (deduped by file name). */
@@ -604,6 +656,7 @@ data class DistroInstallProfile(
             DEBIAN_PROOT, ALPINE_PROOT, FEDORA_PROOT, VOID_PROOT, OPENSUSE_PROOT,
             DEEPIN_PROOT, CHIMERA_PROOT, MANJARO_PROOT,
             UBUNTU_PROOT, KALI_PROOT, PARROT_PROOT, ARCH_PROOT,
+            ROCKY_PROOT, CENTOS_STREAM_PROOT,
         )
 
         /** Installable cards in catalog order (proot then matching chroot). */
@@ -614,6 +667,7 @@ data class DistroInstallProfile(
             DEEPIN_CHROOT, CHIMERA_CHROOT, MANJARO_CHROOT,
             UBUNTU_PROOT, KALI_PROOT, PARROT_PROOT, ARCH_PROOT,
             UBUNTU_CHROOT, KALI_CHROOT, PARROT_CHROOT, ARCH_CHROOT,
+            ROCKY_PROOT, CENTOS_STREAM_PROOT,
         )
 
         fun forId(distroId: String): DistroInstallProfile? = BY_ID[distroId]

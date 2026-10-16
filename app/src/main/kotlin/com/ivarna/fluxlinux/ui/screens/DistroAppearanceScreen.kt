@@ -75,7 +75,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * Foila Linux appearance editor for one distro: wallpaper (presets / custom
+ * Bliss appearance editor for one distro: wallpaper (presets / custom
  * image + dim / solid / random), desktop accent, terminal colors + font size,
  * panel & dock opacity/icon size and an optional mpv-based video wallpaper.
  *
@@ -267,7 +267,7 @@ fun DistroAppearanceScreen(
                     FrostContainer {
                         Column(modifier = Modifier.padding(horizontal = 18.dp, vertical = 14.dp)) {
                             Text(
-                                "Foila Linux appearance",
+                                "Bliss appearance",
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = TextPrimary
@@ -968,7 +968,7 @@ fun DistroAppearanceScreen(
                                     color = TextPrimary
                                 )
                                 Text(
-                                    "Foila Linux Dark · Mono · Foila Linux Mono",
+                                    "Bliss Dark · Mono · Bliss Mono",
                                     fontSize = 12.sp,
                                     color = TextMuted,
                                     maxLines = 1

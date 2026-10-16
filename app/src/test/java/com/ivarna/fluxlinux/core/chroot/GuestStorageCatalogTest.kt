@@ -37,16 +37,22 @@ class GuestStorageCatalogTest {
         assertFalse(ids.contains("adelie"))
         assertFalse(ids.contains("gentoo"))
         assertFalse(ids.contains("artix"))
+        // EL9 cards are proot-only this round — no chroot hosting script.
+        assertFalse(ids.contains("rocky"))
+        assertFalse(ids.contains("centos_stream"))
     }
 
     @Test
-    fun installableProots_containsExactly12InstallableIds() {
+    fun installableProots_containsInstallableIds() {
         val distros = GuestStorageCatalog.installableProots()
-        assertEquals(12, distros.size)
+        // 14 proot cards (12 proot/chroot pairs + Rocky / CentOS Stream).
+        assertEquals(14, distros.size)
         val ids = distros.map { it.id }.toSet()
         assertTrue(ids.contains("debian"))
         assertTrue(ids.contains("alpine"))
         assertTrue(ids.contains("fedora"))
+        assertTrue(ids.contains("rocky"))
+        assertTrue(ids.contains("centos_stream"))
         assertFalse(ids.contains("debian13_chroot"))
     }
 
@@ -91,7 +97,7 @@ class GuestStorageCatalogTest {
         assertNull(GuestStorageCatalog.chrootPathOrNull(GuestStorageCatalog.ALL_CHROOT_ID))
         assertNull(GuestStorageCatalog.chrootPathOrNull(GuestStorageCatalog.ALL_PROOT_ID))
         assertNull(GuestStorageCatalog.chrootPathOrNull("debian")) // proot id
-        assertNull(GuestStorageCatalog.chrootPathOrNull("adelie")) // coming soon
+        assertNull(GuestStorageCatalog.chrootPathOrNull("adelie")) // proot-only, not shipped
         assertNull(GuestStorageCatalog.chrootPathOrNull(""))
         assertNull(GuestStorageCatalog.chrootPathOrNull("invalid_id"))
     }

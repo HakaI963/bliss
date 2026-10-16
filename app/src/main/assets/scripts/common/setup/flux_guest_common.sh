@@ -8,7 +8,7 @@ export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 unset LD_LIBRARY_PATH
 unset LD_PRELOAD
 
-_flux_log() { echo "Foila: $*"; }
+_flux_log() { echo "Bliss: $*"; }
 
 # Portable stat: GNU coreutils uses `-c %u`, BSD userland (Chimera) uses `-f %u`.
 _flux_stat_u() { stat -c %u "$1" 2>/dev/null || stat -f %u "$1" 2>/dev/null || true; }
@@ -143,7 +143,7 @@ _flux_repair_sudo_pam() {
             for _pam in /etc/pam.d/sudo /etc/pam.d/sudo-i; do
                 cat > "$_pam" <<'PAM'
 #%PAM-1.0
-# Foila proot: pam_unix/audit cannot run → sudo asks for a password.
+# Bliss proot: pam_unix/audit cannot run → sudo asks for a password.
 auth       sufficient pam_permit.so
 account    sufficient pam_permit.so
 password   sufficient pam_permit.so
@@ -180,12 +180,12 @@ _flux_ensure_sudo() {
         # 0400 root:root → "doas is not enabled, Permission denied" under proot.
         chmod 0644 /etc/doas.conf
         chown root:root /etc/doas.conf 2>/dev/null || true
-        # sudo shim so Foila wrappers (zshrc / scripts) keep working.
+        # sudo shim so Bliss wrappers (zshrc / scripts) keep working.
         if ! command -v sudo >/dev/null 2>&1; then
             mkdir -p /usr/local/bin
             cat > /usr/local/bin/sudo <<'EOF'
 #!/bin/sh
-# Foila shim: sudo -> doas (nopass flux).
+# Bliss shim: sudo -> doas (nopass flux).
 exec doas "$@"
 EOF
             chmod 755 /usr/local/bin/sudo
@@ -223,7 +223,7 @@ _flux_ensure_home() {
 #!/bin/sh
 export PULSE_SERVER=tcp:127.0.0.1
 [ -f "\$HOME/.Xresources" ] && xrdb "\$HOME/.Xresources"
-# Foila Linux appearance (wallpaper/colors/terminal; hash-guarded inside).
+# Bliss Linux appearance (wallpaper/colors/terminal; hash-guarded inside).
 [ -r "\$HOME/.config/folio/appearance-apply.sh" ] && sh "\$HOME/.config/folio/appearance-apply.sh" >/dev/null 2>&1 || true
 exec $_xs_de
 EOF
@@ -269,7 +269,7 @@ _flux_require_startxfce4() {
     if [ ! -e /usr/bin/startxfce4 ] && [ ! -e /usr/sbin/startxfce4 ] \
         && [ ! -e /usr/local/bin/startxfce4 ] \
         && ! command -v startxfce4 >/dev/null 2>&1; then
-        echo "Foila: ERROR: startxfce4 missing after desktop install"
+        echo "Bliss: ERROR: startxfce4 missing after desktop install"
         exit 1
     fi
 }
@@ -337,7 +337,7 @@ if [ -n "$_pick" ]; then
 else
   unset LC_ALL
   export LANG=C
-  echo "Foila: WARNING: no UTF-8 locale in locale -a; zsh staying LANG=C" >&2
+  echo "Bliss: WARNING: no UTF-8 locale in locale -a; zsh staying LANG=C" >&2
 fi
 unset _have _c _pick
 EOF
@@ -468,6 +468,8 @@ _flux_apt_prep() {
     mkdir -p /etc/apt/apt.conf.d
     printf 'APT::Sandbox::User "root";\nDPkg::Use-Pty "false";\n' \
         > /etc/apt/apt.conf.d/99flux-nosandbox
+    # Bliss: earliest common apt point — apply the quiet speed tuning now.
+    _flux_pick_fast_mirror
 }
 
 # Host Pulse in the app PREFIX. Guests are clients only (no guest daemon).
@@ -525,6 +527,281 @@ _flux_mask_pipewire_pulse() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Bliss: fastest-mirror picker (B2). Runs ONCE per install — from
+# `_flux_retry_pkg` (all families, before the largest transaction) and from
+# `_flux_apt_prep` (early apt tuning). A handful of candidate mirrors race with
+# a 256 KiB range GET each (`--max-time 4`, 200/206 only) and the fastest above
+# 50 KB/s wins; the guest PM is then pointed at it (apk / xbps / pacman) or gets
+# quiet retry/parallel tuning (apt / dnf). No winner, no curl, no writable
+# config → nothing at all is touched. Best-effort, never fatal.
+# ─────────────────────────────────────────────────────────────────────────────
+
+_flux_race_min_speed=51200
+
+# Race $@ URLs in parallel; sets _flux_race_winner (empty when none qualifies)
+# and _flux_race_speed. Quiet: failures / timeouts / non-2xx / slow never win.
+_flux_race_urls() {
+    _flux_race_winner=""
+    _flux_race_speed=""
+    [ "$#" -gt 0 ] || return 0
+    _rt="${TMPDIR:-/tmp}/bliss-race.$$"
+    mkdir -p "$_rt" 2>/dev/null || return 0
+    _ri=0
+    _rpids=""
+    for _ru in "$@"; do
+        _ri=$((_ri + 1))
+        (
+            curl -s -L -r 0-262143 --max-time 4 -o /dev/null \
+                -w '%{speed_download} %{http_code}' "$_ru" > "$_rt/$_ri" 2>/dev/null
+        ) &
+        _rpids="$_rpids $!"
+    done
+    # Per-PID waits only: a family script may have unrelated background jobs.
+    for _rp in $_rpids; do
+        wait "$_rp" 2>/dev/null || true
+    done
+    _ri=0
+    for _ru in "$@"; do
+        _ri=$((_ri + 1))
+        _rres=$(cat "$_rt/$_ri" 2>/dev/null || true)
+        _rspd=${_rres%% *}
+        _rcode=${_rres##* }
+        case "$_rcode" in 200|206) ;; *) continue ;; esac
+        case "$_rspd" in ''|*[!0-9.]*) continue ;; esac
+        awk -v s="$_rspd" -v m="$_flux_race_min_speed" 'BEGIN{exit !(s >= m)}' || continue
+        if [ -z "$_flux_race_winner" ] || \
+            awk -v s="$_rspd" -v b="$_flux_race_speed" 'BEGIN{exit !(s > b)}'; then
+            _flux_race_winner="$_ru"
+            _flux_race_speed="$_rspd"
+        fi
+    done
+    rm -rf "$_rt" 2>/dev/null || true
+    unset _rt _ri _rpids _rp _ru _rres _rspd _rcode
+    return 0
+}
+
+# Host[:port] of a URL for the one-line log.
+_flux_mirror_host() {
+    _mh="$1"
+    _mh="${_mh#*://}"
+    _mh="${_mh%%/*}"
+    printf '%s' "$_mh"
+    unset _mh
+}
+
+# apk (Alpine): race the pinned release's APKINDEX mirrors; the winner goes
+# first in /etc/apk/repositories with dl-cdn as fallback. Chimera (apk v3) is
+# skipped — its repos are not Alpine mirrors.
+_flux_apk_fast_mirror() {
+    [ -r /etc/alpine-release ] || return 0
+    _ver=$(cut -d. -f1,2 /etc/alpine-release 2>/dev/null)
+    case "$_ver" in ''|*[!0-9.]*) return 0 ;; esac
+    _arch=$(apk --print-arch 2>/dev/null || true)
+    case "$_arch" in ''|*[!a-zA-Z0-9_]*) _arch=$(uname -m 2>/dev/null || echo aarch64) ;; esac
+    _rel="v$_ver"
+    _flux_race_urls \
+        "https://mirrors.edge.kernel.org/alpine/$_rel/main/$_arch/APKINDEX.tar.gz" \
+        "https://mirror.leaseweb.com/alpine/$_rel/main/$_arch/APKINDEX.tar.gz" \
+        "https://mirrors.tuna.tsinghua.edu.cn/alpine/$_rel/main/$_arch/APKINDEX.tar.gz" \
+        "https://mirror.sjtu.edu.cn/alpine/$_rel/main/$_arch/APKINDEX.tar.gz" \
+        "https://dl-2.alpinelinux.org/alpine/$_rel/main/$_arch/APKINDEX.tar.gz"
+    if [ -n "$_flux_race_winner" ]; then
+        _base="${_flux_race_winner%%/alpine/*}"
+        echo "Bliss: fast mirror: $(_flux_mirror_host "$_base")"
+        _tmp="/etc/apk/repositories.bliss.$$"
+        if {
+            printf '%s\n' \
+                "$_base/alpine/$_rel/main" \
+                "$_base/alpine/$_rel/community" \
+                "https://dl-cdn.alpinelinux.org/alpine/$_rel/main" \
+                "https://dl-cdn.alpinelinux.org/alpine/$_rel/community"
+        } > "$_tmp" 2>/dev/null; then
+            mv -f "$_tmp" /etc/apk/repositories 2>/dev/null || rm -f "$_tmp" 2>/dev/null || true
+        fi
+        unset _base _tmp
+    fi
+    unset _ver _arch _rel
+    return 0
+}
+
+# xbps (Void): race current/<arch> repodata mirrors; the winner is written to
+# /etc/xbps.d/00-bliss-repository.conf. The stock repo file stays untouched, so
+# the default remains as fallback.
+_flux_xbps_fast_mirror() {
+    _adir="aarch64"
+    for _xf in /etc/xbps.d/*.conf /usr/share/xbps.d/*.conf; do
+        [ -f "$_xf" ] || continue
+        _xline=$(grep -m1 '^repository=' "$_xf" 2>/dev/null || true)
+        [ -n "$_xline" ] || continue
+        case "$_xline" in
+            */current/*)
+                _xdir=${_xline#*/current/}
+                _xdir=${_xdir%%/*}
+                [ -n "$_xdir" ] && _adir="$_xdir"
+                ;;
+        esac
+        break
+    done
+    _flux_race_urls \
+        "https://repo-default.voidlinux.org/current/$_adir/$_adir-repodata" \
+        "https://repo-fastly.voidlinux.org/current/$_adir/$_adir-repodata" \
+        "https://mirrors.servercentral.com/voidlinux/current/$_adir/$_adir-repodata" \
+        "https://mirror.clarkson.edu/voidlinux/current/$_adir/$_adir-repodata"
+    if [ -n "$_flux_race_winner" ]; then
+        _wbase="${_flux_race_winner%/$_adir-repodata}"
+        echo "Bliss: fast mirror: $(_flux_mirror_host "$_wbase")"
+        if mkdir -p /etc/xbps.d 2>/dev/null; then
+            {
+                printf '# Bliss: fastest mirror from a one-shot speed race.\n'
+                printf 'repository=%s\n' "$_wbase"
+            } > /etc/xbps.d/00-bliss-repository.conf 2>/dev/null || true
+        fi
+        unset _wbase
+    fi
+    unset _adir _xf _xline _xdir
+    return 0
+}
+
+# pacman Server template -> concrete core.db URL ($arch/$repo substituted).
+_flux_pacman_url() {
+    _pu=$1
+    _pu=$(printf '%s' "$_pu" | sed -e "s/\\\$arch/$2/g" -e 's/\$repo/core/g')
+    printf '%s/core.db' "${_pu%/}"
+    unset _pu
+}
+
+# pacman: Arch / Arch Linux ARM ONLY (Manjaro skipped — different URL scheme).
+# Races ALARM- or arch-pattern candidates plus up to 3 servers already in the
+# mirrorlist; the winner's Server line is put first, the original list below.
+_flux_pacman_fast_mirror() {
+    # Manjaro's mirrors use a different URL scheme — never touch its list.
+    _flux_is_manjaro 2>/dev/null && return 0
+    [ -f /etc/pacman.d/mirrorlist ] || return 0
+    _arch=$(uname -m 2>/dev/null || echo aarch64)
+    if grep -q 'archlinuxarm' /etc/pacman.d/mirrorlist 2>/dev/null; then
+        _c1='https://mirrors.tuna.tsinghua.edu.cn/archlinuxarm/$arch/$repo'
+        _c2='https://mirrors.ustc.edu.cn/archlinuxarm/$arch/$repo'
+        _c3='https://mirror.csclub.uwaterloo.ca/archlinuxarm/$arch/$repo'
+        _c4='http://mirror.archlinuxarm.org/$arch/$repo'
+    else
+        _c1='https://geo.mirror.pkgbuild.com/$repo/os/$arch'
+        _c2='https://mirror.rackspace.com/archlinux/$repo/os/$arch'
+        _c3='https://mirrors.kernel.org/archlinux/$repo/os/$arch'
+        _c4='https://mirrors.tuna.tsinghua.edu.cn/archlinux/$repo/os/$arch'
+    fi
+    _pf="${TMPDIR:-/tmp}/bliss-pacman.$$"
+    : > "$_pf" 2>/dev/null || return 0
+    for _ct in "$_c1" "$_c2" "$_c3" "$_c4"; do
+        _cu=$(_flux_pacman_url "$_ct" "$_arch")
+        grep -Fq "|$_cu" "$_pf" 2>/dev/null || printf '%s|%s\n' "$_ct" "$_cu" >> "$_pf"
+    done
+    _ml="${TMPDIR:-/tmp}/bliss-ml.$$"
+    grep -E '^[[:space:]]*Server[[:space:]]*=' /etc/pacman.d/mirrorlist 2>/dev/null \
+        | head -3 > "$_ml" 2>/dev/null || true
+    if [ -s "$_ml" ]; then
+        while IFS= read -r _srv; do
+            _srv=$(printf '%s' "${_srv#*=}" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+            case "$_srv" in http://*|https://*) ;; *) continue ;; esac
+            _cu=$(_flux_pacman_url "$_srv" "$_arch")
+            grep -Fq "|$_cu" "$_pf" 2>/dev/null || printf '%s|%s\n' "$_srv" "$_cu" >> "$_pf"
+        done < "$_ml"
+    fi
+    rm -f "$_ml" 2>/dev/null || true
+    _urls=$(sed -n 's/^[^|]*|//p' "$_pf" 2>/dev/null | tr '\n' ' ')
+    # shellcheck disable=SC2086
+    _flux_race_urls $_urls
+    if [ -n "$_flux_race_winner" ]; then
+        _wtpl=$(awk -F'|' -v u="$_flux_race_winner" '$2 == u { print $1; exit }' "$_pf")
+        if [ -n "$_wtpl" ]; then
+            echo "Bliss: fast mirror: $(_flux_mirror_host "$_wtpl")"
+            _mtmp="/etc/pacman.d/mirrorlist.bliss.$$"
+            {
+                printf '# Bliss: fastest mirror from a one-shot speed race.\n'
+                printf 'Server = %s\n' "$_wtpl"
+                grep -vF "Server = $_wtpl" /etc/pacman.d/mirrorlist 2>/dev/null || true
+            } > "$_mtmp" 2>/dev/null && mv -f "$_mtmp" /etc/pacman.d/mirrorlist 2>/dev/null \
+                || rm -f "$_mtmp" 2>/dev/null || true
+            unset _mtmp
+        fi
+        unset _wtpl
+    fi
+    rm -f "$_pf" 2>/dev/null || true
+    unset _arch _c1 _c2 _c3 _c4 _pf _ml _srv _cu _ct _urls
+    return 0
+}
+
+# apt: no mirror rewriting (deb822 complexity) — a quiet retry/timeout tuning
+# drop-in instead. No curl needed; runs even in a bare minirootfs.
+_flux_apt_fast_tuning() {
+    [ -d /etc/apt/apt.conf.d ] || return 0
+    cat > /etc/apt/apt.conf.d/99-bliss-fast 2>/dev/null <<'EOF'
+// Bliss: retry/timeout/parallel tuning (quiet, idempotent).
+Acquire::Retries "5";
+Acquire::http::Timeout "30";
+Acquire::https::Timeout "30";
+Acquire::Languages { "" };
+Acquire::Queue-Mode "access";
+EOF
+    chmod 0644 /etc/apt/apt.conf.d/99-bliss-fast 2>/dev/null || true
+    return 0
+}
+
+# dnf: max_parallel_downloads for both; fastestmirror only for dnf4.
+_flux_dnf_conf_add() {
+    _key=$1
+    _tmp="/etc/dnf/dnf.conf.bliss.$$"
+    awk -v add="$_key" '
+        BEGIN { done = 0 }
+        /^[[:space:]]*\[main\]/ && !done { print; print add; done = 1; next }
+        { print }
+        END { if (!done) { print "[main]"; print add } }
+    ' /etc/dnf/dnf.conf > "$_tmp" 2>/dev/null && mv -f "$_tmp" /etc/dnf/dnf.conf 2>/dev/null \
+        || rm -f "$_tmp" 2>/dev/null || true
+    unset _key _tmp
+}
+
+_flux_dnf_fast_tuning() {
+    [ -f /etc/dnf/dnf.conf ] || return 0
+    if command -v dnf5 >/dev/null 2>&1; then
+        grep -q '^max_parallel_downloads=' /etc/dnf/dnf.conf 2>/dev/null \
+            || _flux_dnf_conf_add 'max_parallel_downloads=10'
+    else
+        grep -q '^max_parallel_downloads=' /etc/dnf/dnf.conf 2>/dev/null \
+            || _flux_dnf_conf_add 'max_parallel_downloads=10'
+        grep -q '^fastestmirror=' /etc/dnf/dnf.conf 2>/dev/null \
+            || _flux_dnf_conf_add 'fastestmirror=True'
+    fi
+    return 0
+}
+
+# Dispatch: once per install; never fatal, never noisy. The guard is only set
+# when the chosen branch could actually act (so a curl-less early call can
+# still be followed by a successful pick once curl exists).
+_flux_pick_fast_mirror() {
+    [ -n "${_FLUX_FAST_MIRROR_DONE:-}" ] && return 0
+    if command -v apt-get >/dev/null 2>&1; then
+        _flux_apt_fast_tuning
+        _FLUX_FAST_MIRROR_DONE=1
+        return 0
+    fi
+    if command -v dnf5 >/dev/null 2>&1 || command -v dnf >/dev/null 2>&1; then
+        _flux_dnf_fast_tuning
+        _FLUX_FAST_MIRROR_DONE=1
+        return 0
+    fi
+    command -v curl >/dev/null 2>&1 || return 0
+    if command -v apk >/dev/null 2>&1; then
+        _flux_is_chimera 2>/dev/null || _flux_apk_fast_mirror
+    elif command -v xbps-install >/dev/null 2>&1; then
+        _flux_xbps_fast_mirror
+    elif command -v pacman >/dev/null 2>&1; then
+        _flux_pacman_fast_mirror
+    fi
+    _FLUX_FAST_MIRROR_DONE=1
+    return 0
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Required-package retry: flaky links abort a package transaction mid-download
 # (xbps/dnf/apt/pacman/zypper all do). `_flux_retry_pkg <cmd…>` runs the given
 # package command up to 3 tries, refreshing the metadata of whichever PM
@@ -553,6 +830,8 @@ _flux_pm_refresh() {
 }
 
 _flux_retry_pkg() {
+    # Bliss: one mirror race per install, before the first (largest) transaction.
+    _flux_pick_fast_mirror
     _retry_tries=3
     _retry_n=1
     _retry_rc=0
@@ -661,7 +940,7 @@ _flux_setup_pulse() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Foila Linux appearance: apply the app-staged wallpaper/colors/terminal config
+# Bliss Linux appearance: apply the app-staged wallpaper/colors/terminal config
 # (~/.config/folio/appearance.env + appearance-apply.sh, staged by the app).
 # No-op when the user never configured appearance. Forces ONE pass because
 # callers are install / script re-run paths that just rewrote the defaults.
@@ -1258,7 +1537,7 @@ EOF
     if [ -n "${_uid:-}" ]; then
         chown -R "$_uid:$_gid" "$_h/.config" 2>/dev/null || true
     fi
-    # Foila Linux appearance (staged by the app) — applied after the compact
+    # Bliss Linux appearance (staged by the app) — applied after the compact
     # defaults so the user's wallpaper/colors win. No-op when unconfigured.
     if command -v _flux_apply_folio_appearance >/dev/null 2>&1; then
         _flux_apply_folio_appearance "$_h" || true

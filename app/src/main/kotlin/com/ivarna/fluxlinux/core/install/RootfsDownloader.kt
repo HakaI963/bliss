@@ -4,8 +4,19 @@ import android.util.Log
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
+import java.io.RandomAccessFile
+import java.nio.ByteBuffer
+import java.nio.channels.FileChannel
 import java.security.MessageDigest
+import java.util.Collections
+import java.util.concurrent.Callable
+import java.util.concurrent.Executors
+import java.util.concurrent.Future
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.AtomicLongArray
+import okhttp3.Call
 import okhttp3.OkHttpClient
 import okhttp3.Request
 
@@ -16,9 +27,21 @@ import okhttp3.Request
  * Local-first (D7): a verified destination file or a verified local candidate
  * (same locations `flux_install.sh` searches) short-circuits before any network
  * access. Only then does it GET [DistroInstallProfile.rootfsUrl] from the
- * GitHub release tag `rootfs`, streaming into `<name>.partial` with HTTP Range
- * resume (D5), SHA256 + minimum-size gates (D4), cancellation, progress and a
+ * GitHub release tag `rootfs` into `<name>.partial` with HTTP Range resume
+ * (D5), SHA256 + minimum-size gates (D4), cancellation, progress and a
  * free-space precheck (D11).
+ *
+ * Speed (B1): the first request sends `Range: bytes=<existing>-`. When the
+ * server answers 206 with `Accept-Ranges: bytes`, a `Content-Range` that covers
+ * the remainder, and more than [PARALLEL_MIN_REMAINING_BYTES] left, that body
+ * becomes segment 0 and [PARALLEL_SEGMENTS]-1 more range requests run
+ * concurrently into one `RandomAccessFile` (positional
+ * `FileChannel.write(buf, position)`), each with its own retry/resume window.
+ * Progress is the sum of segment bytes, throttled to ~150 ms. The classic
+ * single-stream loop below is the fallback and stays byte-for-byte intact for
+ * 200-only servers, missing range headers, unknown/short totals, small
+ * remainders and any probe-like failure — no extra request is ever spent on
+ * probing. Every path still ends in [finishVerified].
  *
  * JVM-testable: dest directory + [OkHttpClient] are injected; no Android
  * [android.content.Context] is required in the core API.
@@ -32,6 +55,19 @@ object RootfsDownloader {
 
     /** Streaming buffer — a 127 MiB Manjaro archive is never loaded into memory. */
     private const val CHUNK_BYTES = 64 * 1024
+
+    /** Concurrent segments + minimum remainder worth racing (B1). */
+    private const val PARALLEL_SEGMENTS = 6
+    private const val PARALLEL_MIN_REMAINING_BYTES = 16L * 1024L * 1024L
+
+    /** Per-segment attempt budget; each attempt resumes at the bytes on disk. */
+    private const val SEGMENT_RETRIES = 3
+
+    /** Progress emit throttle — the UI callback reads the value directly. */
+    private const val PROGRESS_INTERVAL_NANOS = 150_000_000L
+
+    /** `Content-Range: bytes <start>-<end>/<total>` (total only, never `*`). */
+    private val CONTENT_RANGE_RE = Regex("""bytes\s+(\d+)-(\d+)/(\d+)""")
 
     data class Progress(
         val downloadedBytes: Long,
@@ -163,13 +199,23 @@ object RootfsDownloader {
     ): Boolean {
         val partial = File(destDir, archive.fileName + ".partial")
 
-        // Second iteration only runs after a 416 deleted the partial.
+        // Parallel segmented path (B1). The classic first request doubles as the
+        // probe: a 206 whose headers advertise byte ranges and a known total
+        // makes its body segment 0 while PARALLEL_SEGMENTS-1 more range requests
+        // run concurrently (no extra request is ever sent when ranges are
+        // unsupported — that response just streams single-threaded as before).
+        // `Range: bytes=<existing>-` is sent even for fresh downloads so a
+        // range-capable server can answer 206 with `Content-Range`.
         repeat(2) { attempt ->
             val existing = if (partial.isFile) partial.length() else 0L
             val request = Request.Builder()
                 .url(archive.url)
                 .apply {
-                    if (existing > 0L) {
+                    // Fresh download (attempt 0) still sends Range: bytes=0- so a
+                    // range-capable server answers 206 and the parallel path can
+                    // engage. The retry after a 416 is a clean full GET (old D5
+                    // behavior) — the partial is gone, so nothing to resume.
+                    if (existing > 0L || attempt == 0) {
                         header("Range", "bytes=$existing-")
                     }
                 }
@@ -202,6 +248,29 @@ object RootfsDownloader {
                         val body = resp.body ?: return false
                         val contentLength = body.contentLength()
                         val total = if (contentLength > 0L) existing + contentLength else -1L
+                        // Parallel upgrade (B1): the open-ended 206 covers the
+                        // whole remainder and its headers prove range support.
+                        // Its body becomes segment 0 (the surplus is dropped);
+                        // segments 1..5 are fetched concurrently.
+                        if (contentLength > PARALLEL_MIN_REMAINING_BYTES &&
+                            "bytes".equals(resp.header("Accept-Ranges"), ignoreCase = true) &&
+                            rangeCoversRemainder(
+                                resp.header("Content-Range"), existing, contentLength
+                            )
+                        ) {
+                            if (!checkFreeSpace(destDir, contentLength, archive.minBytes)) {
+                                return false
+                            }
+                            Log.i(
+                                TAG,
+                                "parallel download: $PARALLEL_SEGMENTS segments, " +
+                                    "total=$total existing=$existing"
+                            )
+                            return downloadParallel(
+                                dest, partial, archive, client, isCancelled, onProgress,
+                                total, existing, body
+                            )
+                        }
                         val remaining = if (contentLength > 0L) contentLength else -1L
                         if (!checkFreeSpace(destDir, remaining, archive.minBytes)) {
                             return false
@@ -268,6 +337,353 @@ object RootfsDownloader {
             return false
         }
         return true
+    }
+
+    /**
+     * One byte-range segment of the archive: absolute `[start, start + length)`.
+     */
+    private class Segment(val index: Int, val start: Long, val length: Long) {
+        val endInclusive: Long get() = start + length - 1
+    }
+
+    /**
+     * True when `Content-Range: bytes <start>-<end>/<total>` covers exactly
+     * `[existing, existing + contentLength)`: the open-ended request returned
+     * the whole remainder, so its body can serve as segment 0.
+     */
+    private fun rangeCoversRemainder(
+        header: String?,
+        existing: Long,
+        contentLength: Long
+    ): Boolean {
+        if (header == null) return false
+        val match = CONTENT_RANGE_RE.find(header.trim()) ?: return false
+        val start = match.groupValues[1].toLongOrNull() ?: return false
+        val end = match.groupValues[2].toLongOrNull() ?: return false
+        val total = match.groupValues[3].toLongOrNull() ?: return false
+        return start == existing && end == total - 1L &&
+            total == existing + contentLength && total > existing
+    }
+
+    /**
+     * Download the remaining `[existing, total)` bytes as [PARALLEL_SEGMENTS]
+     * concurrent byte-range streams into one positional-write
+     * [RandomAccessFile]. Segment 0 flows from [firstBody] — the already-open
+     * 206 response of the first request — so no extra request is spent on the
+     * probe; segments 1..[PARALLEL_SEGMENTS]-1 are Range GETs.
+     *
+     * - each worker retries up to [SEGMENT_RETRIES] times, resuming at the bytes
+     *   already written for its segment (`Range: bytes=<segStart+written>-<segEnd>`);
+     * - if the adopted segment-0 stream dies, its remainder is retried with a
+     *   normal Range request;
+     * - a permanent worker failure aborts and cancels every in-flight call;
+     * - cancellation is polled per chunk in every worker, which then cancels all
+     *   in-flight calls (stalled reads unblock via socket close);
+     * - on any failure the partial is truncated to the longest contiguous
+     *   downloaded prefix, so the existing `.partial` resume semantics hold.
+     *
+     * Success still funnels through [finishVerified] (size + SHA gate).
+     */
+    private fun downloadParallel(
+        dest: File,
+        partial: File,
+        archive: PinnedReleaseArchive,
+        client: OkHttpClient,
+        isCancelled: () -> Boolean,
+        onProgress: (Progress) -> Unit,
+        total: Long,
+        existing: Long,
+        firstBody: okhttp3.ResponseBody
+    ): Boolean {
+        val remaining = total - existing
+        val base = remaining / PARALLEL_SEGMENTS
+        val extra = remaining % PARALLEL_SEGMENTS
+        val segments = ArrayList<Segment>(PARALLEL_SEGMENTS)
+        var cursor = existing
+        for (i in 0 until PARALLEL_SEGMENTS) {
+            val length = base + if (i < extra) 1L else 0L
+            segments.add(Segment(i, cursor, length))
+            cursor += length
+        }
+
+        val written = AtomicLongArray(PARALLEL_SEGMENTS)
+        val bytesDone = AtomicLong(existing)
+        val aborted = AtomicBoolean(false)
+        val lastEmit = AtomicLong(0L)
+        val inFlight = Collections.synchronizedList(ArrayList<Call>())
+        onProgress(Progress(existing, total))
+
+        val raf = try {
+            RandomAccessFile(partial, "rw")
+        } catch (e: IOException) {
+            Log.e(TAG, "parallel download: cannot open ${partial.absolutePath}: ${e.message}")
+            return false
+        }
+        try {
+            // Preallocate once the total is known; positional writes then never
+            // race on file extension. A crash here leaves a full-size partial,
+            // which the next run's 416 handling discards (no corrupt resume).
+            raf.setLength(total)
+        } catch (e: IOException) {
+            Log.e(TAG, "parallel download: cannot preallocate ${partial.absolutePath}: ${e.message}")
+            closeQuietly(raf)
+            return false
+        }
+
+        val executor = Executors.newFixedThreadPool(PARALLEL_SEGMENTS)
+        var ok = true
+        try {
+            val futures = ArrayList<Future<Boolean>>(PARALLEL_SEGMENTS - 1)
+            for (i in 1 until PARALLEL_SEGMENTS) {
+                val segment = segments[i]
+                futures.add(
+                    executor.submit(
+                        Callable {
+                            runSegment(
+                                segment, raf.channel, archive.url, client, isCancelled,
+                                aborted, inFlight, written, bytesDone, total, lastEmit, onProgress
+                            )
+                        }
+                    )
+                )
+            }
+            // Segment 0 streams from the response we already hold; only its
+            // remainder needs a new Range request if the stream dies early.
+            var segment0Ok = readBodyIntoSegment(
+                segments[0], firstBody, raf.channel, isCancelled, aborted, inFlight,
+                written, bytesDone, total, lastEmit, onProgress
+            )
+            if (!segment0Ok && !aborted.get() && !isCancelled()) {
+                Log.i(TAG, "segment 0: adopted 206 body ended early — resuming via Range")
+                segment0Ok = runSegment(
+                    segments[0], raf.channel, archive.url, client, isCancelled,
+                    aborted, inFlight, written, bytesDone, total, lastEmit, onProgress
+                )
+            }
+            if (!segment0Ok) {
+                ok = false
+                aborted.set(true)
+                cancelInFlight(inFlight)
+            }
+            for (future in futures) {
+                val segmentOk = try {
+                    future.get()
+                } catch (e: Exception) {
+                    false
+                }
+                if (!segmentOk) {
+                    ok = false
+                    aborted.set(true)
+                    cancelInFlight(inFlight)
+                }
+            }
+        } finally {
+            executor.shutdownNow()
+        }
+
+        if (ok && !aborted.get() && !isCancelled()) {
+            closeQuietly(raf)
+            // Final tick — the throttle may have skipped the last chunk.
+            onProgress(Progress(bytesDone.get(), total))
+            return finishVerified(dest, partial, archive)
+        }
+
+        // Truncate to the contiguous prefix (segments fill in order, so this is
+        // the first incomplete segment's start + its written bytes).
+        var completed = 0
+        while (completed < segments.size && written.get(completed) == segments[completed].length) {
+            completed++
+        }
+        val watermark =
+            if (completed >= segments.size) total
+            else segments[completed].start + written.get(completed)
+        try {
+            raf.setLength(watermark)
+        } catch (_: IOException) {
+        }
+        closeQuietly(raf)
+        Log.w(TAG, "parallel download incomplete — partial truncated to $watermark for resume")
+        return false
+    }
+
+    /**
+     * Stream an already-open response body into one segment (the adopted 206
+     * response). Returns true when the segment filled; a shorter read leaves the
+     * remainder for [runSegment]'s Range retry.
+     */
+    @Suppress("LongParameterList")
+    private fun readBodyIntoSegment(
+        segment: Segment,
+        body: okhttp3.ResponseBody,
+        channel: FileChannel,
+        isCancelled: () -> Boolean,
+        aborted: AtomicBoolean,
+        inFlight: MutableList<Call>,
+        written: AtomicLongArray,
+        bytesDone: AtomicLong,
+        total: Long,
+        lastEmit: AtomicLong,
+        onProgress: (Progress) -> Unit
+    ): Boolean {
+        try {
+            body.byteStream().use { input ->
+                val buf = ByteArray(CHUNK_BYTES)
+                while (true) {
+                    if (isCancelled() || aborted.get()) {
+                        if (isCancelled()) {
+                            aborted.set(true)
+                            cancelInFlight(inFlight)
+                        }
+                        return false
+                    }
+                    val position = segment.start + written.get(segment.index)
+                    val left = segment.endInclusive - position + 1
+                    if (left <= 0L) break
+                    val want = minOf(buf.size.toLong(), left).toInt()
+                    val read = input.read(buf, 0, want)
+                    if (read == -1) break
+                    writeFully(channel, ByteBuffer.wrap(buf, 0, read), position)
+                    written.addAndGet(segment.index, read.toLong())
+                    bytesDone.addAndGet(read.toLong())
+                    maybeEmitProgress(bytesDone, total, lastEmit, onProgress)
+                }
+            }
+        } catch (e: IOException) {
+            Log.w(TAG, "segment 0: adopted body failed: ${e.message}")
+        }
+        return written.get(segment.index) >= segment.length
+    }
+
+    /**
+     * Download one segment with up to [SEGMENT_RETRIES] attempts. Returns true
+     * only when the segment is fully on disk; a permanent failure also aborts
+     * and cancels every in-flight call.
+     */
+    @Suppress("LongParameterList")
+    private fun runSegment(
+        segment: Segment,
+        channel: FileChannel,
+        url: String,
+        client: OkHttpClient,
+        isCancelled: () -> Boolean,
+        aborted: AtomicBoolean,
+        inFlight: MutableList<Call>,
+        written: AtomicLongArray,
+        bytesDone: AtomicLong,
+        total: Long,
+        lastEmit: AtomicLong,
+        onProgress: (Progress) -> Unit
+    ): Boolean {
+        var attempt = 0
+        while (attempt < SEGMENT_RETRIES) {
+            attempt++
+            if (isCancelled()) {
+                aborted.set(true)
+                cancelInFlight(inFlight)
+                return false
+            }
+            if (aborted.get()) return false
+            val done = written.get(segment.index)
+            if (done >= segment.length) return true
+            val from = segment.start + done
+            val request = Request.Builder()
+                .url(url)
+                .header("Range", "bytes=$from-${segment.endInclusive}")
+                .build()
+            val call = client.newCall(request)
+            inFlight.add(call)
+            try {
+                call.execute().use { resp ->
+                    if (resp.code != 206) {
+                        Log.w(TAG, "segment ${segment.index}: HTTP ${resp.code}")
+                    } else {
+                        val body = resp.body
+                        if (body != null) {
+                            body.byteStream().use { input ->
+                                val buf = ByteArray(CHUNK_BYTES)
+                                while (true) {
+                                    if (isCancelled() || aborted.get()) {
+                                        if (isCancelled()) {
+                                            aborted.set(true)
+                                            cancelInFlight(inFlight)
+                                        }
+                                        return false
+                                    }
+                                    val position = segment.start + written.get(segment.index)
+                                    val left = segment.endInclusive - position + 1
+                                    if (left <= 0L) break
+                                    val want = minOf(buf.size.toLong(), left).toInt()
+                                    val read = input.read(buf, 0, want)
+                                    if (read == -1) break
+                                    writeFully(channel, ByteBuffer.wrap(buf, 0, read), position)
+                                    written.addAndGet(segment.index, read.toLong())
+                                    bytesDone.addAndGet(read.toLong())
+                                    maybeEmitProgress(bytesDone, total, lastEmit, onProgress)
+                                }
+                            }
+                        }
+                        if (written.get(segment.index) >= segment.length) return true
+                        Log.w(
+                            TAG,
+                            "segment ${segment.index}: short read " +
+                                "(${written.get(segment.index)}/${segment.length})"
+                        )
+                    }
+                }
+            } catch (e: IOException) {
+                if (aborted.get() || isCancelled()) return false
+                Log.w(
+                    TAG,
+                    "segment ${segment.index}: ${e.message} (attempt $attempt/$SEGMENT_RETRIES)"
+                )
+            } finally {
+                inFlight.remove(call)
+            }
+        }
+        aborted.set(true)
+        cancelInFlight(inFlight)
+        Log.e(TAG, "segment ${segment.index}: giving up after $SEGMENT_RETRIES attempts")
+        return false
+    }
+
+    /** Positional write loop — [FileChannel.write] may be short. */
+    private fun writeFully(channel: FileChannel, buffer: ByteBuffer, position: Long) {
+        var pos = position
+        while (buffer.hasRemaining()) {
+            pos += channel.write(buffer, pos)
+        }
+    }
+
+    /** Throttled progress emit (~[PROGRESS_INTERVAL_NANOS]); cheap for the UI. */
+    private fun maybeEmitProgress(
+        bytesDone: AtomicLong,
+        total: Long,
+        lastEmit: AtomicLong,
+        onProgress: (Progress) -> Unit
+    ) {
+        val now = System.nanoTime()
+        val last = lastEmit.get()
+        if (now - last < PROGRESS_INTERVAL_NANOS) return
+        if (!lastEmit.compareAndSet(last, now)) return
+        onProgress(Progress(bytesDone.get(), total))
+    }
+
+    private fun cancelInFlight(calls: MutableList<Call>) {
+        synchronized(calls) {
+            for (call in calls) {
+                try {
+                    call.cancel()
+                } catch (_: Exception) {
+                }
+            }
+        }
+    }
+
+    private fun closeQuietly(raf: RandomAccessFile) {
+        try {
+            raf.close()
+        } catch (_: IOException) {
+        }
     }
 
     /**

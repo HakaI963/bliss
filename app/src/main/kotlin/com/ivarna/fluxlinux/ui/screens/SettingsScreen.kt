@@ -248,7 +248,7 @@ fun SettingsScreen(
                 FrostRow(
                     icon = Icons.Default.History,
                     title = "Legacy Termux",
-                    subtitle = "Leftover installs from Foila Linux ≤ v1.8.0",
+                    subtitle = "Leftover installs from app versions ≤ v1.8.0",
                     onClick = { onNavigateToLegacyTermuxSettings?.invoke() }
                 )
             }
@@ -344,7 +344,7 @@ fun SettingsScreen(
                 }
                 FrostRow(
                     icon = Icons.Default.Person,
-                    title = "About Foila Linux",
+                    title = "About Bliss",
                     subtitle = "Author no_piece",
                     onClick = {},
                     chevron = false
@@ -379,7 +379,7 @@ fun SettingsScreen(
 }
 
 /**
- * Hero: "Foila Linux" wordmark, build-version chip, and a live device-status
+ * Hero: "Bliss" wordmark, build-version chip, and a live device-status
  * line reusing existing reads only (root probe + shared-storage grant).
  */
 @Composable
@@ -418,7 +418,7 @@ private fun SettingsHero(
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
                 Text(
-                    text = "Foila Linux",
+                    text = "Bliss",
                     style = FolioWordmarkStyle,
                     color = TextPrimary
                 )

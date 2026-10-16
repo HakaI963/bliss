@@ -823,7 +823,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                // Helper for Top Bar — Foila: wordmark + frost status pill only.
+                // Helper for Top Bar — Bliss: wordmark + frost status pill only.
                 @Composable
                 fun TopBar(
                     hazeState: HazeState,
@@ -851,7 +851,7 @@ class MainActivity : ComponentActivity() {
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "Foila Linux",
+                                text = "Bliss",
                                 style = com.ivarna.fluxlinux.ui.theme.FolioWordmarkStyle,
                                 color = MaterialTheme.colorScheme.onBackground
                             )
@@ -1254,7 +1254,7 @@ class MainActivity : ComponentActivity() {
                                            currentScreen = Screen.INSTALL_WIZARD
                                        },
                                      onUninstallDistro = {
-                                         // Embedded uninstall: proot → proot-distro remove in Foila
+                                         // Embedded uninstall: proot → proot-distro remove in Bliss
                                          // Terminal; chroot → uninstall_debian13_chroot.sh in Root Shell.
                                          val distro = selectedDistro ?: return@DistroSettingsScreen
                                          com.ivarna.fluxlinux.core.terminal.TerminalLauncher.prepareHost(
@@ -1320,7 +1320,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-// ── Foila navigation motion ─────────────────────────────────────────────────
+// ── Bliss navigation motion ─────────────────────────────────────────────────
 // Depth model: root routes (onboarding/home tabs) = 0, settings hubs = 1,
 // their detail pages + desktop/install/terminal full-screen flows = 2. Push
 // enters from the right, pop from the left (15% width + fade, 240ms); same-depth

@@ -38,7 +38,7 @@ object DistroRepository {
         DistroComponent(
             id = "customization",
             name = "XFCE4 Customization",
-            description = "Foila Linux theme, wallpapers, fonts, and 2x scaling for XFCE4.",
+            description = "Bliss theme, wallpapers, fonts, and 2x scaling for XFCE4.",
             scriptName = "debian/common/setup/setup_customization_debian.sh",
             sizeEstimate = "200 MB"
         ),
@@ -52,7 +52,7 @@ object DistroRepository {
         DistroComponent(
             id = "kde_customization",
             name = "KDE Desktop Customization",
-            description = "Foila Linux theme, Papirus icons, wallpapers & Zsh for KDE Plasma.",
+            description = "Bliss theme, Papirus icons, wallpapers & Zsh for KDE Plasma.",
             scriptName = "debian/common/setup/setup_customization_kde_debian.sh",
             sizeEstimate = "250 MB"
         ),
@@ -145,8 +145,7 @@ object DistroRepository {
             name = "Retro Emulation",
             description = "RetroArch, various emulator cores.",
             scriptName = "debian/common/setup/setup_emulation_debian.sh",
-            sizeEstimate = "1 GB",
-            comingSoon = true
+            sizeEstimate = "1 GB"
         )
     )
 
@@ -171,7 +170,7 @@ object DistroRepository {
         DistroComponent(
             id = "customization",
             name = "XFCE4 Customization",
-            description = "Foila Linux theme, wallpapers, fonts, and Zsh for Alpine.",
+            description = "Bliss theme, wallpapers, fonts, and Zsh for Alpine.",
             scriptName = "alpine/common/setup/setup_customization_alpine.sh",
             sizeEstimate = "150 MB"
         )
@@ -197,7 +196,7 @@ object DistroRepository {
         DistroComponent(
             id = "customization",
             name = "XFCE4 Customization",
-            description = "Foila Linux theme, Papirus icons, Nerd Font, and Zsh.",
+            description = "Bliss theme, Papirus icons, Nerd Font, and Zsh.",
             scriptName = "common/setup/setup_customization_xfce.sh",
             sizeEstimate = "150 MB"
         )
@@ -232,6 +231,13 @@ object DistroRepository {
     )
     private val archlinuxComponents = glibcXfceComponents(
         "arch/common/setup/setup_arch_family.sh"
+    )
+
+    // Rocky Linux / CentOS Stream (EL9, dnf/EPEL) — PRoot only. No KDE
+    // component: DesktopInstallSelection already falls back KDE → XFCE when a
+    // card carries no kde_plasma component.
+    private val rpmComponents = glibcXfceComponents(
+        "rpm/common/setup/setup_rpm_family.sh"
     )
 
     val supportedDistros = listOf(
@@ -529,78 +535,29 @@ object DistroRepository {
             components = archlinuxComponents
         ),
         
-        // Coming Soon - Sorted alphabetically
         Distro(
-            id = "adelie",
-            name = "Adélie Linux",
-            description = "Independent Linux distribution committed to integrity and simplicity.",
-            color = Color(0xFF9C27B0),
-            iconRes = R.drawable.distro_adelie,
-            comingSoon = true,
-            prootSupported = false, // no i686 support
-            chrootSupported = true
-        ),
-        Distro(
-            id = "artix",
-            name = "Artix Linux",
-            description = "Arch-based distribution without systemd.",
-            color = Color(0xFF10A0CC),
-            iconRes = R.drawable.distro_artix,
-            comingSoon = true,
-            prootSupported = true, // aarch64 only
-            chrootSupported = true
-        ),
-        Distro(
-            id = "backbox",
-            name = "BackBox",
-            description = "Ubuntu-based distribution for penetration testing.",
-            color = Color(0xFF000000),
-            iconRes = R.drawable.distro_backbox,
-            comingSoon = true,
-            prootSupported = false, // Not in proot-distro
-            chrootSupported = true
+            id = "rocky",
+            name = "Rocky Linux",
+            description = "Rocky Linux 9 with dnf/EPEL and XFCE4 (proot).",
+            color = Color(0xFF10B981),
+            iconRes = R.drawable.distro_rocky,
+            comingSoon = false,
+            prootSupported = true,
+            chrootSupported = false,
+            configuration = SupportedDistro.ROCKY,
+            components = rpmComponents
         ),
         Distro(
             id = "centos_stream",
             name = "CentOS Stream",
-            description = "Continuously delivered distro that tracks ahead of RHEL.",
+            description = "CentOS Stream 9 with dnf/EPEL and XFCE4 (proot).",
             color = Color(0xFF262577),
             iconRes = R.drawable.distro_centos_stream,
-            comingSoon = true,
-            prootSupported = false, // Not in proot-distro
-            chrootSupported = true
-        ),
-
-        Distro(
-            id = "gentoo",
-            name = "Gentoo",
-            description = "Flexible, source-based Linux distribution.",
-            color = Color(0xFF54487A),
-            iconRes = R.drawable.distro_gentoo,
-            comingSoon = true,
-            prootSupported = false, // Not in proot-distro
-            chrootSupported = true
-        ),
-        Distro(
-            id = "openkylin",
-            name = "OpenKylin",
-            description = "Community-driven Linux distribution from China.",
-            color = Color(0xFF0066CC),
-            iconRes = R.drawable.distro_openkylin,
-            comingSoon = true,
-            prootSupported = false, // Not in proot-distro
-            chrootSupported = true
-        ),
-
-        Distro(
-            id = "rocky",
-            name = "Rocky Linux",
-            description = "Enterprise-grade Linux distribution.",
-            color = Color(0xFF10B981),
-            iconRes = R.drawable.distro_rocky,
-            comingSoon = true,
-            prootSupported = true, // only 64bit
-            chrootSupported = true
+            comingSoon = false,
+            prootSupported = true,
+            chrootSupported = false,
+            configuration = SupportedDistro.CENTOS_STREAM,
+            components = rpmComponents
         ),
     )
 

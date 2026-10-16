@@ -37,7 +37,7 @@ import com.ivarna.fluxlinux.ui.theme.TextPrimary
 import com.ivarna.fluxlinux.ui.theme.TextSecondary
 
 /**
- * Foila active-desktop card: single frost container.
+ * Bliss active-desktop card: single frost container.
  * Primary white "Open X11" pill + ghost "Copy Log" / "Stop" pills.
  * No neon accents.
  */

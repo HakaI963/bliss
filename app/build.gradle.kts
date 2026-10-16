@@ -25,8 +25,8 @@ android {
         // app targets 28 like Termux. bash/proot/loader/pulse stay pinned to
         // nativeLibraryDir (jniLibs) as belt-and-braces for future targetSdk bumps.
         targetSdk = 28
-        versionCode = 13
-        versionName = "2.0.1"
+        versionCode = 14
+        versionName = "3.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -34,7 +34,7 @@ android {
         }
     }
 
-    // App-id flavors: ivarna (F-Droid/GitHub) + zenithblue (Play) + folio (separate app by no_piece).
+    // App-id flavors: ivarna (F-Droid/GitHub) + zenithblue (Play) + bliss (separate app by no_piece).
     // Host bootstrap + jniLibs ship per flavor from native/bootstrap/<applicationId>/
     // staged by :app:packageHostAssets* (runs scripts/package_host_assets.sh).
     flavorDimensions += "store"
@@ -50,9 +50,9 @@ android {
             dimension = "store"
             applicationId = "com.zenithblue.fluxlinux"
         }
-        create("folio") {
+        create("bliss") {
             dimension = "store"
-            applicationId = "com.nopiece.folio"
+            applicationId = "com.nopiece.bliss"
             ndk { abiFilters += listOf("arm64-v8a") }
         }
     }
@@ -162,7 +162,7 @@ tasks.withType<AbstractArchiveTask>().configureEach {
 // Package host assets per flavor (Pass 2 fail-closed gate, plan P0-T6/T7)
 //   :app:packageHostAssetsIvarna     — stages native/bootstrap/com.ivarna.fluxlinux
 //   :app:packageHostAssetsZenithblue — stages native/bootstrap/com.zenithblue.fluxlinux
-//   :app:packageHostAssetsFolio       — stages native/bootstrap/com.nopiece.folio (separate app)
+//   :app:packageHostAssetsBliss      — stages native/bootstrap/com.nopiece.bliss (separate app)
 // Fails assemble with a clear error when bootstrap.tar / jniLibs are missing.
 // Rootfs archives are NOT packaged: the selected distro's rootfs is downloaded
 // on demand from the GitHub release tag `rootfs` at install time
@@ -171,7 +171,7 @@ tasks.withType<AbstractArchiveTask>().configureEach {
 val flavorAppIds = mapOf(
     "ivarna" to "com.ivarna.fluxlinux",
     "zenithblue" to "com.zenithblue.fluxlinux",
-    "folio" to "com.nopiece.folio"
+    "bliss" to "com.nopiece.bliss"
 )
 
 // assets/loader.apk is built from native/loader/Loader.java by

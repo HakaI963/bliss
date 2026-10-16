@@ -1,4 +1,4 @@
-name: Build Folio APK
+name: Build Bliss APK
 
 on:
   push:
@@ -44,25 +44,25 @@ jobs:
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/29.0.14206865" >> "$GITHUB_ENV"
           sdkmanager --list_installed
 
-      - name: Assemble host bootstrap (ivarna + repack folio separate app)
+      - name: Assemble host bootstrap (ivarna + repack bliss separate app)
         run: |
           python3 scripts/assemble_bootstrap.py --package-name com.ivarna.fluxlinux
           ./scripts/verify_bootstrap.sh com.ivarna.fluxlinux
           chmod +x scripts/repack_bootstrap_for_appid.sh
-          ./scripts/repack_bootstrap_for_appid.sh com.ivarna.fluxlinux com.nopiece.folio
-          ./scripts/verify_bootstrap.sh com.nopiece.folio
+          ./scripts/repack_bootstrap_for_appid.sh com.ivarna.fluxlinux com.nopiece.bliss
+          ./scripts/verify_bootstrap.sh com.nopiece.bliss
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Build debug APK (folio flavor, separate app com.nopiece.folio)
-        run: ./gradlew assembleFolioDebug --stacktrace
+      - name: Build debug APK (bliss flavor, separate app com.nopiece.bliss)
+        run: ./gradlew assembleBlissDebug --stacktrace
         env:
           ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_HOME }}
 
       - name: Verify APK (targetSdk 28, bootstrap + jniLibs packaged)
         run: |
-          APK=$(ls app/build/outputs/apk/folio/debug/*.apk | head -n 1)
+          APK=$(ls app/build/outputs/apk/bliss/debug/*.apk | head -n 1)
           AAPT=$(ls "$ANDROID_HOME"/build-tools/*/aapt | head -n 1)
           echo "APK: $APK"
           "$AAPT" dump badging "$APK" | grep -E "^package:|sdkVersion|targetSdkVersion"
@@ -73,6 +73,6 @@ jobs:
         uses: actions/upload-artifact@v4
         continue-on-error: true
         with:
-          name: folio-debug-apk
-          path: app/build/outputs/apk/folio/debug/*.apk
+          name: bliss-debug-apk
+          path: app/build/outputs/apk/bliss/debug/*.apk
           if-no-files-found: warn

@@ -166,7 +166,7 @@ object InstallSessionFactory {
         return openHostScriptSession(
             ctx,
             "flux_install.sh",
-            title = "${profile.displayName} Install (Foila Linux Terminal)",
+            title = "${profile.displayName} Install (Bliss Terminal)",
             args = args,
             onFinished = onFinished,
             extraEnv = mapOf(

@@ -20,7 +20,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Folio"
+rootProject.name = "Bliss"
 include(":app")
 include(":termux-x11")
 include(":terminal-emulator")

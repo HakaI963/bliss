@@ -112,7 +112,7 @@ success "Uninstallation Complete!"
 
 mount -t tracefs tracefs /sys/kernel/tracing 2>/dev/null || true
 
-progress "Notifying Foila App..."
+progress "Notifying Bliss App..."
 /system/bin/am start -a android.intent.action.VIEW \
     -d "fluxlinux://callback?result=success&name=distro_uninstall_alpine_chroot" \
     >/dev/null 2>&1 || true

@@ -1,5 +1,5 @@
 #!/bin/sh
-# uninstall_guest_chroot.sh — remove a Foila guest chroot (Requires Root)
+# uninstall_guest_chroot.sh — remove a Bliss guest chroot (Requires Root)
 # Target from FLUX_CHROOT (must be set). Does not remove shared fluxlinux_chroot.sh.
 
 GUESTPATH="${FLUX_CHROOT:-}"

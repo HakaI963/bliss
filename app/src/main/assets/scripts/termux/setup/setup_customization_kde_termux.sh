@@ -1,11 +1,11 @@
 #!/bin/bash
 # ============================================================
-# Foila — Native Termux KDE Plasma Customization
+# Bliss — Native Termux KDE Plasma Customization
 # Location: termux/setup/setup_customization_kde_termux.sh
 # Runs on: HOST Termux (native, no container)
 # Root required: no
 #
-# Applies Foila dark theme to native Termux KDE Plasma:
+# Applies Bliss dark theme to native Termux KDE Plasma:
 # - Breeze Dark color scheme
 # - Papirus-Dark icon theme
 # - KWin compositing disabled (stability + performance)
@@ -17,7 +17,7 @@ CALLBACK_NAME="kde_customization"
 
 handle_error() {
     echo ""
-    echo "❌ Foila Error: Script failed at step: $1"
+    echo "❌ Bliss Error: Script failed at step: $1"
     echo "---------------------------------------------------"
     echo "Please check the error message above for details."
     echo "---------------------------------------------------"
@@ -27,7 +27,7 @@ handle_error() {
 
 echo ""
 echo "══════════════════════════════════════════════"
-echo "  Foila — KDE Customization (Native)"
+echo "  Bliss — KDE Customization (Native)"
 echo "══════════════════════════════════════════════"
 echo ""
 
@@ -67,7 +67,7 @@ echo " [✅] Wallpaper ready"
 
 # ── Step 3: Theme selection ───────────────────────────────
 if [ -n "$FLUX_THEME" ]; then
-    echo "Foila: Auto-applying Theme: $FLUX_THEME"
+    echo "Bliss: Auto-applying Theme: $FLUX_THEME"
     if [ "$FLUX_THEME" = "light" ]; then
         THEME_CHOICE="2"
     else
@@ -104,7 +104,7 @@ WALLPAPER_DESKTOP_PATH="$HOME/.local/share/wallpapers/Folio/contents.jpg"
 mkdir -p "$KDE_CONFIG" "$HOME/.local/share/wallpapers/Folio"
 cp "$WALLPAPER_PATH" "$WALLPAPER_DESKTOP_PATH" 2>/dev/null || WALLPAPER_DESKTOP_PATH="$WALLPAPER_PATH"
 
-echo "Foila: Writing kdeglobals..."
+echo "Bliss: Writing kdeglobals..."
 cat > "$KDE_CONFIG/kdeglobals" << EOF
 [General]
 ColorScheme=$KDE_COLOR_SCHEME
@@ -133,14 +133,14 @@ ScaleFactor=2
 activeFont=Noto Sans,10,-1,5,700,0,0,0,0,0
 EOF
 
-echo "Foila: Writing kcminputrc..."
+echo "Bliss: Writing kcminputrc..."
 cat > "$KDE_CONFIG/kcminputrc" << EOF
 [Mouse]
 cursorSize=24
 cursorTheme=breeze_cursors
 EOF
 
-echo "Foila: Writing kwinrc..."
+echo "Bliss: Writing kwinrc..."
 cat > "$KDE_CONFIG/kwinrc" << 'EOF'
 [Compositing]
 Backend=QPainter
@@ -171,13 +171,13 @@ library=org.kde.breeze
 theme=Breeze
 EOF
 
-echo "Foila: Writing plasmarc..."
+echo "Bliss: Writing plasmarc..."
 cat > "$KDE_CONFIG/plasmarc" << EOF
 [Theme]
 name=$KDE_PLASMA_THEME
 EOF
 
-echo "Foila: Writing Plasma desktop config..."
+echo "Bliss: Writing Plasma desktop config..."
 cat > "$KDE_CONFIG/plasma-org.kde.plasma.desktop-appletsrc" << EOF
 [Containments][1]
 ItemGeometriesHorizontal=
@@ -229,7 +229,7 @@ plugin=org.kde.plasma.showdesktop
 AppletOrder=3;4;5;6;7
 EOF
 
-echo "Foila: Writing keyboard shortcuts..."
+echo "Bliss: Writing keyboard shortcuts..."
 cat > "$KDE_CONFIG/kglobalshortcutsrc" << 'EOF'
 [kwin]
 Show Desktop=Meta+D,Meta+D,Show Desktop
@@ -250,13 +250,13 @@ NewWindow=Ctrl+N,Ctrl+N,New Window
 _launch=none,none,KDE Plasma Desktop
 EOF
 
-echo "Foila: Writing font DPI config..."
+echo "Bliss: Writing font DPI config..."
 cat > "$KDE_CONFIG/kcmfonts" << 'EOF'
 [General]
 forceFontDPI=192
 EOF
 
-echo "Foila: Configuring Konsole..."
+echo "Bliss: Configuring Konsole..."
 cat > "$HOME/.local/share/konsole/Folio.profile" << 'EOF'
 [Appearance]
 ColorScheme=Breeze
@@ -265,7 +265,7 @@ antialias=true
 
 [General]
 Command=/data/data/com.termux/files/usr/bin/bash
-Name=Foila
+Name=Bliss
 Parent=FALLBACK/
 
 [Interaction Options]

@@ -12,7 +12,7 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * Foila's local crash recorder.
+ * Bliss's local crash recorder.
  *
  * Installed as the process-wide uncaught-exception handler from [FluxApp.onCreate],
  * before MIUI's reporter takes the process. Every uncaught exception is written
@@ -25,7 +25,7 @@ import java.util.Locale
  */
 object CrashLog {
 
-    private const val TAG = "Foila"
+    private const val TAG = "Bliss"
     private const val DIR_NAME = "crashlog"
     private const val PREFIX = "crash-"
     private const val SUFFIX = ".txt"
@@ -66,7 +66,7 @@ object CrashLog {
         val trace = StringWriter().also { error.printStackTrace(PrintWriter(it)) }.toString()
         file.writeText(
             buildString {
-                appendLine("Foila Linux crash report")
+                appendLine("Bliss crash report")
                 appendLine("time: ${Date()}")
                 appendLine("version: ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
                 appendLine(

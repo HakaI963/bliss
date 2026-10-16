@@ -16,6 +16,9 @@ object HostBootstrap {
 
     const val IVARNA_PACKAGE = "com.ivarna.fluxlinux"
     const val ZENITHBLUE_PACKAGE = "com.zenithblue.fluxlinux"
+    const val BLISS_PACKAGE = "com.nopiece.bliss"
+
+    /** Legacy applicationId (pre-Bliss rename); kept so old copies still resolve. */
     const val FOLIO_PACKAGE = "com.nopiece.folio"
 
     val IVARNA = PinnedReleaseArchive(
@@ -32,8 +35,8 @@ object HostBootstrap {
         minBytes = 50L * 1024L * 1024L
     )
 
-    // Foila ships assets/bootstrap.tar like the other flavors; the release tag
-    // has no folio tar yet, so its repair fallback reuses the ivarna tar
+    // Bliss ships assets/bootstrap.tar like the other flavors; the release tag
+    // has no bliss tar yet, so its repair fallback reuses the ivarna tar
     // (same usr/ payload; prefix is rewritten at extract time).
     val FOLIO = PinnedReleaseArchive(
         fileName = IVARNA.fileName,
@@ -45,6 +48,8 @@ object HostBootstrap {
     fun forApplicationId(applicationId: String): PinnedReleaseArchive =
         when (applicationId) {
             ZENITHBLUE_PACKAGE -> ZENITHBLUE
+            BLISS_PACKAGE -> FOLIO
+            // Legacy com.nopiece.folio id — same flavor before the Bliss rename.
             FOLIO_PACKAGE -> FOLIO
             else -> IVARNA
         }

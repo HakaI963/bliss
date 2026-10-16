@@ -216,7 +216,7 @@ fun InstallConfigScreen(
         if (terminalOnly) {
             append(" as a terminal base (no desktop). ")
         } else {
-            append(", and Foila Linux theming. ")
+            append(", and Bliss theming. ")
         }
         append("App modules can be added later from Distro Settings.")
     }
@@ -250,7 +250,7 @@ fun InstallConfigScreen(
                     xfceSelected && kdeSelected ->
                         "XFCE4 + KDE Plasma theming / wallpapers / Zsh"
                     kdeSelected -> "KDE Plasma theming / wallpapers / Zsh"
-                    else -> "Foila Linux theme / wallpapers / fonts"
+                    else -> "Bliss theme / wallpapers / fonts"
                 }
             )
         }

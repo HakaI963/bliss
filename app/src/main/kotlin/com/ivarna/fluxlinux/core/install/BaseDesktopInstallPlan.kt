@@ -81,7 +81,7 @@ object BaseDesktopInstallPlan {
     }
 
     private fun customizationPhaseLabel(terminalOnly: Boolean): String =
-        if (terminalOnly) "Finalizing install…" else "Applying Foila Linux customization…"
+        if (terminalOnly) "Finalizing install…" else "Applying Bliss customization…"
 
     /**
      * Family/base setup payload. [desktops] are the `FLUX_DESKTOPS` contract

@@ -90,25 +90,25 @@ RESOLVER_SRC="$TERMUX_HOME/resolve_bb.sh"
 RESOLVER_TMP="/data/local/folio/helpers/fluxlinux_resolve_bb.sh"
 
 echo "========================================"
-echo "Foila: START XFCE (chroot mode)"
+echo "Bliss: START XFCE (chroot mode)"
 echo "  distro=$DISTRO_HINT path=$CHROOT_PATH"
 echo "========================================"
 
 # Preflight chroot
 if [ ! -d "$CHROOT_PATH" ]; then
-  echo "Foila: ERROR — chroot not found at $CHROOT_PATH"
+  echo "Bliss: ERROR — chroot not found at $CHROOT_PATH"
   echo "Install rooted distro from onboarding or Distros."
   exit 1
 fi
 if [ ! -f "$CHROOT_PATH/.flux_configured" ] && \
    [ ! -e "$CHROOT_PATH/usr/bin/startxfce4" ] && \
    [ ! -e "$CHROOT_PATH/usr/sbin/startxfce4" ]; then
-  echo "Foila: ERROR — chroot incomplete (no .flux_configured / startxfce4)."
+  echo "Bliss: ERROR — chroot incomplete (no .flux_configured / startxfce4)."
   echo "Re-run base desktop install for the rooted distro."
   exit 1
 fi
 if [ ! -f "$ROOT_GUI_SCRIPT" ]; then
-  echo "Foila: ERROR — missing $ROOT_GUI_SCRIPT (HostScriptDeployer failed?)"
+  echo "Bliss: ERROR — missing $ROOT_GUI_SCRIPT (HostScriptDeployer failed?)"
   exit 1
 fi
 # Stage SSOT helper for root guest script (if present)
@@ -126,7 +126,7 @@ pkill -f termux-x11 2>/dev/null || true
 pkill -f "app_process.*termux-x11" 2>/dev/null || true
 sleep 1
 
-# Host Pulse (app uid) before su. Supervisor prints Foila: [AUDIO] …
+# Host Pulse (app uid) before su. Supervisor prints Bliss: [AUDIO] …
 if [ -x "$TERMUX_HOME/start_pulse_host.sh" ]; then
   bash "$TERMUX_HOME/start_pulse_host.sh" || true
 elif command -v start_pulse_host.sh >/dev/null 2>&1; then
@@ -135,17 +135,17 @@ fi
 
 # VirGL optional
 if command -v virgl_test_server_android >/dev/null; then
-  echo "Foila: Starting VirGL server..."
+  echo "Bliss: Starting VirGL server..."
   virgl_test_server_android --socket-path "$TERMUX_PREFIX/tmp/.virgl_test" >/dev/null 2>&1 &
   sleep 2
-  test -S "${TMPDIR}/.virgl_test" && echo "Foila: VirGL socket ready" \
-    || echo "Foila: [WARN] VirGL socket not found"
+  test -S "${TMPDIR}/.virgl_test" && echo "Bliss: VirGL socket ready" \
+    || echo "Bliss: [WARN] VirGL socket not found"
 else
-  echo "Foila: VirGL unavailable; software GL in guest"
+  echo "Bliss: VirGL unavailable; software GL in guest"
 fi
 
 # Embedded termux-x11 (same as proot start_gui.sh)
-echo "Foila: Starting termux-x11 server..."
+echo "Bliss: Starting termux-x11 server..."
 export XDG_RUNTIME_DIR="$TMPDIR"
 export DISPLAY=:0
 
@@ -165,13 +165,13 @@ if [ -z "$TERMUX_X11_APK_PATH" ] || [ ! -f "$TERMUX_X11_APK_PATH" ]; then
   TERMUX_X11_APK_PATH=$(/system/bin/find /data/app -name "base.apk" -path "*$PKG*" 2>/dev/null | head -1)
 fi
 export TERMUX_X11_APK_PATH
-echo "Foila: APK path = $TERMUX_X11_APK_PATH"
+echo "Bliss: APK path = $TERMUX_X11_APK_PATH"
 
 APP_LIB_DIR="/data/data/$PKG/lib"
 mkdir -p "$APP_LIB_DIR" 2>/dev/null
 # Re-extract when the APK is newer, else an app update keeps running the old X server.
 if { [ ! -f "$APP_LIB_DIR/libXlorie.so" ] || [ "$TERMUX_X11_APK_PATH" -nt "$APP_LIB_DIR/libXlorie.so" ]; } && [ -n "$TERMUX_X11_APK_PATH" ]; then
-  echo "Foila: Extracting libXlorie.so..."
+  echo "Bliss: Extracting libXlorie.so..."
   ( cd "$APP_LIB_DIR" && \
     unzip -o "$TERMUX_X11_APK_PATH" 'lib/arm64-v8a/libXlorie.so' 2>/dev/null && \
     mv -f lib/arm64-v8a/libXlorie.so . && rm -rf lib ) || \
@@ -211,12 +211,12 @@ while [ ! -S "$TMPDIR/.X11-unix/X0" ] && [ "$_i" -lt 30 ] && kill -0 "$XSERVER_P
   _i=$((_i + 1))
 done
 if [ ! -S "$TMPDIR/.X11-unix/X0" ] || ! kill -0 "$XSERVER_PID" 2>/dev/null; then
-  echo "Foila: [ERROR] X server did not create $TMPDIR/.X11-unix/X0 within 15s (or exited)."
+  echo "Bliss: [ERROR] X server did not create $TMPDIR/.X11-unix/X0 within 15s (or exited)."
   exit 1
 fi
-echo "Foila: host X0 socket ready (X server PID=$XSERVER_PID)"
+echo "Bliss: host X0 socket ready (X server PID=$XSERVER_PID)"
 
-echo "Foila: Opening X11 activity..."
+echo "Bliss: Opening X11 activity..."
 am start -n "$PKG/com.termux.x11.MainActivity" \
   --activity-single-top \
   --activity-clear-top 2>/dev/null || \
@@ -224,7 +224,7 @@ am start -n "$PKG/com.termux.x11.MainActivity" 2>/dev/null
 sleep 1
 
 # Root stage: copy to /data/local/folio/helpers (SELinux / exec-safe) then su
-echo "Foila: Entering chroot as root..."
+echo "Bliss: Entering chroot as root..."
 cp -f "$ROOT_GUI_SCRIPT" "$ROOT_GUI_TMP" 2>/dev/null || true
 if [ -f "$HELPER_SRC" ]; then
   cp -f "$HELPER_SRC" "$HELPER_TMP" 2>/dev/null || true
@@ -266,5 +266,5 @@ else
     FLUX_BB='${FLUX_BB:-}' FLUX_RESOLVE_BB='$RESOLVER_TMP' sh '$ROOT_GUI_TMP'"
 fi
 rc=$?
-echo "Foila: chroot GUI exit=$rc"
+echo "Bliss: chroot GUI exit=$rc"
 exit $rc

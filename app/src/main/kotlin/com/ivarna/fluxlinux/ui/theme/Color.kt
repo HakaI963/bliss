@@ -6,7 +6,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 
-// Foila monochrome frost palette — matte deep carbon, no neon, no beige.
+// Bliss monochrome frost palette — matte deep carbon, no neon, no beige.
 val FolioBackground = Color(0xFF09090B)
 val FolioSurface = Color(0xFF101013)
 val FolioCard = Color(0xFF18181B)
@@ -35,7 +35,7 @@ val FolioSwitchUncheckedThumb = Color(0xFFE4E4E7)
 val FolioSwitchUncheckedBorder = Color(0xFF52525B)
 
 // Deprecated Flux aliases — mapped to monochrome so legacy call sites keep compiling.
-// Do not use in new Foila UI.
+// Do not use in new Bliss UI.
 @Deprecated("Use TextPrimary", ReplaceWith("TextPrimary"))
 val FluxCream = TextPrimary
 @Deprecated("Use TextPrimary", ReplaceWith("TextPrimary"))

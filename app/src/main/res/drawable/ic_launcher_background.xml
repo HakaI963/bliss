@@ -1,5 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Adaptive-icon background: diagonal 3-stop gradient
+     deep indigo -> violet -> soft pink (top-left to bottom-right). -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
     android:shape="rectangle">
-    <solid android:color="#1A1C1E" />
+    <gradient
+        android:type="linear"
+        android:angle="315"
+        android:startColor="#FF14162B"
+        android:centerColor="#FF5B3DF5"
+        android:endColor="#FFFF9ED2" />
 </shape>

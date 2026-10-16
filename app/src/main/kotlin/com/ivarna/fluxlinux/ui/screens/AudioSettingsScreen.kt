@@ -165,7 +165,7 @@ fun AudioSettingsScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Text(
-                "Host PulseAudio in the Foila Linux prefix. Guests connect with PULSE_SERVER=tcp:127.0.0.1. Stopping the desktop does not stop this service.",
+                "Host PulseAudio in the Bliss prefix. Guests connect with PULSE_SERVER=tcp:127.0.0.1. Stopping the desktop does not stop this service.",
                 fontSize = 13.sp,
                 color = fluxMutedText(),
                 modifier = Modifier.staggerIn(0, entrance)

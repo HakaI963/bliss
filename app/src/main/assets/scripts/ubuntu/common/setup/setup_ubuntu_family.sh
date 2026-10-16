@@ -22,10 +22,10 @@ fi
 # Never install ubuntu-desktop / do-release-upgrade / PPAs.
 
 DISTRO_NAME="${1:-ubuntu}"
-echo "Foila: Configuring ${DISTRO_NAME} (Ubuntu Family)..."
+echo "Bliss: Configuring ${DISTRO_NAME} (Ubuntu Family)..."
 
 if [ "$(id -u)" -ne 0 ]; then
-    echo "Foila: ERROR: must run as root inside the guest (got uid=$(id -u))."
+    echo "Bliss: ERROR: must run as root inside the guest (got uid=$(id -u))."
     exit 1
 fi
 
@@ -38,7 +38,7 @@ _flux_disable_guest_selinux
 _flux_apt_prep
 
 if ! command -v apt-get >/dev/null 2>&1; then
-    echo "Foila: ERROR: apt-get not found"
+    echo "Bliss: ERROR: apt-get not found"
     exit 1
 fi
 
@@ -68,7 +68,7 @@ _flux_log "apt-get update..."
 if ! apt-get update; then
     _flux_log "apt-get update failed once — retrying (ports.ubuntu.com only)"
     apt-get update || {
-        echo "Foila: apt-get update failed (repos/network)"
+        echo "Bliss: apt-get update failed (repos/network)"
         exit 1
     }
 fi
@@ -78,7 +78,7 @@ apt-get install -y --no-install-recommends \
     bash sudo passwd adduser ca-certificates curl wget unzip tar xz-utils \
     git zsh python3 locales \
     dbus dbus-x11 || {
-        echo "Foila: base package install failed"
+        echo "Bliss: base package install failed"
         exit 1
     }
 
@@ -107,7 +107,7 @@ if [ -z "${DESKTOPS##*xfce*}" ]; then
         libgl1-mesa-dri libegl1 mesa-utils; then
         _flux_log "targeted XFCE install failed — falling back to xfce4 metapackage"
         _flux_retry_pkg apt-get install -y --no-install-recommends xfce4 || {
-            echo "Foila: XFCE install failed after 3 tries — check your network, then tap Retry Setup."
+            echo "Bliss: XFCE install failed after 3 tries — check your network, then tap Retry Setup."
             exit 1
         }
     fi
@@ -144,5 +144,5 @@ if [ -z "${DESKTOPS##*xfce*}" ] && command -v _flux_xfce_compact_defaults >/dev/
     _flux_xfce_compact_defaults || true
 fi
 
-echo "Foila: ${DISTRO_NAME} Ubuntu setup complete!"
+echo "Bliss: ${DISTRO_NAME} Ubuntu setup complete!"
 exit 0

@@ -16,7 +16,7 @@ if [ -z "${TARGET_PREFIX:-}" ]; then
 fi
 
 echo "========================================"
-echo "Foila: Stopping Chroot XFCE"
+echo "Bliss: Stopping Chroot XFCE"
 echo "========================================"
 
 # resolve root BusyBox (manager built-in; NDK module not required)
@@ -58,7 +58,7 @@ if [ -z "${BB:-}" ]; then
   fi
 fi
 if [ -z "${BB:-}" ]; then
-  echo "Foila: ERROR — root-capable busybox not found" >&2
+  echo "Bliss: ERROR — root-capable busybox not found" >&2
   exit 1
 fi
 
