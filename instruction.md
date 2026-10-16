@@ -15,9 +15,9 @@ Quick facts:
 | App id / brand | `com.nopiece.folio` / "Folio Linux" |
 | Source package | `com.ivarna.fluxlinux` |
 | Branch | `main` |
-| Latest green CI | run `38854972100` (commit `77e2c0a`) |
-| Released APK | [`folio-debug-77e2c0a`](https://github.com/HakaI963/folio/releases/tag/folio-debug-77e2c0a) `app-folio-debug.apk` (170,584,378 B) |
-| APK sha256 | `07fbaf19a3d2e512f7652b58b649422df0defa562678691f2cd0e156ea47ddc3` |
+| Latest green CI | run `38887109342` (commit `7b4b67a`) |
+| Released APK | [`folio-debug-7b4b67a`](https://github.com/HakaI963/folio/releases/tag/folio-debug-7b4b67a) `app-folio-debug.apk` (172,213,440 B) |
+| APK sha256 | `385c7727e536ff3ba8fa9681aca93cfb982313d56411a1c4549e0b994dacdc75` |
 | Verify APK proof | package `com.nopiece.folio`, `targetSdkVersion 28`, `assets/bootstrap.tar` packaged, libbash/libproot/libloader*.so packaged |
 | Signing | debug only (per-run keystore — uninstall before re-install) |
 | CI gate | `.github/workflows/build.yml` compiles **main sources only** (`assembleFolioDebug` + bootstrap assembly + Verify APK). Unit tests are not part of the gate. |
@@ -243,9 +243,9 @@ The historical "verify before restarting" checklist is fully resolved: nav crash
 
 ## 10. Next steps (ordered)
 
-1. **Commit + push round 3** (changed files only; artifacts excluded).
-2. **CI compile + "Verify APK"** — fix anything that surfaces (main sourceset only).
-3. **Release** `folio-debug-<commit>`; update §0 quick facts.
+1. ~~Commit + push round 3~~ — **done** (`3958b42` code+docs, `1fbd805` splash-color fix, `7b4b67a` compile fixes).
+2. ~~CI compile + "Verify APK"~~ — **green** (run `38887109342`).
+3. ~~Release~~ — **done**: [`folio-debug-7b4b67a`](https://github.com/HakaI963/folio/releases/tag/folio-debug-7b4b67a).
 4. **On-device QA** (cannot be done in this environment):
    - **Install flow**: pick a distro → toggle XFCE/KDE (any combo) → install; press back mid-install → task bar keeps showing live phase/percent; tap it → real progress; Cancel install → bar shows "Install cancelled".
    - **Terminal**: "+" opens instantly, lists only installed guests (Show all reveals the rest); open two sessions → pill tabs switch/close; tools sheet new keys; create a custom key (text + combo), pin it, reorder/resize in the bar editor, long-press a key; reset.
@@ -261,7 +261,7 @@ The historical "verify before restarting" checklist is fully resolved: nav crash
 
 - Round 1: CI green with "Verify APK" passing — **done** (run `38776662519`); release `folio-debug-33c97e9` published.
 - Round 2: CI green + release — **done** (run `38854972100`, release `folio-debug-77e2c0a`).
-- Round 3 (this push): CI green + release `folio-debug-<commit>` — **pending §10.1–10.3**.
+- Round 3: CI green + release — **done** (run `38887109342`, release `folio-debug-7b4b67a`; two pre-CI fixes: 10-digit splash colors, missing `collectAsState` import + stray string constant).
 - Every item in §4, §4b, §4c marked DONE — **done** (on-device confirmation is §10.4).
 - Branding: "Folio Linux" everywhere user-visible; residuals are functional identifiers / short `Folio:` guest prefixes only.
 - Working tree verified locally by: `bash -n` on all 89 scripts, import-resolution sweep + nested-comment-aware brace/paren scanner on all 176 `.kt`, byte-identical diff guard for `host/setup_termux.sh`, sandbox runs (XFCE two-panel XML idempotent + valid; appearance applier 60/60 bash+dash + 20/20 e2e), cross-file signature checks for every refactored API (`TerminalScreen`, `TerminalExtraKeys`/`ShortcutBarConfig`, `InstallTaskBar`/`InstallationQueueManager`, `OnboardingInstallRunner.start(desktops)`, `AppearanceStore`/`AppearanceLiveApply`, `Frost`/`Motion`).
