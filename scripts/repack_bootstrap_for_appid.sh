@@ -3,10 +3,12 @@
 # The .debs in native/output/<src-id>/ are prefix-pinned, so assembling directly
 # for a new id fails (assert_no_wrong_prefix). Instead: copy the assembled
 # root tree, rename data/data/<src> -> data/data/<dst>, rewrite the prefix in
-# text files, patch every baked `data/data/<src-id>` byte string (ELF constants
-# are NUL-terminated — the whole string is rewritten with NUL padding so the
-# file never grows), patchelf RUNPATH in jniLibs, and repack bootstrap.tar
-# reproducibly. Verifies jniLibs/root carry zero old-id references before exit.
+# text files, patch every baked `src-id` byte string (ELF constants and RUNPATH
+# entries are NUL-terminated — the enclosing string is rewritten with NUL
+# padding so the file never grows), and repack bootstrap.tar reproducibly.
+# No patchelf: the byte patcher is deterministic and version-independent
+# (patchelf left stale strings behind on the CI runner).
+# Verifies jniLibs/root carry zero old-id references before exit.
 #
 # Usage:
 #   ./scripts/repack_bootstrap_for_appid.sh com.ivarna.fluxlinux com.nopiece.bliss
@@ -34,29 +36,14 @@ grep -rlI "$SRC_ID" "$DST/root" | while read -r f; do
   sed -i "s|$SRC_ID|$DST_ID|g" "$f"
 done
 
-# jniLibs: copy + rewrite RUNPATH to new prefix.
+# jniLibs: copy only — RUNPATH (a plain NUL-terminated string in .dynstr) is
+# rewritten by the byte patcher below, exactly like every other baked path.
+# Do NOT use patchelf here: its behavior/layout differs across versions and it
+# can leave stale strings behind (CI failure, round 5) — the byte patcher is
+# deterministic and was verified to keep ELFs valid (readelf: RUNPATH updated).
 mkdir -p "$DST/jniLibs/arm64-v8a"
 cp -f "$SRC/jniLibs/arm64-v8a/"*.so "$DST/jniLibs/arm64-v8a/"
 chmod 755 "$DST/jniLibs/arm64-v8a/"*.so || true
-# Root-tree ELFs (usr/bin, usr/lib) also carry RUNPATH with the old prefix.
-if command -v patchelf >/dev/null 2>&1 && command -v readelf >/dev/null 2>&1; then
-  for f in $(find "$DST/root/data/data/$DST_ID/files/usr" -type f 2>/dev/null); do
-    if readelf -d "$f" 2>/dev/null | grep -q "$SRC_ID"; then
-      patchelf --set-rpath "/data/data/$DST_ID/files/usr/lib" "$f" 2>/dev/null || true
-    fi
-  done
-  for so in "$DST/jniLibs/arm64-v8a/"*.so; do
-    if readelf -d "$so" 2>/dev/null | grep -q "$SRC_ID"; then
-      patchelf --set-rpath "/data/data/$DST_ID/files/usr/lib" "$so"
-    fi
-  done
-elif command -v patchelf >/dev/null 2>&1; then
-  for so in "$DST/jniLibs/arm64-v8a/"*.so; do
-    patchelf --set-rpath "/data/data/$DST_ID/files/usr/lib" "$so" 2>/dev/null || true
-  done
-else
-  echo "WARNING: patchelf not found — RUNPATH still points at $SRC_ID" >&2
-fi
 
 # ── Binary-safe prefix patch (A1) ───────────────────────────────────────────
 # Text files were rewritten above with sed; ELF / binary string constants in
@@ -73,8 +60,12 @@ import stat
 import sys
 
 src_id, dst_id, dst = sys.argv[1], sys.argv[2], sys.argv[3]
-src_pat = b"data/data/" + src_id.encode()
-dst_pat = b"data/data/" + dst_id.encode()
+# Patch the BARE id. Every baked anchor contains it (paths, RUNPATHs, app-id
+# strings); patching only the wider `data/data/<id>` form left stale strings on
+# the CI toolchain (round-5 failure), while the bare form is still exact enough
+# — the rewrite keeps every byte after the occurrence inside its string.
+src_pat = src_id.encode()
+dst_pat = dst_id.encode()
 MAX_BYTES = 64 * 1024 * 1024
 
 if len(dst_pat) > len(src_pat):
