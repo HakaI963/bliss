@@ -6,9 +6,14 @@
 # text files, patch every baked `src-id` byte string (ELF constants and RUNPATH
 # entries are NUL-terminated — the enclosing string is rewritten with NUL
 # padding so the file never grows), and repack bootstrap.tar reproducibly.
+# Files whose id occurrences are not plain C strings (marshal/frozen blobs,
+# pyc caches, packed tables) and Python program/stdlib data are RETAINED
+# unchanged — byte-padding those corrupts them (round 5: CPython
+# "Frozen object named 'posixpath' is invalid" from patched libpython).
 # No patchelf: the byte patcher is deterministic and version-independent
 # (patchelf left stale strings behind on the CI runner).
-# Verifies jniLibs/root carry zero old-id references before exit.
+# Verifies jniLibs/root carry zero old-id references (retained exceptions
+# excluded) before exit.
 #
 # Usage:
 #   ./scripts/repack_bootstrap_for_appid.sh com.ivarna.fluxlinux com.nopiece.bliss
@@ -125,8 +130,53 @@ patched_root = 0
 patched_jni = 0
 occurrences = 0
 skipped_large = 0
+retained = []
 scanned = 0
 seen = set()
+
+
+def is_nul_bounded(data, i):
+    """True when the occurrence at `i` sits inside a NUL-terminated printable
+    run on BOTH sides (a real C string)."""
+    st = i
+    while st > 0 and 32 <= data[st - 1] < 127:
+        st -= 1
+    en = i + len(src_pat)
+    while en < len(data) and 32 <= data[en] < 127:
+        en += 1
+    left = st == 0 or data[st - 1] == 0
+    right = en == len(data) or data[en] == 0
+    return left and right
+
+
+def has_unsafe_occurrence(data):
+    """True when any occurrence is NOT a plain NUL-terminated C string.
+    Marshal/pickle/frozen-module blobs and packed tables are length-prefixed;
+    rewriting them with NUL padding corrupts the data (round 5: CPython died
+    with "Frozen object named 'posixpath' is invalid" from the patched
+    libpython frozen-module blob). Such files are retained unchanged."""
+    i = data.find(src_pat)
+    while i != -1:
+        if not is_nul_bounded(data, i):
+            return True
+        i = data.find(src_pat, i + 1)
+    return False
+
+
+def is_protected_data(path):
+    """Python program + stdlib + pyc caches: bytecode/frozen blobs are
+    length-prefixed marshal data; prefix strings inside them are harmless and
+    worked unpatched in earlier rounds. Belt-and-braces next to the
+    occurrence-shape gate above."""
+    rel = path.replace(os.sep, "/")
+    return (
+        "/usr/lib/libpython" in rel
+        or "/usr/lib/python3" in rel
+        or "/usr/bin/python3" in rel
+        or rel.endswith(".pyc")
+    )
+
+
 for path in collect_files():
     try:
         st = os.lstat(path)
@@ -152,6 +202,15 @@ for path in collect_files():
             data = fh.read()
     except OSError:
         continue
+    if data.count(src_pat) == 0:
+        continue
+    if b"\x00" not in data:
+        # Text file: the grep/sed pass owns these. Patching here would pad
+        # the whole file (no NULs to bound the span).
+        continue
+    if is_protected_data(path) or has_unsafe_occurrence(data):
+        retained.append(path)
+        continue
     new_data, hits, changed = patch_buffer(data)
     if not changed or new_data == data:
         continue
@@ -167,12 +226,21 @@ for path in collect_files():
     else:
         patched_root += 1
 
+retained_file = os.path.join(dst, ".repack-retained.txt")
+with open(retained_file, "w") as fh:
+    fh.write("\n".join(sorted(retained)))
+    if retained:
+        fh.write("\n")
+
 print(
     "[*] binary prefix patch: %d file(s) patched (%d root, %d jniLibs), "
-    "%d occurrence(s); scanned %d, skipped %d >64MiB"
+    "%d occurrence(s); scanned %d, skipped %d >64MiB, retained %d file(s) "
+    "with non-string data"
     % (patched_root + patched_jni, patched_root, patched_jni, occurrences,
-       scanned, skipped_large)
+       scanned, skipped_large, len(retained))
 )
+for p in sorted(retained):
+    print("    retained (prefix left as-is): " + os.path.relpath(p, dst))
 PYEOF
 _patch_rc=$?
 set -e
@@ -184,19 +252,28 @@ fi
 # ── Verification (A1) ───────────────────────────────────────────────────────
 # No old-id reference may survive in jniLibs (binary scan). The root tree is
 # checked too — the sed rewrite + binary patch must have removed every one.
+# Files the patcher deliberately RETAINED (non-string data, e.g. CPython's
+# frozen-module blob) are the only accepted exceptions.
 _verify_fail=0
+_retained="$DST/.repack-retained.txt"
 for _dir in "$DST/jniLibs" "$DST/root"; do
-  _left=$(grep -ra "$SRC_ID" "$_dir" 2>/dev/null | wc -l || true)
-  if [ "$_left" -ne 0 ]; then
-    echo "ERROR: $_left line(s) under $_dir still contain $SRC_ID" >&2
-    grep -ral "$SRC_ID" "$_dir" 2>/dev/null | head -10 >&2
+  [ -d "$_dir" ] || continue
+  grep -ral "$SRC_ID" "$_dir" 2>/dev/null | sort -u > "$DST/.repack-leftover.txt" || true
+  if [ -s "$DST/.repack-leftover.txt" ] && [ -s "$_retained" ]; then
+    grep -vxF -f "$_retained" "$DST/.repack-leftover.txt" > "$DST/.repack-leftover.keep" || true
+    mv "$DST/.repack-leftover.keep" "$DST/.repack-leftover.txt"
+  fi
+  if [ -s "$DST/.repack-leftover.txt" ]; then
+    echo "ERROR: $(wc -l < "$DST/.repack-leftover.txt") file(s) under $_dir still contain $SRC_ID (not retained):" >&2
+    head -10 "$DST/.repack-leftover.txt" >&2
     _verify_fail=1
   fi
 done
+rm -f "$DST/.repack-leftover.txt"
 if [ "$_verify_fail" -ne 0 ]; then
   exit 1
 fi
-echo "[*] verify: jniLibs + root carry zero $SRC_ID references"
+echo "[*] verify: jniLibs + root carry zero $SRC_ID references (retained exceptions excluded)"
 
 # Repack bootstrap.tar reproducibly (same flags as assemble_bootstrap.py).
 FILES_DIR="$DST/root/data/data/$DST_ID/files"
