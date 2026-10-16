@@ -15,9 +15,9 @@ Quick facts:
 | App id / brand | `com.nopiece.bliss` / **"Bliss"** (renamed from "Foila Linux" in round 5; functional ids keep `folio`/`flux` internals) |
 | Source package | `com.ivarna.fluxlinux` |
 | Branch | `main` |
-| Latest green CI | run `38936982387` (commit `46bc7d8`) |
-| Released APK | [`bliss-debug-46bc7d8`](https://github.com/HakaI963/folio/releases/tag/bliss-debug-46bc7d8) `app-bliss-debug.apk` (172,320,841 B) |
-| APK sha256 | `85b85668c582c5f1b5f05a64eee4cae8d97cf6539c498667e14844a0786ec5cc` |
+| Latest green CI | run `38946747474` (commit `0557a1a`, hotfix) |
+| Released APK | [`bliss-debug-0557a1a`](https://github.com/HakaI963/folio/releases/tag/bliss-debug-0557a1a) `app-bliss-debug.apk` (172,320,841 B) — hotfix for the host-setup Python crash (`Frozen object named 'posixpath' is invalid`); supersedes `bliss-debug-46bc7d8` |
+| APK sha256 | `68f8ca3af5b507c8846c810ac832a4278d7ce6ecfce0cbcfadfdf9277a853752` |
 | Verify APK proof | package `com.nopiece.bliss`, `targetSdkVersion 28`, `assets/bootstrap.tar` packaged, libbash/libproot/libloader*.so packaged |
 | Signing | debug only (per-run keystore — uninstall before re-install) |
 | CI gate | `.github/workflows/build.yml` compiles **main sources only** (`assembleBlissDebug` + bootstrap assembly + Verify APK). Unit tests are not part of the gate. |
@@ -135,6 +135,8 @@ Evidence base: `Screenshot_2026-10-16-19-15-12-464` (Alpine shell + old banner),
   **Added** `rocky` + `centos_stream` (proot-only, arm64): official container bases converted to plain rootfs tars (`/tmp/opencode/rootfs-staging/convert_image.py` method) and hosted on the `rootfs` release of `HakaI963/folio` — `rocky_9_aarch64_plain.tar.xz` 51,693,928 B sha256 `7af07eade178c80ad3d322940ec6064c566dd34a8cb7e931fcbf4a5e44c18611`; `centos_stream_9_aarch64_plain.tar.xz` 37,294,356 B sha256 `d9ba19e6647c99d0c4d1424dc4a7717f350943c485116423445a64b1faa65f9a`. Shared `rpm/common/setup/setup_rpm_family.sh` (dnf makecache → base pkgs → EPEL (+key import) → tolerant CRB enable → `groupinstall "Xfce"` fallback chain → whisker/screenshooter/battery/netload → locale/user/pulse/banner/GPU; KDE requested → skip with log; XFCE-missing → exit 1; all transactions via `_flux_retry_pkg`); customization reuses the distro-agnostic `setup_customization_xfce.sh`; `flux_install.sh` cases; `HostScriptDeployer` deploys the rpm script for the manual path; enum/component/tests updated (26 installable: 14 proot + 12 chroot).
   **Removed** adelie (a viable `adelie-rootfs-mini-aarch64-1.0-beta6-20241223.txz` pin exists — recorded for a possible future round), artix (no official arm64 rootfs tarball), backbox (amd64-only), openkylin (ISOs only), gentoo (source-based desktop impractical).
   **Retro Emulation** (Debian component): enabled (`comingSoon` removed) — complete installer, arm64 packages verified reachable.
+
+**Hotfix (round 5.1, shipped as `bliss-debug-0557a1a`).** The first round-5 build (`46bc7d8`) failed host setup with `Fatal Python error: init_android_streams … Frozen object named 'posixpath' is invalid`. Cause: the new **binary** prefix patcher rewrote an `com.ivarna.fluxlinux` occurrence inside CPython's **frozen-module marshal blob** in `libpython3.14.so` (length-prefixed data, not a C string) — NUL padding corrupted the blob. Fix in `repack_bootstrap_for_appid.sh`: an occurrence-shape gate (`is_nul_bounded`) patches only files whose every occurrence is a plain NUL-terminated printable run; everything else — Python program/stdlib/pyc caches, marshal/frozen blobs, packed tables (`coreutils`, `capsh`, `dbus-daemon`, `libcrypto`, `dbus-daemon-launch-helper`) — is **retained byte-identical** (they shipped unpatched in rounds 1–4 and worked). The verify step accepts exactly the retained list (`.repack-retained.txt`) and still fails on any other leftover. Local proof: `libpython3.14.so` dst ≡ src (frozen `posixpath` blob intact), bash/libreadline/RUNPATH still patched, `verify_bootstrap.sh` PASS. 84 retained files in total (python stdlib + dynload + the 6 packed-table binaries).
 
 ---
 
