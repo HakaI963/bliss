@@ -184,7 +184,7 @@
         </aapt:attr>
     </path>
     <path
-        android:fillColor="#CCFFFFE9C9"
+        android:fillColor="#CCFFFFE9"
         android:pathData="M138,136 C162,114 196,108 214,116 C196,128 168,136 138,136 Z" />
     <path
         android:fillColor="#7A3A10"

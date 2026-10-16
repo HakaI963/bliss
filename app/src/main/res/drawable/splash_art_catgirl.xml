@@ -256,10 +256,10 @@
         android:fillColor="#FF7A2B5B"
         android:pathData="M186,262 C190,270 195,270 199,263 C203,270 208,270 212,262 C209,274 189,274 186,262 Z" />
     <path
-        android:fillColor="#BFFFDF8EC4"
+        android:fillColor="#BFFFDF8E"
         android:pathData="M118.0,238.0 L150.0,242.0 L150.0,245.0 L118.0,241.0 Z" />
     <path
-        android:fillColor="#BFFFDF8EC4"
+        android:fillColor="#BFFFDF8E"
         android:pathData="M250.0,242.0 L282.0,238.0 L282.0,241.0 L250.0,245.0 Z" />
     <path
         android:pathData="M118,400 C120,332 152,300 200,300 C248,300 280,332 282,400 Z">
