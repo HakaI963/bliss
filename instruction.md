@@ -15,9 +15,9 @@ Quick facts:
 | App id / brand | `com.nopiece.folio` / "Foila Linux" (renamed from "Folio Linux" in round 4; functional ids keep `folio`/`flux` internals) |
 | Source package | `com.ivarna.fluxlinux` |
 | Branch | `main` |
-| Latest green CI | run `38887109342` (commit `7b4b67a`) |
-| Released APK | [`folio-debug-7b4b67a`](https://github.com/HakaI963/folio/releases/tag/folio-debug-7b4b67a) `app-folio-debug.apk` (172,213,440 B) |
-| APK sha256 | `385c7727e536ff3ba8fa9681aca93cfb982313d56411a1c4549e0b994dacdc75` |
+| Latest green CI | run `38904315238` (commit `5791429`) |
+| Released APK | [`folio-debug-5791429`](https://github.com/HakaI963/folio/releases/tag/folio-debug-5791429) `app-folio-debug.apk` (172,230,228 B) |
+| APK sha256 | `d159359fc5602bbd950ed0e19906c4b63a0d64ea0bd5bc0e806c4c2eb6032317` |
 | Verify APK proof | package `com.nopiece.folio`, `targetSdkVersion 28`, `assets/bootstrap.tar` packaged, libbash/libproot/libloader*.so packaged |
 | Signing | debug only (per-run keystore — uninstall before re-install) |
 | CI gate | `.github/workflows/build.yml` compiles **main sources only** (`assembleFolioDebug` + bootstrap assembly + Verify APK). Unit tests are not part of the gate. |
@@ -265,9 +265,9 @@ The historical "verify before restarting" checklist is fully resolved: nav crash
 
 ## 10. Next steps (ordered)
 
-1. **Commit + push round 4** (changed files only; artifacts excluded).
-2. **CI compile + "Verify APK"** — fix anything that surfaces (main sourceset only).
-3. **Release** `folio-debug-<commit>`; update §0 quick facts.
+1. ~~Commit + push round 4~~ — **done** (`5791429`, 143 files).
+2. ~~CI compile + "Verify APK"~~ — **green** (run `38904315238`, first try).
+3. ~~Release~~ — **done**: [`folio-debug-5791429`](https://github.com/HakaI963/folio/releases/tag/folio-debug-5791429).
 4. **On-device QA** (cannot be done in this environment):
    - **First run**: fresh install → onboarding = Welcome → Downloads → Host → Ready; "Later" lands Home with nothing downloaded; "Show onboarding" from Settings still works; the Distros tab installs later as usual.
    - **Void install**: install Void with XFCE on a slow connection → on a download failure it now retries up to 3× with "retrying (2/3)…" instead of dying; a hard failure shows "…after 3 tries — check your network, then tap Retry Setup."
@@ -284,7 +284,7 @@ The historical "verify before restarting" checklist is fully resolved: nav crash
 - Round 1: CI green with "Verify APK" passing — **done** (run `38776662519`); release `folio-debug-33c97e9` published.
 - Round 2: CI green + release — **done** (run `38854972100`, release `folio-debug-77e2c0a`).
 - Round 3: CI green + release — **done** (run `38887109342`, release `folio-debug-7b4b67a`; two pre-CI fixes: 10-digit splash colors, missing `collectAsState` import + stray string constant).
-- Round 4 (this push): CI green + release `folio-debug-<commit>` — **pending §10.1–10.3**.
+- Round 4: CI green + release — **done** (run `38904315238`, release `folio-debug-5791429`, first-try green; APK upload needed a curl retry after a network drop).
 - Every item in §4, §4b, §4c, §4d marked DONE — **done** (on-device confirmation is §10.4).
 - Branding: **"Foila Linux"** everywhere user-visible (Kotlin, XML, 85 script files); residuals are functional identifiers only (`FLUX_*`, `flux` user, `folio-*` ids, `Folio.profile`, `Folio*`/`FluxLinux` identifiers, `Theme.Folio`).
 - Working tree verified locally by: `bash -n` on all 89 scripts, import-resolution sweep + nested-comment-aware brace/paren scanner on all 176 `.kt`, res color-literal check (3/4/6/8 digits), byte-identical guard for `host/setup_termux.sh`, sandbox runs (XFCE two-panel XML idempotent + valid; appearance applier 60/60 bash+dash + 20/20 e2e; `_flux_retry_pkg` success/flaky/hard-fail under dash + busybox; banner header `foila@<id>` incl. fallbacks + opt-out), cross-file signature checks for every refactored API (`reuseExisting` on session openers, `X11SettingsScreen` display-size, `OnboardingFlowScreen` Ready/Later, `TermuxX11Preferences` custom resolution).
