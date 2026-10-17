@@ -14,11 +14,12 @@ bb_ok() {
 }
 
 resolve_bb() {
+[ -d /data/local/folio ] && [ ! -e /data/local/bliss ] && mv /data/local/folio /data/local/bliss 2>/dev/null || true
   BB=""
   if [ -n "${FLUX_BB:-}" ] && bb_ok "$FLUX_BB"; then
     BB="$FLUX_BB"
-  elif bb_ok /data/local/folio/busybox/flux_busybox; then
-    BB=/data/local/folio/busybox/flux_busybox
+  elif bb_ok /data/local/bliss/busybox/bliss_busybox; then
+    BB=/data/local/bliss/busybox/bliss_busybox
   else
     for path in \
       /data/adb/ksu/bin/busybox \
@@ -53,12 +54,12 @@ resolve_bb() {
     fi
   fi
   [ -n "$BB" ] || return 1
-  if [ "$BB" != /data/local/folio/busybox/flux_busybox ]; then
-    mkdir -p /data/local/folio/busybox 2>/dev/null || true
-    cp -f "$BB" /data/local/folio/busybox/flux_busybox 2>/dev/null \
-      && chmod 755 /data/local/folio/busybox/flux_busybox 2>/dev/null \
-      && bb_ok /data/local/folio/busybox/flux_busybox \
-      && BB=/data/local/folio/busybox/flux_busybox || true
+  if [ "$BB" != /data/local/bliss/busybox/bliss_busybox ]; then
+    mkdir -p /data/local/bliss/busybox 2>/dev/null || true
+    cp -f "$BB" /data/local/bliss/busybox/bliss_busybox 2>/dev/null \
+      && chmod 755 /data/local/bliss/busybox/bliss_busybox 2>/dev/null \
+      && bb_ok /data/local/bliss/busybox/bliss_busybox \
+      && BB=/data/local/bliss/busybox/bliss_busybox || true
   fi
   return 0
 }

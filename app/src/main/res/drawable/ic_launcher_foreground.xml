@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Foreground layer: the Bliss mark centred inside the 66dp safe zone
+     (22dp inset on each side of the 108dp layer). -->
 <inset xmlns:android="http://schemas.android.com/apk/res/android"
     android:drawable="@drawable/ic_bliss_mark"
-    android:insetLeft="20dp"
-    android:insetRight="20dp"
-    android:insetTop="20dp"
-    android:insetBottom="20dp" />
+    android:insetLeft="22dp"
+    android:insetRight="22dp"
+    android:insetTop="22dp"
+    android:insetBottom="22dp" />

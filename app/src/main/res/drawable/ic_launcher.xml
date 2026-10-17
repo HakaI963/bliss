@@ -1,12 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Legacy/preview composition of the launcher icon (background + inset mark),
+     matching mipmap-anydpi-v26/ic_launcher.xml. -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:drawable="@drawable/ic_launcher_background" />
     <item>
         <inset
             android:drawable="@drawable/ic_bliss_mark"
-            android:insetLeft="20dp"
-            android:insetRight="20dp"
-            android:insetTop="20dp"
-            android:insetBottom="20dp" />
+            android:insetLeft="22dp"
+            android:insetRight="22dp"
+            android:insetTop="22dp"
+            android:insetBottom="22dp" />
     </item>
 </layer-list>

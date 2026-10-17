@@ -241,7 +241,7 @@ class MainActivity : ComponentActivity() {
             component.scriptName.contains("setup_customization")
 
     /**
-     * Load a component script and prepend flux_gpu_common.sh for hw_accel.
+     * Load a component script and prepend bliss_gpu_common.sh for hw_accel.
      * [extraEnv] is already resolved (no FLUX_GPU=auto).
      */
     private fun loadGuestComponentScript(
@@ -256,7 +256,7 @@ class MainActivity : ComponentActivity() {
         val base = scriptManager.getScriptContent(component.scriptName)
         val common = if (component.id == "hw_accel") {
             runCatching {
-                scriptManager.getScriptContent("common/setup/flux_gpu_common.sh")
+                scriptManager.getScriptContent("common/setup/bliss_gpu_common.sh")
             }.getOrDefault("")
         } else {
             ""

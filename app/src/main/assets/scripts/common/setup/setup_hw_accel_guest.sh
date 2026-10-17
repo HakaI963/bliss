@@ -9,13 +9,14 @@ if [ "$(id -u)" -ne 0 ]; then
     exit 1
 fi
 
+[ -d /etc/fluxlinux ] && [ ! -e /etc/bliss ] && mv /etc/fluxlinux /etc/bliss 2>/dev/null || true
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin${PATH:+:$PATH}"
-mkdir -p /tmp /var/tmp /etc/fluxlinux /usr/local/lib/fluxlinux
+mkdir -p /tmp /var/tmp /etc/bliss /usr/local/lib/fluxlinux
 chmod 1777 /tmp /var/tmp 2>/dev/null || true
 
-# Bundle: Kotlin prepends flux_gpu_common.sh, or runner stages it next to us.
+# Bundle: Kotlin prepends bliss_gpu_common.sh, or runner stages it next to us.
 if ! type flux_gpu_normalize >/dev/null 2>&1; then
-    for _f in /tmp/flux_gpu_common.sh /usr/local/lib/fluxlinux/flux_gpu_common.sh; do
+    for _f in /tmp/bliss_gpu_common.sh /usr/local/lib/fluxlinux/bliss_gpu_common.sh; do
         if [ -r "$_f" ]; then
             # shellcheck disable=SC1090
             . "$_f"
@@ -24,14 +25,14 @@ if ! type flux_gpu_normalize >/dev/null 2>&1; then
     done
 fi
 if ! type flux_gpu_normalize >/dev/null 2>&1; then
-    echo "Bliss: flux_gpu_common.sh missing — writing virgl and exiting 0"
-    printf '%s\n' virgl > /etc/fluxlinux/gpu_mode
+    echo "Bliss: bliss_gpu_common.sh missing — writing virgl and exiting 0"
+    printf '%s\n' virgl > /etc/bliss/gpu_mode
     exit 0
 fi
 
 # Persist common for later Settings re-runs (best-effort).
-if [ -r /tmp/flux_gpu_common.sh ]; then
-    cp -f /tmp/flux_gpu_common.sh /usr/local/lib/fluxlinux/flux_gpu_common.sh 2>/dev/null || true
+if [ -r /tmp/bliss_gpu_common.sh ]; then
+    cp -f /tmp/bliss_gpu_common.sh /usr/local/lib/fluxlinux/bliss_gpu_common.sh 2>/dev/null || true
 fi
 
 echo "Bliss: Hardware acceleration (guest)..."
@@ -217,7 +218,7 @@ fi
 
 if [ "$MODE" = turnip ]; then
     TURNIP_OK=""
-    rm -f /etc/fluxlinux/turnip_version
+    rm -f /etc/bliss/turnip_version
     for _n in 1 2; do
         eval "_spec=\${FLUX_TURNIP_$_n:-}"
         [ -n "$_spec" ] || continue
@@ -228,7 +229,7 @@ if [ "$MODE" = turnip ]; then
             && [ "$(sha256sum /tmp/turnip.tar.gz | cut -d' ' -f1)" = "$3" ] \
             && tar -zxf /tmp/turnip.tar.gz -C /; then
             command -v ldconfig >/dev/null 2>&1 && ldconfig || true
-            printf '%s\n' "$1" > /etc/fluxlinux/turnip_version
+            printf '%s\n' "$1" > /etc/bliss/turnip_version
             TURNIP_OK=$1
             break
         fi
@@ -290,7 +291,7 @@ if [ "$MODE" = panvk ]; then
     PANVK_TOUCHED=""
     if [ -e /lib/ld-musl-aarch64.so.1 ] || [ -e /usr/lib/ld-musl-aarch64.so.1 ]; then
         FLUX_PANVK_MSG="PanVK needs a glibc distro — software rendering stays"
-        rm -f /etc/fluxlinux/panvk_version
+        rm -f /etc/bliss/panvk_version
     else
         for _n in 1 2; do
             eval "_spec=\${FLUX_PANVK_$_n:-}"
@@ -307,11 +308,11 @@ if [ "$MODE" = panvk ]; then
                 install -m 755 /tmp/panvk.so /usr/local/lib64/libvulkan_panfrost.so
                 install -m 644 /tmp/panvk.json /usr/share/vulkan/icd.d/panfrost_icd.aarch64.json
                 if _flux_panvk_deps; then
-                    printf '%s\n' "$1" > /etc/fluxlinux/panvk_version
+                    printf '%s\n' "$1" > /etc/bliss/panvk_version
                     PANVK_OK=$1
                     break
                 fi
-                rm -f /etc/fluxlinux/panvk_version /usr/local/lib64/libvulkan_panfrost.so \
+                rm -f /etc/bliss/panvk_version /usr/local/lib64/libvulkan_panfrost.so \
                     /usr/share/vulkan/icd.d/panfrost_icd.aarch64.json
                 FLUX_PANVK_MSG="PanVK driver cannot load on this distro (missing libs) — software rendering stays"
                 continue
@@ -319,8 +320,8 @@ if [ "$MODE" = panvk ]; then
             echo "Bliss: [WARN] PanVK $1 download or sha256 failed."
         done
         # Offline/failed re-run must not break a working install.
-        if [ -z "$PANVK_OK" ] && [ -z "$PANVK_TOUCHED" ] && [ -r /etc/fluxlinux/panvk_version ]; then
-            PANVK_OK=$(tr -d '[:space:]' </etc/fluxlinux/panvk_version)
+        if [ -z "$PANVK_OK" ] && [ -z "$PANVK_TOUCHED" ] && [ -r /etc/bliss/panvk_version ]; then
+            PANVK_OK=$(tr -d '[:space:]' </etc/bliss/panvk_version)
         fi
     fi
     rm -f /tmp/panvk.so /tmp/panvk.json
@@ -352,6 +353,6 @@ echo "  Hardware Acceleration Setup Complete!"
 echo "============================================"
 echo "Mode:   $MODE"
 echo "Vendor: $VENDOR_HINT"
-echo "State:  /etc/fluxlinux/gpu_mode"
+echo "State:  /etc/bliss/gpu_mode"
 echo "============================================"
 exit 0

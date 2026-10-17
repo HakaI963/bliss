@@ -166,11 +166,11 @@ object GuestSessionFactory {
             append("export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin; ")
             append("export DEBIAN_FRONTEND=noninteractive; ")
             append(envPrefix)
-            append("echo '$b64' | base64 -d > /tmp/flux_feature.sh; ")
-            append("chmod +x /tmp/flux_feature.sh; ")
-            append("if [ -x /bin/bash ]; then bash /tmp/flux_feature.sh$arg; ")
-            append("else sh /tmp/flux_feature.sh$arg; fi; RC=\$?; ")
-            append("rm -f /tmp/flux_feature.sh; ")
+            append("echo '$b64' | base64 -d > /tmp/bliss_feature.sh; ")
+            append("chmod +x /tmp/bliss_feature.sh; ")
+            append("if [ -x /bin/bash ]; then bash /tmp/bliss_feature.sh$arg; ")
+            append("else sh /tmp/bliss_feature.sh$arg; fi; RC=\$?; ")
+            append("rm -f /tmp/bliss_feature.sh; ")
             append("exit \$RC")
         }
         if (!SessionRegistry.hasFreeTab()) return false

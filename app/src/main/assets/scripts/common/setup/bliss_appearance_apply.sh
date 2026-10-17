@@ -1,19 +1,19 @@
 #!/bin/sh
-# folio_appearance_apply.sh — Bliss Linux guest appearance applier (v2).
+# bliss_appearance_apply.sh — Bliss Linux guest appearance applier (v2).
 #
-# Reads <home>/.config/folio/appearance.env and applies the user's saved
+# Reads <home>/.config/bliss/appearance.env and applies the user's saved
 # appearance choices inside the Linux guest:
 #   - desktop wallpaper (image, solid color or random preset) + image style
 #   - xfce4-terminal colors (terminalrc + xfce4-terminal xfconf channel)
 #   - terminal font size 10/12/14 (keeps the configured font family)
-#   - folio zsh prompt color (when the guest has the folio theme)
+#   - bliss zsh prompt color (when the guest has the bliss theme)
 #   - accent selection color via ~/.config/gtk-3.0/gtk.css (best-effort)
 #   - panel/dock opacity (solid/frosted/glass) + icon size S/M/L
 #   - optional mpv video-wallpaper autostart entry (opt-in, reversible)
 #   - login-time safety-net autostart entry for re-applying at desktop start
 #
 # Idempotent + hash-guarded: it re-applies only when appearance.env changes
-# (marker: ~/.config/folio/.appearance.applied = FOLIO_APPEARANCE_APPLIED_<sum>).
+# (marker: ~/.config/bliss/.appearance.applied = FOLIO_APPEARANCE_APPLIED_<sum>).
 # In random-wallpaper mode it re-picks a wallpaper on every run, but skips the
 # other steps unless the env changed.
 #
@@ -37,7 +37,18 @@ FOLIO_APPEARANCE_SCRIPT_VERSION=2
 _fa_home="${FOLIO_APPLY_HOME:-${HOME:-/home/flux}}"
 [ -d "$_fa_home" ] || exit 0
 
-_fa_cfg="$_fa_home/.config/folio"
+# Pre-rename installs: move ~/.config/folio → ~/.config/bliss (banner +
+# appearance config) before anything reads it. Guarded; never fatal.
+if [ -d "$_fa_home/.config/folio" ] && [ ! -e "$_fa_home/.config/bliss" ]; then
+    mv "$_fa_home/.config/folio" "$_fa_home/.config/bliss" 2>/dev/null || true
+fi
+
+# Pre-rename installs: drop old-name leftovers (all are regenerated as bliss-*).
+rm -f "$_fa_home/.oh-my-zsh/custom/themes/folio.zsh-theme" 2>/dev/null || true
+rm -f "$_fa_home/.local/share/applications/folio-"*.desktop 2>/dev/null || true
+[ -d "$_fa_home/.config/bliss" ] && rm -rf "$_fa_home/.config/folio" 2>/dev/null || true
+
+_fa_cfg="$_fa_home/.config/bliss"
 _fa_env="$_fa_cfg/appearance.env"
 [ -f "$_fa_env" ] || exit 0
 
@@ -344,7 +355,7 @@ _fa_apply_term_font() {
 _fa_apply_prompt() {
     [ -n "$FLUX_PROMPT_COLOR" ] || return 0
     case "$FLUX_PROMPT_COLOR" in *[!0-9]*) return 0 ;; esac
-    _t="$_fa_home/.oh-my-zsh/custom/themes/folio.zsh-theme"
+    _t="$_fa_home/.oh-my-zsh/custom/themes/bliss.zsh-theme"
     [ -f "$_t" ] || return 0
     command -v awk >/dev/null 2>&1 || return 0
     _line="PROMPT='%F{240}%D{%H:%M}%f %F{${FLUX_PROMPT_COLOR}}bliss%f %F{250}%~%f %F{${FLUX_PROMPT_COLOR}}%#%f '"
@@ -451,12 +462,14 @@ _fa_apply_panel() {
 
 # ── video wallpaper (opt-in, experimental) ───────────────────────────────────
 _fa_apply_video() {
-    _df="$_fa_home/.config/autostart/folio-video-wallpaper.desktop"
+    _df="$_fa_home/.config/autostart/bliss-video-wallpaper.desktop"
+    _df_old="$_fa_home/.config/autostart/folio-video-wallpaper.desktop"
     if [ -z "${FLUX_VIDEO_WALLPAPER:-}" ] || [ ! -f "$(_fa_guest_path "$FLUX_VIDEO_WALLPAPER")" ]; then
-        rm -f "$_df" 2>/dev/null || true
+        rm -f "$_df" "$_df_old" 2>/dev/null || true
         return 0
     fi
     if command -v mpv >/dev/null 2>&1; then
+        rm -f "$_df_old" 2>/dev/null || true
         mkdir -p "$(dirname "$_df")" 2>/dev/null || true
         {
             printf '[Desktop Entry]\n'
@@ -481,13 +494,14 @@ _fa_apply_video() {
 _fa_ensure_autostart() {
     _ad="$_fa_home/.config/autostart"
     mkdir -p "$_ad" 2>/dev/null || return 0
-    cat > "$_ad/folio-appearance.desktop" <<EOF
+    rm -f "$_ad/folio-appearance.desktop" 2>/dev/null || true
+    cat > "$_ad/bliss-appearance.desktop" <<EOF
 [Desktop Entry]
 Type=Application
 Version=1.0
 Name=Bliss Linux appearance
 Comment=Applies your Bliss Linux wallpaper, colors and terminal settings at login.
-Exec=sh $_fa_home/.config/folio/appearance-apply.sh
+Exec=sh $_fa_home/.config/bliss/appearance-apply.sh
 Terminal=false
 StartupNotify=false
 OnlyShowIn=XFCE;
@@ -501,15 +515,15 @@ _fa_fix_owner() {
     _u=$(stat -c %u "$_fa_home" 2>/dev/null || stat -f %u "$_fa_home" 2>/dev/null || true)
     _g=$(stat -c %g "$_fa_home" 2>/dev/null || stat -f %g "$_fa_home" 2>/dev/null || true)
     [ -n "$_u" ] || return 0
-    for _p in "$_fa_cfg" "$_fa_home/.local/share/folio" \
+    for _p in "$_fa_cfg" "$_fa_home/.local/share/bliss" \
               "$_fa_home/.config/xfce4/terminal/terminalrc" \
               "$_fa_home/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-desktop.xml" \
               "$_fa_home/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-terminal.xml" \
               "$_fa_home/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-panel.xml" \
               "$_fa_home/.config/gtk-3.0/gtk.css" \
-              "$_fa_home/.config/autostart/folio-appearance.desktop" \
-              "$_fa_home/.config/autostart/folio-video-wallpaper.desktop" \
-              "$_fa_home/.oh-my-zsh/custom/themes/folio.zsh-theme"; do
+              "$_fa_home/.config/autostart/bliss-appearance.desktop" \
+              "$_fa_home/.config/autostart/bliss-video-wallpaper.desktop" \
+              "$_fa_home/.oh-my-zsh/custom/themes/bliss.zsh-theme"; do
         [ -e "$_p" ] || continue
         chown -R "$_u:$_g" "$_p" 2>/dev/null || true
     done

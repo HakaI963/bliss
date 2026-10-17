@@ -2,7 +2,7 @@
 # stop_alpine_gui.sh — root: stop XFCE in Alpine chroot + host X11 sockets
 # Does NOT pkill proot (proot stop is stop_gui.sh only).
 
-CHROOT_ROOT="${CHROOT_ROOT:-/data/local/folio/chroots/alpine}"
+CHROOT_ROOT="${CHROOT_ROOT:-/data/local/bliss/chroots/alpine}"
 if [ -z "${TARGET_PREFIX:-}" ]; then
   if [ -n "${FLUX_PREFIX:-}" ]; then
     TARGET_PREFIX="$FLUX_PREFIX"
@@ -24,7 +24,7 @@ _rr=""
 for _c in \
   "${FLUX_RESOLVE_BB:-}" \
   "$(dirname "$0")/resolve_bb.sh" \
-  /data/local/folio/helpers/fluxlinux_resolve_bb.sh
+  /data/local/bliss/helpers/bliss_resolve_bb.sh
 do
   [ -n "$_c" ] && [ -f "$_c" ] && _rr="$_c" && break
 done
@@ -37,9 +37,9 @@ if [ -z "${BB:-}" ]; then
   # sidecar missing (desktop/uninstall/staged setup) — same B1 walk as resolve_bb
   if [ -n "${FLUX_BB:-}" ] && [ -x "$FLUX_BB" ] &&
      "$FLUX_BB" --list >/dev/null 2>&1; then BB="$FLUX_BB"; fi
-  if [ -z "${BB:-}" ] && [ -x /data/local/folio/busybox/flux_busybox ] &&
-     /data/local/folio/busybox/flux_busybox --list >/dev/null 2>&1; then
-    BB=/data/local/folio/busybox/flux_busybox
+  if [ -z "${BB:-}" ] && [ -x /data/local/bliss/busybox/bliss_busybox ] &&
+     /data/local/bliss/busybox/bliss_busybox --list >/dev/null 2>&1; then
+    BB=/data/local/bliss/busybox/bliss_busybox
   fi
   if [ -z "${BB:-}" ]; then
     for path in \

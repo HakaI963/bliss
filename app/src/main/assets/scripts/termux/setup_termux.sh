@@ -77,7 +77,7 @@ fi
 
 # 4. (Scripts now deployed separately via app logic)
 # - start_gui.sh (Specific to distro family)
-# - flux_install.sh (Common installer)
+# - bliss_install.sh (Common installer)
 
 # 5. Configure Termux Permissions (Critical for App Communication)
 # REMOVED: User must manually configure 'allow-external-apps = true' in ~/.termux/termux.properties

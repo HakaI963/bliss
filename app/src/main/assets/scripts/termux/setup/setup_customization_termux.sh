@@ -97,13 +97,13 @@ if [ -n "$FLUX_THEME" ] && [ "$FLUX_THEME" = "light" ]; then
     SEL_THEME="Space-light"
     SEL_ICON="Papirus"
     SEL_CURSOR="Vimix-cursors"
-    SEL_WALLPAPER="fluxlinux-light.png"
+    SEL_WALLPAPER="bliss-light.png"
 else
     echo "Bliss: Dark Mode Selected."
     SEL_THEME="Space-transparency"
     SEL_ICON="Papirus-Dark"
     SEL_CURSOR="Vimix-white-cursors"
-    SEL_WALLPAPER="fluxlinux-dark.png"
+    SEL_WALLPAPER="bliss-dark.png"
 fi
 
 echo "Bliss: Installing Themes..."
@@ -121,8 +121,8 @@ TEMP_WP_ZIP="$TMP_BASE/wallpaper.zip"
 download_file "$BASE_URL/wallpaper.zip" "$TEMP_WP_ZIP" || handle_error "wallpaper download"
 unzip -q -o -j "$TEMP_WP_ZIP" -d "$WALLPAPER_DIR" || handle_error "wallpaper extract"
 rm -f "$TEMP_WP_ZIP"
-[ -f "$WALLPAPER_DIR/dark.png" ] && mv "$WALLPAPER_DIR/dark.png" "$WALLPAPER_DIR/fluxlinux-dark.png"
-[ -f "$WALLPAPER_DIR/light.png" ] && mv "$WALLPAPER_DIR/light.png" "$WALLPAPER_DIR/fluxlinux-light.png"
+[ -f "$WALLPAPER_DIR/dark.png" ] && mv "$WALLPAPER_DIR/dark.png" "$WALLPAPER_DIR/bliss-dark.png"
+[ -f "$WALLPAPER_DIR/light.png" ] && mv "$WALLPAPER_DIR/light.png" "$WALLPAPER_DIR/bliss-light.png"
 
 echo "Bliss: Installing JetBrains Mono Nerd Font..."
 mkdir -p "$FONT_DIR"

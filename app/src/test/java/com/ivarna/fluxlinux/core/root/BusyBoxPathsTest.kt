@@ -34,14 +34,14 @@ class BusyBoxPathsTest {
 
     @Test
     fun constants_exact() {
-        assertEquals("/data/local/folio/busybox/flux_busybox", BusyBoxPaths.PINNED)
+        assertEquals("/data/local/bliss/busybox/bliss_busybox", BusyBoxPaths.PINNED)
         assertEquals("scripts/chroot/resolve_bb.sh", BusyBoxPaths.RESOLVER_ASSET)
-        assertEquals("/data/local/folio/helpers/fluxlinux_resolve_bb.sh", BusyBoxPaths.RESOLVER_ON_DEVICE)
+        assertEquals("/data/local/bliss/helpers/bliss_resolve_bb.sh", BusyBoxPaths.RESOLVER_ON_DEVICE)
     }
 
     @Test
     fun helper_and_resolver_contain_every_candidate() {
-        val helper = readAsset("scripts/chroot/fluxlinux_chroot.sh")
+        val helper = readAsset("scripts/chroot/bliss_chroot.sh")
         val resolver = readAsset("scripts/chroot/resolve_bb.sh")
         for (path in BusyBoxPaths.CANDIDATES) {
             assertTrue("helper missing $path", helper.contains(path))
@@ -51,7 +51,7 @@ class BusyBoxPathsTest {
 
     @Test
     fun helper_and_resolver_reject_prefix() {
-        val helper = readAsset("scripts/chroot/fluxlinux_chroot.sh")
+        val helper = readAsset("scripts/chroot/bliss_chroot.sh")
         val resolver = readAsset("scripts/chroot/resolve_bb.sh")
         for (src in listOf(helper, resolver)) {
             assertTrue(src.contains("*com.termux*"))
@@ -62,7 +62,7 @@ class BusyBoxPathsTest {
 
     @Test
     fun bb_ok_requires_chroot_and_mount() {
-        val helper = readAsset("scripts/chroot/fluxlinux_chroot.sh")
+        val helper = readAsset("scripts/chroot/bliss_chroot.sh")
         val resolver = readAsset("scripts/chroot/resolve_bb.sh")
         for (src in listOf(helper, resolver)) {
             assertTrue(src.contains("bb_has"))
@@ -74,15 +74,15 @@ class BusyBoxPathsTest {
 
     @Test
     fun helper_version_is_v210() {
-        val helper = readAsset("scripts/chroot/fluxlinux_chroot.sh")
-        assertTrue(helper.contains("fluxlinux-chroot v2.11"))
-        assertTrue(helper.contains("VERSION_STR=\"fluxlinux-chroot v2.11\""))
-        assertEquals("fluxlinux-chroot v2.11", ChrootPaths.CHROOT_HELPER_VERSION)
+        val helper = readAsset("scripts/chroot/bliss_chroot.sh")
+        assertTrue(helper.contains("bliss-chroot v2.11"))
+        assertTrue(helper.contains("VERSION_STR=\"bliss-chroot v2.11\""))
+        assertEquals("bliss-chroot v2.11", ChrootPaths.CHROOT_HELPER_VERSION)
     }
 
     @Test
     fun helper_mentions_system_mount_and_chroot() {
-        val helper = readAsset("scripts/chroot/fluxlinux_chroot.sh")
+        val helper = readAsset("scripts/chroot/bliss_chroot.sh")
         assertTrue(helper.contains("/system/bin/mount"))
         assertTrue(helper.contains("/system/bin/chroot"))
     }
@@ -147,7 +147,7 @@ class BusyBoxPathsTest {
             "scripts/debian/chroot/setup/uninstall_debian_chroot.sh",
         )
         val assignOnly = Regex(
-            """\[ -x /data/local/folio/busybox/flux_busybox \][^\n]*\n\s*BB=/data/local/folio/busybox/flux_busybox"""
+            """\[ -x /data/local/bliss/busybox/bliss_busybox \][^\n]*\n\s*BB=/data/local/bliss/busybox/bliss_busybox"""
         )
         for (rel in files) {
             val text = readAsset(rel)
@@ -161,8 +161,8 @@ class BusyBoxPathsTest {
             }
             assertTrue(
                 "$rel last-resort pin must exec-probe --list",
-                !text.contains("[ -x /data/local/folio/busybox/flux_busybox ]; then") ||
-                    text.contains("/data/local/folio/busybox/flux_busybox --list")
+                !text.contains("[ -x /data/local/bliss/busybox/bliss_busybox ]; then") ||
+                    text.contains("/data/local/bliss/busybox/bliss_busybox --list")
             )
         }
     }
@@ -171,8 +171,8 @@ class BusyBoxPathsTest {
     fun termuxIntentFactory_does_not_default_dead_pin() {
         val src = readRepoFile("app/src/main/kotlin/com/ivarna/fluxlinux/core/data/TermuxIntentFactory.kt")
         assertFalse(
-            src.contains("BB=\"\${FLUX_BB:-/data/local/folio/busybox/flux_busybox}\"") ||
-                src.contains("BB=\"\${'$'}{FLUX_BB:-/data/local/folio/busybox/flux_busybox}\"")
+            src.contains("BB=\"\${FLUX_BB:-/data/local/bliss/busybox/bliss_busybox}\"") ||
+                src.contains("BB=\"\${'$'}{FLUX_BB:-/data/local/bliss/busybox/bliss_busybox}\"")
         )
         assertTrue(src.contains("/data/adb/ksu/bin/busybox"))
         assertTrue(src.contains("\${BusyBoxPaths.PINNED} --list"))

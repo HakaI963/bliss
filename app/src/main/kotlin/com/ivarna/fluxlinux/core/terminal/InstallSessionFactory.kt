@@ -9,7 +9,7 @@ import com.termux.terminal.TerminalSession
 
 /**
  * Builds host + install sessions.
- *  - proot: `$HOME/flux_install.sh <prootName> [setup_b64]` under libbash
+ *  - proot: `$HOME/bliss_install.sh <prootName> [setup_b64]` under libbash
  *  - chroot: staged setup_*_chroot.sh run as root on the host
  */
 object InstallSessionFactory {
@@ -165,7 +165,7 @@ object InstallSessionFactory {
         }
         return openHostScriptSession(
             ctx,
-            "flux_install.sh",
+            "bliss_install.sh",
             title = "${profile.displayName} Install (Bliss Terminal)",
             args = args,
             onFinished = onFinished,

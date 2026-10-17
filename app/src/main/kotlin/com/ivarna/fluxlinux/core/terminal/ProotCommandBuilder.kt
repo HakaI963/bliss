@@ -32,7 +32,7 @@ object ProotCommandBuilder {
         val home = if (u == "root") "/root" else "/home/flux"
         // Do not force LANG/LC_ALL here: missing en_US.UTF-8 prints
         // "cannot change locale" from /bin/sh before profile.d can pick.
-        // Guest flux-locale.sh / .zshrc select a locale that exists.
+        // Guest bliss-locale.sh / .zshrc select a locale that exists.
         return listOf(
             "HOME=$home", "USER=$u", "LOGNAME=$u", "TERM=$term", "LANG=C",
             "TMPDIR=/tmp", "XDG_RUNTIME_DIR=/tmp", "PATH=$GUEST_PATH",

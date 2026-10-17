@@ -6,7 +6,7 @@
 #
 # Output (marker line immune to Magisk/su preamble):
 #   # chroot_size v1
-#   # path=/data/local/folio/chroots/debian
+#   # path=/data/local/bliss/chroots/debian
 #   SIZE_BYTES=1234567890
 #
 # Exit: 0 measured; 1 root_required / no_dir; 2 measure_failed
@@ -15,10 +15,10 @@
 # Multi-GB rootfs overflows to negative SIZE_BYTES and the app treats it as fail.
 # Sum via awk (double mantissa OK for disk sizes up to ~9 PB).
 
-CHROOT_PATH="${1:-/data/local/folio/chroots/debian}"
+CHROOT_PATH="${1:-/data/local/bliss/chroots/debian}"
 
 case "$CHROOT_PATH" in
-  ""|"/"|"/data"|"/data/"|"/data/local"|"/data/local/"|"/data/local/folio"|"/data/local/folio/")
+  ""|"/"|"/data"|"/data/"|"/data/local"|"/data/local/"|"/data/local/bliss"|"/data/local/bliss/")
     printf '%s\n' "# chroot_size v1"
     printf '%s\n' "# path=$CHROOT_PATH"
     printf '%s\n' "# error=refused_path"

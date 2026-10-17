@@ -269,7 +269,7 @@ object FluxTerminalSessionManager {
         }
     }
 
-    /** Host script session (e.g. `flux_install.sh debian`). */
+    /** Host script session (e.g. `bliss_install.sh debian`). */
     fun openHostScriptSession(
         ctx: Context,
         scriptName: String,
@@ -297,7 +297,7 @@ object FluxTerminalSessionManager {
         onFinished: (() -> Unit)? = null
     ): Boolean = InstallSessionFactory.openRootScriptSession(ctx, scriptPath, title, onFinished)
 
-    /** Distro install session (proot → flux_install.sh; chroot → setup script as root). */
+    /** Distro install session (proot → bliss_install.sh; chroot → setup script as root). */
     fun openInstallSession(
         ctx: Context,
         distro: Distro,

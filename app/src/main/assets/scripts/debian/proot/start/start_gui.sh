@@ -1,10 +1,11 @@
 #!/data/data/com.ivarna.fluxlinux/files/usr/bin/bash
 # start_gui.sh - Launch XFCE4 Desktop Environment in PRoot Distro
-# Paths: TermuxHostPaths via fluxlinux-host.env (SSOT)
+# Paths: TermuxHostPaths via bliss-host.env (SSOT)
 
 DISTRO=${1:-debian}
 PKG="${TERMUX_APP__PACKAGE_NAME:-com.ivarna.fluxlinux}"
-_HOST_ENV="${TERMUX__PREFIX:-/data/data/${PKG}/files/usr}/etc/fluxlinux-host.env"
+_HOST_ENV="${TERMUX__PREFIX:-/data/data/${PKG}/files/usr}/etc/bliss-host.env"
+[ -r "$_HOST_ENV" ] || _HOST_ENV="${_HOST_ENV%/*}/fluxlinux-host.env"
 [ -r "$_HOST_ENV" ] && . "$_HOST_ENV"
 
 # Termux paths (from SSOT env, with safe fallbacks)
@@ -178,12 +179,13 @@ fi
 
 echo "Bliss: $DE_CMD=READY"
 
-# Guest GPU mode from setup_hw_accel_debian.sh (/etc/fluxlinux/gpu_mode)
+# Guest GPU mode from setup_hw_accel_debian.sh (/etc/bliss/gpu_mode)
 # turnip → Adreno/Zink; virgl → host virgl_test_server; else softpipe
 GUEST_ROOTFS="$TERMUX_PREFIX/var/lib/proot-distro/containers/$DISTRO/rootfs"
+[ -d "$GUEST_ROOTFS/etc/fluxlinux" ] && [ ! -e "$GUEST_ROOTFS/etc/bliss" ] && mv "$GUEST_ROOTFS/etc/fluxlinux" "$GUEST_ROOTFS/etc/bliss" 2>/dev/null || true
 GPU_MODE="virgl"
-if [ -r "$GUEST_ROOTFS/etc/fluxlinux/gpu_mode" ]; then
-  GPU_MODE=$(tr -d '[:space:]' <"$GUEST_ROOTFS/etc/fluxlinux/gpu_mode")
+if [ -r "$GUEST_ROOTFS/etc/bliss/gpu_mode" ]; then
+  GPU_MODE=$(tr -d '[:space:]' <"$GUEST_ROOTFS/etc/bliss/gpu_mode")
 fi
 # sanitize for embedding in guest shell
 case "$GPU_MODE" in
@@ -274,8 +276,8 @@ else
       flux_gpu_apply_runtime
     else
       GPU_MODE=virgl
-      if [ -r /etc/fluxlinux/gpu_mode ]; then
-        GPU_MODE=$(tr -d "[:space:]" </etc/fluxlinux/gpu_mode)
+      if [ -r /etc/bliss/gpu_mode ]; then
+        GPU_MODE=$(tr -d "[:space:]" </etc/bliss/gpu_mode)
       fi
       case "$GPU_MODE" in turnip|virgl) ;; *) GPU_MODE=virgl ;; esac
       unset GALLIUM_DRIVER MESA_LOADER_DRIVER_OVERRIDE VK_ICD_FILENAMES
@@ -339,9 +341,9 @@ BWRAP_EOF
       FLUX_DE_CMD=startplasma-x11
       # GPU env for KDE: zink OpenGL compositing on Turnip/PanVK, none on software.
       mkdir -p /usr/local/lib/fluxlinux
-      cat > /usr/local/lib/fluxlinux/flux_kde_env.sh << "KDE_EOF"
+      cat > /usr/local/lib/fluxlinux/bliss_kde_env.sh << "KDE_EOF"
 # Sourced after flux_gpu_apply_runtime. Plasma 6 kwin_x11: O2 = desktop OpenGL.
-# OPT-IN (touch /etc/fluxlinux/kde_gl): KWin O2 on zink shows a black screen on
+# OPT-IN (touch /etc/bliss/kde_gl): KWin O2 on zink shows a black screen on
 # PanVK (Xlorie, verified Poco X6 Pro); Turnip unverified. Default stays N.
 
 # ── Session hygiene (runs as flux, inside the dbus-run-session shell) ──────
@@ -361,7 +363,7 @@ if [ ! -d /tmp/.ICE-unix ]; then
 fi
 
 export QT_QPA_PLATFORMTHEME=kde KWIN_COMPOSE=N
-if [ -e /etc/fluxlinux/kde_gl ]; then case "$GPU_MODE" in turnip|panvk)
+if [ -e /etc/bliss/kde_gl ]; then case "$GPU_MODE" in turnip|panvk)
   export KWIN_COMPOSE=O2
   _icd=/usr/share/vulkan/icd.d/freedreno_icd.aarch64.json
   if [ "$GPU_MODE" = turnip ] && [ "$MESA_LOADER_DRIVER_OVERRIDE" = kgsl ] && [ -r "$_icd" ]; then
@@ -396,7 +398,7 @@ if [ -n "$_kw" ]; then
   fi
 fi
 KDE_EOF
-      FLUX_KDE_ENV=". /usr/local/lib/fluxlinux/flux_kde_env.sh"
+      FLUX_KDE_ENV=". /usr/local/lib/fluxlinux/bliss_kde_env.sh"
     fi
     FLUX_SU_SHELL=/bin/bash
     if [ ! -x /bin/bash ] && [ ! -x /usr/bin/bash ]; then

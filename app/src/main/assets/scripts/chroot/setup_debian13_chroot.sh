@@ -5,8 +5,9 @@
 # Based on LinuxDroidMaster/Termux-Desktops Guide
 
 # Global Variables
-DEBIANPATH="/data/local/folio/chroots/debian"
+DEBIANPATH="/data/local/bliss/chroots/debian"
 USERNAME="flux"
+[ -d /data/local/folio ] && [ ! -e /data/local/bliss ] && mv /data/local/folio /data/local/bliss 2>/dev/null || true
 
 # Desktop contract: FLUX_DESKTOPS (space/comma separated) = xfce | kde | none;
 # legacy FLUX_DESKTOP / FLUX_DESKTOP_ENV remain valid single values. Unset/empty
@@ -69,7 +70,7 @@ goodbye() {
     exit 1
 }
 
-# Resolve app-packaged / manual / download rootfs (same file as flux_install.sh)
+# Resolve app-packaged / manual / download rootfs (same file as bliss_install.sh)
 resolve_rootfs_archive() {
     ROOTFS_ARCHIVE=""
 
@@ -318,14 +319,14 @@ configure_debian_chroot() {
         progress "Skipping XFCE4 install (FLUX_DESKTOPS=$DESKTOPS)"
     fi
 
-    touch "$DEBIANPATH/.flux_configured"
+    touch "$DEBIANPATH/.bliss_configured"
     success "Debian Environment Configured!"
 
     # Root-staged launchers live in the Bliss helpers dir (idempotent).
-    mkdir -p /data/local/folio/helpers
+    mkdir -p /data/local/bliss/helpers
 
     # --- GENERATE GUI LAUNCH SCRIPT (thin → SSOT GUI / helper) ---
-    LAUNCH_SCRIPT="/data/local/folio/helpers/start_debian13.sh"
+    LAUNCH_SCRIPT="/data/local/bliss/helpers/start_debian13.sh"
     progress "Creating thin GUI launch script at $LAUNCH_SCRIPT..."
 
     # Select the guest session command at generation time (xfce default; kde aware).
@@ -338,9 +339,9 @@ configure_debian_chroot() {
     cat <<EOF > "$LAUNCH_SCRIPT"
 #!/system/bin/sh
 # Compat one-shot GUI → prefer start_debian13_gui.sh (app SSOT) else helper mount --x11 + desktop session
-GUI=/data/local/folio/helpers/start_debian13_gui.sh
-HELPER=/data/local/folio/helpers/fluxlinux_chroot.sh
-DEBIANPATH="\${DEBIANPATH:-/data/local/folio/chroots/debian}"
+GUI=/data/local/bliss/helpers/start_debian13_gui.sh
+HELPER=/data/local/bliss/helpers/bliss_chroot.sh
+DEBIANPATH="\${DEBIANPATH:-/data/local/bliss/chroots/debian}"
 TARGET_PREFIX="\${TARGET_PREFIX:-$APP_PREFIX}"
 USERNAME="\${USERNAME:-flux}"
 export FLUX_PACKAGE="$PKG"
@@ -350,7 +351,7 @@ if [ -f "\$GUI" ]; then
 fi
 
 if [ ! -f "\$HELPER" ]; then
-  echo "fluxlinux_chroot.sh missing — open app chroot session or re-run setup" >&2
+  echo "bliss_chroot.sh missing — open app chroot session or re-run setup" >&2
   exit 127
 fi
 
@@ -370,7 +371,7 @@ EOF
     success "GUI Launch script created (SSOT thin wrapper)."
 
     # Prefer asset SSOT stop when present under app home (redeployed by app)
-    STOP_LAUNCHER="/data/local/folio/helpers/stop_debian13_gui.sh"
+    STOP_LAUNCHER="/data/local/bliss/helpers/stop_debian13_gui.sh"
     progress "Creating GUI Stop Script at $STOP_LAUNCHER..."
     APP_STOP="$APP_HOME/stop_debian13_gui.sh"
     if [ -f "$APP_STOP" ]; then
@@ -380,7 +381,7 @@ EOF
     else
     cat <<EOF > "$STOP_LAUNCHER"
 #!/bin/sh
-DEBIANPATH="/data/local/folio/chroots/debian"
+DEBIANPATH="/data/local/bliss/chroots/debian"
 BB="$BB"
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH
 TARGET_TERMUX_PREFIX="$APP_PREFIX"
@@ -400,19 +401,19 @@ EOF
     # Also stage full root GUI launcher from app home if present (Settings SSOT)
     APP_START_GUI="$APP_HOME/start_debian13_gui.sh"
     if [ -f "$APP_START_GUI" ]; then
-        cp -f "$APP_START_GUI" /data/local/folio/helpers/start_debian13_gui.sh
-        chmod +x /data/local/folio/helpers/start_debian13_gui.sh
+        cp -f "$APP_START_GUI" /data/local/bliss/helpers/start_debian13_gui.sh
+        chmod +x /data/local/bliss/helpers/start_debian13_gui.sh
         success "Staged start_debian13_gui.sh from app assets"
     fi
 
     # --- SSOT helper + thin compat wrappers ---
-    HELPER="/data/local/folio/helpers/fluxlinux_chroot.sh"
+    HELPER="/data/local/bliss/helpers/bliss_chroot.sh"
     progress "Installing chroot SSOT helper at $HELPER..."
     HELPER_SRC=""
     for cand in \
-        "$APP_HOME/fluxlinux_chroot.sh" \
-        "$(dirname "$APP_HOME")/staged_scripts/fluxlinux_chroot.sh" \
-        "$(dirname "$0")/fluxlinux_chroot.sh"
+        "$APP_HOME/bliss_chroot.sh" \
+        "$(dirname "$APP_HOME")/staged_scripts/bliss_chroot.sh" \
+        "$(dirname "$0")/bliss_chroot.sh"
     do
         if [ -f "$cand" ]; then
             HELPER_SRC="$cand"
@@ -424,17 +425,17 @@ EOF
         chmod 755 "$HELPER"
         success "SSOT helper installed from $HELPER_SRC"
     else
-        error "fluxlinux_chroot.sh not found in app home/staged — app ensureHelperScript will stage on first session"
+        error "bliss_chroot.sh not found in app home/staged — app ensureHelperScript will stage on first session"
     fi
 
-    ROOT_RUNNER="/data/local/folio/helpers/run_debian13_root.sh"
+    ROOT_RUNNER="/data/local/bliss/helpers/run_debian13_root.sh"
     progress "Creating thin root runner → SSOT at $ROOT_RUNNER..."
     cat <<'EOF' > "$ROOT_RUNNER"
 #!/system/bin/sh
-# Compat wrapper → fluxlinux_chroot.sh exec --user root
-HELPER=/data/local/folio/helpers/fluxlinux_chroot.sh
+# Compat wrapper → bliss_chroot.sh exec --user root
+HELPER=/data/local/bliss/helpers/bliss_chroot.sh
 if [ ! -f "$HELPER" ]; then
-  echo "fluxlinux_chroot.sh missing — open a chroot session once or re-run setup" >&2
+  echo "bliss_chroot.sh missing — open a chroot session once or re-run setup" >&2
   exit 127
 fi
 if [ "$#" -lt 1 ]; then
@@ -446,26 +447,26 @@ EOF
     chmod 755 "$ROOT_RUNNER"
     success "Root runner created (SSOT wrapper)."
 
-    CLI_SCRIPT="/data/local/folio/helpers/enter_debian13.sh"
+    CLI_SCRIPT="/data/local/bliss/helpers/enter_debian13.sh"
     progress "Creating thin CLI launcher at $CLI_SCRIPT..."
     cat <<'EOF' > "$CLI_SCRIPT"
 #!/system/bin/sh
-# Compat → fluxlinux_chroot.sh login --user flux
-HELPER=/data/local/folio/helpers/fluxlinux_chroot.sh
-[ -f "$HELPER" ] || { echo "fluxlinux_chroot.sh missing" >&2; exit 127; }
+# Compat → bliss_chroot.sh login --user flux
+HELPER=/data/local/bliss/helpers/bliss_chroot.sh
+[ -f "$HELPER" ] || { echo "bliss_chroot.sh missing" >&2; exit 127; }
 echo "Entering Debian 13 Chroot (CLI)..."
 exec sh "$HELPER" login --user flux --shell zsh
 EOF
     chmod 755 "$CLI_SCRIPT"
     success "CLI Launcher created: $CLI_SCRIPT"
 
-    ROOT_CLI_SCRIPT="/data/local/folio/helpers/enter_debian13_root.sh"
+    ROOT_CLI_SCRIPT="/data/local/bliss/helpers/enter_debian13_root.sh"
     progress "Creating thin root CLI launcher at $ROOT_CLI_SCRIPT..."
     cat <<'EOF' > "$ROOT_CLI_SCRIPT"
 #!/system/bin/sh
-# Compat → fluxlinux_chroot.sh login --user root
-HELPER=/data/local/folio/helpers/fluxlinux_chroot.sh
-[ -f "$HELPER" ] || { echo "fluxlinux_chroot.sh missing" >&2; exit 127; }
+# Compat → bliss_chroot.sh login --user root
+HELPER=/data/local/bliss/helpers/bliss_chroot.sh
+[ -f "$HELPER" ] || { echo "bliss_chroot.sh missing" >&2; exit 127; }
 echo "Entering Debian 13 Chroot as ROOT..."
 exec sh "$HELPER" login --user root --shell bash
 EOF
@@ -493,7 +494,7 @@ _rr=""
 for _c in \
   "${FLUX_RESOLVE_BB:-}" \
   "$(dirname "$0")/resolve_bb.sh" \
-  /data/local/folio/helpers/fluxlinux_resolve_bb.sh
+  /data/local/bliss/helpers/bliss_resolve_bb.sh
 do
   [ -n "$_c" ] && [ -f "$_c" ] && _rr="$_c" && break
 done
@@ -506,9 +507,9 @@ if [ -z "${BB:-}" ]; then
   # sidecar missing (desktop/uninstall/staged setup) — same B1 walk as resolve_bb
   if [ -n "${FLUX_BB:-}" ] && [ -x "$FLUX_BB" ] &&
      "$FLUX_BB" --list >/dev/null 2>&1; then BB="$FLUX_BB"; fi
-  if [ -z "${BB:-}" ] && [ -x /data/local/folio/busybox/flux_busybox ] &&
-     /data/local/folio/busybox/flux_busybox --list >/dev/null 2>&1; then
-    BB=/data/local/folio/busybox/flux_busybox
+  if [ -z "${BB:-}" ] && [ -x /data/local/bliss/busybox/bliss_busybox ] &&
+     /data/local/bliss/busybox/bliss_busybox --list >/dev/null 2>&1; then
+    BB=/data/local/bliss/busybox/bliss_busybox
   fi
   if [ -z "${BB:-}" ]; then
     for path in \
@@ -534,14 +535,14 @@ fi
 
     progress "Using Root Busybox: $BB"
 
-    DEBIANPATH="/data/local/folio/chroots/debian"
+    DEBIANPATH="/data/local/bliss/chroots/debian"
 
     # Already installed: marker and/or a real shell binary (app cannot always see this path).
-    if [ -f "$DEBIANPATH/.flux_configured" ] || [ -e "$DEBIANPATH/bin/sh" ] || [ -e "$DEBIANPATH/usr/bin/bash" ]; then
+    if [ -f "$DEBIANPATH/.bliss_configured" ] || [ -f "$DEBIANPATH/.flux_configured" ] || [ -e "$DEBIANPATH/bin/sh" ] || [ -e "$DEBIANPATH/usr/bin/bash" ]; then
         success "Debian 13 Chroot already installed."
         progress "Skipping installation (rootfs at $DEBIANPATH)..."
         # Ensure marker exists for future probes
-        touch "$DEBIANPATH/.flux_configured" 2>/dev/null || true
+        touch "$DEBIANPATH/.bliss_configured" 2>/dev/null || true
         # Print probe lines the app can match in logs
         progress "VERIFY: chroot present (bin/sh or bash + marker)"
         am start -a android.intent.action.VIEW -d "fluxlinux://callback?result=success&name=distro_install_debian13_chroot" >/dev/null 2>&1 || true
@@ -553,7 +554,7 @@ fi
         success "Created directory: $DEBIANPATH"
     fi
 
-    # Prefer app-deployed rootfs (same as flux_install / assets/rootfs/)
+    # Prefer app-deployed rootfs (same as bliss_install / assets/rootfs/)
     if resolve_rootfs_archive; then
         :
     else

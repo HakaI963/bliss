@@ -1,5 +1,5 @@
 #!/bin/sh
-# flux_guest_common.sh — shared guest helpers (sourced by family / customization).
+# bliss_guest_common.sh — shared guest helpers (sourced by family / customization).
 # Safe to concatenate in front of a family payload. Idempotent functions.
 
 # Guest bins only — never append host $PATH (PRoot repair used to see host pactl).
@@ -224,7 +224,7 @@ _flux_ensure_home() {
 export PULSE_SERVER=tcp:127.0.0.1
 [ -f "\$HOME/.Xresources" ] && xrdb "\$HOME/.Xresources"
 # Bliss Linux appearance (wallpaper/colors/terminal; hash-guarded inside).
-[ -r "\$HOME/.config/folio/appearance-apply.sh" ] && sh "\$HOME/.config/folio/appearance-apply.sh" >/dev/null 2>&1 || true
+[ -r "\$HOME/.config/bliss/appearance-apply.sh" ] && sh "\$HOME/.config/bliss/appearance-apply.sh" >/dev/null 2>&1 || true
 exec $_xs_de
 EOF
     unset _xs_de
@@ -235,9 +235,10 @@ EOF
 }
 
 _flux_write_gpu_mode() {
+[ -d /etc/fluxlinux ] && [ ! -e /etc/bliss ] && mv /etc/fluxlinux /etc/bliss 2>/dev/null || true
     _mode="${1:-virgl}"
-    mkdir -p /etc/fluxlinux
-    printf '%s\n' "$_mode" > /etc/fluxlinux/gpu_mode
+    mkdir -p /etc/bliss
+    printf '%s\n' "$_mode" > /etc/bliss/gpu_mode
     _flux_log "gpu_mode=$_mode"
 }
 
@@ -325,7 +326,7 @@ _flux_sanitize_lang
 
 _flux_write_locale_profile() {
     mkdir -p /etc/profile.d
-    cat > /etc/profile.d/flux-locale.sh <<'EOF'
+    cat > /etc/profile.d/bliss-locale.sh <<'EOF'
 # Never export a locale glibc cannot load.
 _have=$(locale -a 2>/dev/null || true)
 _pick=""
@@ -488,7 +489,7 @@ _flux_write_pulse_client() {
     fi
     mkdir -p /etc/pulse/client.conf.d 2>/dev/null || true
     if [ -d /etc/pulse/client.conf.d ]; then
-        cat > /etc/pulse/client.conf.d/99-fluxlinux.conf <<'EOF'
+        cat > /etc/pulse/client.conf.d/99-bliss.conf <<'EOF'
 default-server = tcp:127.0.0.1
 autospawn = no
 EOF
@@ -889,7 +890,7 @@ _flux_guest_pactl() {
     return 1
 }
 
-_flux_install_pulse_client() {
+_bliss_install_pulse_client() {
     _have=$(_flux_guest_pactl || true)
     if [ -n "$_have" ]; then
         _flux_log "pulse client already present ($_have)"
@@ -936,18 +937,18 @@ _flux_install_pulse_client() {
 
 _flux_setup_pulse() {
     _flux_write_pulse_client
-    _flux_install_pulse_client
+    _bliss_install_pulse_client
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Bliss Linux appearance: apply the app-staged wallpaper/colors/terminal config
-# (~/.config/folio/appearance.env + appearance-apply.sh, staged by the app).
+# (~/.config/bliss/appearance.env + appearance-apply.sh, staged by the app).
 # No-op when the user never configured appearance. Forces ONE pass because
 # callers are install / script re-run paths that just rewrote the defaults.
 # ─────────────────────────────────────────────────────────────────────────────
 _flux_apply_folio_appearance() {
     _home="${1:-/home/flux}"
-    _script="$_home/.config/folio/appearance-apply.sh"
+    _script="$_home/.config/bliss/appearance-apply.sh"
     [ -r "$_script" ] || { unset _home _script; return 0; }
     FOLIO_APPLY_HOME="$_home" FOLIO_APPLY_FORCE=1 \
         sh "$_script" >/dev/null 2>&1 || true
@@ -1012,7 +1013,7 @@ _flux_write_folio_xfce_panel() {
     _appdir="$_phome/.local/share/applications"
     mkdir -p "$_appdir" 2>/dev/null || true
     if [ -d "$_appdir" ]; then
-        cat > "$_appdir/folio-terminal.desktop" <<'FOLIO_DESKTOP'
+        cat > "$_appdir/bliss-terminal.desktop" <<'FOLIO_DESKTOP'
 [Desktop Entry]
 Type=Application
 Version=1.0
@@ -1023,7 +1024,7 @@ Icon=utilities-terminal
 Terminal=false
 Categories=System;TerminalEmulator;
 FOLIO_DESKTOP
-        cat > "$_appdir/folio-files.desktop" <<'FOLIO_DESKTOP'
+        cat > "$_appdir/bliss-files.desktop" <<'FOLIO_DESKTOP'
 [Desktop Entry]
 Type=Application
 Version=1.0
@@ -1035,7 +1036,7 @@ Terminal=false
 Categories=System;FileManager;
 FOLIO_DESKTOP
         if command -v xfce4-settings-manager >/dev/null 2>&1; then
-            cat > "$_appdir/folio-settings.desktop" <<'FOLIO_DESKTOP'
+            cat > "$_appdir/bliss-settings.desktop" <<'FOLIO_DESKTOP'
 [Desktop Entry]
 Type=Application
 Version=1.0
@@ -1048,7 +1049,7 @@ Categories=Settings;
 FOLIO_DESKTOP
         fi
         if [ -n "$_browser" ]; then
-            cat > "$_appdir/folio-browser.desktop" <<FOLIO_DESKTOP
+            cat > "$_appdir/bliss-browser.desktop" <<FOLIO_DESKTOP
 [Desktop Entry]
 Type=Application
 Version=1.0
@@ -1144,7 +1145,7 @@ FOLIO_DESKTOP
     _plugins="$_plugins
     <property name='plugin-$_pid' type='string' value='launcher'>
       <property name='items' type='array'>
-        <value type='string' value='folio-terminal.desktop'/>
+        <value type='string' value='bliss-terminal.desktop'/>
       </property>
     </property>"
 
@@ -1154,7 +1155,7 @@ FOLIO_DESKTOP
     _plugins="$_plugins
     <property name='plugin-$_pid' type='string' value='launcher'>
       <property name='items' type='array'>
-        <value type='string' value='folio-files.desktop'/>
+        <value type='string' value='bliss-files.desktop'/>
       </property>
     </property>"
 
@@ -1165,7 +1166,7 @@ FOLIO_DESKTOP
         _plugins="$_plugins
     <property name='plugin-$_pid' type='string' value='launcher'>
       <property name='items' type='array'>
-        <value type='string' value='folio-settings.desktop'/>
+        <value type='string' value='bliss-settings.desktop'/>
       </property>
     </property>"
     fi
@@ -1177,7 +1178,7 @@ FOLIO_DESKTOP
         _plugins="$_plugins
     <property name='plugin-$_pid' type='string' value='launcher'>
       <property name='items' type='array'>
-        <value type='string' value='folio-browser.desktop'/>
+        <value type='string' value='bliss-browser.desktop'/>
       </property>
     </property>"
     fi
@@ -1331,20 +1332,27 @@ _flux_xfce_compact_defaults() {
     # existing dark PNG, else a solid charcoal desktop (image-style 0).
     _wpdir="$_h/Pictures/Wallpapers"
     mkdir -p "$_wpdir" 2>/dev/null || true
-    _wp="$_wpdir/folio-android-dark.png"
+    # Pre-rename installs: migrate the old wallpaper file names once (same images).
+    [ -f "$_wpdir/folio-android-dark.png" ] && [ ! -f "$_wpdir/bliss-android-dark.png" ] \
+        && mv -f "$_wpdir/folio-android-dark.png" "$_wpdir/bliss-android-dark.png" 2>/dev/null || true
+    [ -f "$_wpdir/fluxlinux-dark.png" ] && [ ! -f "$_wpdir/bliss-dark.png" ] \
+        && mv -f "$_wpdir/fluxlinux-dark.png" "$_wpdir/bliss-dark.png" 2>/dev/null || true
+    [ -f "$_wpdir/fluxlinux-light.png" ] && [ ! -f "$_wpdir/bliss-light.png" ] \
+        && mv -f "$_wpdir/fluxlinux-light.png" "$_wpdir/bliss-light.png" 2>/dev/null || true
+    _wp="$_wpdir/bliss-android-dark.png"
     if [ ! -f "$_wp" ]; then
-        for _src in /tmp/flux_xfce_assets/folio-android-dark.png \
-                    /usr/share/backgrounds/folio/folio-android-dark.png; do
+        for _src in /tmp/bliss_xfce_assets/bliss-android-dark.png \
+                    /usr/share/backgrounds/bliss/bliss-android-dark.png; do
             if [ -f "$_src" ]; then
                 cp -f "$_src" "$_wp" 2>/dev/null && break
             fi
         done
     fi
     if [ ! -f "$_wp" ]; then
-        _wp="$_wpdir/fluxlinux-dark.png"
+        _wp="$_wpdir/bliss-dark.png"
         if [ ! -f "$_wp" ]; then
-            for _src in /tmp/flux_xfce_assets/fluxlinux-dark.png \
-                        /usr/share/backgrounds/folio/fluxlinux-dark.png; do
+            for _src in /tmp/bliss_xfce_assets/bliss-dark.png \
+                        /usr/share/backgrounds/bliss/bliss-dark.png; do
                 if [ -f "$_src" ]; then
                     cp -f "$_src" "$_wp" 2>/dev/null && break
                 fi

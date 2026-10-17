@@ -25,7 +25,7 @@ import okhttp3.Request
  * archive available under [destDir]/[DistroInstallProfile.rootfsFileName].
  *
  * Local-first (D7): a verified destination file or a verified local candidate
- * (same locations `flux_install.sh` searches) short-circuits before any network
+ * (same locations `bliss_install.sh` searches) short-circuits before any network
  * access. Only then does it GET [DistroInstallProfile.rootfsUrl] from the
  * GitHub release tag `rootfs` into `<name>.partial` with HTTP Range resume
  * (D5), SHA256 + minimum-size gates (D4), cancellation, progress and a
@@ -113,7 +113,7 @@ object RootfsDownloader {
      * Guarantee a verified rootfs archive in [destDir].
      *
      * 1. verified destination → true (zero HTTP requests)
-     * 2. first verified local candidate (same concept as `flux_install.sh`)
+     * 2. first verified local candidate (same concept as `bliss_install.sh`)
      *    copied into the destination → true (zero HTTP requests)
      * 3. otherwise OkHttp GET with Range resume into `<name>.partial`,
      *    verify SHA + size, then atomic rename to the final filename.
@@ -765,7 +765,7 @@ object RootfsDownloader {
     // ── candidates ──────────────────────────────────────────────────────────
 
     /**
-     * Local candidates in the same order `flux_install.sh` searches (D7):
+     * Local candidates in the same order `bliss_install.sh` searches (D7):
      * `$HOME/<name>`, `$HOME/rootfs/<name>`, proot cache, `/sdcard/Download/`,
      * emulated Download. Only the first *verified* candidate is used.
      */

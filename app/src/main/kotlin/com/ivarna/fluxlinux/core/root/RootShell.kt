@@ -451,7 +451,7 @@ object RootShell {
 
             val staged = stageAsset(ctx, ChrootPaths.CHROOT_HELPER_ASSET)
                 ?: run {
-                    val tmp = File(ctx.cacheDir, "fluxlinux_chroot.sh")
+                    val tmp = File(ctx.cacheDir, "bliss_chroot.sh")
                     ctx.assets.open(ChrootPaths.CHROOT_HELPER_ASSET).use { input ->
                         tmp.outputStream().use { input.copyTo(it) }
                     }
@@ -558,8 +558,8 @@ object RootShell {
             "mkdir -p ${ChrootPaths.HELPERS_DIR}; " +
             "if [ ! -f $helper ]; then " +
             "for _s in " +
-            "/data/data/$pkg/files/home/fluxlinux_chroot.sh " +
-            "/data/data/$pkg/files/staged_scripts/fluxlinux_chroot.sh; do " +
+            "/data/data/$pkg/files/home/bliss_chroot.sh " +
+            "/data/data/$pkg/files/staged_scripts/bliss_chroot.sh; do " +
             "[ -f \"\$_s\" ] && cp -f \"\$_s\" $helper && chmod 755 $helper && break; " +
             "done; fi; " +
             "if [ ! -f $resolver ]; then " +

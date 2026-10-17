@@ -109,7 +109,7 @@ class OmzPokemonContractTest {
             manjaro.contains("pacman -S --noconfirm --needed glibc")
         )
         val common = repoFile(
-            "src/main/assets/scripts/common/setup/flux_guest_common.sh"
+            "src/main/assets/scripts/common/setup/bliss_guest_common.sh"
         ).readText()
         assertTrue(
             "pacman guests must restore glibc i18n data",
@@ -174,7 +174,7 @@ class OmzPokemonContractTest {
         // Fedora 44+ moved `su` out of shadow-utils; chroot flux login needs util-linux.
         assertTrue(fedora.contains("util-linux"))
         val common = repoFile(
-            "src/main/assets/scripts/common/setup/flux_guest_common.sh"
+            "src/main/assets/scripts/common/setup/bliss_guest_common.sh"
         ).readText()
         assertTrue(common.contains("_flux_ensure_en_us_locale"))
         assertTrue(common.contains("glibc-langpack-en"))
@@ -252,7 +252,7 @@ class OmzPokemonContractTest {
         ).readText()
         assertTrue(text.contains("FLUX_TURNIP_"))
         assertTrue(text.contains("sha256sum"))
-        assertTrue(text.contains("/etc/fluxlinux/turnip_version"))
+        assertTrue(text.contains("/etc/bliss/turnip_version"))
         assertFalse(text.contains("turnip-weekly"))
         assertFalse(text.contains("/turnip-"))
     }

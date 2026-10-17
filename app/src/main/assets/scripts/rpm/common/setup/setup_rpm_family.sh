@@ -1,13 +1,13 @@
 #!/bin/sh
 
-# Helpers live in flux_guest_common.sh (prepended by flux_install /
+# Helpers live in bliss_guest_common.sh (prepended by bliss_install /
 # familySetupPayload). Source it only when this file is run standalone.
 if ! command -v _flux_setup_pulse >/dev/null 2>&1; then
     _here=$(CDPATH= cd -- "$(dirname -- "$0")" 2>/dev/null && pwd)
     for _common in \
-        "${_here}/flux_guest_common.sh" \
-        "${HOME:-}/flux_guest_common.sh" \
-        /tmp/flux_guest_common.sh
+        "${_here}/bliss_guest_common.sh" \
+        "${HOME:-}/bliss_guest_common.sh" \
+        /tmp/bliss_guest_common.sh
     do
         if [ -f "$_common" ]; then
             # shellcheck source=/dev/null
@@ -250,7 +250,7 @@ if command -v _flux_write_folio_banner >/dev/null 2>&1; then
 fi
 
 # Phone-compact XFCE defaults (30px mono top panel, DPI 96, wallpaper,
-# Home-only desktop icons, shortcuts). Helper ships in flux_guest_common.sh;
+# Home-only desktop icons, shortcuts). Helper ships in bliss_guest_common.sh;
 # guarded so a standalone run without it is a no-op and never fails install.
 if [ -z "${DESKTOPS##*xfce*}" ] && command -v _flux_xfce_compact_defaults >/dev/null 2>&1; then
     _flux_xfce_compact_defaults || true

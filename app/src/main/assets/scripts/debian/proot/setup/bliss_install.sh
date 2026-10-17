@@ -1,8 +1,8 @@
 #!/bin/bash
-# flux_install.sh — install/configure proot-distro guest from local rootfs archive
+# bliss_install.sh — install/configure proot-distro guest from local rootfs archive
 # One-click (scripts page): no args → debian + local setup_debian_family.sh
-# Onboarding: flux_install.sh debian <base64 setup script>
-# Paths: TermuxHostPaths via fluxlinux-host.env (SSOT), never stock com.termux.
+# Onboarding: bliss_install.sh debian <base64 setup script>
+# Paths: TermuxHostPaths via bliss-host.env (SSOT), never stock com.termux.
 
 set -u
 
@@ -115,8 +115,9 @@ done
 PKG="${TERMUX_APP__PACKAGE_NAME:-com.ivarna.fluxlinux}"
 PREFIX_DEFAULT="${TERMUX__PREFIX:-/data/data/${PKG}/files/usr}"
 
-# SSOT env from Kotlin TermuxHostPaths
-_HOST_ENV="${PREFIX_DEFAULT}/etc/fluxlinux-host.env"
+# SSOT env from Kotlin TermuxHostPaths (bliss-host.env; legacy name fallback)
+_HOST_ENV="${PREFIX_DEFAULT}/etc/bliss-host.env"
+[ -r "$_HOST_ENV" ] || _HOST_ENV="${PREFIX_DEFAULT}/etc/fluxlinux-host.env"
 if [ -r "$_HOST_ENV" ]; then
     # shellcheck source=/dev/null
     . "$_HOST_ENV"
@@ -462,8 +463,8 @@ elif [ -n "$DEFAULT_SETUP" ]; then
     echo "Bliss: Configuring from local setup: $DEFAULT_SETUP"
     : > "$SETUP_HOST_PATH"
     for _common in \
-        "${HOME:-}/flux_guest_common.sh" \
-        "${SCRIPT_DIR}/flux_guest_common.sh"
+        "${HOME:-}/bliss_guest_common.sh" \
+        "${SCRIPT_DIR}/bliss_guest_common.sh"
     do
         if [ -f "$_common" ]; then
             cat "$_common" >> "$SETUP_HOST_PATH"

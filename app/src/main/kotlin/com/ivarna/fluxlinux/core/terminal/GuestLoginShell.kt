@@ -10,7 +10,7 @@ enum class GuestLoginShell(val id: String) {
     ZSH("zsh"),
     BASH("bash");
 
-    /** Value for fluxlinux_chroot.sh `login --shell`. */
+    /** Value for bliss_chroot.sh `login --shell`. */
     val chrootFlag: String get() = id
 
     companion object {

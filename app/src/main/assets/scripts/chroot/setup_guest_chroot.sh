@@ -8,8 +8,9 @@
 #   FLUX_ROOTFS_URL (GitHub release download fallback)
 #   TERMUX_APP__PACKAGE_NAME, TERMUX__HOME
 
-GUESTPATH="${FLUX_CHROOT:-/data/local/folio/chroots/guest}"
+GUESTPATH="${FLUX_CHROOT:-/data/local/bliss/chroots/guest}"
 USERNAME="flux"
+[ -d /data/local/folio ] && [ ! -e /data/local/bliss ] && mv /data/local/folio /data/local/bliss 2>/dev/null || true
 DISTRO_LABEL="${FLUX_DISTRO_LABEL:-guest}"
 
 PKG="${TERMUX_APP__PACKAGE_NAME:-com.ivarna.fluxlinux}"
@@ -204,19 +205,19 @@ configure_guest_chroot() {
         chmod 0440 /etc/sudoers.d/$USERNAME
     " || goodbye
 
-    touch "$GUESTPATH/.flux_configured"
+    touch "$GUESTPATH/.bliss_configured"
     success "$DISTRO_LABEL environment configured (rootfs + user; XFCE via family phase)!"
 
     # Root-staged helper/launchers live in the Bliss helpers dir (idempotent).
-    mkdir -p /data/local/folio/helpers
+    mkdir -p /data/local/bliss/helpers
 
-    HELPER="/data/local/folio/helpers/fluxlinux_chroot.sh"
+    HELPER="/data/local/bliss/helpers/bliss_chroot.sh"
     progress "Installing chroot SSOT helper at $HELPER..."
     HELPER_SRC=""
     for cand in \
-        "/data/data/${PKG}/files/home/fluxlinux_chroot.sh" \
-        "/data/data/${PKG}/files/staged_scripts/fluxlinux_chroot.sh" \
-        "$(dirname "$0")/fluxlinux_chroot.sh"
+        "/data/data/${PKG}/files/home/bliss_chroot.sh" \
+        "/data/data/${PKG}/files/staged_scripts/bliss_chroot.sh" \
+        "$(dirname "$0")/bliss_chroot.sh"
     do
         if [ -f "$cand" ]; then
             HELPER_SRC="$cand"
@@ -228,14 +229,14 @@ configure_guest_chroot() {
         chmod 755 "$HELPER"
         success "SSOT helper installed from $HELPER_SRC"
     else
-        error "fluxlinux_chroot.sh not found — app will stage on first session"
+        error "bliss_chroot.sh not found — app will stage on first session"
     fi
 
     for s in start_guest_gui.sh stop_guest_gui.sh; do
         src="/data/data/${PKG}/files/home/$s"
         if [ -f "$src" ]; then
-            cp -f "$src" "/data/local/folio/helpers/$s"
-            chmod +x "/data/local/folio/helpers/$s"
+            cp -f "$src" "/data/local/bliss/helpers/$s"
+            chmod +x "/data/local/bliss/helpers/$s"
             success "Staged $s"
         fi
     done
@@ -262,7 +263,7 @@ _rr=""
 for _c in \
   "${FLUX_RESOLVE_BB:-}" \
   "$(dirname "$0")/resolve_bb.sh" \
-  /data/local/folio/helpers/fluxlinux_resolve_bb.sh
+  /data/local/bliss/helpers/bliss_resolve_bb.sh
 do
   [ -n "$_c" ] && [ -f "$_c" ] && _rr="$_c" && break
 done
@@ -275,9 +276,9 @@ if [ -z "${BB:-}" ]; then
   # sidecar missing (desktop/uninstall/staged setup) — same B1 walk as resolve_bb
   if [ -n "${FLUX_BB:-}" ] && [ -x "$FLUX_BB" ] &&
      "$FLUX_BB" --list >/dev/null 2>&1; then BB="$FLUX_BB"; fi
-  if [ -z "${BB:-}" ] && [ -x /data/local/folio/busybox/flux_busybox ] &&
-     /data/local/folio/busybox/flux_busybox --list >/dev/null 2>&1; then
-    BB=/data/local/folio/busybox/flux_busybox
+  if [ -z "${BB:-}" ] && [ -x /data/local/bliss/busybox/bliss_busybox ] &&
+     /data/local/bliss/busybox/bliss_busybox --list >/dev/null 2>&1; then
+    BB=/data/local/bliss/busybox/bliss_busybox
   fi
   if [ -z "${BB:-}" ]; then
     for path in \
@@ -302,9 +303,9 @@ fi
 
     progress "Using Root Busybox: $BB"
 
-    GUESTPATH="${FLUX_CHROOT:-/data/local/folio/chroots/guest}"
+    GUESTPATH="${FLUX_CHROOT:-/data/local/bliss/chroots/guest}"
 
-    if [ -f "$GUESTPATH/.flux_configured" ] && \
+    if { [ -f "$GUESTPATH/.bliss_configured" ] || [ -f "$GUESTPATH/.flux_configured" ]; } && \
        { [ -e "$GUESTPATH/bin/bash" ] || [ -e "$GUESTPATH/usr/bin/bash" ]; } && \
        grep -q '^flux:' "$GUESTPATH/etc/passwd" 2>/dev/null; then
         success "$DISTRO_LABEL Chroot already installed."

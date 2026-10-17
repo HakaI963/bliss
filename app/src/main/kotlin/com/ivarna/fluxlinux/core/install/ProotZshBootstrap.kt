@@ -25,11 +25,11 @@ object ProotZshBootstrap {
 
     /**
      * Local monochrome prompt theme written during OMZ staging (matches the guest
-     * scripts' folio.zsh-theme). Remote colorful themes were removed — no network
+     * scripts' bliss.zsh-theme). Remote colorful themes were removed — no network
      * dependency for the prompt anymore.
      */
     private val FOLIO_THEME = """
-        # folio.zsh-theme — Bliss's minimal monochrome prompt.
+        # bliss.zsh-theme — Bliss's minimal monochrome prompt.
         # White/gray on black only; ASCII-safe (no powerline glyphs, no ANSI colors 31-44).
         # Segments:  time  bliss  working-dir  input-char
         PROMPT='%F{240}%D{%H:%M}%f %F{255}bliss%f %F{250}%~%f %F{255}%#%f '
@@ -116,9 +116,9 @@ object ProotZshBootstrap {
         // Local monochrome prompt theme — no remote colorful download. Drop the
         // old remote theme if a previous staging left it behind.
         File(themes, "agnosterzak.zsh-theme").delete()
-        val themeFile = File(themes, "folio.zsh-theme")
+        val themeFile = File(themes, "bliss.zsh-theme")
         if (!themeFile.isFile || themeFile.length() < 50) {
-            onLog("Writing folio prompt theme…")
+            onLog("Writing bliss prompt theme…")
             runCatching { themeFile.writeText(FOLIO_THEME) }
         }
     }

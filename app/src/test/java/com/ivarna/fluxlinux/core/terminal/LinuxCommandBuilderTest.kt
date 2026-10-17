@@ -44,7 +44,7 @@ class LinuxCommandBuilderTest {
             val (args, _) = LinuxCommandBuilder.build(ctx(), "exec zsh", method = "chroot")
             assertEquals("/system/bin/sh", args[0])
             assertEquals("-c", args[1])
-            assertTrue(args[2].contains("fluxlinux_chroot.sh"))
+            assertTrue(args[2].contains("bliss_chroot.sh"))
         }
     }
 

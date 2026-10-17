@@ -5,7 +5,7 @@ import com.ivarna.fluxlinux.core.root.ChrootPaths
 import com.ivarna.fluxlinux.core.root.RootShell
 
 /** Builds shell arguments and environment map for chroot Debian sessions (SSOT helper).
- *  Ported from termux-lib `ChrootCommandBuilder` (fluxlinux_chroot.sh v2.2).
+ *  Ported from termux-lib `ChrootCommandBuilder` (bliss_chroot.sh v2.2).
  *  Depends on RootShell (one-way) — RootShell never imports this (plan §2.5). */
 object ChrootCommandBuilder {
 
@@ -25,7 +25,7 @@ object ChrootCommandBuilder {
         ensureHelperScript(ctx) // also stages the BusyBox resolver
         RootShell.resolveBusyBox()
         // Shell comes from loginShell; helper resolves the real binary as root
-        // (app uid cannot stat /data/local/folio). When loginShell is null (legacy
+        // (app uid cannot stat /data/local/bliss). When loginShell is null (legacy
         // callers), flux stays zsh and root stays bash (sh on Alpine paths).
         val isAlpine = chrootPath.contains("Alpine", ignoreCase = true)
         val fluxFlag = loginShell?.chrootFlag ?: "zsh"
@@ -66,7 +66,7 @@ object ChrootCommandBuilder {
         val isInteractive = GuestLoginShell.isInteractiveLogin(shellCmd)
 
         // Always `sh $HELPER` (not bare exec of script) — SELinux often blocks exec of
-        // /data/local/folio/helpers/*.sh; /system/bin/sh interpreting the script is reliable.
+        // /data/local/bliss/helpers/*.sh; /system/bin/sh interpreting the script is reliable.
         return when {
             isInteractive && u == "root" -> {
                 val wd = workdir?.let { " --workdir ${shellSingleQuote(it)}" } ?: ""

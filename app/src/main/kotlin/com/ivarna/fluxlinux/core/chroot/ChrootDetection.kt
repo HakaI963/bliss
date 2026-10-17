@@ -39,10 +39,10 @@ object ChrootDetection {
     fun rootfsDir(path: String = ChrootPaths.CHROOT_PATH): File = File(path)
 
     fun markerFile(path: String = ChrootPaths.CHROOT_PATH): File =
-        File(path, ".flux_configured")
+        File(path, ".bliss_configured")
 
     fun isVisibleToApp(path: String = ChrootPaths.CHROOT_PATH): Boolean {
-        return File("$path/.flux_configured").exists() ||
+        return File("$path/.bliss_configured").exists() ||
             shellPresentToApp(path) ||
             File(path).isDirectory
     }
@@ -134,8 +134,12 @@ object ChrootDetection {
         val root = path
         val out = try {
             RootShell.capture(
-                "M=0; D=0; S=0; " +
-                    "[ -e '$root/.flux_configured' ] && M=1; " +
+                // One-shot legacy rename (best-effort): pre-rename installs
+                // lived under /data/local/bliss (old app versions / user data).
+                "[ -d /data/local/folio ] && [ ! -e /data/local/bliss ] && " +
+                    "mv /data/local/folio /data/local/bliss 2>/dev/null; " +
+                    "M=0; D=0; S=0; " +
+                    "[ -e '$root/.bliss_configured' ] && M=1; " +
                     "[ -d '$root' ] && D=1; " +
                     // Alpine: bin/sh -> /bin/busybox (absolute); -e fails on host.
                     "{ [ -L '$root/bin/sh' ] || [ -e '$root/bin/sh' ] || " +

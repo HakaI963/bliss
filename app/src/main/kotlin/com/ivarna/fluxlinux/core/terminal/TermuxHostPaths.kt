@@ -8,7 +8,8 @@ import java.io.File
 /**
  * Single source of truth for host (embedded Termux-class) package paths.
  *
- * Kotlin, generated `fluxlinux-host.env`, and bootstrap path rewrites all derive
+ * Kotlin, generated `bliss-host.env` (legacy `fluxlinux-host.env` dual-written),
+ * and bootstrap path rewrites all derive
  * from [PACKAGE]. Never hardcode `com.termux` defaults at call sites.
  * Mirrors termux-lib `TermuxHostPaths` with the package pinned to the flavor
  * applicationId via `BuildConfig.APPLICATION_ID`.
@@ -52,7 +53,13 @@ object TermuxHostPaths {
     const val TERMUX_VERSION = "flux-host"
 
     /** Relative path under app filesDir for generated shell env. */
-    const val HOST_ENV_REL = "usr/etc/fluxlinux-host.env"
+    const val HOST_ENV_REL = "usr/etc/bliss-host.env"
+
+    /**
+     * Legacy env file name — still written with the same content so the frozen
+     * `setup_termux.sh` (which sources `/etc/fluxlinux-host.env`) keeps working.
+     */
+    const val HOST_ENV_LEGACY_REL = "usr/etc/fluxlinux-host.env"
 
     private const val TAG = "TermuxHostPaths"
     private const val MAX_REWRITE_BYTES = 2_000_000L
@@ -183,16 +190,23 @@ object TermuxHostPaths {
         )
 
     /**
-     * Write `usr/etc/fluxlinux-host.env` for shell scripts to source.
+     * Write `usr/etc/bliss-host.env` for shell scripts to source.
+     * Dual-writes the legacy `usr/etc/fluxlinux-host.env` with the same content
+     * (frozen `setup_termux.sh` still sources the old name).
      * Generated from this object only — do not hand-edit on device.
      *
      * When [ctx] is provided, also pins W^X-safe `PD_PROOT_BIN` / `PROOT_LOADER{,_32}`
      * to jniLibs under `nativeLibraryDir` (W^X stay-clear on top of targetSdk 28).
      */
     fun writeHostEnvFile(filesDir: File, ctx: Context? = null): File {
+        val text = hostEnvText(ctx)
         val f = hostEnvFile(filesDir)
         f.parentFile?.mkdirs()
-        f.writeText(hostEnvText(ctx))
+        f.writeText(text)
+        // Legacy compatibility copy (same bytes).
+        val legacy = File(filesDir, HOST_ENV_LEGACY_REL)
+        legacy.parentFile?.mkdirs()
+        legacy.writeText(text)
         return f
     }
 

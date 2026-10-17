@@ -3,8 +3,8 @@
 # Uninstalls Debian Chroot environment (Requires Root)
 
 # Paths (Must match setup_debian_chroot.sh)
-DEBIANPATH="/data/local/folio/chroots/debian"
-LAUNCH_SCRIPTS="/data/local/folio/helpers/start_debian.sh /data/local/folio/helpers/start_debian_gui.sh /data/local/folio/helpers/enter_debian.sh"
+DEBIANPATH="/data/local/bliss/chroots/debian"
+LAUNCH_SCRIPTS="/data/local/bliss/helpers/start_debian.sh /data/local/bliss/helpers/start_debian_gui.sh /data/local/bliss/helpers/enter_debian.sh"
 
 # Error Handler
 error() {
@@ -35,7 +35,7 @@ _rr=""
 for _c in \
   "${FLUX_RESOLVE_BB:-}" \
   "$(dirname "$0")/resolve_bb.sh" \
-  /data/local/folio/helpers/fluxlinux_resolve_bb.sh
+  /data/local/bliss/helpers/bliss_resolve_bb.sh
 do
   [ -n "$_c" ] && [ -f "$_c" ] && _rr="$_c" && break
 done
@@ -47,9 +47,9 @@ fi
 if [ -z "${BB:-}" ]; then
   if [ -n "${FLUX_BB:-}" ] && [ -x "$FLUX_BB" ] &&
      "$FLUX_BB" --list >/dev/null 2>&1; then BB="$FLUX_BB"; fi
-  if [ -z "${BB:-}" ] && [ -x /data/local/folio/busybox/flux_busybox ] &&
-     /data/local/folio/busybox/flux_busybox --list >/dev/null 2>&1; then
-    BB=/data/local/folio/busybox/flux_busybox
+  if [ -z "${BB:-}" ] && [ -x /data/local/bliss/busybox/bliss_busybox ] &&
+     /data/local/bliss/busybox/bliss_busybox --list >/dev/null 2>&1; then
+    BB=/data/local/bliss/busybox/bliss_busybox
   fi
   if [ -z "${BB:-}" ]; then
     for path in \

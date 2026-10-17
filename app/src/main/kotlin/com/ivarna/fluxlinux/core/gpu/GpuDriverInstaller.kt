@@ -18,7 +18,7 @@ import java.io.File
  */
 object GpuDriverInstaller {
 
-    const val MARKER = "/etc/fluxlinux/turnip_version"
+    const val MARKER = "/etc/bliss/turnip_version"
     const val API = "https://api.github.com/repos/lfdevs/mesa-for-android-container/releases?per_page=30"
     private const val BASE = "https://github.com/lfdevs/mesa-for-android-container/releases/download"
     private const val PREFS = "fluxlinux_gpu_driver"

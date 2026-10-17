@@ -51,8 +51,8 @@ object ProotXfceAssetInstaller {
                 iconName = ICON_NAME,
                 cursorName = "Vimix-cursors",
                 cursorAsset = "xfce4/cursor/01-Vimix-cursors.tar.xz",
-                wallpaperAsset = "xfce4/wallpaper/fluxlinux-light.png",
-                wallpaperFileName = "fluxlinux-light.png"
+                wallpaperAsset = "xfce4/wallpaper/bliss-light.png",
+                wallpaperFileName = "bliss-light.png"
             )
         } else {
             Selection(
@@ -61,8 +61,8 @@ object ProotXfceAssetInstaller {
                 iconName = ICON_NAME,
                 cursorName = "Vimix-white-cursors",
                 cursorAsset = "xfce4/cursor/02-Vimix-white-cursors.tar.xz",
-                wallpaperAsset = "xfce4/wallpaper/fluxlinux-dark.png",
-                wallpaperFileName = "fluxlinux-dark.png"
+                wallpaperAsset = "xfce4/wallpaper/bliss-dark.png",
+                wallpaperFileName = "bliss-dark.png"
             )
         }
 
@@ -124,9 +124,9 @@ object ProotXfceAssetInstaller {
             return true
         }
 
-        val cache = File(app.cacheDir, "flux_xfce_assets").also { it.mkdirs() }
+        val cache = File(app.cacheDir, "bliss_xfce_assets").also { it.mkdirs() }
         // Guest /tmp maps here with proot --shared-tmp (fallback path for script).
-        val shared = File(TermuxHostPaths.TMPDIR, "flux_xfce_assets").also { it.mkdirs() }
+        val shared = File(TermuxHostPaths.TMPDIR, "bliss_xfce_assets").also { it.mkdirs() }
 
         var ok = true
         try {
@@ -250,9 +250,9 @@ object ProotXfceAssetInstaller {
 
     /**
      * Stage the selected theme/icon/cursor/wallpaper archives into a chroot
-     * guest's `/tmp/flux_xfce_assets` (root copy). The guest customization
+     * guest's `/tmp/bliss_xfce_assets` (root copy). The guest customization
      * script finds them via its default `FLUX_ASSET_DIR` and extracts them
-     * with guest tar (chroot /tmp is the rootfs /tmp — fluxlinux_chroot.sh
+     * with guest tar (chroot /tmp is the rootfs /tmp — bliss_chroot.sh
      * `ensure_sticky_tmp` never binds host tmp over it).
      *
      * @return true when every asset was staged (or already present).
@@ -293,7 +293,7 @@ object ProotXfceAssetInstaller {
             }
         }
         if (staged.isEmpty()) return false
-        val dst = "$chrootPath/tmp/flux_xfce_assets"
+        val dst = "$chrootPath/tmp/bliss_xfce_assets"
         val cmd = buildString {
             append("mkdir -p '$dst' && chmod 1777 '$dst' 2>/dev/null; ")
             for ((f, name) in staged) {
@@ -318,8 +318,8 @@ object ProotXfceAssetInstaller {
 
     /** Stage + extract XFCE category extras onto Papirus-Dark (existing + new). */
     private fun stageCategoryExtras(app: Context, rootfs: File, onLog: (String) -> Unit) {
-        val cache = File(app.cacheDir, "flux_xfce_assets").also { it.mkdirs() }
-        val shared = File(TermuxHostPaths.TMPDIR, "flux_xfce_assets").also { it.mkdirs() }
+        val cache = File(app.cacheDir, "bliss_xfce_assets").also { it.mkdirs() }
+        val shared = File(TermuxHostPaths.TMPDIR, "bliss_xfce_assets").also { it.mkdirs() }
         val tar = materialize(
             app, cache, shared,
             assetPath = ICON_CATEGORIES_ASSET,

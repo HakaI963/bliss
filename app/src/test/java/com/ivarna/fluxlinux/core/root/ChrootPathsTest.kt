@@ -10,15 +10,15 @@ class ChrootPathsTest {
 
     @Test
     fun helper_version_is_v210() {
-        assertEquals("fluxlinux-chroot v2.11", ChrootPaths.CHROOT_HELPER_VERSION)
+        assertEquals("bliss-chroot v2.11", ChrootPaths.CHROOT_HELPER_VERSION)
     }
 
     @Test
     fun helper_fluxLoginPrefersRunuserThenSetuidgid() {
         val cwd = java.io.File("").absoluteFile
         val candidates = listOf(
-            java.io.File(cwd, "src/main/assets/scripts/chroot/fluxlinux_chroot.sh"),
-            java.io.File(cwd, "app/src/main/assets/scripts/chroot/fluxlinux_chroot.sh")
+            java.io.File(cwd, "src/main/assets/scripts/chroot/bliss_chroot.sh"),
+            java.io.File(cwd, "app/src/main/assets/scripts/chroot/bliss_chroot.sh")
         )
         val text = candidates.first { it.isFile }.readText()
         assertTrue("guest_login_user must exist", text.contains("guest_login_user()"))
@@ -110,12 +110,12 @@ class ChrootPathsTest {
 
     @Test
     fun new_paths_match_plan_contract() {
-        assertEquals("/data/local/folio/chroots/deepin", ChrootPaths.DEEPIN_CHROOT_PATH)
-        assertEquals("/data/local/folio/chroots/chimera", ChrootPaths.CHIMERA_CHROOT_PATH)
-        assertEquals("/data/local/folio/chroots/manjaro", ChrootPaths.MANJARO_CHROOT_PATH)
-        assertEquals("/data/local/folio/chroots/ubuntu", ChrootPaths.UBUNTU_CHROOT_PATH)
-        assertEquals("/data/local/folio/chroots/kali", ChrootPaths.KALI_CHROOT_PATH)
-        assertEquals("/data/local/folio/chroots/parrot", ChrootPaths.PARROT_CHROOT_PATH)
-        assertEquals("/data/local/folio/chroots/archlinux", ChrootPaths.ARCH_CHROOT_PATH)
+        assertEquals("/data/local/bliss/chroots/deepin", ChrootPaths.DEEPIN_CHROOT_PATH)
+        assertEquals("/data/local/bliss/chroots/chimera", ChrootPaths.CHIMERA_CHROOT_PATH)
+        assertEquals("/data/local/bliss/chroots/manjaro", ChrootPaths.MANJARO_CHROOT_PATH)
+        assertEquals("/data/local/bliss/chroots/ubuntu", ChrootPaths.UBUNTU_CHROOT_PATH)
+        assertEquals("/data/local/bliss/chroots/kali", ChrootPaths.KALI_CHROOT_PATH)
+        assertEquals("/data/local/bliss/chroots/parrot", ChrootPaths.PARROT_CHROOT_PATH)
+        assertEquals("/data/local/bliss/chroots/archlinux", ChrootPaths.ARCH_CHROOT_PATH)
     }
 }

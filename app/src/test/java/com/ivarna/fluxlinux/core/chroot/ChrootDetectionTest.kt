@@ -30,7 +30,7 @@ class ChrootDetectionTest {
     @Test
     fun marker_isInstalled() {
         val dir = tmp.newFolder("marked")
-        File(dir, ".flux_configured").writeText("ok")
+        File(dir, ".bliss_configured").writeText("ok")
         val snap = ChrootDetection.probe(forceRoot = false, path = dir.absolutePath)
         assertTrue(snap.installed)
         assertTrue(ChrootDetection.isInstalled(dir.absolutePath))

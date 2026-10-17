@@ -14,7 +14,7 @@ import java.util.concurrent.atomic.AtomicReference
 /**
  * Live application of the staged Bliss appearance to a *running* desktop.
  *
- * The guest applier (`~/.config/folio/appearance-apply.sh`) writes the XML/rc
+ * The guest applier (`~/.config/bliss/appearance-apply.sh`) writes the XML/rc
  * files; this object additionally pokes the running session so the change is
  * visible immediately:
  *  - xfconf live values for every existing xfce4-desktop backdrop property
@@ -126,7 +126,7 @@ object AppearanceLiveApply {
      *  3. reload xfdesktop and restart xfce4-panel (best-effort).
      */
     internal val GUEST_LIVE_CMD: String = """
-        _fa_sc=/home/flux/.config/folio/appearance-apply.sh
+        _fa_sc=/home/flux/.config/bliss/appearance-apply.sh
         if [ ! -r "${'$'}_fa_sc" ]; then echo FOLIO_APPEARANCE_NO_SCRIPT; exit 0; fi
         _fa_out=${'$'}(FOLIO_APPLY_HOME=/home/flux FOLIO_APPLY_FORCE=1 FOLIO_APPLY_PRINT_PICK=1 /bin/sh "${'$'}_fa_sc" 2>/dev/null || true)
         _fa_wp=${'$'}(printf '%s\n' "${'$'}_fa_out" | sed -n 's/^FOLIO_APPEARANCE_PICK_IMAGE=//p' | head -n 1)

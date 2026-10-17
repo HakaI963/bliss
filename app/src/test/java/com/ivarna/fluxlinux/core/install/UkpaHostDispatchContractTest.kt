@@ -31,10 +31,10 @@ class UkpaHostDispatchContractTest {
     )
 
     private val ukpaPaths = listOf(
-        "/data/local/folio/chroots/ubuntu",
-        "/data/local/folio/chroots/kali",
-        "/data/local/folio/chroots/parrot",
-        "/data/local/folio/chroots/archlinux"
+        "/data/local/bliss/chroots/ubuntu",
+        "/data/local/bliss/chroots/kali",
+        "/data/local/bliss/chroots/parrot",
+        "/data/local/bliss/chroots/archlinux"
     )
 
     @Test
@@ -69,11 +69,11 @@ class UkpaHostDispatchContractTest {
         val stop = repoFile("src/main/assets/scripts/chroot/stop_gui_chroot.sh").readText()
 
         val startDefault = start.substringAfter("*)").substringBefore("esac")
-        assertTrue(startDefault.contains("/data/local/folio/chroots/debian"))
+        assertTrue(startDefault.contains("/data/local/bliss/chroots/debian"))
         assertTrue(startDefault.contains("start_debian13_gui.sh"))
 
         val stopDefault = stop.substringAfter("*)").substringBefore("esac")
-        assertTrue(stopDefault.contains("/data/local/folio/chroots/debian"))
+        assertTrue(stopDefault.contains("/data/local/bliss/chroots/debian"))
         assertTrue(stopDefault.contains("stop_debian13_gui.sh"))
 
         val startAlpine = start.substringAfter("alpine|alpine_chroot").substringBefore(";;")
@@ -88,12 +88,12 @@ class UkpaHostDispatchContractTest {
             "src/main/assets/scripts/chroot/uninstall_guest_chroot.sh"
         ).readText()
         for (path in listOf(
-            "/data/local/folio/chroots/ubuntu",
-            "/data/local/folio/chroots/kali",
-            "/data/local/folio/chroots/parrot",
-            "/data/local/folio/chroots/archlinux",
-            "/data/local/folio/chroots/debian",
-            "/data/local/folio/chroots/manjaro"
+            "/data/local/bliss/chroots/ubuntu",
+            "/data/local/bliss/chroots/kali",
+            "/data/local/bliss/chroots/parrot",
+            "/data/local/bliss/chroots/archlinux",
+            "/data/local/bliss/chroots/debian",
+            "/data/local/bliss/chroots/manjaro"
         )) {
             assertTrue("uninstall allowlist missing $path", text.contains(path))
         }
@@ -178,7 +178,7 @@ class UkpaHostDispatchContractTest {
         )
         assertTrue(arch.contains("_flux_ensure_en_us_locale || exit 1"))
         val common = repoFile(
-            "src/main/assets/scripts/common/setup/flux_guest_common.sh"
+            "src/main/assets/scripts/common/setup/bliss_guest_common.sh"
         ).readText()
         assertTrue(common.contains("pacman -S --noconfirm glibc"))
         assertTrue(
@@ -190,7 +190,7 @@ class UkpaHostDispatchContractTest {
     @Test
     fun localeHelpers_trustLocaleDashA_equateUtf8Spellings() {
         val common = repoFile(
-            "src/main/assets/scripts/common/setup/flux_guest_common.sh"
+            "src/main/assets/scripts/common/setup/bliss_guest_common.sh"
         ).readText()
         val hasEnUs = common.substringAfter("_flux_locale_has_en_us() {")
             .substringBefore("_flux_locale_has_c_utf8")

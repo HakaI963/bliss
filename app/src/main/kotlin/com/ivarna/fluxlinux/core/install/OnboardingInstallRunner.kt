@@ -25,7 +25,7 @@ import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * Runs the simplified onboarding / base install with phase progress + live log.
- * Proot: prepareHost → flux_install (family) → customization via proot-distro.
+ * Proot: prepareHost → bliss_install (family) → customization via proot-distro.
  * Chroot: root check → prepareHost → setup_*_chroot → family → customization in chroot.
  *
  * Distro identity from [DistroInstallProfile] (Debian + Alpine).
@@ -315,7 +315,7 @@ class OnboardingInstallRunner(private val ctx: Context) {
         enter(phases, rootfsIdx, onProgress, "Installing ${profile.displayName} via proot-distro…")
         if (abortIfCancelled(gen, phases, onProgress)) return
         val bash = TermuxHostPaths.libBash(appCtx).absolutePath
-        val installScript = TermuxHostPaths.hostScript(appCtx, "flux_install.sh").absolutePath
+        val installScript = TermuxHostPaths.hostScript(appCtx, "bliss_install.sh").absolutePath
         val setupB64 = BaseDesktopInstallPlan.familySetupB64(
             appCtx, theme, distroId, desktops
         )
@@ -446,7 +446,7 @@ class OnboardingInstallRunner(private val ctx: Context) {
                     "FLUX_SKIP_THEME_ICONS=$skipAssets " +
                     "FLUX_SKIP_OMZ=$skipOmz " +
                     "FLUX_SKIP_POKEMON=0 " +
-                    "FLUX_ASSET_DIR=/tmp/flux_xfce_assets"
+                    "FLUX_ASSET_DIR=/tmp/bliss_xfce_assets"
             )
             if (abortIfCancelled(gen, phases, onProgress)) return
             if (!xfceCustomOk) {
@@ -757,7 +757,7 @@ class OnboardingInstallRunner(private val ctx: Context) {
         var kdeCustomOk = false
         if (xfceSelected) {
             // Stage theme/icon/cursor/wallpaper into the chroot guest /tmp (root copy).
-            // The customization script extracts from /tmp/flux_xfce_assets with guest
+            // The customization script extracts from /tmp/bliss_xfce_assets with guest
             // tar; icons have no download fallback, so this staging is mandatory.
             log(phases, customIdx, onProgress, "Staging XFCE theme/icons into chroot…")
             try {
@@ -928,8 +928,8 @@ class OnboardingInstallRunner(private val ctx: Context) {
     private fun stageFluxGpuCommon() {
         val tmp = File(TermuxHostPaths.TMPDIR)
         if (!tmp.exists()) tmp.mkdirs()
-        val dest = File(tmp, "flux_gpu_common.sh")
-        appCtx.assets.open("scripts/common/setup/flux_gpu_common.sh").use { input ->
+        val dest = File(tmp, "bliss_gpu_common.sh")
+        appCtx.assets.open("scripts/common/setup/bliss_gpu_common.sh").use { input ->
             dest.outputStream().use { input.copyTo(it) }
         }
         dest.setExecutable(true)
@@ -994,7 +994,7 @@ class OnboardingInstallRunner(private val ctx: Context) {
         onProgress: (Progress) -> Unit,
         chrootPath: String = com.ivarna.fluxlinux.core.root.ChrootPaths.CHROOT_PATH
     ): Int {
-        // captureInChroot already base64-wraps once via fluxlinux_chroot b64.
+        // captureInChroot already base64-wraps once via bliss_chroot b64.
         // Nested echo|base64 is redundant and bloated host su -c strings.
         // guest_b64 prefers /bin/bash when present, else /bin/sh (Alpine minirootfs).
         val body = "export PYTHONUNBUFFERED=1\n$scriptBody"

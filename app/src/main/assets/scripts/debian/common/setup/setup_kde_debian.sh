@@ -84,7 +84,7 @@ if [ "$1" = "uninstall" ] || [ "$2" = "uninstall" ]; then
     # Remove KDE-specific marker and runtime env helper only.
     # Never remove /home/flux/.vnc — that file belongs to the XFCE component too.
     rm -f /home/flux/.fluxlinux/kde_installed
-    rm -f /usr/local/lib/fluxlinux/flux_kde_env.sh
+    rm -f /usr/local/lib/fluxlinux/bliss_kde_env.sh
 
     echo "Bliss: KDE Plasma Environment Uninstalled."
     exit 0
@@ -121,7 +121,7 @@ handle_error() {
 }
 
 # ── Required-package retry (flaky downloads abort xbps/dnf/apt mid-fetch) ──
-# The shared helpers (_flux_retry_pkg in flux_guest_common.sh) are not
+# The shared helpers (_flux_retry_pkg in bliss_guest_common.sh) are not
 # prepended to this standalone component, so carry the same guarded helper.
 if ! command -v _flux_pm_refresh >/dev/null 2>&1; then
     _flux_pm_refresh() {
@@ -229,7 +229,7 @@ chmod +x /home/flux/.vnc/xstartup
 chown -R flux:flux /home/flux/.vnc
 
 # Compositing + effects off system-wide by default (XFCE parity; GPU accel path).
-# Per-user config is kept in sync at session start (flux_kde_env.sh).
+# Per-user config is kept in sync at session start (bliss_kde_env.sh).
 mkdir -p /etc/xdg
 [ -e /etc/xdg/kwinrc ] || cat > /etc/xdg/kwinrc << 'KWEOF'
 [Compositing]

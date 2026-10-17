@@ -245,7 +245,7 @@ class InstallServerService : Service() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_stat_flux)
+            .setSmallIcon(R.drawable.ic_stat_bliss)
             .setContentTitle(title)
             .setContentText(body)
             .setOngoing(true)

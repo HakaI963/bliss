@@ -91,7 +91,7 @@ class AudioSettingsContractTest {
 
     @Test
     fun guestCommon_noPulseDaemonFallback() {
-        val common = repoFile("src/main/assets/scripts/common/setup/flux_guest_common.sh").readText()
+        val common = repoFile("src/main/assets/scripts/common/setup/bliss_guest_common.sh").readText()
         assertTrue(common.contains("Never fall back to the `pulseaudio` server package"))
         assertFalse(common.contains("_flux_try_install pulseaudio ||"))
         assertTrue(common.contains("pulse client already present"))
@@ -106,7 +106,7 @@ class AudioSettingsContractTest {
         val voidFamily = repoFile("src/main/assets/scripts/void/common/setup/setup_void_family.sh")
             .readText()
         assertFalse(voidFamily.contains("_flux_try_install pulseaudio ||"))
-        assertFalse(voidFamily.contains("# --- inlined flux_guest_common.sh ---"))
+        assertFalse(voidFamily.contains("# --- inlined bliss_guest_common.sh ---"))
         assertTrue(voidFamily.contains("_flux_setup_pulse"))
     }
 

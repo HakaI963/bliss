@@ -1,8 +1,8 @@
 #!/bin/sh
 # uninstall_alpine_chroot.sh — remove Alpine chroot (Requires Root)
 
-ALPINEPATH="${FLUX_CHROOT:-/data/local/folio/chroots/alpine}"
-LAUNCH_SCRIPTS="/data/local/folio/helpers/start_alpine_gui.sh /data/local/folio/helpers/stop_alpine_gui.sh /data/local/folio/helpers/enter_alpine.sh /data/local/folio/helpers/uninstall_alpine_chroot.sh"
+ALPINEPATH="${FLUX_CHROOT:-/data/local/bliss/chroots/alpine}"
+LAUNCH_SCRIPTS="/data/local/bliss/helpers/start_alpine_gui.sh /data/local/bliss/helpers/stop_alpine_gui.sh /data/local/bliss/helpers/enter_alpine.sh /data/local/bliss/helpers/uninstall_alpine_chroot.sh"
 
 error()    { printf "\033[1;31m[!] %s\033[0m\n" "$1"; }
 success()  { printf "\033[1;32m[✓] %s\033[0m\n" "$1"; }
@@ -21,7 +21,7 @@ _rr=""
 for _c in \
   "${FLUX_RESOLVE_BB:-}" \
   "$(dirname "$0")/resolve_bb.sh" \
-  /data/local/folio/helpers/fluxlinux_resolve_bb.sh
+  /data/local/bliss/helpers/bliss_resolve_bb.sh
 do
   [ -n "$_c" ] && [ -f "$_c" ] && _rr="$_c" && break
 done
@@ -33,9 +33,9 @@ fi
 if [ -z "${BB:-}" ]; then
   if [ -n "${FLUX_BB:-}" ] && [ -x "$FLUX_BB" ] &&
      "$FLUX_BB" --list >/dev/null 2>&1; then BB="$FLUX_BB"; fi
-  if [ -z "${BB:-}" ] && [ -x /data/local/folio/busybox/flux_busybox ] &&
-     /data/local/folio/busybox/flux_busybox --list >/dev/null 2>&1; then
-    BB=/data/local/folio/busybox/flux_busybox
+  if [ -z "${BB:-}" ] && [ -x /data/local/bliss/busybox/bliss_busybox ] &&
+     /data/local/bliss/busybox/bliss_busybox --list >/dev/null 2>&1; then
+    BB=/data/local/bliss/busybox/bliss_busybox
   fi
   if [ -z "${BB:-}" ]; then
     for path in \
@@ -107,7 +107,7 @@ for script in $LAUNCH_SCRIPTS; do
     fi
 done
 
-# Do NOT remove shared fluxlinux_chroot.sh (used by Debian too)
+# Do NOT remove shared bliss_chroot.sh (used by Debian too)
 success "Uninstallation Complete!"
 
 mount -t tracefs tracefs /sys/kernel/tracing 2>/dev/null || true

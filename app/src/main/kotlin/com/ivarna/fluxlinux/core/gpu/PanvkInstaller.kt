@@ -14,7 +14,7 @@ import java.io.File
  */
 object PanvkInstaller {
 
-    const val MARKER = "/etc/fluxlinux/panvk_version"
+    const val MARKER = "/etc/bliss/panvk_version"
     const val API = "https://api.github.com/repos/zenithblue-oss/panvk-kbase-android/releases?per_page=100"
     private const val BASE = "https://github.com/zenithblue-oss/panvk-kbase-android/releases/download"
     private const val PREFS = "fluxlinux_gpu_driver"

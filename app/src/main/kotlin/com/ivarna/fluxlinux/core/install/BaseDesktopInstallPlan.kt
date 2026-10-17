@@ -102,7 +102,7 @@ object BaseDesktopInstallPlan {
         val sm = ScriptManager(ctx)
         val family = sm.getScriptContent(profile.familyScript)
         val common = runCatching {
-            sm.getScriptContent("common/setup/flux_guest_common.sh")
+            sm.getScriptContent("common/setup/bliss_guest_common.sh")
         }.getOrDefault("")
         val desktopsEnv = DesktopInstallSelection.envValue(desktops)
         val firstEnv = DesktopInstallSelection.firstEnvValue(desktops)
@@ -183,7 +183,7 @@ object BaseDesktopInstallPlan {
     }
 
     /**
-     * Guest hw-accel payload: [flux_gpu_common.sh] + installer.
+     * Guest hw-accel payload: [bliss_gpu_common.sh] + installer.
      * [fluxGpu] must already be `turnip`, `virgl`, or `ask` — never `auto`.
      */
     fun hwAccelPayload(
@@ -199,7 +199,7 @@ object BaseDesktopInstallPlan {
         val installerPath = profile.hwAccelScript ?: "common/setup/setup_hw_accel_guest.sh"
         val installer = sm.getScriptContent(installerPath)
         val common = runCatching {
-            sm.getScriptContent("common/setup/flux_gpu_common.sh")
+            sm.getScriptContent("common/setup/bliss_gpu_common.sh")
         }.getOrDefault("")
         return buildString {
             append("export FLUX_GPU='").append(fluxGpu).append("'\n")

@@ -1,5 +1,5 @@
 #!/bin/sh
-# flux_gpu_common.sh — POSIX functions only. No exit. No package manager.
+# bliss_gpu_common.sh — POSIX functions only. No exit. No package manager.
 # Sourced by setup_hw_accel_guest.sh and prepended by Kotlin payloads.
 
 # shellcheck disable=SC2034
@@ -96,32 +96,33 @@ flux_gpu_arch() {
 }
 
 flux_gpu_write_state() {
+[ -d /etc/fluxlinux ] && [ ! -e /etc/bliss ] && mv /etc/fluxlinux /etc/bliss 2>/dev/null || true
     _mode=${1:-virgl}
     _vendor=${2:-unknown}
-    mkdir -p /etc/fluxlinux
-    printf '%s\n' "$_mode" > /etc/fluxlinux/gpu_mode
-    printf '%s\n' "$_vendor" > /etc/fluxlinux/gpu_vendor
-    chmod 644 /etc/fluxlinux/gpu_mode /etc/fluxlinux/gpu_vendor 2>/dev/null || true
+    mkdir -p /etc/bliss
+    printf '%s\n' "$_mode" > /etc/bliss/gpu_mode
+    printf '%s\n' "$_vendor" > /etc/bliss/gpu_vendor
+    chmod 644 /etc/bliss/gpu_mode /etc/bliss/gpu_vendor 2>/dev/null || true
     mkdir -p /etc/profile.d
-    cat > /etc/profile.d/flux-gpu.sh << 'PROFILE'
+    cat > /etc/profile.d/bliss-gpu.sh << 'PROFILE'
 # Bliss GPU mode helpers
-if [ -r /etc/fluxlinux/gpu_mode ]; then
-    FLUX_GPU_MODE=$(tr -d '[:space:]' </etc/fluxlinux/gpu_mode)
+if [ -r /etc/bliss/gpu_mode ]; then
+    FLUX_GPU_MODE=$(tr -d '[:space:]' </etc/bliss/gpu_mode)
     export FLUX_GPU_MODE
 fi
 # Turnip installed (marker) → hardware GL/Vulkan in terminal sessions too.
-if [ "${FLUX_GPU_MODE:-}" = turnip ] && [ -r /etc/fluxlinux/turnip_version ]; then
+if [ "${FLUX_GPU_MODE:-}" = turnip ] && [ -r /etc/bliss/turnip_version ]; then
     export MESA_LOADER_DRIVER_OVERRIDE=kgsl
 fi
 # PanVK installed (marker) → zink on the Mali Vulkan ICD in terminal sessions.
-if [ "${FLUX_GPU_MODE:-}" = panvk ] && [ -r /etc/fluxlinux/panvk_version ]; then
+if [ "${FLUX_GPU_MODE:-}" = panvk ] && [ -r /etc/bliss/panvk_version ]; then
     export MESA_LOADER_DRIVER_OVERRIDE=zink
     export GALLIUM_DRIVER=zink
     export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/panfrost_icd.aarch64.json
     export MESA_VK_WSI_DEBUG=sw
 fi
 PROFILE
-    chmod 644 /etc/profile.d/flux-gpu.sh 2>/dev/null || true
+    chmod 644 /etc/profile.d/bliss-gpu.sh 2>/dev/null || true
 }
 
 flux_gpu_has_kgsl_dri() {
@@ -139,12 +140,13 @@ flux_gpu_has_kgsl_dri() {
 
 flux_gpu_apply_runtime() {
     unset GALLIUM_DRIVER MESA_LOADER_DRIVER_OVERRIDE VK_ICD_FILENAMES
+[ -d /etc/fluxlinux ] && [ ! -e /etc/bliss ] && mv /etc/fluxlinux /etc/bliss 2>/dev/null || true
     unset LIBGL_ALWAYS_SOFTWARE TU_DEBUG MESA_VK_WSI_DEBUG
     MODE=virgl
     if [ -n "${FLUX_GPU_RUNTIME:-}" ]; then
         MODE=$(printf '%s' "$FLUX_GPU_RUNTIME" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
-    elif [ -r /etc/fluxlinux/gpu_mode ]; then
-        MODE=$(tr -d '[:space:]' </etc/fluxlinux/gpu_mode)
+    elif [ -r /etc/bliss/gpu_mode ]; then
+        MODE=$(tr -d '[:space:]' </etc/bliss/gpu_mode)
     fi
     case "$MODE" in turnip|panvk|virgl) ;; *) MODE=virgl ;; esac
     if [ "$MODE" = turnip ]; then
@@ -208,12 +210,13 @@ flux_gpu_has_kgsl_dri() {
 
 flux_gpu_apply_runtime() {
     unset GALLIUM_DRIVER MESA_LOADER_DRIVER_OVERRIDE VK_ICD_FILENAMES
+[ -d /etc/fluxlinux ] && [ ! -e /etc/bliss ] && mv /etc/fluxlinux /etc/bliss 2>/dev/null || true
     unset LIBGL_ALWAYS_SOFTWARE TU_DEBUG MESA_VK_WSI_DEBUG
     MODE=virgl
     if [ -n "${FLUX_GPU_RUNTIME:-}" ]; then
         MODE=$(printf '%s' "$FLUX_GPU_RUNTIME" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
-    elif [ -r /etc/fluxlinux/gpu_mode ]; then
-        MODE=$(tr -d '[:space:]' </etc/fluxlinux/gpu_mode)
+    elif [ -r /etc/bliss/gpu_mode ]; then
+        MODE=$(tr -d '[:space:]' </etc/bliss/gpu_mode)
     fi
     case "$MODE" in turnip|panvk|virgl) ;; *) MODE=virgl ;; esac
     if [ "$MODE" = turnip ]; then
@@ -260,15 +263,15 @@ flux_gpu_write_gpu_launch() {
     mkdir -p /usr/local/bin
     cat > /usr/local/bin/gpu-launch << 'EOF'
 #!/bin/sh
-# Bliss GPU launcher — reads /etc/fluxlinux/gpu_mode; override via FLUX_GPU_RUNTIME
+# Bliss GPU launcher — reads /etc/bliss/gpu_mode; override via FLUX_GPU_RUNTIME
 if [ -r /usr/local/lib/fluxlinux/apply_gpu_env.sh ]; then
     # shellcheck disable=SC1091
     . /usr/local/lib/fluxlinux/apply_gpu_env.sh
     flux_gpu_apply_runtime
 else
     MODE=virgl
-    if [ -r /etc/fluxlinux/gpu_mode ]; then
-        MODE=$(tr -d '[:space:]' </etc/fluxlinux/gpu_mode)
+    if [ -r /etc/bliss/gpu_mode ]; then
+        MODE=$(tr -d '[:space:]' </etc/bliss/gpu_mode)
     fi
     [ -n "${FLUX_GPU_RUNTIME:-}" ] && MODE=$FLUX_GPU_RUNTIME
     case "$MODE" in

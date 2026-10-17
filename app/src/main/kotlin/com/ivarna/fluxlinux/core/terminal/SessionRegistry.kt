@@ -191,7 +191,7 @@ object SessionRegistry {
                 Log.d(TAG, "Session finished: ${session.exitStatus}")
                 val managed = sessionsList.find { it.session === session }
                 // B3: success callbacks fire ONLY on clean exit — a failed
-                // flux_install.sh / component script must never mark state installed.
+                // bliss_install.sh / component script must never mark state installed.
                 if (session.exitStatus == 0) {
                     managed?.onFinished?.invoke()
                 }

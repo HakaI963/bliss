@@ -29,8 +29,9 @@ object HostScriptDeployer {
      * deployed asset changes so existing installs re-deploy on the next cold run.
      * A current marker makes [deployScripts] a no-op — no 30-script asset copy,
      * no pulse overlay, no loader churn — on successive warm sessions.
+     * v2: script assets renamed (bliss_install.sh / bliss_guest_common.sh / …).
      */
-    internal const val DEPLOY_VERSION = 1
+    internal const val DEPLOY_VERSION = 2
     private const val MARKER_REL = "home/.fluxlinux/scripts.deployed"
 
     /** Marker file: content is the deployed [DEPLOY_VERSION]. */
@@ -65,7 +66,7 @@ object HostScriptDeployer {
         HostScript("start_pulse_host.sh", "scripts/host/start_pulse_host.sh"),
         HostScript("repair_pulse_guests.sh", "scripts/host/repair_pulse_guests.sh"),
         HostScript("setup_pulse_guest.sh", "scripts/common/setup/setup_pulse_guest.sh"),
-        HostScript("flux_install.sh", "scripts/debian/proot/setup/flux_install.sh"),
+        HostScript("bliss_install.sh", "scripts/debian/proot/setup/bliss_install.sh"),
         // Debian guest
         HostScript("setup_debian_family.sh", "scripts/debian/common/setup/setup_debian_family.sh"),
         HostScript(
@@ -84,8 +85,8 @@ object HostScriptDeployer {
             "scripts/alpine/common/setup/setup_customization_alpine.sh"
         ),
         // Shared glibc-guest helpers (Fedora / Void / openSUSE)
-        HostScript("flux_guest_common.sh", "scripts/common/setup/flux_guest_common.sh"),
-        HostScript("flux_gpu_common.sh", "scripts/common/setup/flux_gpu_common.sh"),
+        HostScript("bliss_guest_common.sh", "scripts/common/setup/bliss_guest_common.sh"),
+        HostScript("bliss_gpu_common.sh", "scripts/common/setup/bliss_gpu_common.sh"),
         HostScript(
             "setup_customization_xfce.sh",
             "scripts/common/setup/setup_customization_xfce.sh"
@@ -149,7 +150,7 @@ object HostScriptDeployer {
         HostScript("uninstall_debian13_chroot.sh", "scripts/chroot/uninstall_debian13_chroot.sh"),
         HostScript("setup_alpine_chroot.sh", "scripts/chroot/setup_alpine_chroot.sh"),
         HostScript("uninstall_alpine_chroot.sh", "scripts/chroot/uninstall_alpine_chroot.sh"),
-        HostScript("fluxlinux_chroot.sh", "scripts/chroot/fluxlinux_chroot.sh"),
+        HostScript("bliss_chroot.sh", "scripts/chroot/bliss_chroot.sh"),
         HostScript("resolve_bb.sh", "scripts/chroot/resolve_bb.sh"),
         HostScript("chroot_processes.sh", "scripts/chroot/chroot_processes.sh", required = false),
         HostScript("chroot_size.sh", "scripts/chroot/chroot_size.sh", required = false),
@@ -269,7 +270,7 @@ object HostScriptDeployer {
         chmodPulseLib(lame0)
         val paDir = File(ctx.filesDir, "usr/etc/pulse/default.pa.d")
         paDir.mkdirs()
-        File(paDir, "99-fluxlinux.pa").writeText(
+        File(paDir, "99-bliss.pa").writeText(
             ".nofail\n" +
                 "load-module module-aaudio-sink\n" +
                 "load-module module-sles-sink\n" +

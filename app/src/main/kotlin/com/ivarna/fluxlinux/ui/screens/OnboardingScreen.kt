@@ -80,7 +80,7 @@ private fun PortraitLayout(
 ) {
     Box(Modifier.fillMaxSize()) {
         Image(
-            painter = painterResource(id = R.drawable.onboarding_bg_1),
+            painter = painterResource(id = R.drawable.ic_bliss_mark),
             contentDescription = null,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
@@ -175,7 +175,7 @@ private fun LandscapeLayout(
             Spacer(modifier = Modifier.weight(1f))
 
             Image(
-                painter = painterResource(id = R.drawable.onboarding_bg_1),
+                painter = painterResource(id = R.drawable.ic_bliss_mark),
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxWidth(0.9f),

@@ -3,14 +3,14 @@
 # Post-install base desktop for Alpine (proot + chroot). apk + musl.
 # Creates user flux, installs XFCE4. Must run as root inside the guest.
 
-# Helpers live in flux_guest_common.sh (prepended by flux_install /
+# Helpers live in bliss_guest_common.sh (prepended by bliss_install /
 # familySetupPayload). Source it only when this file is run standalone.
 if ! command -v _flux_setup_pulse >/dev/null 2>&1; then
     _here=$(CDPATH= cd -- "$(dirname -- "$0")" 2>/dev/null && pwd)
     for _common in \
-        "${_here}/flux_guest_common.sh" \
-        "${HOME:-}/flux_guest_common.sh" \
-        /tmp/flux_guest_common.sh
+        "${_here}/bliss_guest_common.sh" \
+        "${HOME:-}/bliss_guest_common.sh" \
+        /tmp/bliss_guest_common.sh
     do
         if [ -f "$_common" ]; then
             # shellcheck source=/dev/null
@@ -240,7 +240,7 @@ else
     else
         printf 'PULSE_SERVER=tcp:127.0.0.1\n' > /etc/environment
     fi
-    cat > /etc/pulse/client.conf.d/99-fluxlinux.conf <<'EOF'
+    cat > /etc/pulse/client.conf.d/99-bliss.conf <<'EOF'
 default-server = tcp:127.0.0.1
 autospawn = no
 EOF
@@ -286,12 +286,13 @@ _flux_fix_apk_writable() {
 echo "Bliss: Ensuring apk database is writable (proot-safe)…"
 _flux_fix_apk_writable
 
-mkdir -p /etc/fluxlinux
-printf '%s\n' virgl > /etc/fluxlinux/gpu_mode
+[ -d /etc/fluxlinux ] && [ ! -e /etc/bliss ] && mv /etc/fluxlinux /etc/bliss 2>/dev/null || true
+mkdir -p /etc/bliss
+printf '%s\n' virgl > /etc/bliss/gpu_mode
 echo "Bliss: gpu_mode=virgl (first-paint; hw-accel may upgrade)"
 
 # Phone-compact XFCE defaults (30px mono top panel, DPI 96, wallpaper,
-# Home-only desktop icons, shortcuts). Helper ships in flux_guest_common.sh;
+# Home-only desktop icons, shortcuts). Helper ships in bliss_guest_common.sh;
 # guarded so a standalone run without it is a no-op and never fails install.
 if [ -z "${DESKTOPS##*xfce*}" ] && command -v _flux_xfce_compact_defaults >/dev/null 2>&1; then
     _flux_xfce_compact_defaults || true

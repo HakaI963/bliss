@@ -4,8 +4,9 @@
 # Requires Root (su)
 
 # Global Variables
-ARCHPATH="/data/local/folio/chroots/archlinux"
+ARCHPATH="/data/local/bliss/chroots/archlinux"
 USERNAME="flux"
+[ -d /data/local/folio ] && [ ! -e /data/local/bliss ] && mv /data/local/folio /data/local/bliss 2>/dev/null || true
 # App prefix (embedded Termux-class host; both store flavors via env override)
 PKG="${TERMUX_APP__PACKAGE_NAME:-com.ivarna.fluxlinux}"
 APP_PREFIX="${TERMUX__PREFIX:-/data/data/${PKG}/files/usr}"
@@ -59,7 +60,7 @@ _rr=""
 for _c in \
   "${FLUX_RESOLVE_BB:-}" \
   "$(dirname "$0")/resolve_bb.sh" \
-  /data/local/folio/helpers/fluxlinux_resolve_bb.sh
+  /data/local/bliss/helpers/bliss_resolve_bb.sh
 do
   [ -n "$_c" ] && [ -f "$_c" ] && _rr="$_c" && break
 done
@@ -72,9 +73,9 @@ if [ -z "${BB:-}" ]; then
   # sidecar missing (desktop/uninstall/staged setup) — same B1 walk as resolve_bb
   if [ -n "${FLUX_BB:-}" ] && [ -x "$FLUX_BB" ] &&
      "$FLUX_BB" --list >/dev/null 2>&1; then BB="$FLUX_BB"; fi
-  if [ -z "${BB:-}" ] && [ -x /data/local/folio/busybox/flux_busybox ] &&
-     /data/local/folio/busybox/flux_busybox --list >/dev/null 2>&1; then
-    BB=/data/local/folio/busybox/flux_busybox
+  if [ -z "${BB:-}" ] && [ -x /data/local/bliss/busybox/bliss_busybox ] &&
+     /data/local/bliss/busybox/bliss_busybox --list >/dev/null 2>&1; then
+    BB=/data/local/bliss/busybox/bliss_busybox
   fi
   if [ -z "${BB:-}" ]; then
     for path in \
@@ -291,15 +292,15 @@ fi
     success "Arch Environment Configured!"
     
     # Root-staged launchers live in the Bliss helpers dir (idempotent).
-    mkdir -p /data/local/folio/helpers
+    mkdir -p /data/local/bliss/helpers
     
     # --- LAUNCH SCRIPTS ---
     
     # 1. CLI Launcher (enter_arch.sh)
-    CLI_SCRIPT="/data/local/folio/helpers/enter_arch.sh"
+    CLI_SCRIPT="/data/local/bliss/helpers/enter_arch.sh"
     cat <<EOF > "$CLI_SCRIPT"
 #!/bin/sh
-ARCHPATH="/data/local/folio/chroots/archlinux"
+ARCHPATH="/data/local/bliss/chroots/archlinux"
 BB="$BB"
 
 \$BB mount -o remount,dev,suid /data
@@ -319,7 +320,7 @@ EOF
     success "CLI Launcher Created: $CLI_SCRIPT"
 
     # 2. KDE Launcher (start_arch_gui.sh)
-    GUI_SCRIPT="/data/local/folio/helpers/start_arch_gui.sh"
+    GUI_SCRIPT="/data/local/bliss/helpers/start_arch_gui.sh"
     TERMUX_PREFIX="$APP_PREFIX"
     
     cat <<EOF > "$GUI_SCRIPT"
@@ -334,7 +335,7 @@ killall -9 termux-x11 Xwayland pulseaudio virgl_test_server_android 2>/dev/null
 am start --user 0 -n com.termux.x11/com.termux.x11.MainActivity >/dev/null
 
 # Mount Tmp for VirGL socket sharing
-$BB mount --bind $TERMUX_PREFIX/tmp /data/local/folio/chroots/archlinux/tmp 2>/dev/null
+$BB mount --bind $TERMUX_PREFIX/tmp /data/local/bliss/chroots/archlinux/tmp 2>/dev/null
 
 # Fix Permissions for VirGL
 chmod -R 1777 $TERMUX_PREFIX/tmp
@@ -357,7 +358,7 @@ sleep 2
 
 # Launch KDE Plasma
 echo "Starting KDE Plasma..."
-$BB chroot /data/local/folio/chroots/archlinux /bin/su - flux -c '
+$BB chroot /data/local/bliss/chroots/archlinux /bin/su - flux -c '
     export DISPLAY=:0 
     export PULSE_SERVER=tcp:127.0.0.1
     export GALLIUM_DRIVER=virpipe 

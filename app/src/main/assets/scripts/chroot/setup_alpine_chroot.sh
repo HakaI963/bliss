@@ -3,8 +3,9 @@
 # Installs Alpine 3.24 minirootfs chroot (Requires Root).
 # Family/XFCE install is owned by onboarding family phase (setup_alpine_family.sh).
 
-ALPINEPATH="${FLUX_CHROOT:-/data/local/folio/chroots/alpine}"
+ALPINEPATH="${FLUX_CHROOT:-/data/local/bliss/chroots/alpine}"
 USERNAME="flux"
+[ -d /data/local/folio ] && [ ! -e /data/local/bliss ] && mv /data/local/folio /data/local/bliss 2>/dev/null || true
 
 PKG="${TERMUX_APP__PACKAGE_NAME:-com.ivarna.fluxlinux}"
 APP_HOME="${TERMUX__HOME:-/data/data/${PKG}/files/home}"
@@ -196,20 +197,20 @@ configure_alpine_chroot() {
     " || goodbye
 
     # XFCE is installed by setup_alpine_family.sh in onboarding (cleaner single owner)
-    touch "$ALPINEPATH/.flux_configured"
+    touch "$ALPINEPATH/.bliss_configured"
     success "Alpine Environment Configured (rootfs + user; XFCE via family phase)!"
 
     # Root-staged helper/launchers live in the Bliss helpers dir (idempotent).
-    mkdir -p /data/local/folio/helpers
+    mkdir -p /data/local/bliss/helpers
 
     # Stage SSOT helper
-    HELPER="/data/local/folio/helpers/fluxlinux_chroot.sh"
+    HELPER="/data/local/bliss/helpers/bliss_chroot.sh"
     progress "Installing chroot SSOT helper at $HELPER..."
     HELPER_SRC=""
     for cand in \
-        "/data/data/${PKG}/files/home/fluxlinux_chroot.sh" \
-        "/data/data/${PKG}/files/staged_scripts/fluxlinux_chroot.sh" \
-        "$(dirname "$0")/fluxlinux_chroot.sh"
+        "/data/data/${PKG}/files/home/bliss_chroot.sh" \
+        "/data/data/${PKG}/files/staged_scripts/bliss_chroot.sh" \
+        "$(dirname "$0")/bliss_chroot.sh"
     do
         if [ -f "$cand" ]; then
             HELPER_SRC="$cand"
@@ -221,26 +222,26 @@ configure_alpine_chroot() {
         chmod 755 "$HELPER"
         success "SSOT helper installed from $HELPER_SRC"
     else
-        error "fluxlinux_chroot.sh not found — app will stage on first session"
+        error "bliss_chroot.sh not found — app will stage on first session"
     fi
 
     # Stage Alpine GUI scripts if present in app home
     for s in start_alpine_gui.sh stop_alpine_gui.sh; do
         src="/data/data/${PKG}/files/home/$s"
         if [ -f "$src" ]; then
-            cp -f "$src" "/data/local/folio/helpers/$s"
-            chmod +x "/data/local/folio/helpers/$s"
+            cp -f "$src" "/data/local/bliss/helpers/$s"
+            chmod +x "/data/local/bliss/helpers/$s"
             success "Staged $s"
         fi
     done
 
     # Thin CLI launcher
-    CLI_SCRIPT="/data/local/folio/helpers/enter_alpine.sh"
+    CLI_SCRIPT="/data/local/bliss/helpers/enter_alpine.sh"
     cat > "$CLI_SCRIPT" <<'EOF'
 #!/system/bin/sh
-HELPER=/data/local/folio/helpers/fluxlinux_chroot.sh
-[ -f "$HELPER" ] || { echo "fluxlinux_chroot.sh missing" >&2; exit 127; }
-export FLUX_CHROOT="${FLUX_CHROOT:-/data/local/folio/chroots/alpine}"
+HELPER=/data/local/bliss/helpers/bliss_chroot.sh
+[ -f "$HELPER" ] || { echo "bliss_chroot.sh missing" >&2; exit 127; }
+export FLUX_CHROOT="${FLUX_CHROOT:-/data/local/bliss/chroots/alpine}"
 echo "Entering Alpine Chroot (CLI)..."
 exec sh "$HELPER" login --user flux --shell zsh
 EOF
@@ -268,7 +269,7 @@ _rr=""
 for _c in \
   "${FLUX_RESOLVE_BB:-}" \
   "$(dirname "$0")/resolve_bb.sh" \
-  /data/local/folio/helpers/fluxlinux_resolve_bb.sh
+  /data/local/bliss/helpers/bliss_resolve_bb.sh
 do
   [ -n "$_c" ] && [ -f "$_c" ] && _rr="$_c" && break
 done
@@ -281,9 +282,9 @@ if [ -z "${BB:-}" ]; then
   # sidecar missing (desktop/uninstall/staged setup) — same B1 walk as resolve_bb
   if [ -n "${FLUX_BB:-}" ] && [ -x "$FLUX_BB" ] &&
      "$FLUX_BB" --list >/dev/null 2>&1; then BB="$FLUX_BB"; fi
-  if [ -z "${BB:-}" ] && [ -x /data/local/folio/busybox/flux_busybox ] &&
-     /data/local/folio/busybox/flux_busybox --list >/dev/null 2>&1; then
-    BB=/data/local/folio/busybox/flux_busybox
+  if [ -z "${BB:-}" ] && [ -x /data/local/bliss/busybox/bliss_busybox ] &&
+     /data/local/bliss/busybox/bliss_busybox --list >/dev/null 2>&1; then
+    BB=/data/local/bliss/busybox/bliss_busybox
   fi
   if [ -z "${BB:-}" ]; then
     for path in \
@@ -308,11 +309,11 @@ fi
 
     progress "Using Root Busybox: $BB"
 
-    ALPINEPATH="${FLUX_CHROOT:-/data/local/folio/chroots/alpine}"
+    ALPINEPATH="${FLUX_CHROOT:-/data/local/bliss/chroots/alpine}"
 
     # Only treat as fully installed when marker + bash + flux user exist.
     # Minirootfs always has bin/sh + sbin/apk — those alone must NOT skip configure.
-    if [ -f "$ALPINEPATH/.flux_configured" ] && \
+    if { [ -f "$ALPINEPATH/.bliss_configured" ] || [ -f "$ALPINEPATH/.flux_configured" ]; } && \
        { [ -e "$ALPINEPATH/bin/bash" ] || [ -e "$ALPINEPATH/usr/bin/bash" ]; } && \
        grep -q '^flux:' "$ALPINEPATH/etc/passwd" 2>/dev/null; then
         success "Alpine Chroot already installed."

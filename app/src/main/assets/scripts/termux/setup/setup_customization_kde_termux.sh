@@ -257,7 +257,7 @@ forceFontDPI=192
 EOF
 
 echo "Bliss: Configuring Konsole..."
-cat > "$HOME/.local/share/konsole/Folio.profile" << 'EOF'
+cat > "$HOME/.local/share/konsole/bliss.profile" << 'EOF'
 [Appearance]
 ColorScheme=Breeze
 Font=Noto Sans Mono,12,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
@@ -284,7 +284,7 @@ EOF
 
 cat > "$KDE_CONFIG/konsolerc" << 'EOF'
 [Desktop Entry]
-DefaultProfile=Folio.profile
+DefaultProfile=bliss.profile
 
 [KonsoleWindow]
 RememberWindowSize=true

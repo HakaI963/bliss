@@ -1,6 +1,9 @@
 package com.ivarna.fluxlinux.ui.onboarding
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -17,7 +20,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
@@ -77,8 +79,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -105,6 +107,7 @@ import com.ivarna.fluxlinux.ui.components.MethodTabs
 import com.ivarna.fluxlinux.ui.components.isChrootCard
 import com.ivarna.fluxlinux.ui.install.InstallProgressPanel
 import com.ivarna.fluxlinux.ui.theme.FolioBackground
+import com.ivarna.fluxlinux.ui.theme.FolioMotion
 import com.ivarna.fluxlinux.ui.theme.FrostHairline
 import com.ivarna.fluxlinux.ui.theme.StatusDot
 import com.ivarna.fluxlinux.ui.theme.TextPrimary
@@ -246,6 +249,18 @@ fun OnboardingFlowScreen(
 private fun WelcomePage(onNext: () -> Unit) {
     val colors = MaterialTheme.colorScheme
 
+    // One-shot hero entrance: fade with a subtle scale-up on the mark.
+    var heroIn by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { heroIn = true }
+    val heroProgress by animateFloatAsState(
+        targetValue = if (heroIn) 1f else 0f,
+        animationSpec = tween(
+            durationMillis = FolioMotion.ScreenMs,
+            easing = FastOutSlowInEasing
+        ),
+        label = "welcomeHero"
+    )
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -254,37 +269,84 @@ private fun WelcomePage(onNext: () -> Unit) {
     ) {
         StepDots(current = 1, total = 4)
 
-        // Top Hero Header
+        // Hero + copy + features scroll together so nothing clips on short
+        // screens; the CTA stays pinned at the bottom.
         Column(
             modifier = Modifier
+                .weight(1f)
                 .fillMaxWidth()
-                .padding(top = 16.dp, bottom = 12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            // Glowing Logo Container
+            Spacer(Modifier.height(8.dp))
+
+            // Frost hero: a soft radial glow with the mark floating on a small
+            // always-dark tile (mirrors the launcher icon so it reads in every
+            // theme). Pure Compose gradients — no bitmap art.
             Box(
                 modifier = Modifier
-                    .size(68.dp)
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(
-                        Brush.linearGradient(
-                            listOf(
-                                TextSecondary.copy(alpha = 0.25f),
-                                TextSecondary.copy(alpha = 0.25f)
-                            )
-                        )
-                    )
-                    .border(0.75.dp, FrostHairline, RoundedCornerShape(20.dp)),
+                    .fillMaxWidth()
+                    .height(190.dp)
+                    .clip(RoundedCornerShape(26.dp))
+                    .background(colors.surface.copy(alpha = 0.35f))
+                    .border(0.75.dp, FrostHairline, RoundedCornerShape(26.dp)),
                 contentAlignment = Alignment.Center
             ) {
-                Image(
-                    painter = painterResource(id = R.drawable.ic_bliss_mark),
-                    contentDescription = "Bliss logo",
-                    modifier = Modifier.size(44.dp)
+                Box(
+                    modifier = Modifier
+                        .size(190.dp)
+                        .background(
+                            Brush.radialGradient(
+                                listOf(
+                                    TextSecondary.copy(alpha = 0.22f),
+                                    TextSecondary.copy(alpha = 0.05f),
+                                    Color.Transparent
+                                )
+                            )
+                        )
                 )
+                Box(
+                    modifier = Modifier
+                        .size(124.dp)
+                        .clip(RoundedCornerShape(32.dp))
+                        .background(
+                            Brush.linearGradient(
+                                listOf(Color(0xFF15161F), Color(0xFF0A0B0F))
+                            )
+                        )
+                        .border(
+                            0.75.dp,
+                            Color.White.copy(alpha = 0.08f),
+                            RoundedCornerShape(32.dp)
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(124.dp)
+                            .background(
+                                Brush.radialGradient(
+                                    listOf(Color(0x592A2F52), Color(0x002A2F52))
+                                )
+                            )
+                    )
+                    Image(
+                        painter = painterResource(id = R.drawable.ic_bliss_mark),
+                        contentDescription = "Bliss logo",
+                        modifier = Modifier
+                            .size(96.dp)
+                            .graphicsLayer {
+                                alpha = heroProgress
+                                val markScale = 0.88f + 0.12f * heroProgress
+                                scaleX = markScale
+                                scaleY = markScale
+                            }
+                    )
+                }
             }
 
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(8.dp))
 
             Text(
                 text = "Bliss",
@@ -294,8 +356,6 @@ private fun WelcomePage(onNext: () -> Unit) {
                 letterSpacing = 0.5.sp
             )
 
-            Spacer(Modifier.height(6.dp))
-
             Text(
                 text = "Full Linux desktop on Android — no Termux app required",
                 fontSize = 14.sp,
@@ -303,23 +363,15 @@ private fun WelcomePage(onNext: () -> Unit) {
                 color = colors.onBackground.copy(alpha = 0.72f),
                 modifier = Modifier.padding(horizontal = 16.dp)
             )
-        }
 
-        // Scrollable Features & Illustration Area
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState()),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
+            Spacer(Modifier.height(8.dp))
+
             // Feature 1: PRoot & Chroot
             ModernFeatureCard(
                 icon = Icons.Filled.Storage,
                 iconTint = TextSecondary,
                 title = "PRoot & Chroot",
-                description = "No root required with PRoot mode, or run with full native speed via Chroot on rooted devices."
+                description = "Run without root in PRoot mode, or at full native speed with Chroot on rooted devices."
             )
 
             // Feature 2: Desktop & Themes
@@ -327,51 +379,21 @@ private fun WelcomePage(onNext: () -> Unit) {
                 icon = Icons.Filled.DesktopWindows,
                 iconTint = TextSecondary,
                 title = "XFCE4 Desktop",
-                description = "Pre-configured desktop experience with Bliss glass themes, icons, wallpapers, and fonts."
+                description = "A pre-configured desktop with Bliss glass themes, icons, wallpapers, and fonts."
             )
 
             // Feature 3: Integrated Terminal & X11
             ModernFeatureCard(
                 icon = Icons.Filled.Terminal,
-                iconTint = TextPrimary,
+                iconTint = TextSecondary,
                 title = "Embedded Terminal & X11",
-                description = "Built-in hardware accelerated X11 display and multi-tab terminal with Oh My Zsh integration."
+                description = "Hardware-accelerated X11 display and a multi-tab terminal with Oh My Zsh integration."
             )
 
-            Spacer(Modifier.height(4.dp))
-
-            // Responsive Illustration Banner
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 130.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(colors.surface.copy(alpha = 0.45f))
-                    .border(0.75.dp, FrostHairline, RoundedCornerShape(16.dp)),
-                contentAlignment = Alignment.Center
-            ) {
-                Image(
-                    painter = painterResource(id = R.drawable.onboarding_bg_1),
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
-                )
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.verticalGradient(
-                                listOf(
-                                    Color.Transparent,
-                                    FolioBackground.copy(alpha = 0.65f)
-                                )
-                            )
-                        )
-                )
-            }
+            Spacer(Modifier.height(8.dp))
         }
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(12.dp))
 
         // Get Started CTA
         FolioPrimaryButton(

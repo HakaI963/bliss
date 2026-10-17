@@ -39,6 +39,10 @@ class TermuxHostPathsTest {
             assertTrue(content.contains("PROOT_TMP_DIR=\"${TermuxHostPaths.PROOT_TMP}\""))
             assertFalse(content.contains("PROOT_TMP_DIR=\"${TermuxHostPaths.TMPDIR}\""))
             assertFalse(content.contains("com.termux"))
+            // Legacy dual-write: frozen setup_termux.sh still sources the old name.
+            val legacy = File(dir, TermuxHostPaths.HOST_ENV_LEGACY_REL)
+            assertTrue(legacy.exists())
+            assertEquals(content, legacy.readText())
         } finally {
             dir.deleteRecursively()
         }
@@ -69,7 +73,8 @@ class TermuxHostPathsTest {
         assertEquals("/data/data/${TermuxHostPaths.PACKAGE}/files/home", TermuxHostPaths.HOME)
         assertEquals("/data/data/${TermuxHostPaths.PACKAGE}/files/usr/bin/proot-distro", TermuxHostPaths.PROOT_DISTRO)
         assertEquals("/data/data/${TermuxHostPaths.PACKAGE}/files/proot-tmp", TermuxHostPaths.PROOT_TMP)
-        assertEquals("usr/etc/fluxlinux-host.env", TermuxHostPaths.HOST_ENV_REL)
+        assertEquals("usr/etc/bliss-host.env", TermuxHostPaths.HOST_ENV_REL)
+        assertEquals("usr/etc/fluxlinux-host.env", TermuxHostPaths.HOST_ENV_LEGACY_REL)
     }
 
     @Test

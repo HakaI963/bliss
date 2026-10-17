@@ -7,8 +7,10 @@
 DISTRO_HINT="${1:-${FLUX_CHROOT_DISTRO:-debian13_chroot}}"
 
 PKG="${TERMUX_APP__PACKAGE_NAME:-com.ivarna.fluxlinux}"
-_HOST_ENV="${TERMUX__PREFIX:-/data/data/${PKG}/files/usr}/etc/fluxlinux-host.env"
+_HOST_ENV="${TERMUX__PREFIX:-/data/data/${PKG}/files/usr}/etc/bliss-host.env"
+[ -r "$_HOST_ENV" ] || _HOST_ENV="${_HOST_ENV%/*}/fluxlinux-host.env"
 [ -r "$_HOST_ENV" ] && . "$_HOST_ENV"
+[ -d /data/local/folio ] && [ ! -e /data/local/bliss ] && mv /data/local/folio /data/local/bliss 2>/dev/null || true
 
 # Normalize install-time FLUX_DESKTOP (xfce|xfce4|kde|none) → launch-time (xfce4|kde).
 # Unset/empty → xfce4 (backward compat); inner guest launchers only branch on "kde".
@@ -34,60 +36,60 @@ export XKB_CONFIG_ROOT="$TERMUX_PREFIX/share/X11/xkb"
 # Resolve chroot path + guest launcher from distro hint (env overrides win)
 case "$DISTRO_HINT" in
   alpine|alpine_chroot)
-    CHROOT_PATH="${CHROOT_PATH:-/data/local/folio/chroots/alpine}"
+    CHROOT_PATH="${CHROOT_PATH:-/data/local/bliss/chroots/alpine}"
     ROOT_GUI_NAME="${ROOT_GUI_NAME:-start_alpine_gui.sh}"
     ;;
   fedora|fedora_chroot)
-    CHROOT_PATH="${CHROOT_PATH:-/data/local/folio/chroots/fedora}"
+    CHROOT_PATH="${CHROOT_PATH:-/data/local/bliss/chroots/fedora}"
     ROOT_GUI_NAME="${ROOT_GUI_NAME:-start_guest_gui.sh}"
     ;;
   void|void_chroot)
-    CHROOT_PATH="${CHROOT_PATH:-/data/local/folio/chroots/void}"
+    CHROOT_PATH="${CHROOT_PATH:-/data/local/bliss/chroots/void}"
     ROOT_GUI_NAME="${ROOT_GUI_NAME:-start_guest_gui.sh}"
     ;;
   opensuse|opensuse_chroot)
-    CHROOT_PATH="${CHROOT_PATH:-/data/local/folio/chroots/opensuse}"
+    CHROOT_PATH="${CHROOT_PATH:-/data/local/bliss/chroots/opensuse}"
     ROOT_GUI_NAME="${ROOT_GUI_NAME:-start_guest_gui.sh}"
     ;;
   deepin|deepin_chroot)
-    CHROOT_PATH="${CHROOT_PATH:-/data/local/folio/chroots/deepin}"
+    CHROOT_PATH="${CHROOT_PATH:-/data/local/bliss/chroots/deepin}"
     ROOT_GUI_NAME="${ROOT_GUI_NAME:-start_guest_gui.sh}"
     ;;
   chimera|chimera_chroot)
-    CHROOT_PATH="${CHROOT_PATH:-/data/local/folio/chroots/chimera}"
+    CHROOT_PATH="${CHROOT_PATH:-/data/local/bliss/chroots/chimera}"
     ROOT_GUI_NAME="${ROOT_GUI_NAME:-start_guest_gui.sh}"
     ;;
   manjaro|manjaro_chroot)
-    CHROOT_PATH="${CHROOT_PATH:-/data/local/folio/chroots/manjaro}"
+    CHROOT_PATH="${CHROOT_PATH:-/data/local/bliss/chroots/manjaro}"
     ROOT_GUI_NAME="${ROOT_GUI_NAME:-start_guest_gui.sh}"
     ;;
   ubuntu|ubuntu_chroot)
-    CHROOT_PATH="${CHROOT_PATH:-/data/local/folio/chroots/ubuntu}"
+    CHROOT_PATH="${CHROOT_PATH:-/data/local/bliss/chroots/ubuntu}"
     ROOT_GUI_NAME="${ROOT_GUI_NAME:-start_guest_gui.sh}"
     ;;
   kali|kali_chroot)
-    CHROOT_PATH="${CHROOT_PATH:-/data/local/folio/chroots/kali}"
+    CHROOT_PATH="${CHROOT_PATH:-/data/local/bliss/chroots/kali}"
     ROOT_GUI_NAME="${ROOT_GUI_NAME:-start_guest_gui.sh}"
     ;;
   parrot|parrot_chroot)
-    CHROOT_PATH="${CHROOT_PATH:-/data/local/folio/chroots/parrot}"
+    CHROOT_PATH="${CHROOT_PATH:-/data/local/bliss/chroots/parrot}"
     ROOT_GUI_NAME="${ROOT_GUI_NAME:-start_guest_gui.sh}"
     ;;
   archlinux|archlinux_chroot)
-    CHROOT_PATH="${CHROOT_PATH:-/data/local/folio/chroots/archlinux}"
+    CHROOT_PATH="${CHROOT_PATH:-/data/local/bliss/chroots/archlinux}"
     ROOT_GUI_NAME="${ROOT_GUI_NAME:-start_guest_gui.sh}"
     ;;
   *)
-    CHROOT_PATH="${CHROOT_PATH:-/data/local/folio/chroots/debian}"
+    CHROOT_PATH="${CHROOT_PATH:-/data/local/bliss/chroots/debian}"
     ROOT_GUI_NAME="${ROOT_GUI_NAME:-start_debian13_gui.sh}"
     ;;
 esac
 ROOT_GUI_SCRIPT="$TERMUX_HOME/$ROOT_GUI_NAME"
-ROOT_GUI_TMP="/data/local/folio/helpers/$ROOT_GUI_NAME"
-HELPER_SRC="$TERMUX_HOME/fluxlinux_chroot.sh"
-HELPER_TMP="/data/local/folio/helpers/fluxlinux_chroot.sh"
+ROOT_GUI_TMP="/data/local/bliss/helpers/$ROOT_GUI_NAME"
+HELPER_SRC="$TERMUX_HOME/bliss_chroot.sh"
+HELPER_TMP="/data/local/bliss/helpers/bliss_chroot.sh"
 RESOLVER_SRC="$TERMUX_HOME/resolve_bb.sh"
-RESOLVER_TMP="/data/local/folio/helpers/fluxlinux_resolve_bb.sh"
+RESOLVER_TMP="/data/local/bliss/helpers/bliss_resolve_bb.sh"
 
 echo "========================================"
 echo "Bliss: START XFCE (chroot mode)"
@@ -100,10 +102,10 @@ if [ ! -d "$CHROOT_PATH" ]; then
   echo "Install rooted distro from onboarding or Distros."
   exit 1
 fi
-if [ ! -f "$CHROOT_PATH/.flux_configured" ] && \
+if [ ! -f "$CHROOT_PATH/.bliss_configured" ] && [ ! -f "$CHROOT_PATH/.flux_configured" ] && \
    [ ! -e "$CHROOT_PATH/usr/bin/startxfce4" ] && \
    [ ! -e "$CHROOT_PATH/usr/sbin/startxfce4" ]; then
-  echo "Bliss: ERROR — chroot incomplete (no .flux_configured / startxfce4)."
+  echo "Bliss: ERROR — chroot incomplete (no .bliss_configured / startxfce4)."
   echo "Re-run base desktop install for the rooted distro."
   exit 1
 fi
@@ -223,7 +225,7 @@ am start -n "$PKG/com.termux.x11.MainActivity" \
 am start -n "$PKG/com.termux.x11.MainActivity" 2>/dev/null
 sleep 1
 
-# Root stage: copy to /data/local/folio/helpers (SELinux / exec-safe) then su
+# Root stage: copy to /data/local/bliss/helpers (SELinux / exec-safe) then su
 echo "Bliss: Entering chroot as root..."
 cp -f "$ROOT_GUI_SCRIPT" "$ROOT_GUI_TMP" 2>/dev/null || true
 if [ -f "$HELPER_SRC" ]; then
@@ -247,7 +249,7 @@ fi
 # DEBIANPATH = legacy name used by start_debian13_gui.sh
 # CHROOT_ROOT  = name used by start_alpine_gui.sh
 if [ -f "$ROOT_GUI_TMP" ] || cp -f "$ROOT_GUI_SCRIPT" "$ROOT_GUI_TMP" 2>/dev/null; then
-  "$SU_BIN" -c "mkdir -p '/data/local/folio/helpers'; \
+  "$SU_BIN" -c "mkdir -p '/data/local/bliss/helpers'; \
     cp -f '$ROOT_GUI_SCRIPT' '$ROOT_GUI_TMP' 2>/dev/null; \
     [ -f '$HELPER_SRC' ] && cp -f '$HELPER_SRC' '$HELPER_TMP' 2>/dev/null; \
     [ -f '$RESOLVER_SRC' ] && cp -f '$RESOLVER_SRC' '$RESOLVER_TMP' 2>/dev/null; \
@@ -257,7 +259,7 @@ if [ -f "$ROOT_GUI_TMP" ] || cp -f "$ROOT_GUI_SCRIPT" "$ROOT_GUI_TMP" 2>/dev/nul
     FLUX_DESKTOP='${FLUX_DESKTOP:-xfce4}' FLUX_GPU_RUNTIME='${FLUX_GPU_RUNTIME:-}' \
     FLUX_BB='${FLUX_BB:-}' FLUX_RESOLVE_BB='$RESOLVER_TMP' sh '$ROOT_GUI_TMP'"
 else
-  "$SU_BIN" -c "mkdir -p '/data/local/folio/helpers' && \
+  "$SU_BIN" -c "mkdir -p '/data/local/bliss/helpers' && \
     cp -f '$ROOT_GUI_SCRIPT' '$ROOT_GUI_TMP' && chmod 755 '$ROOT_GUI_TMP' && \
     [ -f '$RESOLVER_SRC' ] && cp -f '$RESOLVER_SRC' '$RESOLVER_TMP' 2>/dev/null; \
     DEBIANPATH='$CHROOT_PATH' CHROOT_ROOT='$CHROOT_PATH' FLUX_CHROOT='$CHROOT_PATH' \

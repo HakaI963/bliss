@@ -6,8 +6,10 @@
 DISTRO_HINT="${1:-${FLUX_CHROOT_DISTRO:-debian13_chroot}}"
 
 PKG="${TERMUX_APP__PACKAGE_NAME:-com.ivarna.fluxlinux}"
-_HOST_ENV="${TERMUX__PREFIX:-/data/data/${PKG}/files/usr}/etc/fluxlinux-host.env"
+_HOST_ENV="${TERMUX__PREFIX:-/data/data/${PKG}/files/usr}/etc/bliss-host.env"
+[ -r "$_HOST_ENV" ] || _HOST_ENV="${_HOST_ENV%/*}/fluxlinux-host.env"
 [ -r "$_HOST_ENV" ] && . "$_HOST_ENV"
+[ -d /data/local/folio ] && [ ! -e /data/local/bliss ] && mv /data/local/folio /data/local/bliss 2>/dev/null || true
 
 PKG="${TERMUX_APP__PACKAGE_NAME:-$PKG}"
 TERMUX_PREFIX="${TERMUX__PREFIX:-/data/data/$PKG/files/usr}"
@@ -17,58 +19,58 @@ export PATH="$TERMUX_PREFIX/bin:$TERMUX_PREFIX/bin/applets:/system/bin:/system/x
 
 case "$DISTRO_HINT" in
   alpine|alpine_chroot)
-    CHROOT_PATH="${CHROOT_PATH:-/data/local/folio/chroots/alpine}"
+    CHROOT_PATH="${CHROOT_PATH:-/data/local/bliss/chroots/alpine}"
     ROOT_STOP_NAME="${ROOT_STOP_NAME:-stop_alpine_gui.sh}"
     ;;
   fedora|fedora_chroot)
-    CHROOT_PATH="${CHROOT_PATH:-/data/local/folio/chroots/fedora}"
+    CHROOT_PATH="${CHROOT_PATH:-/data/local/bliss/chroots/fedora}"
     ROOT_STOP_NAME="${ROOT_STOP_NAME:-stop_guest_gui.sh}"
     ;;
   void|void_chroot)
-    CHROOT_PATH="${CHROOT_PATH:-/data/local/folio/chroots/void}"
+    CHROOT_PATH="${CHROOT_PATH:-/data/local/bliss/chroots/void}"
     ROOT_STOP_NAME="${ROOT_STOP_NAME:-stop_guest_gui.sh}"
     ;;
   opensuse|opensuse_chroot)
-    CHROOT_PATH="${CHROOT_PATH:-/data/local/folio/chroots/opensuse}"
+    CHROOT_PATH="${CHROOT_PATH:-/data/local/bliss/chroots/opensuse}"
     ROOT_STOP_NAME="${ROOT_STOP_NAME:-stop_guest_gui.sh}"
     ;;
   deepin|deepin_chroot)
-    CHROOT_PATH="${CHROOT_PATH:-/data/local/folio/chroots/deepin}"
+    CHROOT_PATH="${CHROOT_PATH:-/data/local/bliss/chroots/deepin}"
     ROOT_STOP_NAME="${ROOT_STOP_NAME:-stop_guest_gui.sh}"
     ;;
   chimera|chimera_chroot)
-    CHROOT_PATH="${CHROOT_PATH:-/data/local/folio/chroots/chimera}"
+    CHROOT_PATH="${CHROOT_PATH:-/data/local/bliss/chroots/chimera}"
     ROOT_STOP_NAME="${ROOT_STOP_NAME:-stop_guest_gui.sh}"
     ;;
   manjaro|manjaro_chroot)
-    CHROOT_PATH="${CHROOT_PATH:-/data/local/folio/chroots/manjaro}"
+    CHROOT_PATH="${CHROOT_PATH:-/data/local/bliss/chroots/manjaro}"
     ROOT_STOP_NAME="${ROOT_STOP_NAME:-stop_guest_gui.sh}"
     ;;
   ubuntu|ubuntu_chroot)
-    CHROOT_PATH="${CHROOT_PATH:-/data/local/folio/chroots/ubuntu}"
+    CHROOT_PATH="${CHROOT_PATH:-/data/local/bliss/chroots/ubuntu}"
     ROOT_STOP_NAME="${ROOT_STOP_NAME:-stop_guest_gui.sh}"
     ;;
   kali|kali_chroot)
-    CHROOT_PATH="${CHROOT_PATH:-/data/local/folio/chroots/kali}"
+    CHROOT_PATH="${CHROOT_PATH:-/data/local/bliss/chroots/kali}"
     ROOT_STOP_NAME="${ROOT_STOP_NAME:-stop_guest_gui.sh}"
     ;;
   parrot|parrot_chroot)
-    CHROOT_PATH="${CHROOT_PATH:-/data/local/folio/chroots/parrot}"
+    CHROOT_PATH="${CHROOT_PATH:-/data/local/bliss/chroots/parrot}"
     ROOT_STOP_NAME="${ROOT_STOP_NAME:-stop_guest_gui.sh}"
     ;;
   archlinux|archlinux_chroot)
-    CHROOT_PATH="${CHROOT_PATH:-/data/local/folio/chroots/archlinux}"
+    CHROOT_PATH="${CHROOT_PATH:-/data/local/bliss/chroots/archlinux}"
     ROOT_STOP_NAME="${ROOT_STOP_NAME:-stop_guest_gui.sh}"
     ;;
   *)
-    CHROOT_PATH="${CHROOT_PATH:-/data/local/folio/chroots/debian}"
+    CHROOT_PATH="${CHROOT_PATH:-/data/local/bliss/chroots/debian}"
     ROOT_STOP_NAME="${ROOT_STOP_NAME:-stop_debian13_gui.sh}"
     ;;
 esac
 ROOT_STOP_SCRIPT="$TERMUX_HOME/$ROOT_STOP_NAME"
-ROOT_STOP_TMP="/data/local/folio/helpers/$ROOT_STOP_NAME"
+ROOT_STOP_TMP="/data/local/bliss/helpers/$ROOT_STOP_NAME"
 RESOLVER_SRC="$TERMUX_HOME/resolve_bb.sh"
-RESOLVER_TMP="/data/local/folio/helpers/fluxlinux_resolve_bb.sh"
+RESOLVER_TMP="/data/local/bliss/helpers/bliss_resolve_bb.sh"
 
 echo "========================================"
 echo "Bliss: STOP XFCE (chroot mode)"
@@ -82,7 +84,7 @@ else
   for s in /system/bin/su /system/xbin/su /sbin/su; do
     if [ -x "$s" ]; then SU_BIN="$s"; break; fi
   done
-  "$SU_BIN" -c "mkdir -p '/data/local/folio/helpers'; \
+  "$SU_BIN" -c "mkdir -p '/data/local/bliss/helpers'; \
     cp -f '$ROOT_STOP_SCRIPT' '$ROOT_STOP_TMP' 2>/dev/null; \
     [ -f '$RESOLVER_SRC' ] && cp -f '$RESOLVER_SRC' '$RESOLVER_TMP' 2>/dev/null; \
     chmod 755 '$ROOT_STOP_TMP' '$RESOLVER_TMP' 2>/dev/null; \

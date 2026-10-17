@@ -8,7 +8,7 @@ package com.ivarna.fluxlinux.core.root
  */
 object ChrootPaths {
     /** Bliss-owned root tree on device (all root-requiring artifacts live here). */
-    const val FOLIO_ROOT = "/data/local/folio"
+    const val FOLIO_ROOT = "/data/local/bliss"
 
     /** Distro rootfs trees, one subdir per distro. */
     const val CHROOTS_DIR = "$FOLIO_ROOT/chroots"
@@ -47,11 +47,11 @@ object ChrootPaths {
      */
     const val CHROOT_PATH = DEBIAN_CHROOT_PATH
 
-    /** On-device SSOT helper (assets/scripts/chroot/fluxlinux_chroot.sh). */
-    const val CHROOT_HELPER = "$HELPERS_DIR/fluxlinux_chroot.sh"
-    const val CHROOT_HELPER_ASSET = "scripts/chroot/fluxlinux_chroot.sh"
-    /** Must match first `# fluxlinux-chroot vN` line in the asset. */
-    const val CHROOT_HELPER_VERSION = "fluxlinux-chroot v2.11"
+    /** On-device SSOT helper (assets/scripts/chroot/bliss_chroot.sh). */
+    const val CHROOT_HELPER = "$HELPERS_DIR/bliss_chroot.sh"
+    const val CHROOT_HELPER_ASSET = "scripts/chroot/bliss_chroot.sh"
+    /** Must match first `# bliss-chroot vN` line in the asset. */
+    const val CHROOT_HELPER_VERSION = "bliss-chroot v2.11"
 
     /** Session executable — must be a system binary (SELinux blocks exec of app-data scripts). */
     const val SESSION_EXEC = "/system/bin/sh"

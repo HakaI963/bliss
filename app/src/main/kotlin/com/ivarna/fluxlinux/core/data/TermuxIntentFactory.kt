@@ -75,13 +75,13 @@ object TermuxIntentFactory {
         // Use Base64 decoding to write files. This avoids fragile 'cat << EOF' constructs in terminals
         // and handles special characters safely.
         return """
-            echo "$installScriptB64" | base64 -d > ${'$'}HOME/flux_install.sh
-            chmod +x ${'$'}HOME/flux_install.sh
+            echo "$installScriptB64" | base64 -d > ${'$'}HOME/bliss_install.sh
+            chmod +x ${'$'}HOME/bliss_install.sh
             
             echo "$guiScriptB64" | base64 -d > ${'$'}HOME/start_gui.sh
             chmod +x ${'$'}HOME/start_gui.sh
             
-            bash ${'$'}HOME/flux_install.sh $distroId "$setupB64"
+            bash ${'$'}HOME/bliss_install.sh $distroId "$setupB64"
         """.trimIndent()
     }
 
@@ -97,7 +97,7 @@ object TermuxIntentFactory {
      */
     fun buildInstallIntent(distroId: String, setupScript: String? = null): Intent {
         // Use the native helper script we created in setup_termux.sh
-        // Usage: bash ~/flux_install.sh <distro> <base64_setup>
+        // Usage: bash ~/bliss_install.sh <distro> <base64_setup>
         
         val setupB64 = if (!setupScript.isNullOrEmpty()) {
             android.util.Base64.encodeToString(setupScript.toByteArray(), android.util.Base64.NO_WRAP)
@@ -105,7 +105,7 @@ object TermuxIntentFactory {
             "null"
         }
         
-        val command = "bash $TERMUX_HOME_DIR/flux_install.sh $distroId \"$setupB64\""
+        val command = "bash $TERMUX_HOME_DIR/bliss_install.sh $distroId \"$setupB64\""
         return buildRunCommandIntent(command)
     }
 
@@ -269,11 +269,11 @@ object TermuxIntentFactory {
              val baseConfigB64 = android.util.Base64.encodeToString(baseConfig.toByteArray(), android.util.Base64.NO_WRAP)
              
              // Use echo with base64 - avoids all heredoc/trimIndent issues
-             fullScript += "echo '$baseConfigB64' | base64 -d > \$HOME/flux_base_setup.sh\n"
-             fullScript += "chmod +x \$HOME/flux_base_setup.sh\n"
+             fullScript += "echo '$baseConfigB64' | base64 -d > \$HOME/bliss_base_setup.sh\n"
+             fullScript += "chmod +x \$HOME/bliss_base_setup.sh\n"
              fullScript += "\n# Run inside Proot (with fixed PATH)\n"
-             fullScript += "proot-distro login ${distro.id} --shared-tmp -- bash -c \"export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin && bash /data/data/com.termux/files/home/flux_base_setup.sh\"\n"
-             fullScript += "rm -f \$HOME/flux_base_setup.sh\n"
+             fullScript += "proot-distro login ${distro.id} --shared-tmp -- bash -c \"export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin && bash /data/data/com.termux/files/home/bliss_base_setup.sh\"\n"
+             fullScript += "rm -f \$HOME/bliss_base_setup.sh\n"
               
              // Deploy start_gui.sh separately using echo
              val guiScriptB64 = android.util.Base64.encodeToString(scriptManager.getScriptContent("debian/proot/start/start_gui.sh").toByteArray(), android.util.Base64.NO_WRAP)
@@ -302,7 +302,7 @@ object TermuxIntentFactory {
         
         // Generate a random ID for the EOF marker to avoid collisions
         val eofMarker = "EOF_FLUX_INSTALL_${System.currentTimeMillis()}"
-        val targetPath = if (isChroot) "${ChrootPaths.STAGING_DIR}/flux_full_install.sh" else "$TERMUX_HOME_DIR/flux_full_install.sh"
+        val targetPath = if (isChroot) "${ChrootPaths.STAGING_DIR}/bliss_full_install.sh" else "$TERMUX_HOME_DIR/bliss_full_install.sh"
         val runnerCmd = if (isChroot) "sh" else "bash"
         
         // Command to decode: echo "..." | base64 -d | gunzip > script.sh
@@ -441,11 +441,11 @@ object TermuxIntentFactory {
         if (distroId == "termux") {
             // Termux Native: script runs directly in Termux host (no proot, no chroot)
             val command = """
-                echo "$scriptB64" | base64 -d > $TERMUX_HOME_DIR/flux_feature.sh
-                chmod +x $TERMUX_HOME_DIR/flux_feature.sh
-                bash $TERMUX_HOME_DIR/flux_feature.sh$scriptArg
+                echo "$scriptB64" | base64 -d > $TERMUX_HOME_DIR/bliss_feature.sh
+                chmod +x $TERMUX_HOME_DIR/bliss_feature.sh
+                bash $TERMUX_HOME_DIR/bliss_feature.sh$scriptArg
                 STATUS=${'$'}?
-                rm -f $TERMUX_HOME_DIR/flux_feature.sh
+                rm -f $TERMUX_HOME_DIR/bliss_feature.sh
                 if [ ${'$'}STATUS -eq 0 ]; then
                     $successCallbackCmd
                 else
@@ -465,8 +465,8 @@ object TermuxIntentFactory {
             val innerCommand = """
                 su -c '
                 mkdir -p $hostTmp;
-                echo "$scriptB64" | base64 -d > $hostTmp/flux_feature.sh;
-                chmod +x $hostTmp/flux_feature.sh;
+                echo "$scriptB64" | base64 -d > $hostTmp/bliss_feature.sh;
+                chmod +x $hostTmp/bliss_feature.sh;
                 BB="${'$'}{FLUX_BB:-}";
                 if [ -z "${'$'}BB" ] || ! [ -x "${'$'}BB" ] || ! "${'$'}BB" --list >/dev/null 2>&1; then
                   BB="";
@@ -480,9 +480,9 @@ object TermuxIntentFactory {
                     BB=${BusyBoxPaths.PINNED};
                   fi;
                 fi;
-                "${'$'}BB" chroot ${ChrootPaths.DEBIAN_CHROOT_PATH} /bin/su - root -c "bash /tmp/flux_feature.sh$scriptArg";
+                "${'$'}BB" chroot ${ChrootPaths.DEBIAN_CHROOT_PATH} /bin/su - root -c "bash /tmp/bliss_feature.sh$scriptArg";
                 STATUS=${'$'}?;
-                rm -f $hostTmp/flux_feature.sh;
+                rm -f $hostTmp/bliss_feature.sh;
                 exit ${'$'}STATUS;
                 ';
                 sleep 1;
@@ -503,11 +503,11 @@ object TermuxIntentFactory {
                 ROOT_RUNNER="${ChrootPaths.HELPERS_DIR}/run_debian13_root.sh";
                 if [ -f "${'$'}ROOT_RUNNER" ]; then
                     mkdir -p $hostTmp;
-                    echo "$scriptB64" | base64 -d > $hostTmp/flux_feature.sh;
-                    chmod +x $hostTmp/flux_feature.sh;
-                    sh "${'$'}ROOT_RUNNER" "bash /tmp/flux_feature.sh$scriptArg";
+                    echo "$scriptB64" | base64 -d > $hostTmp/bliss_feature.sh;
+                    chmod +x $hostTmp/bliss_feature.sh;
+                    sh "${'$'}ROOT_RUNNER" "bash /tmp/bliss_feature.sh$scriptArg";
                     STATUS=${'$'}?;
-                    rm -f $hostTmp/flux_feature.sh;
+                    rm -f $hostTmp/bliss_feature.sh;
                 else
                     mnt=${ChrootPaths.DEBIAN_CHROOT_PATH};
                     mkdir -p $hostTmp;
@@ -520,8 +520,8 @@ object TermuxIntentFactory {
                     mount -t tmpfs -o size=512M tmpfs ${'$'}mnt/dev/shm >/dev/null 2>&1;
                     mkdir -p ${'$'}mnt/tmp;
                     mount --bind $hostTmp ${'$'}mnt/tmp >/dev/null 2>&1;
-                    echo "$scriptB64" | base64 -d > $hostTmp/flux_feature.sh;
-                    chmod +x $hostTmp/flux_feature.sh;
+                    echo "$scriptB64" | base64 -d > $hostTmp/bliss_feature.sh;
+                    chmod +x $hostTmp/bliss_feature.sh;
                     BB="${'$'}{FLUX_BB:-}";
                     if [ -z "${'$'}BB" ] || ! [ -x "${'$'}BB" ] || ! "${'$'}BB" --list >/dev/null 2>&1; then
                       BB="";
@@ -535,9 +535,9 @@ object TermuxIntentFactory {
                         BB=${BusyBoxPaths.PINNED};
                       fi;
                     fi;
-                    "${'$'}BB" chroot ${'$'}mnt /bin/su - root -c "bash /tmp/flux_feature.sh$scriptArg";
+                    "${'$'}BB" chroot ${'$'}mnt /bin/su - root -c "bash /tmp/bliss_feature.sh$scriptArg";
                     STATUS=${'$'}?;
-                    rm -f $hostTmp/flux_feature.sh;
+                    rm -f $hostTmp/bliss_feature.sh;
                 fi;
                 exit ${'$'}STATUS;
                 ';
@@ -553,7 +553,7 @@ object TermuxIntentFactory {
         //    exit code BEFORE the trailing rm (which would otherwise mask the
         //    script's status with its own always-zero exit), then propagate the
         //    captured status to the outer shell via `exit $RC`.
-        val innerCommand = "echo \"$scriptB64\" | base64 -d > /tmp/flux_feature.sh && bash /tmp/flux_feature.sh$scriptArg; RC=${'$'}?; rm -f /tmp/flux_feature.sh; exit ${'$'}RC"
+        val innerCommand = "echo \"$scriptB64\" | base64 -d > /tmp/bliss_feature.sh && bash /tmp/bliss_feature.sh$scriptArg; RC=${'$'}?; rm -f /tmp/bliss_feature.sh; exit ${'$'}RC"
         // 2. Outer command: run proot, capture its exit, fire success/error callback
         val command = """
             proot-distro login $distroId --shared-tmp -- bash -c '$innerCommand'
@@ -577,10 +577,10 @@ object TermuxIntentFactory {
         val command = """
             su -c '
             mkdir -p ${ChrootPaths.STAGING_DIR};
-            echo "$scriptB64" | base64 -d > ${ChrootPaths.STAGING_DIR}/flux_root_task.sh
-            chmod +x ${ChrootPaths.STAGING_DIR}/flux_root_task.sh
-            sh ${ChrootPaths.STAGING_DIR}/flux_root_task.sh
-            rm -f ${ChrootPaths.STAGING_DIR}/flux_root_task.sh
+            echo "$scriptB64" | base64 -d > ${ChrootPaths.STAGING_DIR}/bliss_root_task.sh
+            chmod +x ${ChrootPaths.STAGING_DIR}/bliss_root_task.sh
+            sh ${ChrootPaths.STAGING_DIR}/bliss_root_task.sh
+            rm -f ${ChrootPaths.STAGING_DIR}/bliss_root_task.sh
             '
         """.trimIndent().replace("\n", " ")
         

@@ -5,8 +5,9 @@
 # Based on LinuxDroidMaster/Termux-Desktops Guide
 
 # Global Variables
-DEBIANPATH="/data/local/folio/chroots/debian"
+DEBIANPATH="/data/local/bliss/chroots/debian"
 USERNAME="flux"
+[ -d /data/local/folio ] && [ ! -e /data/local/bliss ] && mv /data/local/folio /data/local/bliss 2>/dev/null || true
 
 # Desktop contract: FLUX_DESKTOPS (space/comma separated) = xfce | kde | none;
 # legacy FLUX_DESKTOP / FLUX_DESKTOP_ENV remain valid single values. Unset/empty
@@ -256,12 +257,12 @@ mkdir -p \$DEBIANPATH/tmp
     fi
 
     # Mark configuration as complete to prevent re-runs
-    touch "$DEBIANPATH/.flux_configured"
+    touch "$DEBIANPATH/.bliss_configured"
 
     success "Debian Environment Configured!"
 
     # --- LAUNCH SCRIPT GENERATION ---
-    LAUNCH_SCRIPT="/data/local/folio/helpers/start_debian13.sh"
+    LAUNCH_SCRIPT="/data/local/bliss/helpers/start_debian13.sh"
     progress "Creating launch script at $LAUNCH_SCRIPT..."
     
     # Matches the guide's 'start_debian.sh' content
@@ -269,7 +270,7 @@ mkdir -p \$DEBIANPATH/tmp
 #!/bin/sh
 
 # Path of DEBIAN rootfs
-DEBIANPATH="/data/local/folio/chroots/debian"
+DEBIANPATH="/data/local/bliss/chroots/debian"
 BB="$BB"
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH
 
@@ -324,7 +325,7 @@ _rr=""
 for _c in \
   "${FLUX_RESOLVE_BB:-}" \
   "$(dirname "$0")/resolve_bb.sh" \
-  /data/local/folio/helpers/fluxlinux_resolve_bb.sh
+  /data/local/bliss/helpers/bliss_resolve_bb.sh
 do
   [ -n "$_c" ] && [ -f "$_c" ] && _rr="$_c" && break
 done
@@ -337,9 +338,9 @@ if [ -z "${BB:-}" ]; then
   # sidecar missing (desktop/uninstall/staged setup) — same B1 walk as resolve_bb
   if [ -n "${FLUX_BB:-}" ] && [ -x "$FLUX_BB" ] &&
      "$FLUX_BB" --list >/dev/null 2>&1; then BB="$FLUX_BB"; fi
-  if [ -z "${BB:-}" ] && [ -x /data/local/folio/busybox/flux_busybox ] &&
-     /data/local/folio/busybox/flux_busybox --list >/dev/null 2>&1; then
-    BB=/data/local/folio/busybox/flux_busybox
+  if [ -z "${BB:-}" ] && [ -x /data/local/bliss/busybox/bliss_busybox ] &&
+     /data/local/bliss/busybox/bliss_busybox --list >/dev/null 2>&1; then
+    BB=/data/local/bliss/busybox/bliss_busybox
   fi
   if [ -z "${BB:-}" ]; then
     for path in \
@@ -370,14 +371,14 @@ fi
          progress "Using Root Busybox: $BB"
     fi
 
-    DEBIANPATH="/data/local/folio/chroots/debian"
+    DEBIANPATH="/data/local/bliss/chroots/debian"
 
     # Root-staged launchers live in the Bliss helpers dir (idempotent).
-    mkdir -p /data/local/folio/helpers
+    mkdir -p /data/local/bliss/helpers
 
     # --- CHECK EXISTING INSTALLATION ---
     # Check for marker file indicating SUCCESSFUL configuration
-    if [ -f "$DEBIANPATH/.flux_configured" ]; then
+    if [ -f "$DEBIANPATH/.bliss_configured" ] || [ -f "$DEBIANPATH/.flux_configured" ]; then
         success "Debian 13 Chroot appears to be already installed."
         progress "Skipping Download/Extraction/Config..."
         progress "Regenerating launch scripts..."
@@ -386,12 +387,12 @@ fi
         # Just creating the launch scripts again to be safe.
         
         # --- RE-GENERATE LAUNCH SCRIPT (Core) ---
-        LAUNCH_SCRIPT="/data/local/folio/helpers/start_debian13.sh"
+        LAUNCH_SCRIPT="/data/local/bliss/helpers/start_debian13.sh"
         cat <<EOF > "$LAUNCH_SCRIPT"
 #!/bin/sh
 
 # Path of DEBIAN rootfs
-DEBIANPATH="/data/local/folio/chroots/debian"
+DEBIANPATH="/data/local/bliss/chroots/debian"
 BB="$BB"
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH
 
@@ -452,7 +453,7 @@ EOF
         configure_debian_chroot
 
         # --- LAUNCH SCRIPT GENERATION ---
-        LAUNCH_SCRIPT="/data/local/folio/helpers/start_debian13.sh"
+        LAUNCH_SCRIPT="/data/local/bliss/helpers/start_debian13.sh"
         progress "Creating launch script at $LAUNCH_SCRIPT..."
         
         # Matches the guide's 'start_debian.sh' content
@@ -460,7 +461,7 @@ EOF
 #!/bin/sh
 
 # Path of DEBIAN rootfs
-DEBIANPATH="/data/local/folio/chroots/debian"
+DEBIANPATH="/data/local/bliss/chroots/debian"
 BB="$BB"
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH
 
@@ -497,7 +498,7 @@ EOF
     fi
 
     # --- GENERATE GUI LAUNCHER (For X11 from Root) ---
-    GUI_LAUNCHER="/data/local/folio/helpers/start_debian13_gui.sh"
+    GUI_LAUNCHER="/data/local/bliss/helpers/start_debian13_gui.sh"
     progress "Creating X11 GUI Launcher at $GUI_LAUNCHER..."
     
     TARGET_TERMUX_PREFIX="$APP_PREFIX"
@@ -563,7 +564,7 @@ am start --user 0 -n com.termux.x11/com.termux.x11.MainActivity >/dev/null 2>&1
 
 # 5. Mount /tmp to chroot
 echo "[5/7] Mounting /tmp to chroot..."
-\$BB mount --bind \$TARGET_TERMUX_PREFIX/tmp /data/local/folio/chroots/debian/tmp 2>/dev/null
+\$BB mount --bind \$TARGET_TERMUX_PREFIX/tmp /data/local/bliss/chroots/debian/tmp 2>/dev/null
 chmod -R 1777 \$TARGET_TERMUX_PREFIX/tmp
 
 # 6. Start X server with debug logging
@@ -622,13 +623,13 @@ fi
 
 echo ""
 echo "Entering chroot..."
-sh /data/local/folio/helpers/start_debian13.sh
+sh /data/local/bliss/helpers/start_debian13.sh
 EOFGUI
     chmod +x "$GUI_LAUNCHER"
     success "GUI Launcher created: $GUI_LAUNCHER"
     
     # --- GENERATE GUI STOP SCRIPT ---
-    STOP_LAUNCHER="/data/local/folio/helpers/stop_debian13_gui.sh"
+    STOP_LAUNCHER="/data/local/bliss/helpers/stop_debian13_gui.sh"
     progress "Creating GUI Stop Script at $STOP_LAUNCHER..."
     
     cat <<EOF > "$STOP_LAUNCHER"
@@ -639,7 +640,7 @@ echo "========================================"
 echo "Bliss: Stopping Debian 13 Chroot GUI"
 echo "========================================"
 
-DEBIANPATH="/data/local/folio/chroots/debian"
+DEBIANPATH="/data/local/bliss/chroots/debian"
 TARGET_TERMUX_PREFIX="\${TARGET_TERMUX_PREFIX:-$APP_PREFIX}"
 BB="$BB"
 
@@ -678,14 +679,14 @@ EOF
     success "GUI Stop Script created: $STOP_LAUNCHER"
     
     # --- GENERATE ROOT COMMAND RUNNER (For App Scripts) ---
-    ROOT_RUNNER="/data/local/folio/helpers/run_debian13_root.sh"
+    ROOT_RUNNER="/data/local/bliss/helpers/run_debian13_root.sh"
     progress "Creating Root Runner at $ROOT_RUNNER..."
     
     cat <<EOF > "$ROOT_RUNNER"
 #!/bin/sh
 # Wrapper to run a command inside Chroot as Root (with mounts)
 
-DEBIANPATH="/data/local/folio/chroots/debian"
+DEBIANPATH="/data/local/bliss/chroots/debian"
 BB="$BB"
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH
 
@@ -715,7 +716,7 @@ EOF
     success "Root runner created."
 
     # --- GENERATE CLI LAUNCHER (Shell Only) ---
-    CLI_SCRIPT="/data/local/folio/helpers/enter_debian13.sh"
+    CLI_SCRIPT="/data/local/bliss/helpers/enter_debian13.sh"
     progress "Creating CLI Launcher at $CLI_SCRIPT..."
     
     cat <<EOF > "$CLI_SCRIPT"
@@ -723,7 +724,7 @@ EOF
 # CLI Entry for Debian 13 Chroot
 
 # Path of DEBIAN rootfs
-DEBIANPATH="/data/local/folio/chroots/debian"
+DEBIANPATH="/data/local/bliss/chroots/debian"
 BB="$BB"
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH
 
@@ -755,7 +756,7 @@ EOF
     success "CLI Launcher created: $CLI_SCRIPT"
     
     # --- GENERATE ROOT CLI LAUNCHER (Shell as Root) ---
-    ROOT_CLI_SCRIPT="/data/local/folio/helpers/enter_debian13_root.sh"
+    ROOT_CLI_SCRIPT="/data/local/bliss/helpers/enter_debian13_root.sh"
     progress "Creating Root CLI Launcher at $ROOT_CLI_SCRIPT..."
     
     cat <<EOF > "$ROOT_CLI_SCRIPT"
@@ -763,7 +764,7 @@ EOF
 # Root CLI Entry for Debian 13 Chroot
 
 # Path of DEBIAN rootfs
-DEBIANPATH="/data/local/folio/chroots/debian"
+DEBIANPATH="/data/local/bliss/chroots/debian"
 BB="$BB"
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH
 

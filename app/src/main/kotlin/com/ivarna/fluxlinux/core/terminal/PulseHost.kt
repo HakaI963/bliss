@@ -167,7 +167,7 @@ object PulseHost {
     }
 
     /**
-     * Stage setup_pulse_guest.sh + flux_guest_common.sh into each installed
+     * Stage setup_pulse_guest.sh + bliss_guest_common.sh into each installed
      * PRoot (and chroot when su works) and run the client repair. Call from a
      * background thread — package install can take minutes when pactl is missing.
      */

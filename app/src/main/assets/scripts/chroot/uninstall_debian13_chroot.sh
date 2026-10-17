@@ -3,8 +3,8 @@
 # Uninstalls Debian 13 (Trixie) Chroot environment (Requires Root)
 
 # Paths (Must match setup_debian13_chroot.sh)
-DEBIANPATH="/data/local/folio/chroots/debian"
-LAUNCH_SCRIPTS="/data/local/folio/helpers/start_debian13.sh /data/local/folio/helpers/start_debian13_gui.sh /data/local/folio/helpers/enter_debian13.sh /data/local/folio/helpers/enter_debian13_root.sh /data/local/folio/helpers/run_debian13_root.sh /data/local/folio/helpers/stop_debian13_gui.sh /data/local/folio/helpers/uninstall_debian13_chroot.sh /data/local/folio/helpers/fluxlinux_chroot.sh"
+DEBIANPATH="/data/local/bliss/chroots/debian"
+LAUNCH_SCRIPTS="/data/local/bliss/helpers/start_debian13.sh /data/local/bliss/helpers/start_debian13_gui.sh /data/local/bliss/helpers/enter_debian13.sh /data/local/bliss/helpers/enter_debian13_root.sh /data/local/bliss/helpers/run_debian13_root.sh /data/local/bliss/helpers/stop_debian13_gui.sh /data/local/bliss/helpers/uninstall_debian13_chroot.sh /data/local/bliss/helpers/bliss_chroot.sh"
 
 # Error Handler
 error() {
@@ -34,7 +34,7 @@ _rr=""
 for _c in \
   "${FLUX_RESOLVE_BB:-}" \
   "$(dirname "$0")/resolve_bb.sh" \
-  /data/local/folio/helpers/fluxlinux_resolve_bb.sh
+  /data/local/bliss/helpers/bliss_resolve_bb.sh
 do
   [ -n "$_c" ] && [ -f "$_c" ] && _rr="$_c" && break
 done
@@ -46,9 +46,9 @@ fi
 if [ -z "${BB:-}" ]; then
   if [ -n "${FLUX_BB:-}" ] && [ -x "$FLUX_BB" ] &&
      "$FLUX_BB" --list >/dev/null 2>&1; then BB="$FLUX_BB"; fi
-  if [ -z "${BB:-}" ] && [ -x /data/local/folio/busybox/flux_busybox ] &&
-     /data/local/folio/busybox/flux_busybox --list >/dev/null 2>&1; then
-    BB=/data/local/folio/busybox/flux_busybox
+  if [ -z "${BB:-}" ] && [ -x /data/local/bliss/busybox/bliss_busybox ] &&
+     /data/local/bliss/busybox/bliss_busybox --list >/dev/null 2>&1; then
+    BB=/data/local/bliss/busybox/bliss_busybox
   fi
   if [ -z "${BB:-}" ]; then
     for path in \

@@ -1,9 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Bliss brand mark: a stylized five-petal lotus/blossom.
-     Five symmetric petals are one path rotated around the base pivot
-     (54,72); each petal fades from white at the base to soft pink at the
-     tip. A small four-point sparkle sits at the top-right of the flower.
-     Geometric and clean so it stays legible down to 48px. -->
+<!-- Bliss brand mark: one clean four-point sparkle with a small companion dot.
+     The whole glyph lives inside the 66dp adaptive-icon safe zone (tips at
+     21.5 / 86.5 on the 108 viewport) and reads crisply down to 48px, both on
+     the near-black launcher tile and on the app's dark background. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
@@ -11,104 +10,24 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- Outer-left petal -->
-    <group
-        android:rotation="-40"
-        android:pivotX="54"
-        android:pivotY="72">
-        <path android:pathData="M54,72 C47.5,58 47,43 54,30 C61,43 60.5,58 54,72 Z">
-            <aapt:attr name="android:fillColor">
-                <gradient
-                    android:type="linear"
-                    android:startX="54"
-                    android:startY="72"
-                    android:endX="54"
-                    android:endY="30"
-                    android:startColor="#FFFFFFFF"
-                    android:endColor="#FFFFD9F0" />
-            </aapt:attr>
-        </path>
-    </group>
-
-    <!-- Outer-right petal -->
-    <group
-        android:rotation="40"
-        android:pivotX="54"
-        android:pivotY="72">
-        <path android:pathData="M54,72 C47.5,58 47,43 54,30 C61,43 60.5,58 54,72 Z">
-            <aapt:attr name="android:fillColor">
-                <gradient
-                    android:type="linear"
-                    android:startX="54"
-                    android:startY="72"
-                    android:endX="54"
-                    android:endY="30"
-                    android:startColor="#FFFFFFFF"
-                    android:endColor="#FFFFD9F0" />
-            </aapt:attr>
-        </path>
-    </group>
-
-    <!-- Inner-left petal -->
-    <group
-        android:rotation="-20"
-        android:pivotX="54"
-        android:pivotY="72">
-        <path android:pathData="M54,72 C47.5,58 47,43 54,30 C61,43 60.5,58 54,72 Z">
-            <aapt:attr name="android:fillColor">
-                <gradient
-                    android:type="linear"
-                    android:startX="54"
-                    android:startY="72"
-                    android:endX="54"
-                    android:endY="30"
-                    android:startColor="#FFFFFFFF"
-                    android:endColor="#FFFFD9F0" />
-            </aapt:attr>
-        </path>
-    </group>
-
-    <!-- Inner-right petal -->
-    <group
-        android:rotation="20"
-        android:pivotX="54"
-        android:pivotY="72">
-        <path android:pathData="M54,72 C47.5,58 47,43 54,30 C61,43 60.5,58 54,72 Z">
-            <aapt:attr name="android:fillColor">
-                <gradient
-                    android:type="linear"
-                    android:startX="54"
-                    android:startY="72"
-                    android:endX="54"
-                    android:endY="30"
-                    android:startColor="#FFFFFFFF"
-                    android:endColor="#FFFFD9F0" />
-            </aapt:attr>
-        </path>
-    </group>
-
-    <!-- Center petal (drawn last so it sits on top) -->
-    <group
-        android:rotation="0"
-        android:pivotX="54"
-        android:pivotY="72">
-        <path android:pathData="M54,72 C47.5,58 47,43 54,30 C61,43 60.5,58 54,72 Z">
-            <aapt:attr name="android:fillColor">
-                <gradient
-                    android:type="linear"
-                    android:startX="54"
-                    android:startY="72"
-                    android:endX="54"
-                    android:endY="30"
-                    android:startColor="#FFFFFFFF"
-                    android:endColor="#FFFFD9F0" />
-            </aapt:attr>
-        </path>
-    </group>
-
-    <!-- Four-point sparkle, top-right of the flower -->
+    <!-- Main sparkle: soft white, a hint of lavender toward the base. -->
     <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M80,15.5 C80.9,20.4 83,22.4 88.5,24 C83,25.6 80.9,27.6 80,32.5 C79.1,27.6 77,25.6 71.5,24 C77,22.4 79.1,20.4 80,15.5 Z" />
+        android:pathData="M54,21.5 C57.44,40.24 65.47,47.88 86.5,54 C67.76,57.44 60.12,65.47 54,86.5 C50.56,67.76 42.53,60.12 21.5,54 C40.24,50.56 47.88,42.53 54,21.5 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="54"
+                android:startY="21.5"
+                android:endX="54"
+                android:endY="86.5"
+                android:startColor="#FFFDFDFF"
+                android:endColor="#FFE7E9F8" />
+        </aapt:attr>
+    </path>
+
+    <!-- Companion dot: dimmer lavender, keeps the mark feeling alive. -->
+    <path
+        android:pathData="M77.6,25.9 C80.09,25.9 82.1,27.91 82.1,30.4 C82.1,32.89 80.09,34.9 77.6,34.9 C75.11,34.9 73.1,32.89 73.1,30.4 C73.1,27.91 75.11,25.9 77.6,25.9 Z"
+        android:fillColor="#FFB9BDE0" />
 
 </vector>

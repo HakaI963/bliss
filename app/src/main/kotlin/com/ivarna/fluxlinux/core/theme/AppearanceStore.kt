@@ -28,14 +28,14 @@ import java.io.FileOutputStream
  * (`appearance_<distroId>`), plus picked media in `filesDir/appearance/`.
  *
  * Guest application is **single-sourced** in the guest script
- * `scripts/common/setup/folio_appearance_apply.sh` (staged as
- * `~/.config/folio/appearance-apply.sh` together with
- * `~/.config/folio/appearance.env`). This object only:
+ * `scripts/common/setup/bliss_appearance_apply.sh` (staged as
+ * `~/.config/bliss/appearance-apply.sh` together with
+ * `~/.config/bliss/appearance.env`). This object only:
  *  - keeps the per-distro config,
  *  - resolves it into the `FLUX_*` env contract ([exportEnvFor]),
  *  - stages env + media into the distro:
  *      - proot: direct host-side writes into the rootfs (app uid owns it),
- *      - chroot: root copy into `/data/local/folio/chroots/<distro>` via
+ *      - chroot: root copy into `/data/local/bliss/chroots/<distro>` via
  *        [RootShell] + an immediate in-chroot apply run (best-effort).
  *
  * Applying is immediate when the distro's XFCE desktop is already running
@@ -49,7 +49,7 @@ object AppearanceStore {
     private const val TAG = "AppearanceStore"
 
     /** SharedPreferences file holding one JSON config per distro. */
-    const val PREFS = "folio_appearance"
+    const val PREFS = "bliss_appearance"
     private const val KEY_PREFIX = "appearance_"
     private const val JSON_VERSION = 1
 
@@ -70,19 +70,22 @@ object AppearanceStore {
 
     // ── guest paths ──────────────────────────────────────────────────────────
     const val GUEST_HOME = "/home/flux"
-    const val GUEST_CFG = "$GUEST_HOME/.config/folio"
-    const val GUEST_SHARE = "$GUEST_HOME/.local/share/folio"
+    const val GUEST_CFG = "$GUEST_HOME/.config/bliss"
+    const val GUEST_SHARE = "$GUEST_HOME/.local/share/bliss"
     const val GUEST_ENV_FILE = "appearance.env"
     const val GUEST_APPLY_SCRIPT = "appearance-apply.sh"
     const val GUEST_MARKER = ".appearance.applied"
     const val GUEST_AUTOSTART_DIR = "$GUEST_HOME/.config/autostart"
-    const val GUEST_AUTOSTART_FILE = "folio-appearance.desktop"
+    const val GUEST_AUTOSTART_FILE = "bliss-appearance.desktop"
+
+    /** Pre-rename autostart entry, removed when (re)staging into a guest. */
+    private const val GUEST_AUTOSTART_FILE_LEGACY = "folio-appearance.desktop"
 
     /** Staged name of the app-side dimmed variant of a custom wallpaper. */
     private const val DIMMED_WALLPAPER_NAME = "wallpaper-dim.png"
 
-    /** Guest-side applier (asset, also staged into `~/.config/folio/`). */
-    const val APPLY_ASSET = "scripts/common/setup/folio_appearance_apply.sh"
+    /** Guest-side applier (asset, also staged into `~/.config/bliss/`). */
+    const val APPLY_ASSET = "scripts/common/setup/bliss_appearance_apply.sh"
 
     private const val MAX_WALLPAPER_BYTES = 64L * 1024L * 1024L
     private const val MAX_VIDEO_BYTES = 2L * 1024L * 1024L * 1024L
@@ -116,71 +119,94 @@ object AppearanceStore {
     /** Shipped presets (the three originals + three Bliss presets + 7 new). */
     val WALLPAPER_PRESETS: List<WallpaperPreset> = listOf(
         WallpaperPreset(
-            "folio-dark", "Bliss Dark",
-            "xfce4/wallpaper/fluxlinux-dark.png", "wallpaper-folio-dark.png",
-            R.drawable.folio_wall_dark
+            "bliss-dark", "Bliss Dark",
+            "xfce4/wallpaper/bliss-dark.png", "wallpaper-bliss-dark.png",
+            R.drawable.bliss_wall_dark
         ),
         WallpaperPreset(
-            "folio-light", "Bliss Light",
-            "xfce4/wallpaper/fluxlinux-light.png", "wallpaper-folio-light.png",
-            R.drawable.folio_wall_light
+            "bliss-light", "Bliss Light",
+            "xfce4/wallpaper/bliss-light.png", "wallpaper-bliss-light.png",
+            R.drawable.bliss_wall_light
         ),
         WallpaperPreset(
-            "folio-shard", "Bliss Shard",
-            "xfce4/wallpaper/folio-dark.svg", "wallpaper-folio-shard.svg",
-            R.drawable.folio_wall_shard
+            "bliss-shard", "Bliss Shard",
+            "xfce4/wallpaper/bliss-dark.svg", "wallpaper-bliss-shard.svg",
+            R.drawable.bliss_wall_shard
         ),
         WallpaperPreset(
             "aurora", "Aurora",
-            "xfce4/wallpaper/presets/folio-aurora.png", "wallpaper-aurora.png",
-            R.drawable.folio_wall_aurora
+            "xfce4/wallpaper/presets/bliss-aurora.png", "wallpaper-aurora.png",
+            R.drawable.bliss_wall_aurora
         ),
         WallpaperPreset(
             "traces", "Traces",
-            "xfce4/wallpaper/presets/folio-traces.png", "wallpaper-traces.png",
-            R.drawable.folio_wall_traces
+            "xfce4/wallpaper/presets/bliss-traces.png", "wallpaper-traces.png",
+            R.drawable.bliss_wall_traces
         ),
         WallpaperPreset(
             "density", "Density",
-            "xfce4/wallpaper/presets/folio-density.png", "wallpaper-density.png",
-            R.drawable.folio_wall_density
+            "xfce4/wallpaper/presets/bliss-density.png", "wallpaper-density.png",
+            R.drawable.bliss_wall_density
         ),
         WallpaperPreset(
-            "folio-amoled", "Bliss AMOLED",
-            "xfce4/wallpaper/presets/folio-amoled.png", "wallpaper-folio-amoled.png",
-            R.drawable.folio_wall_amoled
+            "bliss-amoled", "Bliss AMOLED",
+            "xfce4/wallpaper/presets/bliss-amoled.png", "wallpaper-bliss-amoled.png",
+            R.drawable.bliss_wall_amoled
         ),
         WallpaperPreset(
-            "folio-mesh", "Bliss Mesh",
-            "xfce4/wallpaper/presets/folio-mesh.png", "wallpaper-folio-mesh.png",
-            R.drawable.folio_wall_mesh
+            "bliss-mesh", "Bliss Mesh",
+            "xfce4/wallpaper/presets/bliss-mesh.png", "wallpaper-bliss-mesh.png",
+            R.drawable.bliss_wall_mesh
         ),
         WallpaperPreset(
-            "folio-silk", "Bliss Silk",
-            "xfce4/wallpaper/presets/folio-silk.png", "wallpaper-folio-silk.png",
-            R.drawable.folio_wall_silk
+            "bliss-silk", "Bliss Silk",
+            "xfce4/wallpaper/presets/bliss-silk.png", "wallpaper-bliss-silk.png",
+            R.drawable.bliss_wall_silk
         ),
         WallpaperPreset(
-            "folio-dither", "Bliss Dither",
-            "xfce4/wallpaper/presets/folio-dither.png", "wallpaper-folio-dither.png",
-            R.drawable.folio_wall_dither
+            "bliss-dither", "Bliss Dither",
+            "xfce4/wallpaper/presets/bliss-dither.png", "wallpaper-bliss-dither.png",
+            R.drawable.bliss_wall_dither
         ),
         WallpaperPreset(
-            "folio-waves", "Bliss Waves",
-            "xfce4/wallpaper/presets/folio-waves.png", "wallpaper-folio-waves.png",
-            R.drawable.folio_wall_waves
+            "bliss-waves", "Bliss Waves",
+            "xfce4/wallpaper/presets/bliss-waves.png", "wallpaper-bliss-waves.png",
+            R.drawable.bliss_wall_waves
         ),
         WallpaperPreset(
-            "folio-beams", "Bliss Beams",
-            "xfce4/wallpaper/presets/folio-beams.png", "wallpaper-folio-beams.png",
-            R.drawable.folio_wall_beams
+            "bliss-beams", "Bliss Beams",
+            "xfce4/wallpaper/presets/bliss-beams.png", "wallpaper-bliss-beams.png",
+            R.drawable.bliss_wall_beams
         ),
         WallpaperPreset(
-            "folio-sakura", "Bliss Sakura",
-            "xfce4/wallpaper/presets/folio-sakura.png", "wallpaper-folio-sakura.png",
-            R.drawable.folio_wall_sakura
+            "bliss-sakura", "Bliss Sakura",
+            "xfce4/wallpaper/presets/bliss-sakura.png", "wallpaper-bliss-sakura.png",
+            R.drawable.bliss_wall_sakura
         )
     )
+
+    /**
+     * Pre-rename (`folio-*`) preset ids → current ids. Persisted user prefs
+     * (single preset + random set) keep working on existing installs.
+     */
+    private val LEGACY_WALLPAPER_IDS = mapOf(
+        "folio-dark" to "bliss-dark",
+        "folio-light" to "bliss-light",
+        "folio-shard" to "bliss-shard",
+        "folio-amoled" to "bliss-amoled",
+        "folio-mesh" to "bliss-mesh",
+        "folio-silk" to "bliss-silk",
+        "folio-dither" to "bliss-dither",
+        "folio-waves" to "bliss-waves",
+        "folio-beams" to "bliss-beams",
+        "folio-sakura" to "bliss-sakura"
+    )
+
+    /** Resolve a persisted preset id (legacy `folio-*` names still accepted). */
+    fun aliasPresetId(id: String?): String? {
+        val v = id ?: return null
+        return LEGACY_WALLPAPER_IDS[v] ?: v
+    }
 
     /** Desktop accent presets — mono-first, then the requested accents. */
     val ACCENT_PRESETS: List<AccentPreset> = listOf(
@@ -253,7 +279,7 @@ object AppearanceStore {
     data class Config(
         val wallpaperKind: String = KIND_ASSET,
         /** Preset id for [KIND_ASSET] and the fallback preset. */
-        val wallpaperPreset: String = "folio-dark",
+        val wallpaperPreset: String = "bliss-dark",
         /** App-side file name (`filesDir/appearance/…`) for [KIND_CUSTOM]. */
         val wallpaperLocal: String = "",
         val wallpaperStyle: String = STYLE_ZOOM,
@@ -277,7 +303,8 @@ object AppearanceStore {
         val termFontSize: Int = 10
     )
 
-    fun presetFor(id: String?): WallpaperPreset? = WALLPAPER_PRESETS.firstOrNull { it.id == id }
+    fun presetFor(id: String?): WallpaperPreset? =
+        WALLPAPER_PRESETS.firstOrNull { it.id == aliasPresetId(id) }
 
     fun accentFor(cfg: Config): AccentPreset =
         ACCENT_PRESETS.firstOrNull { it.id == cfg.accent } ?: ACCENT_PRESETS[0]
@@ -293,7 +320,9 @@ object AppearanceStore {
 
     /** Preset ids participating in random mode (all presets when unset). */
     fun randomIdsFor(cfg: Config): List<String> {
-        val valid = cfg.randomIds.filter { presetFor(it) != null }
+        val valid = cfg.randomIds.mapNotNull { aliasPresetId(it) }.filter { presetId ->
+            WALLPAPER_PRESETS.any { it.id == presetId }
+        }
         return valid.ifEmpty { WALLPAPER_PRESETS.map { it.id } }
     }
 
@@ -313,13 +342,15 @@ object AppearanceStore {
                 wallpaperKind = o.optString("wallpaperKind", KIND_ASSET)
                     .takeIf { it in setOf(KIND_ASSET, KIND_CUSTOM, KIND_NONE, KIND_RANDOM) }
                     ?: KIND_ASSET,
-                wallpaperPreset = o.optString("wallpaperPreset", "folio-dark")
-                    .takeIf { presetFor(it) != null } ?: "folio-dark",
+                wallpaperPreset = aliasPresetId(o.optString("wallpaperPreset", "bliss-dark"))
+                    ?.takeIf { presetFor(it) != null } ?: "bliss-dark",
                 wallpaperLocal = o.optString("wallpaperLocal", ""),
                 wallpaperStyle = o.optString("wallpaperStyle", STYLE_ZOOM)
                     .takeIf { it in WALLPAPER_STYLES } ?: STYLE_ZOOM,
                 randomIds = o.optJSONArray("randomIds")?.let { arr ->
-                    (0 until arr.length()).mapNotNull { i -> arr.optString(i).takeIf { it.isNotBlank() } }
+                    (0 until arr.length()).mapNotNull { i ->
+                        aliasPresetId(arr.optString(i).takeIf { it.isNotBlank() })
+                    }
                 } ?: emptyList(),
                 accent = o.optString("accent", "mono")
                     .takeIf { id -> ACCENT_PRESETS.any { it.id == id } } ?: "mono",
@@ -366,8 +397,31 @@ object AppearanceStore {
         prefs(ctx).edit().putString(KEY_PREFIX + distroId, o.toString()).apply()
     }
 
-    private fun prefs(ctx: Context) =
-        ctx.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+    /** Legacy prefs file (pre-Bliss); migrated once on first open. */
+    private const val LEGACY_PREFS = "folio_appearance"
+
+    private fun prefs(ctx: Context): android.content.SharedPreferences {
+        val app = ctx.applicationContext
+        val prefs = app.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        if (prefs.all.isEmpty()) {
+            val old = app.getSharedPreferences(LEGACY_PREFS, Context.MODE_PRIVATE).all
+            if (old.isNotEmpty()) {
+                val e = prefs.edit()
+                for ((k, v) in old) {
+                    when (v) {
+                        is String -> e.putString(k, v)
+                        is Int -> e.putInt(k, v)
+                        is Long -> e.putLong(k, v)
+                        is Boolean -> e.putBoolean(k, v)
+                        is Float -> e.putFloat(k, v)
+                        is Set<*> -> @Suppress("UNCHECKED_CAST") e.putStringSet(k, v as Set<String>)
+                    }
+                }
+                e.apply()
+            }
+        }
+        return prefs
+    }
 
     /** One-line summary for the Distro Settings row. */
     fun summary(ctx: Context, distroId: String): String {
@@ -729,7 +783,7 @@ object AppearanceStore {
      * asset presets are never dimmed (documented in the editor).
      */
     private fun collectMedia(app: Context, cfg: Config, onLog: (String) -> Unit): MediaPlan {
-        val cache = File(app.cacheDir, "folio_appearance").also { it.mkdirs() }
+        val cache = File(app.cacheDir, "bliss_appearance").also { it.mkdirs() }
         val out = mutableListOf<StagedFile>()
         var dimmed: String? = null
 
@@ -869,8 +923,8 @@ object AppearanceStore {
             return StageOutcome(false, "Distro rootfs not found — install it first.")
         }
         val home = File(rootfs, GUEST_HOME.removePrefix("/"))
-        val cfgDir = File(home, ".config/folio").also { it.mkdirs() }
-        val shareDir = File(home, ".local/share/folio").also { it.mkdirs() }
+        val cfgDir = File(home, ".config/bliss").also { it.mkdirs() }
+        val shareDir = File(home, ".local/share/bliss").also { it.mkdirs() }
         if (!cfgDir.isDirectory || !shareDir.isDirectory) {
             return StageOutcome(false, "Cannot write into the distro home directory.")
         }
@@ -893,6 +947,8 @@ object AppearanceStore {
         val autostartDir = File(home, ".config/autostart").also { it.mkdirs() }
         try {
             File(autostartDir, GUEST_AUTOSTART_FILE).writeText(autostartEntry())
+            // Pre-rename entry would double-apply the (now stale) old config.
+            File(autostartDir, GUEST_AUTOSTART_FILE_LEGACY).delete()
         } catch (e: Exception) {
             onLog("autostart entry write failed: ${e.message}")
         }
@@ -911,7 +967,7 @@ object AppearanceStore {
         onLog: (String) -> Unit
     ): StageOutcome {
         val path = chrootPath?.takeIf { it.isNotBlank() } ?: ChrootPaths.pathForDistro(distroId)
-        val cache = File(app.cacheDir, "folio_appearance").also { it.mkdirs() }
+        val cache = File(app.cacheDir, "bliss_appearance").also { it.mkdirs() }
         val envFile = File(cache, GUEST_ENV_FILE).also { it.writeText(envText) }
         val scriptFile = File(cache, GUEST_APPLY_SCRIPT).also { it.writeText(readApplyScript(app)) }
         val autostartFile = File(cache, GUEST_AUTOSTART_FILE).also { it.writeText(autostartEntry()) }
@@ -930,6 +986,7 @@ object AppearanceStore {
             append("cp -f '${envFile.absolutePath}' '$cfgDir/$GUEST_ENV_FILE' 2>/dev/null || true; ")
             append("cp -f '${scriptFile.absolutePath}' '$cfgDir/$GUEST_APPLY_SCRIPT' 2>/dev/null || true; ")
             append("cp -f '${autostartFile.absolutePath}' '$autostartDir/$GUEST_AUTOSTART_FILE' 2>/dev/null || true; ")
+            append("rm -f '$autostartDir/$GUEST_AUTOSTART_FILE_LEGACY' 2>/dev/null || true; ")
             append("chmod 644 '$cfgDir/$GUEST_ENV_FILE' '$cfgDir/$GUEST_APPLY_SCRIPT' '$autostartDir/$GUEST_AUTOSTART_FILE' 2>/dev/null || true; ")
             append("rm -f '$cfgDir/$GUEST_MARKER' 2>/dev/null || true; ")
             append("chown -R --reference='$homeDir' '$cfgDir' '$shareDir' 2>/dev/null || true; ")

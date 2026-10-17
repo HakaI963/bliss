@@ -3,7 +3,8 @@
 # Called by start_gui_chroot.sh after host Pulse/VirGL/X11 are up.
 # Paths: app package via FLUX_PACKAGE / TARGET_PREFIX (ivarna or zenithblue). Sticky guest /tmp preserved.
 
-DEBIANPATH="${DEBIANPATH:-/data/local/folio/chroots/debian}"
+DEBIANPATH="${DEBIANPATH:-/data/local/bliss/chroots/debian}"
+[ -d /data/local/folio ] && [ ! -e /data/local/bliss ] && mv /data/local/folio /data/local/bliss 2>/dev/null || true
 if [ -z "${TARGET_PREFIX:-}" ]; then
   if [ -n "${FLUX_PREFIX:-}" ]; then
     TARGET_PREFIX="$FLUX_PREFIX"
@@ -27,7 +28,7 @@ _rr=""
 for _c in \
   "${FLUX_RESOLVE_BB:-}" \
   "$(dirname "$0")/resolve_bb.sh" \
-  /data/local/folio/helpers/fluxlinux_resolve_bb.sh
+  /data/local/bliss/helpers/bliss_resolve_bb.sh
 do
   [ -n "$_c" ] && [ -f "$_c" ] && _rr="$_c" && break
 done
@@ -40,9 +41,9 @@ if [ -z "${BB:-}" ]; then
   # sidecar missing (desktop/uninstall/staged setup) — same B1 walk as resolve_bb
   if [ -n "${FLUX_BB:-}" ] && [ -x "$FLUX_BB" ] &&
      "$FLUX_BB" --list >/dev/null 2>&1; then BB="$FLUX_BB"; fi
-  if [ -z "${BB:-}" ] && [ -x /data/local/folio/busybox/flux_busybox ] &&
-     /data/local/folio/busybox/flux_busybox --list >/dev/null 2>&1; then
-    BB=/data/local/folio/busybox/flux_busybox
+  if [ -z "${BB:-}" ] && [ -x /data/local/bliss/busybox/bliss_busybox ] &&
+     /data/local/bliss/busybox/bliss_busybox --list >/dev/null 2>&1; then
+    BB=/data/local/bliss/busybox/bliss_busybox
   fi
   if [ -z "${BB:-}" ]; then
     for path in \
@@ -95,7 +96,7 @@ if command -v chcon >/dev/null 2>&1; then
 fi
 restorecon -RF "$TARGET_PREFIX/tmp" 2>/dev/null || true
 
-HELPER="${HELPER:-/data/local/folio/helpers/fluxlinux_chroot.sh}"
+HELPER="${HELPER:-/data/local/bliss/helpers/bliss_chroot.sh}"
 echo "[1/5] Mounts (SSOT if available)..."
 # Wait for host Loader to create X0 before --x11 bind
 mkdir -p "$TARGET_PREFIX/tmp/.X11-unix" 2>/dev/null || true
@@ -122,7 +123,7 @@ if [ -f "$HELPER" ]; then
   export NC_PREFIX="$TARGET_PREFIX"
   export NC_HOST_TMP="${TARGET_PREFIX}/tmp"
   sh "$HELPER" mount --x11 || true
-  echo "[2/5] X11 via fluxlinux_chroot mount --x11"
+  echo "[2/5] X11 via bliss_chroot mount --x11"
 else
   /system/bin/mount -o remount,dev,suid /data 2>/dev/null \
     || $BB mount -o remount,dev,suid /data 2>/dev/null || true
@@ -169,12 +170,12 @@ if [ "${FLUX_DESKTOP:-xfce4}" = kde ]; then
   # Qt/KDE reject /tmp as XDG_RUNTIME_DIR (wrong perms); use a private 0700 dir.
   # GPU env for KDE: zink OpenGL compositing on Turnip/PanVK, none on software.
   mkdir -p "$DEBIANPATH/usr/local/lib/fluxlinux"
-  cat > "$DEBIANPATH/usr/local/lib/fluxlinux/flux_kde_env.sh" << 'KDE_EOF'
+  cat > "$DEBIANPATH/usr/local/lib/fluxlinux/bliss_kde_env.sh" << 'KDE_EOF'
 # Sourced after flux_gpu_apply_runtime. Plasma 6 kwin_x11: O2 = desktop OpenGL.
-# OPT-IN (touch /etc/fluxlinux/kde_gl): KWin O2 on zink shows a black screen on
+# OPT-IN (touch /etc/bliss/kde_gl): KWin O2 on zink shows a black screen on
 # PanVK (Xlorie, verified Poco X6 Pro); Turnip unverified. Default stays N.
 export QT_QPA_PLATFORMTHEME=kde KWIN_COMPOSE=N
-if [ -e /etc/fluxlinux/kde_gl ]; then case "$GPU_MODE" in turnip|panvk)
+if [ -e /etc/bliss/kde_gl ]; then case "$GPU_MODE" in turnip|panvk)
   export KWIN_COMPOSE=O2
   _icd=/usr/share/vulkan/icd.d/freedreno_icd.aarch64.json
   if [ "$GPU_MODE" = turnip ] && [ "$MESA_LOADER_DRIVER_OVERRIDE" = kgsl ] && [ -r "$_icd" ]; then
@@ -209,12 +210,13 @@ if [ -n "$_kw" ]; then
   fi
 fi
 KDE_EOF
-  chmod 644 "$DEBIANPATH/usr/local/lib/fluxlinux/flux_kde_env.sh"
-  FLUX_KDE_ENV="export XDG_RUNTIME_DIR=/home/$USERNAME/.cache/runtime; rm -rf /home/$USERNAME/.cache/runtime /home/$USERNAME/.cache/sessions 2>/dev/null || true; mkdir -p /home/$USERNAME/.cache/runtime; chmod 700 /home/$USERNAME/.cache/runtime; mkdir -p /tmp/.ICE-unix && chmod 1777 /tmp/.ICE-unix 2>/dev/null || true; . /usr/local/lib/fluxlinux/flux_kde_env.sh"
+  chmod 644 "$DEBIANPATH/usr/local/lib/fluxlinux/bliss_kde_env.sh"
+  FLUX_KDE_ENV="export XDG_RUNTIME_DIR=/home/$USERNAME/.cache/runtime; rm -rf /home/$USERNAME/.cache/runtime /home/$USERNAME/.cache/sessions 2>/dev/null || true; mkdir -p /home/$USERNAME/.cache/runtime; chmod 700 /home/$USERNAME/.cache/runtime; mkdir -p /tmp/.ICE-unix && chmod 1777 /tmp/.ICE-unix 2>/dev/null || true; . /usr/local/lib/fluxlinux/bliss_kde_env.sh"
 fi
 # Guest script: sticky /tmp X11 + host-tmp VirGL + gpu_mode file
 $BB chroot "$DEBIANPATH" /bin/bash -c "
 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+[ -d /etc/fluxlinux ] && [ ! -e /etc/bliss ] && mv /etc/fluxlinux /etc/bliss 2>/dev/null || true
 export TMPDIR=/tmp
 if command -v dbus-uuidgen >/dev/null 2>&1; then
   dbus-uuidgen --ensure=/etc/machine-id 2>/dev/null || true
@@ -230,8 +232,8 @@ su - $USERNAME -c '
     flux_gpu_apply_runtime
   else
     GPU_MODE=virgl
-    if [ -r /etc/fluxlinux/gpu_mode ]; then
-      GPU_MODE=\$(tr -d \"[:space:]\" </etc/fluxlinux/gpu_mode)
+    if [ -r /etc/bliss/gpu_mode ]; then
+      GPU_MODE=\$(tr -d \"[:space:]\" </etc/bliss/gpu_mode)
     fi
     case \"\$GPU_MODE\" in turnip|virgl) ;; *) GPU_MODE=virgl ;; esac
     if [ \"\$GPU_MODE\" = turnip ]; then
