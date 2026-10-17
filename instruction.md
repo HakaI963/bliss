@@ -15,9 +15,9 @@ Quick facts:
 | App id / brand | `com.nopiece.bliss` / **"Bliss"** (renamed from "Foila Linux" in round 5; functional ids keep `folio`/`flux` internals) |
 | Source package | `com.ivarna.fluxlinux` |
 | Branch | `main` |
-| Latest green CI | run `39037758339` (commit `8c9d7ab`, round 7) |
-| Released APK | [`bliss-debug-8c9d7ab`](https://github.com/HakaI963/folio/releases/tag/bliss-debug-8c9d7ab) `app-bliss-debug.apk` (172,845,426 B) |
-| APK sha256 | `c84773e899f3aac64476089eef14205ef35ab0ce793980362ffd70864980d5bb` |
+| Latest green CI | run `39043883518` (commit `63b57ee`, hotfix 3) |
+| Released APK | [`bliss-debug-63b57ee`](https://github.com/HakaI963/folio/releases/tag/bliss-debug-63b57ee) `app-bliss-debug.apk` (172,847,722 B) — supersedes `bliss-debug-8c9d7ab` |
+| APK sha256 | `5910249307ef4ea3b9b005b5c65eda5af4b90e26415b9d09177bf9696806c8cd` |
 | Verify APK proof | package `com.nopiece.bliss`, `targetSdkVersion 28`, `assets/bootstrap.tar` packaged, libbash/libproot/libloader*.so packaged |
 | Signing | debug only (per-run keystore — uninstall before re-install) |
 | CI gate | `.github/workflows/build.yml` compiles **main sources only** (`assembleBlissDebug` + bootstrap assembly + Verify APK). Unit tests are not part of the gate. |
@@ -167,6 +167,21 @@ Evidence: `Screenshot_2026-10-17-17-01-55` (Alpine: sticker printed 4×) and `�
 - **Settings → Terminal → "NSFW banner art"** (off by default) — FluxSwitch gated by an 18+ `AlertDialog` ("I am 18+ — enable"); 4-mode slider Minimal/Moderate/Fan service/Full; optional API URL template (`{level}` → `minimal|moderate|fanservice|full`, `{rand}`) + optional key; "Refresh art now"; cached-count status. `NsfwArtFetcher` fetches from keyless built-ins per level (purrbot sfw/nsfw neko, nekos.life lewd) or the custom template, and `HalfBlockRenderer` converts on-device to the half-block ANSI format (alpha flatten over black, border flood-fill knock-out tol 40, dark-frame ×1.5 lift, trim black borders, grouped SGR, literal `\033`, ≤45 KB with a re-render guard at 80% cols). Cache: `cacheDir/banner-nsfw/src/NN-<sha1>.img` + `…/l<q>/NN-<sha1>.txt`; `BannerAssets.active` prefers NSFW only when enabled **and** the set is non-empty (rev `7-n<level>-l<q>`). GIF/JPEG/PNG/WEBP via BitmapFactory (first frame for GIFs). The pipeline was validated off-device by a line-faithful Python port: 7 real API images rendered and visually checked (backgrounds clean, characters recognizable, no raw ESC bytes, `printf %b` conversion verified).
 - **Kotlin core restructure** — new `core/banner/` (BannerAssets, BannerArtWriter), `HalfBlockRenderer`, `NsfwArtFetcher`, `core/root/ChrootStager`; `GuestZshrcRepair` shrank 2144 → ~620 lines (embedded art + `BANNER_SH` constants deleted; assets are the single source). `versionCode` 15 / `versionName 3.1.0`.
 - **Verification** — 90/90 scripts `bash -n`; 181 `.kt` balanced (nested-comment-aware; caught + fixed a real `/*` sequence inside a KDoc that Kotlin would nest), 0 import problems; res color literals OK; `host/setup_termux.sh` byte-identical; 6 writer art payloads md5-identical (`f7a78afc3c87`) + `assets/banner/banner.sh` byte-identical to the canonical script; sandboxed dedupe/wiring/once-guard tests; chunk simulation (9 chunks for the L2 set, byte-exact reassembly, ~81 KB max argv); CI run `39037758339` green.
+
+### 2.13 Hotfix 3 — host script deploy (shipped)
+
+Symptoms: fresh install → onboarding Host Environment → "Setup failed …" with detail "Script deploy failed — check app storage space." (screenshot 20:20).
+
+Diagnosis: the APK is intact — whole-APK `testzip` CRC pass + all 48 `HOST_SCRIPTS` assets, `loader.apk`, `fonts/font.ttf` readable and size-verified from the exact released artifact; the deploy target path (`files/home`) is created by the app (the bootstrap tar has no `home/` entries, `usr/etc/pulse` is a directory). The only unguarded failure paths were device-side IO: per-script writes, the `99-bliss.pa` write, the `libmp3lame.so.0` fallback, `deployLoaderApk`, and the deploy-marker write — a full disk (the APK + ~124 MB bootstrap extract are gigabytes of peak) explains a deploy that fails right after a successful extract.
+
+Fixes (`63b57ee`):
+- `HostScriptDeployer.copyScriptAsset`: remove a stale target (dir/symlink/leftover) + retry once; a copy is OK only when the file exists non-empty.
+- Tail steps can no longer fail the deploy: pulse `.pa` write, `libmp3lame.so.0` fallback copy, `markDeployedSafe`.
+- `lastDeployFailure` = first failing file + exception + free MB; `TerminalLauncher.lastPrepareError` surfaces it (both fast + cold paths) instead of the generic line.
+- EACCES-style failures (only when free space > 50 MB) get one root `chown -R <appUid> files/home` + `chmod u+rwX` heal and a full retry (`healHomeOwnership`).
+- `TerminalLauncher`: pre-extract free-space check (`MIN_HOST_FREE_BYTES` 256 MB) with an actionable message ("Not enough free space — need about 256 MB, have X MB").
+
+Verification: battery green (90/90 scripts, 181 `.kt` balanced 0 unbalanced, 0 import problems, res literals OK, `setup_termux.sh` byte-identical); CI run `39043883518` green; release asset digest matches local sha256 (`591024930…`).
 
 ## 3. Standalone-host constraints (never regress these)
 
@@ -337,9 +352,9 @@ The historical "verify before restarting" checklist is fully resolved: nav crash
 
 ## 10. Next steps (ordered)
 
-1. ~~Commit + push round 7~~ — **done** (`8c9d7ab`).
-2. ~~CI compile + "Verify APK"~~ — **green** (run `39037758339`, 6m44s).
-3. ~~Release~~ — **done**: [`bliss-debug-8c9d7ab`](https://github.com/HakaI963/folio/releases/tag/bliss-debug-8c9d7ab) (APK 172,845,426 B).
+1. ~~Commit + push round 7~~ — **done** (`8c9d7ab`); hotfix 3 — **done** (`63b57ee`).
+2. ~~CI compile + "Verify APK"~~ — **green** (runs `39037758339` + `39043883518`).
+3. ~~Releases~~ — **done**: [`bliss-debug-8c9d7ab`](https://github.com/HakaI963/folio/releases/tag/bliss-debug-8c9d7ab) then hotfix [`bliss-debug-63b57ee`](https://github.com/HakaI963/folio/releases/tag/bliss-debug-63b57ee) (APK 172,847,722 B).
 4. **On-device QA** (cannot be done in this environment):
    - **Alpine (Rooted)**: open the tab repeatedly → exactly **one** sticker + one `bliss@alpine` per shell (no more stacking); existing duplicates self-heal on first open.
    - **Debian/Ubuntu (Rooted)**: the sticker now prints in the bash session too; new chroot installs get zsh.
@@ -359,7 +374,7 @@ The historical "verify before restarting" checklist is fully resolved: nav crash
 - Round 4: CI green + release — **done** (run `38904315238`, release `folio-debug-5791429`, first-try green; APK upload needed a curl retry after a network drop).
 - Round 5: CI green + release — **done** (run `38936982387`, release `bliss-debug-46bc7d8`), then the host-setup Python hotfixes (`bliss-debug-0557a1a` clean-bootstrap + `bliss-debug-d83208f` extract-version bump).
 - Round 6: CI green + release — **done** (run `39024115857`, release [`bliss-debug-1ace0d8`](https://github.com/HakaI963/folio/releases/tag/bliss-debug-1ace0d8), first-try green).
-- Round 7: CI green + release — **done** (run `39037758339`, release [`bliss-debug-8c9d7ab`](https://github.com/HakaI963/folio/releases/tag/bliss-debug-8c9d7ab), 6m44s).
+- Round 7: CI green + release — **done** (run `39037758339`, release [`bliss-debug-8c9d7ab`](https://github.com/HakaI963/folio/releases/tag/bliss-debug-8c9d7ab), 6m44s); hotfix 3 (host deploy resilience + diagnostics) — **done** (run `39043883518`, release [`bliss-debug-63b57ee`](https://github.com/HakaI963/folio/releases/tag/bliss-debug-63b57ee)).
 - Every item in §4, §4b, §4c, §4d, §4e, §4f, §4g marked DONE — **done** (on-device confirmation is §10.4).
 - Branding: **"Bliss"** everywhere user-visible (Kotlin, XML, 90 scripts, prompts, logs) **and in file/asset names** (round 6); only functional identifiers (`FLUX_*`, `flux` user, `folio-banner` functions, `Folio*` class names, `Theme.Folio`, `com.ivarna.fluxlinux`) and the frozen host-contract names (`fluxlinux-host.env` dual-write, `~/.fluxlinux` marker) remain.
 - Working tree verified locally by: `bash -n` on all 90 scripts; art equality across the 6 writers (md5-identical payload) + `assets/banner/banner.sh` byte-identical to the canonical POSIX sticker; banner sandbox (once-per-shell, multi-source, opt-out, non-interactive; bash/zsh/dash); rc dedupe idempotency; nested-comment-aware brace/paren scan on all 181 `.kt` + import-resolution sweep; res color-literal check; byte-identical guard for `host/setup_termux.sh`; chunked-staging simulation (byte-exact reassembly, ≤81 KB argv); cross-file signature checks for every refactored API.
