@@ -51,7 +51,7 @@ object ChrootPaths {
     const val CHROOT_HELPER = "$HELPERS_DIR/bliss_chroot.sh"
     const val CHROOT_HELPER_ASSET = "scripts/chroot/bliss_chroot.sh"
     /** Must match first `# bliss-chroot vN` line in the asset. */
-    const val CHROOT_HELPER_VERSION = "bliss-chroot v2.11"
+    const val CHROOT_HELPER_VERSION = "bliss-chroot v2.12"
 
     /** Session executable — must be a system binary (SELinux blocks exec of app-data scripts). */
     const val SESSION_EXEC = "/system/bin/sh"

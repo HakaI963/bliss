@@ -27,7 +27,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -51,7 +50,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ivarna.fluxlinux.core.banner.BannerArtWriter
-import com.ivarna.fluxlinux.core.banner.NsfwArtFetcher
 import com.ivarna.fluxlinux.core.terminal.GuestLoginShell
 import com.ivarna.fluxlinux.core.utils.TerminalPreferences
 import com.ivarna.fluxlinux.ui.components.FluxSwitch
@@ -94,16 +92,6 @@ fun TerminalSettingsScreen(
     var nsfwLevel by remember {
         mutableIntStateOf(TerminalPreferences.getNsfwLevel(context))
     }
-    var nsfwApiUrl by remember {
-        mutableStateOf(TerminalPreferences.getNsfwApiUrl(context))
-    }
-    var nsfwApiKey by remember {
-        mutableStateOf(TerminalPreferences.getNsfwApiKey(context))
-    }
-    var nsfwCached by remember {
-        mutableIntStateOf(NsfwArtFetcher.cachedCount(context))
-    }
-    var nsfwStatus by remember { mutableStateOf<String?>(null) }
     // Consent gate: the NSFW switch only flips after the 18+ dialog is confirmed.
     var showNsfwConfirm by remember { mutableStateOf(false) }
 
@@ -399,7 +387,7 @@ fun TerminalSettingsScreen(
                             )
                             Spacer(Modifier.height(4.dp))
                             Text(
-                                "18+ only. Replaces the sticker with adult art fetched from a web API. Off by default; turn it off anytime.",
+                                "18+ only. Replaces the sticker with adult art from a built-in offline set. Off by default; turn it off anytime.",
                                 fontSize = 13.sp,
                                 lineHeight = 20.sp,
                                 color = fluxMutedText()
@@ -414,10 +402,7 @@ fun TerminalSettingsScreen(
                                     showNsfwConfirm = true
                                 } else {
                                     nsfwEnabled = false
-                                    nsfwStatus = null
-                                    nsfwCached = 0
                                     TerminalPreferences.setNsfwEnabled(context, false)
-                                    NsfwArtFetcher.clear(context)
                                     BannerArtWriter.refreshAsync(context)
                                 }
                             },
@@ -440,10 +425,6 @@ fun TerminalSettingsScreen(
                             onValueChange = { nsfwLevel = it.roundToInt() },
                             onValueChangeFinished = {
                                 TerminalPreferences.setNsfwLevel(context, nsfwLevel)
-                                NsfwArtFetcher.refreshAsync(context) { n ->
-                                    nsfwCached = n
-                                    nsfwStatus = "$n designs cached"
-                                }
                                 BannerArtWriter.refreshAsync(context)
                             },
                             valueRange = 1f..4f,
@@ -460,73 +441,9 @@ fun TerminalSettingsScreen(
                             fontSize = 12.sp,
                             color = fluxMutedText()
                         )
-                        Spacer(Modifier.height(12.dp))
-                        OutlinedTextField(
-                            value = nsfwApiUrl,
-                            onValueChange = {
-                                nsfwApiUrl = it
-                                TerminalPreferences.setNsfwApiUrl(context, it)
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            label = { Text("API URL template (optional)") },
-                            placeholder = { Text("https://your-api.example/img?level={level}") },
-                            singleLine = true,
-                            shape = RoundedCornerShape(12.dp)
-                        )
                         Spacer(Modifier.height(8.dp))
-                        OutlinedTextField(
-                            value = nsfwApiKey,
-                            onValueChange = {
-                                nsfwApiKey = it
-                                TerminalPreferences.setNsfwApiKey(context, it)
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            label = { Text("API key (optional)") },
-                            placeholder = { Text("Paste your key") },
-                            singleLine = true,
-                            shape = RoundedCornerShape(12.dp)
-                        )
-                        Spacer(Modifier.height(12.dp))
-                        TextButton(
-                            onClick = {
-                                NsfwArtFetcher.refreshAsync(context) { n ->
-                                    nsfwCached = n
-                                    nsfwStatus = "$n designs cached"
-                                }
-                                BannerArtWriter.refreshAsync(context)
-                            }
-                        ) {
-                            Text(
-                                "Refresh art now",
-                                color = MaterialTheme.colorScheme.secondary,
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 13.sp
-                            )
-                        }
-                        Spacer(Modifier.height(4.dp))
                         Text(
-                            "$nsfwCached designs cached — " +
-                                (if (nsfwApiUrl.isBlank()) "built-in source" else "custom API"),
-                            fontSize = 12.sp,
-                            color = fluxMutedText()
-                        )
-                        nsfwStatus?.let { status ->
-                            Text(
-                                status,
-                                fontSize = 12.sp,
-                                color = fluxMutedText()
-                            )
-                        }
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            "{level} is replaced by minimal/moderate/fanservice/full in your URL.",
-                            fontSize = 12.sp,
-                            lineHeight = 18.sp,
-                            color = fluxMutedText()
-                        )
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            "Saved choices apply on the next refresh; terminal tabs pick them up automatically.",
+                            "Built-in art set — works fully offline, no API or account needed.",
                             fontSize = 12.sp,
                             lineHeight = 18.sp,
                             color = fluxMutedText()
@@ -554,9 +471,8 @@ fun TerminalSettingsScreen(
             },
             text = {
                 Text(
-                    "18+ adult content fetched from a third-party API source (the built-in " +
-                        "source or your own API URL below). It is shown only in the terminal " +
-                        "sticker and can be turned off anytime.",
+                    "18+ adult content from a built-in offline art set (no network, no account). " +
+                        "It is shown only in the terminal sticker and can be turned off anytime.",
                     fontSize = 13.sp,
                     lineHeight = 20.sp
                 )
@@ -567,10 +483,6 @@ fun TerminalSettingsScreen(
                         showNsfwConfirm = false
                         nsfwEnabled = true
                         TerminalPreferences.setNsfwEnabled(context, true)
-                        NsfwArtFetcher.refreshAsync(context) { n ->
-                            nsfwCached = n
-                            nsfwStatus = "$n designs cached"
-                        }
                         BannerArtWriter.refreshAsync(context)
                     }
                 ) {

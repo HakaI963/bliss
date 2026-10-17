@@ -1,7 +1,7 @@
 # bliss-banner.sh — Bliss launch sticker: truecolor half-block anime art,
-# one random design per interactive shell, printed at most ONCE per shell
-# (even if several rc files source it). Works with zsh, bash and POSIX sh.
-# Opt out at runtime: FLUX_NO_BANNER=1
+# one random design per interactive shell, printed at most ONCE per terminal
+# tab (even if several rc files or nested shells source it). Works with zsh,
+# bash and POSIX sh. Opt out at runtime: FLUX_NO_BANNER=1
 bliss_banner_art() {
   # zsh: empty glob must not abort the function.
   if [ -n "${ZSH_VERSION:-}" ]; then
@@ -40,7 +40,47 @@ bliss_banner() {
     *i*) ;;
     *) return 0 ;;
   esac
-  _BLISS_BANNER_SHOWN=1
+  # Once per terminal tab. The exported guard covers nested shells that
+  # inherit the environment. A pty-keyed marker (pty node ctime + a short
+  # time window as fallback) covers shells that lose the environment
+  # (`su -` chains, re-sourced rc files in a fresh process): nested shells in
+  # the SAME tab never reprint, while a NEW tab - even one that reuses the
+  # same pty number quickly - gets its own sticker.
+  _bb_skip=0
+  _bb_tty="$(tty 2>/dev/null || true)"
+  case "$_bb_tty" in
+    /dev/*)
+      _bb_mark="${TMPDIR:-/tmp}/.bliss-banner$(printf '%s' "$_bb_tty" | tr -d ' /')"
+      _bb_now="$(date +%s 2>/dev/null || echo 0)"
+      case "$_bb_now" in ''|*[!0-9]*) _bb_now=0 ;; esac
+      # Sub-second pty node ctime: exact per-tab identity when the platform
+      # reports it; otherwise a tight open-chain window dedupes nested shells.
+      _bb_ct="$(stat -c %.9Z "$_bb_tty" 2>/dev/null || echo '')"
+      case "$_bb_ct" in
+        *.*) case "$_bb_ct" in *[!0-9.]*) _bb_ct="" ;; esac ;;
+        *) _bb_ct="" ;;
+      esac
+      if [ -f "$_bb_mark" ]; then
+        _bb_prev="$(sed -n 1p "$_bb_mark" 2>/dev/null || echo 0)"
+        _bb_ct_prev="$(sed -n 2p "$_bb_mark" 2>/dev/null || echo '')"
+        case "$_bb_prev" in ''|*[!0-9]*) _bb_prev=0 ;; esac
+        if [ -n "$_bb_ct" ] && [ "$_bb_ct" = "$_bb_ct_prev" ]; then
+          _bb_skip=1
+        elif [ -z "$_bb_ct" ] && [ "$_bb_now" -gt 0 ] && [ "$_bb_prev" -gt 0 ] && [ $((_bb_now - _bb_prev)) -lt 10 ]; then
+          _bb_skip=1
+        fi
+      fi
+      if [ "$_bb_skip" = "0" ]; then
+        printf '%s\n%s\n' "$_bb_now" "$_bb_ct" > "$_bb_mark" 2>/dev/null || true
+      fi
+      ;;
+  esac
+  if [ "$_bb_skip" = "1" ]; then
+    export _BLISS_BANNER_SHOWN=1
+    unset _bb_skip _bb_tty _bb_mark _bb_now _bb_prev _bb_ct _bb_ct_prev
+    return 0
+  fi
+  export _BLISS_BANNER_SHOWN=1
   bliss_banner_art
   # Header: exactly one line, "bliss@<id>" (distro id only). ID= from
   # /etc/os-release; fallbacks: first word of PRETTY_NAME, then "linux".
@@ -53,6 +93,6 @@ bliss_banner() {
   fi
   [ -n "$_bb_fid" ] || _bb_fid="linux"
   printf '%s\n' "bliss@$_bb_fid"
-  unset _bb_fid
+  unset _bb_fid _bb_skip _bb_tty _bb_mark
 }
 bliss_banner

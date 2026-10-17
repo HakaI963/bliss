@@ -4,8 +4,13 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 
 /**
- * Standalone half-block truecolor ANSI art renderer for the optional NSFW
- * banner ([NsfwArtFetcher] renders fetched images through this).
+ * Standalone half-block truecolor ANSI art renderer — the reference emission
+ * implementation for the embedded NSFW art sets.
+ *
+ * The embedded `banner/nsfw/` assets shipped in the APK were produced offline
+ * by the Python port of this file (`hb_port.py`, self-checked against this
+ * exact pipeline), so runtime image decoding/rendering is never needed
+ * on-device.
  *
  * Pipeline: decode -> center-crop square -> scale to `cols x cols` px ->
  * [renderPixels] (alpha flatten -> border flood-fill background knock-out ->
@@ -14,10 +19,6 @@ import android.graphics.BitmapFactory
  * Escape sequences are written as the LITERAL four-character text `\033`
  * (backslash, zero, three, three) — never a raw ESC byte — because the guest
  * banner helpers render the files with `printf '%b'`.
- *
- * No project dependencies on purpose: the pure-emission half of this file is
- * mirrored by a throwaway Python port for off-device verification (the app has
- * no Android runtime in CI).
  */
 object HalfBlockRenderer {
 

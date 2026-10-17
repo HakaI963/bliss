@@ -710,9 +710,18 @@ class MainActivity : ComponentActivity() {
                             if (result == com.ivarna.fluxlinux.core.terminal.FluxTerminalSessionManager.SessionOpenResult.OPENED) {
                                 openTerminalTab()
                             } else {
+                                val message = when (result) {
+                                    com.ivarna.fluxlinux.core.terminal.FluxTerminalSessionManager.SessionOpenResult.HOST_PREPARE_FAILED ->
+                                        "Host bootstrap not ready — check Settings"
+                                    com.ivarna.fluxlinux.core.terminal.FluxTerminalSessionManager.SessionOpenResult.HOST_NOT_READY ->
+                                        "Host not ready — check Settings"
+                                    com.ivarna.fluxlinux.core.terminal.FluxTerminalSessionManager.SessionOpenResult.MAX_TABS ->
+                                        "Tab limit reached"
+                                    else -> "Session failed to open — try again"
+                                }
                                 android.widget.Toast.makeText(
                                     this@MainActivity,
-                                    "Host bootstrap not ready — check Settings",
+                                    message,
                                     android.widget.Toast.LENGTH_LONG
                                 ).show()
                             }

@@ -18,8 +18,6 @@ object TerminalPreferences {
     private const val KEY_BANNER_QUALITY = "banner_quality"
     private const val KEY_NSFW_ENABLED = "nsfw_enabled"
     private const val KEY_NSFW_LEVEL = "nsfw_level"
-    private const val KEY_NSFW_API_URL = "nsfw_api_url"
-    private const val KEY_NSFW_API_KEY = "nsfw_api_key"
 
     const val FONT_MIN = 10
     const val FONT_MAX = 48
@@ -122,19 +120,4 @@ object TerminalPreferences {
             .apply()
     }
 
-    /** Custom NSFW art API URL; empty → built-in source. */
-    fun getNsfwApiUrl(context: Context): String =
-        prefs(context).getString(KEY_NSFW_API_URL, "") ?: ""
-
-    fun setNsfwApiUrl(context: Context, url: String) {
-        prefs(context).edit().putString(KEY_NSFW_API_URL, url).apply()
-    }
-
-    /** Custom NSFW art API key; empty → built-in source. */
-    fun getNsfwApiKey(context: Context): String =
-        prefs(context).getString(KEY_NSFW_API_KEY, "") ?: ""
-
-    fun setNsfwApiKey(context: Context, key: String) {
-        prefs(context).edit().putString(KEY_NSFW_API_KEY, key).apply()
-    }
 }

@@ -516,6 +516,17 @@ fun TerminalScreen(
                                 override fun logStackTrace(tag: String, e: Exception) {}
                             })
                             terminalViewRef = this
+                            // A session attached while the view is 0x0 never starts its
+                            // process until a later updateSize(); nudge on first real layout.
+                            addOnLayoutChangeListener { v, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom ->
+                                val w = right - left
+                                val h = bottom - top
+                                val ow = oldRight - oldLeft
+                                val oh = oldBottom - oldTop
+                                if (w > 0 && h > 0 && (w != ow || h != oh)) {
+                                    forceTerminalResize(v as TerminalView)
+                                }
+                            }
                         }
                     },
                     update = { view ->

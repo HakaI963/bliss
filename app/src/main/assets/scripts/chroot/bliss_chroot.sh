@@ -1,5 +1,5 @@
 #!/system/bin/sh
-# bliss-chroot v2.11
+# bliss-chroot v2.12
 # SSOT chroot runner for NativeCode Debian 13 (requires root).
 # Do not nest this under run_debian13_root.sh — it already owns mounts + one chroot.
 # Guest entry always uses env -i + Debian PATH (never Android /system PATH).
@@ -17,7 +17,7 @@
 #   FLUX_CHROOT  FLUX_PACKAGE  FLUX_HOST_TMP  FLUX_PREFIX  FLUX_BB  FLUX_SHELL
 set -u
 
-VERSION_STR="bliss-chroot v2.11"
+VERSION_STR="bliss-chroot v2.12"
 # Prefer caller-pinned env (RootShell / start_gui). Fallbacks cover both store flavors.
 if [ -z "${FLUX_PACKAGE:-}" ]; then
   if [ -d /data/data/com.zenithblue.fluxlinux/files/usr ]; then
@@ -423,10 +423,16 @@ resolve_login_shell() {
   printf '%s' "sh"
 }
 
-# Seed Bliss zsh profile when customization never wrote one (Alpine chroot).
+# Bliss profile bootstrap for the interactive users (flux AND root). Old
+# builds only repaired /home/flux, so /root kept stale duplicated banner
+# source lines + an unguarded banner.sh — every rc line printed its own art
+# in the same shell (the "flood" on root tabs).
 ensure_flux_zsh_profile() {
-  [ "$USER_NAME" = "flux" ] || return 0
-  _home="$FLUX_CHROOT/home/flux"
+  case "$USER_NAME" in
+    flux|root) ;;
+    *) return 0 ;;
+  esac
+  _home="$FLUX_CHROOT/home/$USER_NAME"
   [ -d "$_home" ] || return 0
   if [ ! -f "$_home/.zshrc" ]; then
     cat > "$_home/.zshrc" <<'ZSHRC'
@@ -493,17 +499,17 @@ FOLIO_THEME_EOF
   # `.banner-rev` refreshes existing installs on the next customization re-run.
   _fbdir="$_home/.config/bliss/banner"
   mkdir -p "$_fbdir" "$_home/.config/bliss" 2>/dev/null || true
-  _fbrev="7-l2"
+  _fbrev="8-l2"
   _fneed=0
   case "$(cat "$_fbdir/.banner-rev" 2>/dev/null || true)" in
-    7-*) ;;
+    8-*) ;;
     *) _fneed=1 ;;
   esac
   for _fb in 01-catgirl 02-catgirl-teal 03-catgirl-violet 04-arch-tan 05-arch-tan-violet 06-icecat 07-icecat-blush 08-maidfull 09-maidfull-rose 10-maidfull-lime 11-fandom 12-fandom-teal 13-fox 14-fox-sky 15-godette 16-godette-violet 17-godette-gobot 18-godette-gobot-mint 19-newsboy 20-newsboy-rose 21-newsboy-violet 22-rational 23-rational-indigo 24-lufthan 25-lufthan-teal 26-lufthan-violet 27-publicq 28-publicq-blue 29-publicq-violet 30-chibisq 31-chibisq-cyan 32-chibisq-amber 33-loveweb 34-loveweb-teal 35-kitsune 36-kitsune-jade 37-kitsune-azure 38-animegirl 39-animegirl-teal 40-animegirl-lime 41-moemiku 42-moemiku-azure 43-moemiku-blush 44-afrowikipe 45-afrowikipe-indigo 46-vocaloid 47-vocaloid-azure 48-vocaloid-blush 49-blossom; do
     [ -s "$_fbdir/$_fb.txt" ] || _fneed=1
   done
   [ -s "$_home/.config/bliss/banner.sh" ] || _fneed=1
-  grep -q "_BLISS_BANNER_SHOWN" "$_home/.config/bliss/banner.sh" 2>/dev/null || _fneed=1
+  grep -q "_bb_skip" "$_home/.config/bliss/banner.sh" 2>/dev/null || _fneed=1
   if [ "$_fneed" = "1" ]; then
     rm -f "$_fbdir"/*.txt 2>/dev/null || true
     cat > "$_fbdir/.bliss-banners.$$" <<'FOLIO_BANNER_ALL'
@@ -1365,9 +1371,9 @@ FOLIO_BANNER_ALL
     printf '%s\n' "$_fbrev" > "$_fbdir/.banner-rev" 2>/dev/null || true
     cat > "$_home/.config/bliss/banner.sh" <<'FB_SH'
 # bliss-banner.sh — Bliss launch sticker: truecolor half-block anime art,
-# one random design per interactive shell, printed at most ONCE per shell
-# (even if several rc files source it). Works with zsh, bash and POSIX sh.
-# Opt out at runtime: FLUX_NO_BANNER=1
+# one random design per interactive shell, printed at most ONCE per terminal
+# tab (even if several rc files or nested shells source it). Works with zsh,
+# bash and POSIX sh. Opt out at runtime: FLUX_NO_BANNER=1
 bliss_banner_art() {
   # zsh: empty glob must not abort the function.
   if [ -n "${ZSH_VERSION:-}" ]; then
@@ -1406,7 +1412,47 @@ bliss_banner() {
     *i*) ;;
     *) return 0 ;;
   esac
-  _BLISS_BANNER_SHOWN=1
+  # Once per terminal tab. The exported guard covers nested shells that
+  # inherit the environment. A pty-keyed marker (pty node ctime + a short
+  # time window as fallback) covers shells that lose the environment
+  # (`su -` chains, re-sourced rc files in a fresh process): nested shells in
+  # the SAME tab never reprint, while a NEW tab - even one that reuses the
+  # same pty number quickly - gets its own sticker.
+  _bb_skip=0
+  _bb_tty="$(tty 2>/dev/null || true)"
+  case "$_bb_tty" in
+    /dev/*)
+      _bb_mark="${TMPDIR:-/tmp}/.bliss-banner$(printf '%s' "$_bb_tty" | tr -d ' /')"
+      _bb_now="$(date +%s 2>/dev/null || echo 0)"
+      case "$_bb_now" in ''|*[!0-9]*) _bb_now=0 ;; esac
+      # Sub-second pty node ctime: exact per-tab identity when the platform
+      # reports it; otherwise a tight open-chain window dedupes nested shells.
+      _bb_ct="$(stat -c %.9Z "$_bb_tty" 2>/dev/null || echo '')"
+      case "$_bb_ct" in
+        *.*) case "$_bb_ct" in *[!0-9.]*) _bb_ct="" ;; esac ;;
+        *) _bb_ct="" ;;
+      esac
+      if [ -f "$_bb_mark" ]; then
+        _bb_prev="$(sed -n 1p "$_bb_mark" 2>/dev/null || echo 0)"
+        _bb_ct_prev="$(sed -n 2p "$_bb_mark" 2>/dev/null || echo '')"
+        case "$_bb_prev" in ''|*[!0-9]*) _bb_prev=0 ;; esac
+        if [ -n "$_bb_ct" ] && [ "$_bb_ct" = "$_bb_ct_prev" ]; then
+          _bb_skip=1
+        elif [ -z "$_bb_ct" ] && [ "$_bb_now" -gt 0 ] && [ "$_bb_prev" -gt 0 ] && [ $((_bb_now - _bb_prev)) -lt 10 ]; then
+          _bb_skip=1
+        fi
+      fi
+      if [ "$_bb_skip" = "0" ]; then
+        printf '%s\n%s\n' "$_bb_now" "$_bb_ct" > "$_bb_mark" 2>/dev/null || true
+      fi
+      ;;
+  esac
+  if [ "$_bb_skip" = "1" ]; then
+    export _BLISS_BANNER_SHOWN=1
+    unset _bb_skip _bb_tty _bb_mark _bb_now _bb_prev _bb_ct _bb_ct_prev
+    return 0
+  fi
+  export _BLISS_BANNER_SHOWN=1
   bliss_banner_art
   # Header: exactly one line, "bliss@<id>" (distro id only). ID= from
   # /etc/os-release; fallbacks: first word of PRETTY_NAME, then "linux".
@@ -1419,7 +1465,7 @@ bliss_banner() {
   fi
   [ -n "$_bb_fid" ] || _bb_fid="linux"
   printf '%s\n' "bliss@$_bb_fid"
-  unset _bb_fid
+  unset _bb_fid _bb_skip _bb_tty _bb_mark
 }
 bliss_banner
 FB_SH
@@ -1478,6 +1524,39 @@ FB_SH
       'export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin; \
        FOLIO_APPLY_HOME=/home/flux /bin/sh /home/flux/.config/bliss/appearance-apply.sh \
        >/dev/null 2>&1 || true' >/dev/null 2>&1 || true
+  fi
+  # Root parity: /root carries the SAME sticker + art set as flux (copied, so
+  # app-selected quality/NSFW follows), and the same rc dedupe so duplicated
+  # old source lines can never flood the tab again.
+  if [ "$USER_NAME" = "root" ] && [ "$_home" != "$FLUX_CHROOT/home/flux" ]; then
+    _fsrc="$FLUX_CHROOT/home/flux/.config/bliss"
+    _rdir="$FLUX_CHROOT/root/.config/bliss"
+    if [ -d "$_fsrc/banner" ]; then
+      mkdir -p "$_rdir/banner" 2>/dev/null || true
+      cp -f "$_fsrc/banner.sh" "$_rdir/banner.sh" 2>/dev/null || true
+      cp -f "$_fsrc/banner"/*.txt "$_rdir/banner/" 2>/dev/null || true
+      cp -f "$_fsrc/banner/.banner-rev" "$_rdir/banner/.banner-rev" 2>/dev/null || true
+      chown -R --reference="$_home" "$_rdir" 2>/dev/null || true
+    fi
+    for _rc in "$_home/.zshrc" "$_home/.bashrc" "$_home/.profile" "$_home/.bash_profile"; do
+      [ -f "$_rc" ] || continue
+      awk '/banner\.sh/ { if (b++) next } /appearance-apply\.sh/ { if (a++) next } { print }' \
+        "$_rc" > "$_rc.bliss.$$" 2>/dev/null && mv -f "$_rc.bliss.$$" "$_rc" 2>/dev/null || \
+        rm -f "$_rc.bliss.$$" 2>/dev/null || true
+    done
+    if [ -f "$_home/.zshrc" ] && ! grep -q 'bliss/banner.sh' "$_home/.zshrc" 2>/dev/null; then
+      {
+        printf '\n# Bliss launch sticker (random truecolor anime banner; opt out FLUX_NO_BANNER=1)\n'
+        printf '[ -r "$HOME/.config/bliss/banner.sh" ] && . "$HOME/.config/bliss/banner.sh"\n'
+      } >> "$_home/.zshrc" 2>/dev/null || true
+    fi
+    if [ -f "$_home/.bashrc" ] && ! grep -q 'bliss/banner.sh' "$_home/.bashrc" 2>/dev/null; then
+      {
+        printf '\n# Bliss launch sticker (random truecolor anime banner; opt out FLUX_NO_BANNER=1)\n'
+        printf '[ -r "$HOME/.config/bliss/banner.sh" ] && . "$HOME/.config/bliss/banner.sh"\n'
+      } >> "$_home/.bashrc" 2>/dev/null || true
+    fi
+    unset _fsrc _rdir _rc
   fi
 }
 
