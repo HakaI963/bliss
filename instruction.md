@@ -15,9 +15,9 @@ Quick facts:
 | App id / brand | `com.nopiece.bliss` / **"Bliss"** (renamed from "Foila Linux" in round 5; functional ids keep `folio`/`flux` internals) |
 | Source package | `com.ivarna.fluxlinux` |
 | Branch | `main` |
-| Latest green CI | run `38946747474` (commit `0557a1a`, hotfix) |
-| Released APK | [`bliss-debug-0557a1a`](https://github.com/HakaI963/folio/releases/tag/bliss-debug-0557a1a) `app-bliss-debug.apk` (172,320,841 B) — hotfix for the host-setup Python crash (`Frozen object named 'posixpath' is invalid`); supersedes `bliss-debug-46bc7d8` |
-| APK sha256 | `68f8ca3af5b507c8846c810ac832a4278d7ce6ecfce0cbcfadfdf9277a853752` |
+| Latest green CI | run `39013803090` (commit `d83208f`, hotfix 2) |
+| Released APK | [`bliss-debug-d83208f`](https://github.com/HakaI963/folio/releases/tag/bliss-debug-d83208f) `app-bliss-debug.apk` (172,320,869 B) — hotfix 2; supersedes `bliss-debug-0557a1a` (whose clean bootstrap was never re-extracted on devices with app data from `46bc7d8`) |
+| APK sha256 | `44fe9737c6cb0981e1cde3d5bebb58af3243ceef2bf03aa983e210b15b98f8a3` |
 | Verify APK proof | package `com.nopiece.bliss`, `targetSdkVersion 28`, `assets/bootstrap.tar` packaged, libbash/libproot/libloader*.so packaged |
 | Signing | debug only (per-run keystore — uninstall before re-install) |
 | CI gate | `.github/workflows/build.yml` compiles **main sources only** (`assembleBlissDebug` + bootstrap assembly + Verify APK). Unit tests are not part of the gate. |
@@ -137,6 +137,8 @@ Evidence base: `Screenshot_2026-10-16-19-15-12-464` (Alpine shell + old banner),
   **Retro Emulation** (Debian component): enabled (`comingSoon` removed) — complete installer, arm64 packages verified reachable.
 
 **Hotfix (round 5.1, shipped as `bliss-debug-0557a1a`).** The first round-5 build (`46bc7d8`) failed host setup with `Fatal Python error: init_android_streams … Frozen object named 'posixpath' is invalid`. Cause: the new **binary** prefix patcher rewrote an `com.ivarna.fluxlinux` occurrence inside CPython's **frozen-module marshal blob** in `libpython3.14.so` (length-prefixed data, not a C string) — NUL padding corrupted the blob. Fix in `repack_bootstrap_for_appid.sh`: an occurrence-shape gate (`is_nul_bounded`) patches only files whose every occurrence is a plain NUL-terminated printable run; everything else — Python program/stdlib/pyc caches, marshal/frozen blobs, packed tables (`coreutils`, `capsh`, `dbus-daemon`, `libcrypto`, `dbus-daemon-launch-helper`) — is **retained byte-identical** (they shipped unpatched in rounds 1–4 and worked). The verify step accepts exactly the retained list (`.repack-retained.txt`) and still fails on any other leftover. Local proof: `libpython3.14.so` dst ≡ src (frozen `posixpath` blob intact), bash/libreadline/RUNPATH still patched, `verify_bootstrap.sh` PASS. 84 retained files in total (python stdlib + dynload + the 6 packed-table binaries).
+
+**Hotfix 2 (round 5.2, shipped as `bliss-debug-d83208f`).** The round-5.1 clean bootstrap alone did not help devices that had already run the round-5 build: installs share the app id, app data persists, and the extracted-tree marker (`home/.fluxlinux/bootstrap.extracted`, `EXTRACT_VERSION|pkg`) still matched — so `ensureExtracted()` took the happy path and kept the **corrupted prefix already on disk**. Fix: `BootstrapInstaller.EXTRACT_VERSION` 3→4 — the next host prepare re-extracts the full prefix from the new APK asset (`usr/var/lib/proot-distro` is preserved, so installed guests survive). Both hotfixes are in the tree; the shipped APK carries the clean bootstrap **and** the invalidation marker.
 
 ---
 
