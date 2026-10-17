@@ -38,7 +38,7 @@ object BootstrapInstaller {
     private const val TMP_DIR = ".bootstrap_extract_tmp"
 
     /** Bump when the extract/rewrite pipeline changes (invalidates old trees). */
-    const val EXTRACT_VERSION = 3
+    const val EXTRACT_VERSION = 4
 
     private const val MARKER_REL = "home/.fluxlinux/bootstrap.extracted"
 
