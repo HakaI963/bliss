@@ -27,6 +27,9 @@ import java.util.concurrent.Executors
 object TerminalLauncher {
 
     private const val TAG = "TerminalLauncher"
+
+    /** Minimum free bytes on filesDir before host init (extract ≈ 140 MB peak). */
+    private const val MIN_HOST_FREE_BYTES = 256L * 1024 * 1024
     internal val executor: ExecutorService = Executors.newSingleThreadExecutor()
     internal val mainHandler = Handler(Looper.getMainLooper())
 
@@ -190,8 +193,20 @@ object TerminalLauncher {
         if (!forceHostSetup && isHostSetupDone(ctx) && BootstrapInstaller.isExtracted(ctx)) {
             // After an app update this refreshes host env + scripts (marker is stamped per install).
             val ok = HostScriptDeployer.deployScripts(ctx)
-            if (!ok) lastPrepareError = "Script deploy failed — check app storage space."
+            if (!ok) {
+                lastPrepareError = "Script deploy failed — " +
+                    (HostScriptDeployer.lastDeployFailure ?: "check app storage space.")
+            }
             return ok
+        }
+        // Storage pre-check: an almost-full disk fails mid-extraction with a
+        // cryptic write error — surface it before touching the tree.
+        val free = HostScriptDeployer.freeBytes(ctx.filesDir)
+        if (free in 0 until MIN_HOST_FREE_BYTES) {
+            lastPrepareError = "Not enough free space — need about " +
+                "${MIN_HOST_FREE_BYTES / (1024 * 1024)} MB, have ${free / (1024 * 1024)} MB. " +
+                "Free up space and retry."
+            return false
         }
         // Corrupt/partial tree (no valid marker) → clean re-extract (containers preserved).
         if (!BootstrapInstaller.ensureExtracted(
@@ -204,7 +219,8 @@ object TerminalLauncher {
             return false
         }
         if (!HostScriptDeployer.deployScripts(ctx)) {
-            lastPrepareError = "Script deploy failed — check app storage space."
+            lastPrepareError = "Script deploy failed — " +
+                (HostScriptDeployer.lastDeployFailure ?: "check app storage space.")
             return false
         }
         if (!forceHostSetup && isHostSetupDone(ctx)) return true

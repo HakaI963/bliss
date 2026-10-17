@@ -55,6 +55,11 @@ object HostScriptDeployer {
         marker.writeText(deployStamp(ctx))
     }
 
+    /** Safe variant: a marker write failure must not fail an otherwise good deploy. */
+    private fun markDeployedSafe(ctx: Context) {
+        runCatching { markDeployed(ctx) }
+    }
+
     private data class HostScript(
         val name: String,
         val assetPath: String,
@@ -170,6 +175,16 @@ object HostScriptDeployer {
         HostScript("stop_guest_gui.sh", "scripts/chroot/stop_guest_gui.sh"),
     )
 
+    /** Set when the last [deployScripts] run failed a required step. */
+    internal var lastDeployFailure: String? = null
+
+    /** Free bytes on the volume holding [dir], or -1 when unknown. */
+    internal fun freeBytes(dir: File): Long = try {
+        android.os.StatFs(dir.absolutePath).availableBytes
+    } catch (_: Exception) {
+        -1L
+    }
+
     /**
      * Deploy host + distro scripts/assets into `$HOME` and the loader APK.
      * Idempotent: when the deploy marker is current and [force] is false the
@@ -178,6 +193,11 @@ object HostScriptDeployer {
      * inside [BootstrapInstaller] on extraction, and re-walking usr/bin,
      * usr/etc, usr/share, python3.14 and include on every call is the startup
      * stall this optimization removes.
+     *
+     * Per-script copies are self-healing (target removed + one retry) and, on
+     * EACCES-style failures, ownership is repaired through root once. The
+     * first failure + free space land in [lastDeployFailure] so host-setup
+     * errors name the exact file instead of a generic message.
      *
      * @param force when true, always rewrite assets and refresh the marker
      * @return false when any required deploy step fails (fail-closed contract)
@@ -189,15 +209,13 @@ object HostScriptDeployer {
         return try {
             val homeDir = File(ctx.filesDir, "home").also { it.mkdirs() }
             var ok = true
+            var firstFailure: String? = null
             for (script in HOST_SCRIPTS) {
                 val out = File(homeDir, script.name)
-                try {
-                    ctx.assets.open(script.assetPath).use { input ->
-                        FileOutputStream(out).use { input.copyTo(it) }
-                    }
-                    out.setExecutable(true, false)
-                } catch (e: Exception) {
-                    Log.w(TAG, "Script ${script.assetPath} not found in assets", e)
+                val err = copyScriptAsset(ctx, script.assetPath, out)
+                if (err != null) {
+                    Log.w(TAG, "Script ${script.assetPath} deploy failed: $err")
+                    if (firstFailure == null) firstFailure = "${script.name}: $err"
                     if (script.required) ok = false
                 }
             }
@@ -212,12 +230,88 @@ object HostScriptDeployer {
             } catch (_: Exception) {
             }
             overlayPulseRuntime(ctx)
+            // A stale/root-owned home can make every write fail with EACCES —
+            // one owner fix + retry usually heals it (no-op without root).
+            // Skipped when free space is critically low (storage is the issue).
+            if (!ok) {
+                val freeNow = freeBytes(ctx.filesDir)
+                val storageSuspect = freeNow in 0 until (50L * 1024 * 1024)
+                if (!storageSuspect && healHomeOwnership(ctx, homeDir)) {
+                    Log.i(TAG, "retrying script deploy after ownership heal")
+                    ok = true
+                    firstFailure = null
+                    for (script in HOST_SCRIPTS) {
+                        val out = File(homeDir, script.name)
+                        val err = copyScriptAsset(ctx, script.assetPath, out)
+                        if (err != null) {
+                            if (firstFailure == null) firstFailure = "${script.name}: $err"
+                            if (script.required) ok = false
+                        }
+                    }
+                }
+            }
             val loaderOk = deployLoaderApk(ctx)
-            if (!loaderOk) Log.w(TAG, "loader.apk deploy failed — host not ready")
-            if (ok && loaderOk) markDeployed(ctx)
+            if (!loaderOk) {
+                Log.w(TAG, "loader.apk deploy failed — host not ready")
+                if (firstFailure == null) firstFailure = "loader.apk: copy failed"
+            }
+            if (ok && loaderOk) {
+                markDeployedSafe(ctx)
+            }
+            if (!ok || !loaderOk) {
+                val freeMb = freeBytes(ctx.filesDir).takeIf { it >= 0 }?.let { it / (1024 * 1024) }
+                lastDeployFailure = buildString {
+                    append(firstFailure ?: "unknown step")
+                    if (freeMb != null) append(" (free ${freeMb} MB)")
+                }
+                Log.w(TAG, "deployScripts failed: $lastDeployFailure")
+            } else {
+                lastDeployFailure = null
+            }
             ok && loaderOk
         } catch (e: Exception) {
+            lastDeployFailure = "${e.javaClass.simpleName}: ${e.message}"
             Log.e(TAG, "Failed to deploy scripts", e)
+            false
+        }
+    }
+
+    /**
+     * Copy one asset to its deploy target. On failure the target is removed
+     * (stale directory/symlink/root-owned leftover) and the copy retried once.
+     * Returns null on success, else a short error string.
+     */
+    private fun copyScriptAsset(ctx: Context, assetPath: String, out: File): String? {
+        fun attempt(): String? = try {
+            ctx.assets.open(assetPath).use { input ->
+                FileOutputStream(out).use { input.copyTo(it) }
+            }
+            runCatching { out.setExecutable(true, false) }
+            if (!out.isFile || out.length() == 0L) "empty after copy" else null
+        } catch (e: Exception) {
+            "${e.javaClass.simpleName}: ${e.message}"
+        }
+        val first = attempt()
+        if (first == null) return null
+        runCatching {
+            if (out.isDirectory) out.deleteRecursively() else out.delete()
+        }
+        return attempt() ?: null
+    }
+
+    /**
+     * Best-effort `chown -R <appUid> files/home` through root, for homes left
+     * root-owned by very old builds. Safe no-op without root.
+     */
+    private fun healHomeOwnership(ctx: Context, homeDir: File): Boolean {
+        return try {
+            val inv = com.ivarna.fluxlinux.core.root.RootShell.resolveSuInvocation() ?: return false
+            val uid = android.os.Process.myUid()
+            val cmd = "chown -R $uid:$uid '${homeDir.absolutePath}' 2>/dev/null; " +
+                "chmod -R u+rwX '${homeDir.absolutePath}' 2>/dev/null; true"
+            val res = com.ivarna.fluxlinux.core.root.RootShell.captureResult(cmd, 20_000L)
+            res.exitCode == 0
+        } catch (_: Exception) {
             false
         }
     }
@@ -263,20 +357,27 @@ object HostScriptDeployer {
                     java.nio.file.Paths.get("libmp3lame.so")
                 )
             } catch (_: Exception) {
-                val src = File(libDir, "libmp3lame.so")
-                if (src.isFile) src.copyTo(lame0, overwrite = true)
+                try {
+                    val src = File(libDir, "libmp3lame.so")
+                    if (src.isFile) src.copyTo(lame0, overwrite = true)
+                } catch (_: Exception) {
+                }
             }
         }
         chmodPulseLib(lame0)
         val paDir = File(ctx.filesDir, "usr/etc/pulse/default.pa.d")
         paDir.mkdirs()
-        File(paDir, "99-bliss.pa").writeText(
-            ".nofail\n" +
-                "load-module module-aaudio-sink\n" +
-                "load-module module-sles-sink\n" +
-                "load-module module-native-protocol-tcp " +
-                "auth-ip-acl=127.0.0.1 auth-anonymous=1 listen=127.0.0.1\n"
-        )
+        try {
+            File(paDir, "99-bliss.pa").writeText(
+                ".nofail\n" +
+                    "load-module module-aaudio-sink\n" +
+                    "load-module module-sles-sink\n" +
+                    "load-module module-native-protocol-tcp " +
+                    "auth-ip-acl=127.0.0.1 auth-anonymous=1 listen=127.0.0.1\n"
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "pulse config write failed: ${e.message}")
+        }
     }
 
     /** 0755 so the untrusted_app linker can PROT_EXEC the overlay `.so`. */
