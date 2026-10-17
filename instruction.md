@@ -1,12 +1,12 @@
 # Bliss — Project Instructions, Status & Next Steps
 
-Updated: 2026-10-16 · Repo: `HakaI963/folio` (branch `main`) · Local working copy: `/emulated/folio` (no git) · Git clone: `/tmp/opencode/folio-clone` · Upstream reference clone: `/tmp/opencode/fluxlinux-src`
+Updated: 2026-10-17 · Repo: `HakaI963/folio` (branch `main`) · Local working copy: `/emulated/folio` (no git) · Git clone: `/tmp/opencode/folio-clone` · Upstream reference clone: `/tmp/opencode/fluxlinux-src`
 
 ## 0. TL;DR
 
 Bliss is a rebranded, standalone Android build of the FluxLinux app (app id `com.nopiece.bliss`, source package `com.ivarna.fluxlinux`, brand **"Bliss"**). It boots Linux distros on-device via a bundled Termux-derived host bootstrap, proot containers, chroot distros, and termux-x11 GUI sessions.
 
-The host-boot failure (commit `10ef127`, release `folio-debug-10ef127`) is shipped. The **UI/UX + feature overhaul** (§4) shipped as release `folio-debug-33c97e9`; the **second user-feedback round** (§4b) shipped as `folio-debug-77e2c0a`; the **third** (§4c) as `folio-debug-7b4b67a`; the **fourth** (§4d) as `folio-debug-5791429`. The **fifth round** (§4e, three screenshots; §2.10) — host-shell **Permission denied fixed** (repack patches every baked app-id string in binaries + RUNPATH; host shell launches with its own generated rc), **installs made much faster** (6-connection parallel rootfs download, guest fast-mirror racing, dnf parallel downloads, apt retry tuning), **real anime banner art** (truecolor half-block, 5 free-licensed characters, header `bliss@<distro>`), **renamed to Bliss** (app id `com.nopiece.bliss`, new lotus icon, version 3.0.0), and the **distro list overhauled** (Rocky Linux 9 + CentOS Stream 9 added for arm64 proot; Adélie/Artix/BackBox/openKylin/Gentoo removed — no usable arm64 rootfs / source-based; Retro Emulation component enabled) — shipped as release **`bliss-debug-46bc7d8`** (CI run `38936982387`, first-try green after two repack-patcher fixes). See §2.10. **Round 7** (§2.12, §4g): the launch sticker now appears on **every** distro and **exactly once** (chroot login dedupe + once-per-shell guard + bash wiring), a latent **~128 KB su-argument cap** that silently broke chroot repairs was fixed with chunked staging (`ChrootStager`), the art got a **quality slider** with a smaller default (Pixelated 24 → Max 54 cols), and Settings → Terminal gained an optional **NSFW banner art** mode (off by default, 18+ warning, 4 levels, runtime API fetch + on-device half-block conversion) — released as **`bliss-debug-8c9d7ab`** (run `39037758339`, 6m44s). See §2.11 for round 6. **Round 6** (§2.11, §4f): HD re-render of the terminal banner (49 truecolor variants, 54×28 cells, black-blended characters), a new **dark minimal sparkle icon**, a **penguin-free Welcome screen**, and a **complete file-name rename** of every remaining `foila`/`folio`/`flux` file/asset name to `bliss` (scripts, wallpapers, presets, drawables, guest theme/config/marker/chroot paths, Konsole profile, prefs file) with automatic migrations for existing installs — shipped as **`bliss-debug-1ace0d8`** (run `39024115857`, first-try green).
+The host-boot failure (commit `10ef127`, release `folio-debug-10ef127`) is shipped. The **UI/UX + feature overhaul** (§4) shipped as release `folio-debug-33c97e9`; the **second user-feedback round** (§4b) shipped as `folio-debug-77e2c0a`; the **third** (§4c) as `folio-debug-7b4b67a`; the **fourth** (§4d) as `folio-debug-5791429`. The **fifth round** (§4e, three screenshots; §2.10) — host-shell **Permission denied fixed** (repack patches every baked app-id string in binaries + RUNPATH; host shell launches with its own generated rc), **installs made much faster** (6-connection parallel rootfs download, guest fast-mirror racing, dnf parallel downloads, apt retry tuning), **real anime banner art** (truecolor half-block, 5 free-licensed characters, header `bliss@<distro>`), **renamed to Bliss** (app id `com.nopiece.bliss`, new lotus icon, version 3.0.0), and the **distro list overhauled** (Rocky Linux 9 + CentOS Stream 9 added for arm64 proot; Adélie/Artix/BackBox/openKylin/Gentoo removed — no usable arm64 rootfs / source-based; Retro Emulation component enabled) — shipped as release **`bliss-debug-46bc7d8`** (CI run `38936982387`, first-try green after two repack-patcher fixes). See §2.10. **Round 7** (§2.12, §4g): the launch sticker now appears on **every** distro and **exactly once** (chroot login dedupe + once-per-shell guard + bash wiring), a latent **~128 KB su-argument cap** that silently broke chroot repairs was fixed with chunked staging (`ChrootStager`), the art got a **quality slider** with a smaller default (Pixelated 24 → Max 54 cols), and Settings → Terminal gained an optional **NSFW banner art** mode (off by default, 18+ warning, 4 levels, runtime API fetch + on-device half-block conversion) — released as **`bliss-debug-8c9d7ab`** (run `39037758339`, 6m44s). **Round 8** (§2.14, §4h; user screen recording 21:05): NSFW art became a **hardcoded offline set** (custom API URL/key UI + runtime fetcher deleted; 4 levels x 8 designs x 5 widths = 160 arts), the **banner flood** was killed for good (exported guard + pty-keyed marker; `/root` finally repaired: the recorded root tab was re-sourcing duplicated old banner lines that nothing ever deduped), art **revision 8** re-pulls the fixed sticker everywhere, and launch polish (0x0-attach nudge, truthful session toasts). Released as **`bliss-debug-9ac5e64`** (run `39052434778`, first-try green). See §2.11 for round 6. **Round 6** (§2.11, §4f): HD re-render of the terminal banner (49 truecolor variants, 54×28 cells, black-blended characters), a new **dark minimal sparkle icon**, a **penguin-free Welcome screen**, and a **complete file-name rename** of every remaining `foila`/`folio`/`flux` file/asset name to `bliss` (scripts, wallpapers, presets, drawables, guest theme/config/marker/chroot paths, Konsole profile, prefs file) with automatic migrations for existing installs — shipped as **`bliss-debug-1ace0d8`** (run `39024115857`, first-try green).
 
 Quick facts:
 
@@ -15,9 +15,9 @@ Quick facts:
 | App id / brand | `com.nopiece.bliss` / **"Bliss"** (renamed from "Foila Linux" in round 5; functional ids keep `folio`/`flux` internals) |
 | Source package | `com.ivarna.fluxlinux` |
 | Branch | `main` |
-| Latest green CI | run `39043883518` (commit `63b57ee`, hotfix 3) |
-| Released APK | [`bliss-debug-63b57ee`](https://github.com/HakaI963/folio/releases/tag/bliss-debug-63b57ee) `app-bliss-debug.apk` (172,847,722 B) — supersedes `bliss-debug-8c9d7ab` |
-| APK sha256 | `5910249307ef4ea3b9b005b5c65eda5af4b90e26415b9d09177bf9696806c8cd` |
+| Latest green CI | run `39052434778` (commit `9ac5e64`, round 8) |
+| Released APK | [`bliss-debug-9ac5e64`](https://github.com/HakaI963/folio/releases/tag/bliss-debug-9ac5e64) `app-bliss-debug.apk` (173,737,161 B) — supersedes `bliss-debug-63b57ee` |
+| APK sha256 | `3f44790330258ce8720f2135b2ada59b7659d85a83c7d35525dac8bd8c53a40f` |
 | Verify APK proof | package `com.nopiece.bliss`, `targetSdkVersion 28`, `assets/bootstrap.tar` packaged, libbash/libproot/libloader*.so packaged |
 | Signing | debug only (per-run keystore — uninstall before re-install) |
 | CI gate | `.github/workflows/build.yml` compiles **main sources only** (`assembleBlissDebug` + bootstrap assembly + Verify APK). Unit tests are not part of the gate. |
@@ -183,6 +183,25 @@ Fixes (`63b57ee`):
 
 Verification: battery green (90/90 scripts, 181 `.kt` balanced 0 unbalanced, 0 import problems, res literals OK, `setup_termux.sh` byte-identical); CI run `39043883518` green; release asset digest matches local sha256 (`591024930…`).
 
+### 2.14 Wave 10 — eighth user-feedback round (shipped, commit `9ac5e64`)
+
+Trigger: screen recording `Screenrecorder-2026-10-17-21-05-22-411.mp4` (58 s) + user notes: (1) remove the NSFW API URL/key options, (2) "Full" NSFW shows nothing, (3) shells open only sometimes ("Host bootstrap not ready", empty tabs), (4) one tab prints the art again and again (flood), (5) art size too big despite the slider, (6) hardcode the art instead of fetching online.
+
+Root causes found:
+- **NSFW**: the runtime fetcher had rendered **0 designs** on the device (settings showed "0 designs cached"), so Full silently fell back to SFW art. The custom URL/key UI was the developer's idea, which the user explicitly did not want.
+- **Flood**: the once-guard was per-process and never exported; every guest chain runs `env -i` + `su -`/`runuser` (environment reset), so nothing deduped across processes. The recorded tab was **root** — `/root` is repaired by **nothing** (helper returned early for root; app writers hardcode `/home/flux`), so pre-r7 duplicated banner source lines + the old unguarded `banner.sh` printed one art per line in the same shell. (App-side session-restart theory disproved: a tab never re-executes its command; extra shells are always extra sessions.)
+- **Empty tab**: a session attached while the view was 0x0 never started its process until a later `updateSize()`; the blanket MainActivity toast also reported "Host bootstrap not ready" for *any* non-OPENED result.
+
+Fixes:
+- `banner.sh`: exported guard + **pty-keyed marker** (sub-second pty-node ctime; 10 s open-chain fallback for `stat` without `%.9Z`) — nested shells and env-reset chains in one tab never reprint, a new tab (even reusing a pty number immediately) always gets its own sticker. Tested in bash/dash/zsh incl. env-reset + recycled-pty cases.
+- Art revision `7` → `8` (`BannerAssets.REV`, all six guest writers, their `8-*` freshness guards, `_bb_skip` stale-sticker probe) so existing guests re-pull the guarded sticker; `ChrootPaths.CHROOT_HELPER_VERSION` → `bliss-chroot v2.12`.
+- `bliss_chroot.sh v2.12`: `ensure_flux_zsh_profile` now serves **both** interactive users (flux + root), copies flux's sticker + active art set to `/root` (so quality/NSFW follow) and dedupes `/root/.zshrc`, `.bashrc`, `.profile`, `.bash_profile`.
+- NSFW is now **hardcoded**: `assets/banner/nsfw/l<level>/l<quality>/` — 4 levels x 8 designs x 5 widths = 160 arts (~3.2 MB), rendered offline with the `hb_port.py` HalfBlockRenderer reference pipeline, validated (<=45 KB, literal `\033`, >=4 rows) and QA'd via contact sheets. Level 1 safe mix, level 2 50/50, levels 3/4 spicy tiers, designs distinct across levels. `NsfwArtFetcher.kt` deleted; `TerminalPreferences` API-URL/key accessors removed; the Settings card is toggle + level slider + "built-in offline set" note.
+- Launch polish: `TerminalScreen` first-layout `forceTerminalResize` nudge (session can no longer stay dead at 0x0); `MainActivity` maps each `SessionOpenResult` to its real toast; `versionCode 16 / 3.2.0`.
+
+Verification: battery green (90/90 scripts, 180 `.kt` balanced, 0 import problems, `setup_termux.sh` byte-identical); APK CRC + all 160 nsfw assets verified from the released artifact; CI run `39052434778` first-try green; GitHub asset digest matches local sha256 (`3f447903…`). A parallel art-generation subagent produced a second candidate set while CI ran; it was **not** shipped (some picks looked child-like — never ship those; the released set comes from the curated purrbot/nekos sources).
+
+
 ## 3. Standalone-host constraints (never regress these)
 
 - `targetSdk` stays **28**. `setup_termux.sh` stays byte-identical to upstream. Keep the `Os.chmod`-based mode repair. Keep jniLibs pinning. Keep `preserveProotDistro` on re-extract.
@@ -268,8 +287,17 @@ Legend: DONE / PARTIAL / TODO.
 52. **"Fix anime to show on all distros"** — **DONE** (§2.12): 4× Alpine stacking fixed (login-helper stale guard + once-per-shell guard + dedupe); Debian/Ubuntu bash sessions now print the sticker (POSIX banner.sh + `.bashrc`/`.bash_profile` wiring + zsh in the chroot base); the ~128 KB `su -c` cap that silently broke all chroot repairs/component installs is fixed with chunked staging.
 53. **"Fix size, too big — want small clean, high res"** — **DONE** (§2.12): default is the new 32-column level; 49 designs regenerated at 5 sizes; dark variants brightened.
 54. **"Add resolution slider (pixelated → max)"** — **DONE** (§2.12): Settings → Terminal → Banner art, 5 stops (24/32/40/48/54), applies to every distro.
-55. **"Add NSFW option, off by default, warning, slider with 4 modes (minimal/moderate/fan service/full), no hardcoded art — use an API or ask me"** — **DONE** (§2.12): consent-gated toggle + 4-level slider + runtime fetching from keyless built-in APIs with a custom-URL/key override; no art is hardcoded for NSFW. **Follow-up:** if the user provides their own site/API (URL format + optional key), set it as the default template and test on-device.
+55. **"Add NSFW option, off by default, warning, slider with 4 modes (minimal/moderate/fan service/full), no hardcoded art — use an API or ask me"** — **DONE** (§2.12): consent-gated toggle + 4-level slider + runtime fetching from keyless built-in APIs with a custom-URL/key override; no art is hardcoded for NSFW. **Follow-up:** if the user provides their own site/API (URL format + optional key), set it as the default template and test on-device. **Superseded** in round 8: the user does not want any API; NSFW is a hardcoded offline set (§2.14).
 
+### 4h. Eighth feedback round (recording 21:05) — all addressed in `9ac5e64`
+
+56. **"Remove the NSFW API URL/key options — I don't want to use mine"** — **DONE**: fields deleted; no network in the NSFW path.
+57. **"Hardcode 50-50 of all types of option arts, no online api fetch"** — **DONE** (§2.14): 160 embedded arts; L1 safe mix, L2 50/50, L3/L4 spicy tiers.
+58. **"Even in Full NSFW there's nothing"** — **DONE**: the embedded Full set always renders (no fetch, no cache).
+59. **"Shell launch is fucked up — sometimes opens, sometimes not"** — **FIXED**: root-tab repair + per-tab guard, 0x0-attach nudge, truthful failure toasts, plus the earlier hotfix (`63b57ee`) that made host deploy self-heal + self-report.
+60. **"Prints the anime art again and again and floods on launch"** — **FIXED**: exactly one sticker per terminal tab (exported guard + pty-keyed marker; `/root` rc dedupe; art rev 8).
+61. **"Art size way too big despite resolution"** — **FIXED**: both SFW and NSFW sets follow the same 5-stop quality slider (NSFW used to render at fetch time and ignore changes).
+62. **"Fix all distro launch so it works smoothly"** — addressed by 59 + the chroot helper self-heal and the deploy/storage hotfix; any remaining tab failure now says exactly what failed.
 
 ---
 
@@ -352,17 +380,18 @@ The historical "verify before restarting" checklist is fully resolved: nav crash
 
 ## 10. Next steps (ordered)
 
-1. ~~Commit + push round 7~~ — **done** (`8c9d7ab`); hotfix 3 — **done** (`63b57ee`).
-2. ~~CI compile + "Verify APK"~~ — **green** (runs `39037758339` + `39043883518`).
-3. ~~Releases~~ — **done**: [`bliss-debug-8c9d7ab`](https://github.com/HakaI963/folio/releases/tag/bliss-debug-8c9d7ab) then hotfix [`bliss-debug-63b57ee`](https://github.com/HakaI963/folio/releases/tag/bliss-debug-63b57ee) (APK 172,847,722 B).
+1. ~~Commit + push rounds 7/8 + hotfixes~~ — **done** (`8c9d7ab`, `63b57ee`, `9ac5e64`).
+2. ~~CI compile + "Verify APK"~~ — **green** (runs `39037758339`, `39043883518`, `39052434778`).
+3. ~~Releases~~ — **done**: [`bliss-debug-8c9d7ab`](https://github.com/HakaI963/folio/releases/tag/bliss-debug-8c9d7ab), [`bliss-debug-63b57ee`](https://github.com/HakaI963/folio/releases/tag/bliss-debug-63b57ee), [`bliss-debug-9ac5e64`](https://github.com/HakaI963/folio/releases/tag/bliss-debug-9ac5e64) (APK 173,737,161 B).
 4. **On-device QA** (cannot be done in this environment):
    - **Alpine (Rooted)**: open the tab repeatedly → exactly **one** sticker + one `bliss@alpine` per shell (no more stacking); existing duplicates self-heal on first open.
    - **Debian/Ubuntu (Rooted)**: the sticker now prints in the bash session too; new chroot installs get zsh.
    - **Small default**: new shells show the small 32-col sticker; Settings → Terminal → Banner art slider to Pixelated/Large/Max and reopen shells → size changes on every distro.
-   - **NSFW**: toggle on → warning dialog → confirm → level slider + "Refresh art now" → after a refresh, new shells show the fetched designs; off → normal art returns.
+   - **NSFW (round 8)**: toggle on → warning → confirm → pick a level (Minimal/Moderate/Fan service/Full) → open a NEW shell in any distro → embedded art for that level appears (offline); Full shows spicy art; off → normal art returns. Also: open one tab repeatedly → exactly one sticker per tab; change the quality slider and reopen → size follows on every distro.
    - Chroot **component installs** (XFCE/customization) on a fresh chroot should now complete (previously E2BIG-failed silently).
    - Previous rounds: host shell, install speed, tools sheet, display size, distros (Rocky/CentOS), crash logs.
-5. Optional: wire a user-provided NSFW API as the default template (§4g item 55).
+5. ~~Optional: wire a user-provided NSFW API~~ — dropped by the user in round 8 (hardcoded offline set instead).
+6. Watch for the next on-device feedback: exactly-one sticker per tab (incl. root tabs), NSFW levels on all distros, smooth tab opens.
 
 ---
 
