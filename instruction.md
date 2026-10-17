@@ -6,7 +6,7 @@ Updated: 2026-10-16 · Repo: `HakaI963/folio` (branch `main`) · Local working c
 
 Bliss is a rebranded, standalone Android build of the FluxLinux app (app id `com.nopiece.bliss`, source package `com.ivarna.fluxlinux`, brand **"Bliss"**). It boots Linux distros on-device via a bundled Termux-derived host bootstrap, proot containers, chroot distros, and termux-x11 GUI sessions.
 
-The host-boot failure (commit `10ef127`, release `folio-debug-10ef127`) is shipped. The **UI/UX + feature overhaul** (§4) shipped as release `folio-debug-33c97e9`; the **second user-feedback round** (§4b) shipped as `folio-debug-77e2c0a`; the **third** (§4c) as `folio-debug-7b4b67a`; the **fourth** (§4d) as `folio-debug-5791429`. The **fifth round** (§4e, three screenshots; §2.10) — host-shell **Permission denied fixed** (repack patches every baked app-id string in binaries + RUNPATH; host shell launches with its own generated rc), **installs made much faster** (6-connection parallel rootfs download, guest fast-mirror racing, dnf parallel downloads, apt retry tuning), **real anime banner art** (truecolor half-block, 5 free-licensed characters, header `bliss@<distro>`), **renamed to Bliss** (app id `com.nopiece.bliss`, new lotus icon, version 3.0.0), and the **distro list overhauled** (Rocky Linux 9 + CentOS Stream 9 added for arm64 proot; Adélie/Artix/BackBox/openKylin/Gentoo removed — no usable arm64 rootfs / source-based; Retro Emulation component enabled) — shipped as release **`bliss-debug-46bc7d8`** (CI run `38936982387`, first-try green after two repack-patcher fixes). See §2.10.
+The host-boot failure (commit `10ef127`, release `folio-debug-10ef127`) is shipped. The **UI/UX + feature overhaul** (§4) shipped as release `folio-debug-33c97e9`; the **second user-feedback round** (§4b) shipped as `folio-debug-77e2c0a`; the **third** (§4c) as `folio-debug-7b4b67a`; the **fourth** (§4d) as `folio-debug-5791429`. The **fifth round** (§4e, three screenshots; §2.10) — host-shell **Permission denied fixed** (repack patches every baked app-id string in binaries + RUNPATH; host shell launches with its own generated rc), **installs made much faster** (6-connection parallel rootfs download, guest fast-mirror racing, dnf parallel downloads, apt retry tuning), **real anime banner art** (truecolor half-block, 5 free-licensed characters, header `bliss@<distro>`), **renamed to Bliss** (app id `com.nopiece.bliss`, new lotus icon, version 3.0.0), and the **distro list overhauled** (Rocky Linux 9 + CentOS Stream 9 added for arm64 proot; Adélie/Artix/BackBox/openKylin/Gentoo removed — no usable arm64 rootfs / source-based; Retro Emulation component enabled) — shipped as release **`bliss-debug-46bc7d8`** (CI run `38936982387`, first-try green after two repack-patcher fixes). See §2.10. **Round 6** (§2.11, §4f): HD re-render of the terminal banner (49 truecolor variants, 54×28 cells, black-blended characters), a new **dark minimal sparkle icon**, a **penguin-free Welcome screen**, and a **complete file-name rename** of every remaining `foila`/`folio`/`flux` file/asset name to `bliss` (scripts, wallpapers, presets, drawables, guest theme/config/marker/chroot paths, Konsole profile, prefs file) with automatic migrations for existing installs — shipped as **`bliss-debug-1ace0d8`** (run `39024115857`, first-try green).
 
 Quick facts:
 
@@ -15,9 +15,9 @@ Quick facts:
 | App id / brand | `com.nopiece.bliss` / **"Bliss"** (renamed from "Foila Linux" in round 5; functional ids keep `folio`/`flux` internals) |
 | Source package | `com.ivarna.fluxlinux` |
 | Branch | `main` |
-| Latest green CI | run `39013803090` (commit `d83208f`, hotfix 2) |
-| Released APK | [`bliss-debug-d83208f`](https://github.com/HakaI963/folio/releases/tag/bliss-debug-d83208f) `app-bliss-debug.apk` (172,320,869 B) — hotfix 2; supersedes `bliss-debug-0557a1a` (whose clean bootstrap was never re-extracted on devices with app data from `46bc7d8`) |
-| APK sha256 | `44fe9737c6cb0981e1cde3d5bebb58af3243ceef2bf03aa983e210b15b98f8a3` |
+| Latest green CI | run `39024115857` (commit `1ace0d8`, round 6) |
+| Released APK | [`bliss-debug-1ace0d8`](https://github.com/HakaI963/folio/releases/tag/bliss-debug-1ace0d8) `app-bliss-debug.apk` (172,787,976 B) |
+| APK sha256 | `edf9e974eeb702a9479a9ba5c98341ffe2c6226d3426f02de6a67c13f948a834` |
 | Verify APK proof | package `com.nopiece.bliss`, `targetSdkVersion 28`, `assets/bootstrap.tar` packaged, libbash/libproot/libloader*.so packaged |
 | Signing | debug only (per-run keystore — uninstall before re-install) |
 | CI gate | `.github/workflows/build.yml` compiles **main sources only** (`assembleBlissDebug` + bootstrap assembly + Verify APK). Unit tests are not part of the gate. |
@@ -142,6 +142,16 @@ Evidence base: `Screenshot_2026-10-16-19-15-12-464` (Alpine shell + old banner),
 
 ---
 
+
+### 2.11 Wave 8 — sixth user-feedback round (shipped)
+
+Evidence: ss1/ss2 (banner pixelation), ss3 (boxy cropped variant), ss4 (Welcome with penguin).
+
+- **Banner art v2 (49 variants)** — 54×28-cell truecolor half-block art from 20 free-licensed anime artworks (Wikimedia mascots/OS-tans, CC0/CC-BY/CC-BY-SA/public domain) + hue-recolour derivatives (hair/eyes only). Characters are knocked out onto pure black (alpha flood-fill + key-drop + feather) so there is **no background box/crop**; the disliked `01-anime-girl` crop is gone. Identical payload in all 6 writers + `GuestZshrcRepair` (aggregate md5 `030ff30cbe6d…`, 49 sections × 7 copies) — verified independently. 833,737 B total (~17 KB/variant; ≤1.1 MB per writer). Revisions: `.banner-rev` 5, `BANNER_ART_REVISION` 5, `REPAIR_REVISION` 8. Generator/credits: `scripts/tools/ansi_art_gen.py`, `docs/art-credits.md` (49-row variant table + rejected list).
+- **New app icon** — minimal four-point sparkle + companion dot on a near-black tile (#0A0B0F/#15161F + soft indigo glow), white→lavender gradient; monochrome themed-icon layer; preview-verified at 48/96/192 px (filled lotus and crescent concepts rejected at 48 px). `ic_bliss_mark` / `ic_launcher_background` / `ic_launcher_foreground` / `ic_launcher_monochrome` / legacy `ic_launcher.xml` updated.
+- **Welcome redesign (penguin removed)** — the `onboarding_bg_1` illustration block and the pinned glass header were replaced by a one-shot animated hero (frost radial glow + always-dark tile + floating mark); feature cards kept, step dots + Get Started wiring unchanged; the dead `OnboardingScreen.kt` reference was swapped to the mark and the webp deleted (all 5 unreferenced webps removed).
+- **Complete file-name rename** — see §4f item 50. 18 asset files renamed (`flux_guest_common`→`bliss_guest_common`, `flux_gpu_common`→`bliss_gpu_common`, `flux_install`→`bliss_install`, `folio_appearance_apply`→`bliss_appearance_apply`, `fluxlinux_chroot.sh`→`bliss_chroot.sh`, wallpapers `fluxlinux-*`/`folio-*`→`bliss-*`, presets `folio-*`→`bliss-*`), res `folio_wall_*`→`bliss_wall_*`, `ic_stat_flux`→`ic_stat_bliss`; guest names `bliss.zsh-theme` (+`ZSH_THEME="bliss"`), `~/.config/bliss`, `/etc/bliss`, `/data/local/bliss`, `bliss_busybox`, `bliss-locale.sh`, `bliss-ensure-locale`, `bliss-gpu.sh`, `bliss_kde_env.sh`, `bliss_resolve_bb.sh`, `bliss-*.desktop`, `bliss.profile` (Konsole), `bliss_xfce_assets`, `bliss_*` temp scripts, AppearanceStore prefs `bliss_appearance`. Migrations: appearance-apply moves `.config/folio`→`.config/bliss` and removes old theme/desktop leftovers; GuestZshrcRepair rewrites `.zshrc` (old paths sed-migrated, repair rev 8); chroot `.flux_configured` honored via dual-check; `/etc/fluxlinux` + `/data/local/folio` rename-once lines; prefs value migration; legacy wallpaper ids aliased. Frozen exceptions (documented): `fluxlinux-host.env` (dual-write; `setup_termux.sh` reads it) and `~/.fluxlinux` marker dir. Kept identifiers: `FLUX_*`/`FOLIO_*` env names, `flux` Linux user, `folio-banner` functions, `com.ivarna.fluxlinux` package.
+
 ## 3. Standalone-host constraints (never regress these)
 
 - `targetSdk` stays **28**. `setup_termux.sh` stays byte-identical to upstream. Keep the `Os.chmod`-based mode repair. Keep jniLibs pinning. Keep `preserveProotDistro` on re-extract.
@@ -213,6 +223,15 @@ Legend: DONE / PARTIAL / TODO.
 44. **"Rename app to Bliss, everything to bliss, change app icon"** — **DONE** (§2.10): app id/flavor `com.nopiece.bliss`, new lotus icon + gradient background + monochrome layer, version 3.0.0, full user-visible sweep (Kotlin, res, 83 scripts, prompts, install logs, notifications).
 45. **"Distro list: many tagged Soon — diagnose for arm64; add all that work, remove what can't"** — **DONE** (§2.10): added Rocky Linux 9 + CentOS Stream 9 (arm64 proot, hosted+SHA-pinned); removed Adélie/Artix/BackBox/openKylin/Gentoo with evidence; zero "Soon" cards remain; Retro Emulation enabled.
 46. **"Check every file — replace flux with bliss"** — **DONE** (§2.10): zero `Foila`/`foila`/`flux` display text anywhere in `app/src` (repo scans); functional ids (`FLUX_*`, `flux` user, `folio-*`) kept by design.
+
+### 4f. Sixth feedback round (ss1–ss4)
+
+47. **"Anime on top is damn good but increase its quality — too low/pixelated"** — **DONE** (§2.11): 54×28-cell truecolor art (~2.5× detail), sharper crops, 49 variants.
+48. **"ss3 is a big boxy cropped image — remove it, add more like the others; only 2-3 total — make 40-50"** — **DONE** (§2.11): boxy crop dropped, black-blended knockouts, 49 designs (20 artworks + recolours).
+49. **"ss4 remove the old setup screen, make a new one, remove the penguin"** — **DONE** (§2.11): Welcome redesigned with an animated hero; penguin asset + all references deleted.
+50. **"Make a new Bliss app icon — something good, dark, clean, minimal, perfect"** — **DONE** (§2.11): sparkle-on-near-black icon, preview-verified at 48 px, monochrome layer.
+51. **"See if any foila/folio/flux file name remains and make it bliss"** — **DONE** (§2.11): all remaining brand file/asset names renamed (repo assets + guest paths) with migrations; only documented functional identifiers and the two frozen host-contract names remain.
+
 
 ---
 
@@ -295,17 +314,15 @@ The historical "verify before restarting" checklist is fully resolved: nav crash
 
 ## 10. Next steps (ordered)
 
-1. ~~Commit + push round 5~~ — **done** (`b7bc309` + two repack fixes `93bbdb9`, `46bc7d8`).
-2. ~~CI compile + "Verify APK"~~ — **green** (run `38936982387`).
-3. ~~Release~~ — **done**: [`bliss-debug-46bc7d8`](https://github.com/HakaI963/folio/releases/tag/bliss-debug-46bc7d8) (APK 172,320,841 B; upload via curl after the usual big-upload flakiness).
+1. ~~Commit + push round 6~~ — **done** (`1ace0d8`).
+2. ~~CI compile + "Verify APK"~~ — **green** (run `39024115857`, first try).
+3. ~~Release~~ — **done**: [`bliss-debug-1ace0d8`](https://github.com/HakaI963/folio/releases/tag/bliss-debug-1ace0d8) (APK 172,787,976 B).
 4. **On-device QA** (cannot be done in this environment):
-   - **Host shell**: Terminal → "+" → Host → prompt is `bliss:~$` (colored), no `Permission denied` line, `ls`/`pkg`/`proot-distro` all work. (Old installs: fresh app id means a fresh data dir — re-init is expected.)
-   - **Install speed**: install Alpine or Rocky and watch the DL phase — the download should use several connections (faster than the old single-stream on the same link); guest phase logs one `Bliss: fast mirror: …` line before package installs.
-   - **Banner**: open a new shell a few times → different anime art each time; below it exactly one `bliss@<distro>` line; no host/version/time; art is truecolor (not the old block face).
-   - **Bliss brand**: launcher icon = lotus over gradient, label "Bliss"; settings/about/notification names say Bliss; terminal prompt label `bliss`; install logs `Bliss:` lines.
-   - **Distros**: no "Soon" cards anywhere; install **Rocky Linux** and **CentOS Stream** (proot) — rootfs downloads from the `rootfs` release, base install + XFCE via dnf/EPEL, then the desktop launches; Retro Emulation component installs (Debian).
-   - **Previous rounds re-check**: task bar during install, "+" opens a second same-distro tab, X11 display-size, wallpaper live-apply, appearance options, motion, crash logs.
-   - Reminder: if anything crashes → Settings → Crash logs → share the trace.
+   - **Banner**: open several new shells → different HD anime characters (49 set), each on black with no box edges; header `bliss@<distro>`; existing installs refresh on next shell.
+   - **Icon**: launcher shows the dark sparkle icon; themed (monochrome) icon on Android 13+.
+   - **Welcome**: fresh onboarding → new hero (no penguin), dots/cards/Get Started unchanged.
+   - **Renames**: `ls ~/.config` shows `bliss` (not folio), theme is `bliss.zsh-theme`, wallpapers `bliss-*`, desktop entries `bliss-*.desktop`; old chroot keeps working (`/data/local/bliss`, marker honored); saved wallpaper preset still applied.
+   - Previous rounds: host shell, install speed, tools sheet, display size, distros (Rocky/CentOS), crash logs.
 
 ---
 
@@ -315,7 +332,8 @@ The historical "verify before restarting" checklist is fully resolved: nav crash
 - Round 2: CI green + release — **done** (run `38854972100`, release `folio-debug-77e2c0a`).
 - Round 3: CI green + release — **done** (run `38887109342`, release `folio-debug-7b4b67a`; two pre-CI fixes: 10-digit splash colors, missing `collectAsState` import + stray string constant).
 - Round 4: CI green + release — **done** (run `38904315238`, release `folio-debug-5791429`, first-try green; APK upload needed a curl retry after a network drop).
-- Round 5: CI green + release — **done** (run `38936982387`, release [`bliss-debug-46bc7d8`](https://github.com/HakaI963/folio/releases/tag/bliss-debug-46bc7d8), after two repack-patcher CI fixes: drop patchelf + bare-id match, then the symlink/seen-ordering bug; the sim that forced the CI order now passes).
-- Every item in §4, §4b, §4c, §4d, §4e marked DONE — **done** (on-device confirmation is §10.4).
-- Branding: **"Bliss"** everywhere user-visible (Kotlin, XML, 83 scripts, prompts, logs); residuals are functional identifiers only (`FLUX_*`, `flux` user, `folio-*` ids, `Folio*`/`FluxLinux` identifiers, `Theme.Folio`, Konsole `Folio.profile`, `wallpapers/Folio`).
-- Working tree verified locally by: `bash -n` on all 90 scripts, import-resolution sweep + nested-comment-aware brace/paren scanner on all 176 `.kt`, res color-literal check (3/4/6/8 digits), byte-identical guard for `host/setup_termux.sh`, sandbox runs (banner art+header/opt-out/non-interactive; mirror racing 12 cases dash+bash; `_flux_retry_pkg` success/flaky/hard-fail; repack byte-patcher incl. forced symlink-first ordering + `verify_bootstrap.sh` PASS + `readelf` RUNPATH checks), cross-file signature checks for every refactored API (`RootfsDownloader.ensurePresent`, `TermuxHostPaths.ensureHostShellRc`, `HostBootstrap.BLISS_PACKAGE`, distro profiles/`SupportedDistro` enum, host rc launch args).
+- Round 5: CI green + release — **done** (run `38936982387`, release `bliss-debug-46bc7d8`), then the host-setup Python hotfixes (`bliss-debug-0557a1a` clean-bootstrap + `bliss-debug-d83208f` extract-version bump).
+- Round 6: CI green + release — **done** (run `39024115857`, release [`bliss-debug-1ace0d8`](https://github.com/HakaI963/folio/releases/tag/bliss-debug-1ace0d8), first-try green).
+- Every item in §4, §4b, §4c, §4d, §4e, §4f marked DONE — **done** (on-device confirmation is §10.4).
+- Branding: **"Bliss"** everywhere user-visible (Kotlin, XML, 90 scripts, prompts, logs) **and in file/asset names** (round 6); only functional identifiers (`FLUX_*`, `flux` user, `folio-banner` functions, `Folio*` class names, `Theme.Folio`, `com.ivarna.fluxlinux`) and the frozen host-contract names (`fluxlinux-host.env` dual-write, `~/.fluxlinux` marker) remain.
+- Working tree verified locally by: `bash -n` on all 90 scripts, art equality (49×7, md5-identical), migrated-file cleanup, `bash -n` on all 90 scripts, import-resolution sweep + nested-comment-aware brace/paren scanner on all 176 `.kt`, res color-literal check (3/4/6/8 digits), byte-identical guard for `host/setup_termux.sh`, sandbox runs (banner art+header/opt-out/non-interactive; mirror racing 12 cases dash+bash; `_flux_retry_pkg` success/flaky/hard-fail; repack byte-patcher incl. forced symlink-first ordering + `verify_bootstrap.sh` PASS + `readelf` RUNPATH checks), cross-file signature checks for every refactored API (`RootfsDownloader.ensurePresent`, `TermuxHostPaths.ensureHostShellRc`, `HostBootstrap.BLISS_PACKAGE`, distro profiles/`SupportedDistro` enum, host rc launch args).
