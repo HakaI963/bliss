@@ -994,12 +994,21 @@ class OnboardingInstallRunner(private val ctx: Context) {
         onProgress: (Progress) -> Unit,
         chrootPath: String = com.ivarna.fluxlinux.core.root.ChrootPaths.CHROOT_PATH
     ): Int {
-        // captureInChroot already base64-wraps once via bliss_chroot b64.
-        // Nested echo|base64 is redundant and bloated host su -c strings.
-        // guest_b64 prefers /bin/bash when present, else /bin/sh (Alpine minirootfs).
+        // A single `su -c` argument is capped (~128 KB) by the kernel, and the
+        // component scripts (with the embedded sticker art) are far bigger, so
+        // the body is staged into the chroot in chunks first and executed by
+        // path. `guest_b64` prefers /bin/bash when present, else /bin/sh.
+        val dest = "/.bliss-guest-step.sh"
         val body = "export PYTHONUNBUFFERED=1\n$scriptBody"
+        val staged = com.ivarna.fluxlinux.core.root.ChrootStager.writeFiles(
+            appCtx, chrootPath, listOf(dest to body), user = "root"
+        )
+        if (!staged) {
+            log(phases, phaseIndex, onProgress, "guest script staging failed (no root or chroot busy)")
+            return -1
+        }
         val result = RootShell.captureInChroot(
-            body,
+            "sh $dest; _rc=\$?; rm -f $dest 2>/dev/null; exit \$_rc",
             user = user,
             context = appCtx,
             chrootPath = chrootPath,

@@ -18,6 +18,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.rounded.ArrowBack
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -26,8 +27,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -45,13 +50,18 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ivarna.fluxlinux.core.banner.BannerArtWriter
+import com.ivarna.fluxlinux.core.banner.NsfwArtFetcher
 import com.ivarna.fluxlinux.core.terminal.GuestLoginShell
 import com.ivarna.fluxlinux.core.utils.TerminalPreferences
 import com.ivarna.fluxlinux.ui.components.FluxSwitch
 import com.ivarna.fluxlinux.ui.components.GlassSettingCard
+import com.ivarna.fluxlinux.ui.theme.FolioSwitchUncheckedTrack
+import com.ivarna.fluxlinux.ui.theme.TextPrimary
 import com.ivarna.fluxlinux.ui.theme.fluxMutedText
 import com.ivarna.fluxlinux.ui.theme.rememberStaggerEntrance
 import com.ivarna.fluxlinux.ui.theme.staggerIn
+import kotlin.math.roundToInt
 
 /**
  * Terminal font zoom + ExtraKeys toolbar + guest login shell (nativecode settings parity).
@@ -75,6 +85,27 @@ fun TerminalSettingsScreen(
     var legacyProot by remember {
         mutableStateOf(TerminalPreferences.isLegacyProotLauncher(context))
     }
+    var bannerQuality by remember {
+        mutableIntStateOf(TerminalPreferences.getBannerQuality(context))
+    }
+    var nsfwEnabled by remember {
+        mutableStateOf(TerminalPreferences.isNsfwEnabled(context))
+    }
+    var nsfwLevel by remember {
+        mutableIntStateOf(TerminalPreferences.getNsfwLevel(context))
+    }
+    var nsfwApiUrl by remember {
+        mutableStateOf(TerminalPreferences.getNsfwApiUrl(context))
+    }
+    var nsfwApiKey by remember {
+        mutableStateOf(TerminalPreferences.getNsfwApiKey(context))
+    }
+    var nsfwCached by remember {
+        mutableIntStateOf(NsfwArtFetcher.cachedCount(context))
+    }
+    var nsfwStatus by remember { mutableStateOf<String?>(null) }
+    // Consent gate: the NSFW switch only flips after the 18+ dialog is confirmed.
+    var showNsfwConfirm by remember { mutableStateOf(false) }
 
     // Staggered card entrance (30ms steps) — visual only.
     val entrance = rememberStaggerEntrance()
@@ -313,7 +344,273 @@ fun TerminalSettingsScreen(
                 }
             }
 
+            GlassSettingCard(modifier = Modifier.staggerIn(4, entrance)) {
+                Column(Modifier.padding(20.dp).fillMaxWidth()) {
+                    Text(
+                        "Banner art",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "Size and detail of the random anime sticker printed by new terminal shells. Applies to every distro.",
+                        fontSize = 13.sp,
+                        lineHeight = 20.sp,
+                        color = fluxMutedText()
+                    )
+                    Spacer(Modifier.height(16.dp))
+                    Slider(
+                        value = bannerQuality.toFloat(),
+                        onValueChange = { bannerQuality = it.roundToInt() },
+                        onValueChangeFinished = {
+                            TerminalPreferences.setBannerQuality(context, bannerQuality)
+                            BannerArtWriter.refreshAsync(context)
+                        },
+                        valueRange = 1f..5f,
+                        steps = 3,
+                        colors = SliderDefaults.colors(
+                            thumbColor = TextPrimary,
+                            activeTrackColor = TextPrimary,
+                            inactiveTrackColor = FolioSwitchUncheckedTrack
+                        )
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        bannerQualityLabel(bannerQuality),
+                        fontSize = 12.sp,
+                        color = fluxMutedText()
+                    )
+                }
+            }
+
+            GlassSettingCard(modifier = Modifier.staggerIn(5, entrance)) {
+                Column(Modifier.padding(20.dp).fillMaxWidth()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                "NSFW banner art",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                "18+ only. Replaces the sticker with adult art fetched from a web API. Off by default; turn it off anytime.",
+                                fontSize = 13.sp,
+                                lineHeight = 20.sp,
+                                color = fluxMutedText()
+                            )
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        FluxSwitch(
+                            checked = nsfwEnabled,
+                            onCheckedChange = { on ->
+                                if (on) {
+                                    // Consent gate: persist only after "I am 18+ — enable".
+                                    showNsfwConfirm = true
+                                } else {
+                                    nsfwEnabled = false
+                                    nsfwStatus = null
+                                    nsfwCached = 0
+                                    TerminalPreferences.setNsfwEnabled(context, false)
+                                    NsfwArtFetcher.clear(context)
+                                    BannerArtWriter.refreshAsync(context)
+                                }
+                            },
+                            modifier = Modifier.semantics {
+                                contentDescription = "NSFW banner art"
+                            }
+                        )
+                    }
+
+                    if (nsfwEnabled) {
+                        Spacer(Modifier.height(16.dp))
+                        Text(
+                            "Level",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Slider(
+                            value = nsfwLevel.toFloat(),
+                            onValueChange = { nsfwLevel = it.roundToInt() },
+                            onValueChangeFinished = {
+                                TerminalPreferences.setNsfwLevel(context, nsfwLevel)
+                                NsfwArtFetcher.refreshAsync(context) { n ->
+                                    nsfwCached = n
+                                    nsfwStatus = "$n designs cached"
+                                }
+                                BannerArtWriter.refreshAsync(context)
+                            },
+                            valueRange = 1f..4f,
+                            steps = 2,
+                            colors = SliderDefaults.colors(
+                                thumbColor = TextPrimary,
+                                activeTrackColor = TextPrimary,
+                                inactiveTrackColor = FolioSwitchUncheckedTrack
+                            )
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            nsfwLevelLabel(nsfwLevel),
+                            fontSize = 12.sp,
+                            color = fluxMutedText()
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        OutlinedTextField(
+                            value = nsfwApiUrl,
+                            onValueChange = {
+                                nsfwApiUrl = it
+                                TerminalPreferences.setNsfwApiUrl(context, it)
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text("API URL template (optional)") },
+                            placeholder = { Text("https://your-api.example/img?level={level}") },
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = nsfwApiKey,
+                            onValueChange = {
+                                nsfwApiKey = it
+                                TerminalPreferences.setNsfwApiKey(context, it)
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text("API key (optional)") },
+                            placeholder = { Text("Paste your key") },
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        TextButton(
+                            onClick = {
+                                NsfwArtFetcher.refreshAsync(context) { n ->
+                                    nsfwCached = n
+                                    nsfwStatus = "$n designs cached"
+                                }
+                                BannerArtWriter.refreshAsync(context)
+                            }
+                        ) {
+                            Text(
+                                "Refresh art now",
+                                color = MaterialTheme.colorScheme.secondary,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 13.sp
+                            )
+                        }
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "$nsfwCached designs cached — " +
+                                (if (nsfwApiUrl.isBlank()) "built-in source" else "custom API"),
+                            fontSize = 12.sp,
+                            color = fluxMutedText()
+                        )
+                        nsfwStatus?.let { status ->
+                            Text(
+                                status,
+                                fontSize = 12.sp,
+                                color = fluxMutedText()
+                            )
+                        }
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "{level} is replaced by minimal/moderate/fanservice/full in your URL.",
+                            fontSize = 12.sp,
+                            lineHeight = 18.sp,
+                            color = fluxMutedText()
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "Saved choices apply on the next refresh; terminal tabs pick them up automatically.",
+                            fontSize = 12.sp,
+                            lineHeight = 18.sp,
+                            color = fluxMutedText()
+                        )
+                    }
+                }
+            }
+
             Spacer(Modifier.height(110.dp))
         }
     }
+
+    // 18+ consent gate: the switch stays off until this dialog is confirmed.
+    if (showNsfwConfirm) {
+        AlertDialog(
+            onDismissRequest = { showNsfwConfirm = false },
+            containerColor = MaterialTheme.colorScheme.surface,
+            titleContentColor = MaterialTheme.colorScheme.onSurface,
+            textContentColor = MaterialTheme.colorScheme.onSurface,
+            title = {
+                Text(
+                    "Enable NSFW banner art?",
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Text(
+                    "18+ adult content fetched from a third-party API source (the built-in " +
+                        "source or your own API URL below). It is shown only in the terminal " +
+                        "sticker and can be turned off anytime.",
+                    fontSize = 13.sp,
+                    lineHeight = 20.sp
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showNsfwConfirm = false
+                        nsfwEnabled = true
+                        TerminalPreferences.setNsfwEnabled(context, true)
+                        NsfwArtFetcher.refreshAsync(context) { n ->
+                            nsfwCached = n
+                            nsfwStatus = "$n designs cached"
+                        }
+                        BannerArtWriter.refreshAsync(context)
+                    }
+                ) {
+                    Text(
+                        "I am 18+ — enable",
+                        color = MaterialTheme.colorScheme.secondary,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 13.sp
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showNsfwConfirm = false }) {
+                    Text(
+                        "Cancel",
+                        color = MaterialTheme.colorScheme.secondary,
+                        fontSize = 13.sp
+                    )
+                }
+            }
+        )
+    }
 }
+
+/** Banner-art slider stops: label + sticker width in columns (quality 1..5). */
+private val BannerQualityStops = listOf(
+    "Pixelated" to 24,
+    "Small" to 32,
+    "Medium" to 40,
+    "Large" to 48,
+    "Max" to 54
+)
+
+/** NSFW level labels, index 0 = level 1. */
+private val NsfwLevelLabels = listOf("Minimal", "Moderate", "Fan service", "Full")
+
+private fun bannerQualityLabel(quality: Int): String {
+    val (name, columns) = BannerQualityStops[quality.coerceIn(1, BannerQualityStops.size) - 1]
+    return "$name — $columns columns"
+}
+
+private fun nsfwLevelLabel(level: Int): String =
+    NsfwLevelLabels[level.coerceIn(1, NsfwLevelLabels.size) - 1]

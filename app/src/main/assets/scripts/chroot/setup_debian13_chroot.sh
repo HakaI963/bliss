@@ -275,7 +275,7 @@ configure_debian_chroot() {
         rm -f /tmp/.apt_write_probe
         apt-get update -y
         apt-get upgrade -y
-        apt-get install -y nano vim net-tools sudo git dbus-x11 wget unzip
+        apt-get install -y nano vim net-tools sudo git dbus-x11 wget unzip zsh
     ' || goodbye
 
     progress "Creating User ($USERNAME)..."
