@@ -789,6 +789,13 @@ object CloneEngine {
         val preset = RES_PRESETS[displayResPreset.value.coerceIn(0, RES_PRESETS.size - 1)]
         displayW.value = preset.first
         displayH.value = preset.second
+        // Reuse a live display: the service keeps it across app restarts, and
+        // re-creating on every probe/run leaks display ids on the device.
+        val remote = ShellVd.remoteDisplayId()
+        if (remote > 0) {
+            if (ShellVd.displayId.value != remote) ShellVd.adoptDisplayId(remote)
+            return true
+        }
         val err = ShellVd.ensure(
             ctx,
             preset.first,

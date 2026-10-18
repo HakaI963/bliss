@@ -530,3 +530,14 @@ The historical "verify before restarting" checklist is fully resolved: nav crash
 - **Virtual display availability, in-app:** Display tab now auto-probes on entry and shows `Virtual display: available (id=N)` / `NOT available — <last shell log line>`, with a **Check** button (`CloneEngine.probeDisplayBlocking`, `vdProbe` flow).
 - **Button renamed** "Open on hidden display" → **"Run app"** (Display tab). The live virtual-display view below it was already wired (JPEG frame stream); it renders once the display actually comes up.
 - versionCode 24→25, 3.8.3.
+
+---
+
+## 18. Round 18 — launch fixed for user clones (no launch component), display reuse (2026-10-19)
+
+**User evidence:** display creation now works (`display created id=7..10 720x1560 input=ok ime=local`, probe shows `Virtual display: available (id=10)`) — but launch fails: `Launch failed: no launch component for io.github.muntashirakon.AppManager`.
+
+**Root causes / fixes:**
+- `resolveLaunchComponent` for clones in **user 10** relied on `cmd package query-activities … | grep '^<pkg>/'` — the `^` anchor breaks on indented output lines, and the whole resolve fails when the service process cannot see that user's install state. Now: anchored grep removed (unanchored `-F pkg/` + tolerant Java-side trim parse), second ladder `cmd package resolve-activity --brief`, raw outputs logged on failure, and — decisive — **framework-side resolve fallback**: `am start --user U --display N -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -p <pkg>` lets `am` resolve the launcher activity for the target user itself. Resolution can no longer be wrong about user install state.
+- **Display churn**: probe + Run created a new display each time (ids 7,8,9,10). `ensureDisplay()` now **reuses** the service-owned display: `ShellVd.remoteDisplayId()` (`displayId()` AIDL) → adopt; only a dead/absent display is re-created.
+- versionCode 25→26, 3.8.4.

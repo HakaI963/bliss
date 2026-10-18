@@ -475,6 +475,21 @@ object ShellVd {
         return "$op failed: ${t.message ?: name}"
     }
 
+    /** Display id the service currently owns; -1/0 when none or unbound. Off-main only. */
+    fun remoteDisplayId(): Int {
+        val remote = service ?: return -1
+        return try {
+            remote.displayId()
+        } catch (t: Throwable) {
+            -1
+        }
+    }
+
+    /** Adopt a service-owned display id (survives app restarts, service keeps it). */
+    fun adoptDisplayId(id: Int) {
+        if (id > 0) displayId.value = id
+    }
+
     /**
      * Snapshot of the service-side log (real shell-side errors live there:
      * shell context init, createVirtualDisplay SecurityException, etc.).

@@ -307,14 +307,21 @@ public final class ShellVdService extends IShellVd.Stub {
         }
         String userArg = userId > 0 ? " --user " + userId : "";
         try {
-            String component = resolveLaunchComponent(packageName, userId);
-            if (component.isEmpty()) {
-                return "no launch component for " + packageName;
-            }
             runShell("am force-stop" + userArg + " " + shellQuote(packageName));
-            String command = "am start" + userArg
-                    + " --display " + id
-                    + " -f 0x10008000 -n " + shellQuote(component);
+            String component = resolveLaunchComponent(packageName, userId);
+            String command;
+            if (component.isEmpty()) {
+                // Framework-side resolve: am resolves the launcher activity for
+                // the target user itself — correct even when this process
+                // cannot see that user's install state.
+                log("no resolved component, starting by LAUNCHER intent for " + packageName);
+                command = "am start" + userArg + " --display " + id
+                        + " -f 0x10008000 -a android.intent.action.MAIN"
+                        + " -c android.intent.category.LAUNCHER -p " + shellQuote(packageName);
+            } else {
+                command = "am start" + userArg + " --display " + id
+                        + " -f 0x10008000 -n " + shellQuote(component);
+            }
             ShellResult result = runShell(command);
             String output = result.output == null ? "" : result.output.trim();
             log("am start " + component + " exit=" + result.exitCode + " " + output);
@@ -618,19 +625,47 @@ public final class ShellVdService extends IShellVd.Stub {
         }
         // Install state for another user is not visible to this process's
         // PackageManager, so ask the shell `cmd` for the launcher activity.
-        String command = "cmd package query-activities --brief --user " + Math.max(userId, 0)
+        int user = Math.max(userId, 0);
+        ShellResult result = runShell("cmd package query-activities --brief --user " + user
                 + " -a android.intent.action.MAIN -c android.intent.category.LAUNCHER"
-                + " | grep '^" + packageName + "/' | head -1";
-        ShellResult result = runShell(command);
-        if (result.output != null) {
-            for (String line : result.output.split("\n")) {
-                String trimmed = line.trim();
-                if (trimmed.startsWith(packageName + "/")) {
-                    return trimmed;
-                }
+                + " | grep -m 3 -F '" + packageName + "/'");
+        String found = firstComponent(result, packageName);
+        if (!found.isEmpty()) {
+            return found;
+        }
+        // Second ladder: resolve-activity answers for the intent itself.
+        ShellResult r2 = runShell("cmd package resolve-activity --brief --user " + user
+                + " -a android.intent.action.MAIN -c android.intent.category.LAUNCHER"
+                + " " + shellQuote(packageName));
+        found = firstComponent(r2, packageName);
+        if (!found.isEmpty()) {
+            return found;
+        }
+        log("resolve empty for " + packageName + " (user " + user + "): q="
+                + oneLine(result) + " r=" + oneLine(r2));
+        return "";
+    }
+
+    /** First output line of the form {@code pkg/component} (tolerant of padding). */
+    private static String firstComponent(ShellResult result, String packageName) {
+        if (result.output == null) {
+            return "";
+        }
+        for (String line : result.output.split("\n")) {
+            String trimmed = line.trim();
+            if (trimmed.startsWith(packageName + "/")) {
+                return trimmed;
             }
         }
         return "";
+    }
+
+    private static String oneLine(ShellResult result) {
+        String output = result == null || result.output == null ? "" : result.output.trim();
+        if (output.isEmpty()) {
+            return "exit=" + (result == null ? -1 : result.exitCode);
+        }
+        return ("exit=" + result.exitCode + " " + output).replace('\n', ' ').substring(0, Math.min(220, ("exit=" + result.exitCode + " " + output).length()));
     }
 
     private static boolean failure(ShellResult result) {
