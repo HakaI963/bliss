@@ -497,3 +497,20 @@ The historical "verify before restarting" checklist is fully resolved: nav crash
 - **Tools structure:** `ToolsScreen` = hub with one "Clone apps" row; sub-page `Clone` holds every way to add apps: *Choose APK file*, *Install from link*, *From this phone* (device app list with per-app Clone buttons) + the `Added apps` list (Remove → row tap → Apps tab). BackHandler returns to the hub.
 - **Terminal colors existed only in the zsh theme; Alpine without zsh runs /etc/profile's plain bash PS1.** New `writeColorProfile()` (repair sweep, `REPAIR_REVISION` 10→11) writes `/etc/profile.d/bliss-color.sh` into the guest: green user@host, blue dir, **red `$` after a failed command**, `ls --color=auto` (bash-guarded, aliased for every shell).
 - **Fullscreen:** TerminalScreen gains a toolbar fullscreen toggle (Icons.Fullscreen/FullscreenExit) + `TerminalSettingsScreen` "Fullscreen" switch (`TerminalPreferences` key `auto_fullscreen`) so new sessions open bar-less; the header row hides while immersive; DisposableEffect restores bars on dispose.
+
+---
+
+## 16. Round 16 — display creation hardened (createDisplay id=-1 on HyperOS), real shell errors surfaced (2026-10-18)
+
+**User evidence:** the Logs pane of a cloned app shows `Display failed: createDisplay failed (id=-1)` for every launch attempt (23:00:45…23:02:11); installs/kill work (`pm install` ok via round 15), only the shell-side display never comes up.
+
+**Root cause (found by structural diff against ShadowAuto + AOSP 14 `DisplayManagerService.createVirtualDisplayInternal`):** in the service's `createDisplay()` the optional helpers were built **inside the same try as the display**: `new InputBridge(context)` (throws on reflection/service failure) and `new WindowManagerBridge()` inside `DisplaySession`'s ctor (its `service()` helper throws `IllegalStateException`; the IME-policy reflection runs in the ctor too). Any of those throwing on a locked-down OEM build **destroyed an already-created display and reported id=-1** — exactly the log trace, repeated per attempt.
+
+**Fixes:**
+- `ShellVdService.createDisplay`: create+commit the display **first**; `InputBridge` built separately (failure keeps the display, logs `input bridge unavailable (display kept)`); success logged with `input=ok|retry-on-demand`.
+- Lazy input bridge: `inputBridge()` now (re)constructs on demand at tap/swipe/key/text when a display exists — a bridge failure on MIUI no longer disables the clone.
+- `DisplaySession`: IME-policy wiring wrapped in per-step try (bridge optional, nullable); `release()` null-guards the bridge.
+- `DisplaySession.create`: second ladder with **no surface** (`name "FluxCloneSh"`, `createVirtualDisplay(..., null, flags)`), then `display.setSurface(readerSurface)` — for OEM builds that validate the scanout surface and reject the create with a real surface attached.
+- AIDL `IShellVd.logs()` + service impl: the service log ring buffer (max 200, the one containing `createDisplay failed: <describe>` / `shell context init failed`) is now fetchable; `ShellVd.serviceLogTail()` client helper.
+- `CloneEngine.ensureDisplay`/launch failure paths feed the **last 12 service log lines** into the app's clone Logs pane (`shell: …`), so the next failure screenshot shows the real engine-side error, not just id=-1.
+- versionCode 23→24 (Shizuku reloads the UserService on version change), 3.8.2.

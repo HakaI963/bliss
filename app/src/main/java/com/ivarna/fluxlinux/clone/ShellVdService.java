@@ -87,7 +87,15 @@ public final class ShellVdService extends IShellVd.Stub {
                 int h = clamp(height, MIN_HEIGHT, MAX_HEIGHT);
                 int d = clamp(dpi, MIN_DPI, MAX_DPI);
                 session = DisplaySession.create(context, w, h, d);
-                InputBridge bridge = new InputBridge(context);
+                // The display is the expensive, capricious part; input and IME
+                // policy are optional helpers — if they fail here the display
+                // must survive (input retries on demand at first use).
+                InputBridge bridge = null;
+                try {
+                    bridge = new InputBridge(context);
+                } catch (Throwable it) {
+                    log("input bridge unavailable (display kept): " + describe(it));
+                }
                 display = session;
                 inputBridge = bridge;
                 currentDisplayId = session.displayId;
@@ -95,7 +103,8 @@ public final class ShellVdService extends IShellVd.Stub {
                 displayHeight = h;
                 displayDpi = d;
                 log("display created id=" + session.displayId + " " + w + "x" + h + " dpi=" + d
-                        + (session.localImeEnabled() ? " ime=local" : " ime=unavailable"));
+                        + " input=" + (bridge != null ? "ok" : "retry-on-demand")
+                        + (session.localImeEnabled() ? " ime=local" : " ime=default"));
                 return session.displayId;
             } catch (Throwable t) {
                 if (session != null) {
@@ -113,6 +122,13 @@ public final class ShellVdService extends IShellVd.Stub {
                 log("createDisplay failed: " + describe(t));
                 return -1;
             }
+        }
+    }
+
+    @Override
+    public String[] logs() {
+        synchronized (lock) {
+            return logBuffer.toArray(new String[0]);
         }
     }
 
@@ -476,6 +492,14 @@ public final class ShellVdService extends IShellVd.Stub {
 
     private InputBridge inputBridge() {
         synchronized (lock) {
+            if (inputBridge == null && display != null && currentDisplayId > 0) {
+                try {
+                    inputBridge = new InputBridge(contextLocked());
+                    log("input bridge created on demand");
+                } catch (Throwable t) {
+                    log("input bridge retry failed: " + describe(t));
+                }
+            }
             return inputBridge;
         }
     }

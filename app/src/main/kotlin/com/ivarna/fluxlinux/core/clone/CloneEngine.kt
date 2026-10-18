@@ -770,6 +770,7 @@ object CloneEngine {
         if (err != null) {
             status.value = err
             log("Display failed: $err")
+            for (line in ShellVd.serviceLogTail(12) ?: emptyList()) log("  shell: $line")
             return false
         }
         log("Display ready: id=${ShellVd.displayId.value} ${preset.first}x${preset.second} dpi=${displayDpi.value} fps=${displayFps.value}")
@@ -838,6 +839,9 @@ object CloneEngine {
         if (err != null) return err
         if (!ensureDisplay()) return "hidden display unavailable"
         val launchErr = ShellVd.launch(packageName, uid)
+        if (!launchErr.isNullOrEmpty()) {
+            for (line in ShellVd.serviceLogTail(12) ?: emptyList()) log("  shell: $line")
+        }
         if (launchErr != null) {
             log("Launch failed: ${launchErr.take(240)}")
             return launchErr.take(240)

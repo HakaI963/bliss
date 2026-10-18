@@ -31,7 +31,7 @@ final class DisplaySession {
     private final ImageReader reader;
     private final Surface readerSurface;
     private final VirtualDisplay display;
-    private final WindowManagerBridge windowManager;
+    private final WindowManagerBridge windowManager; // optional: may be null on locked-down builds
     private final int previousImePolicy;
     private final boolean localImeEnabled;
 
@@ -43,9 +43,28 @@ final class DisplaySession {
         this.readerSurface = reader.getSurface();
         this.display = display;
         this.displayId = display.getDisplay().getDisplayId();
-        this.windowManager = new WindowManagerBridge();
-        this.previousImePolicy = windowManager.getDisplayImePolicy(displayId);
-        this.localImeEnabled = windowManager.setDisplayImePolicy(displayId, WindowManagerBridge.DISPLAY_IME_POLICY_LOCAL);
+        // IME policy is best-effort: a WindowManagerBridge failure must not
+        // destroy a display that was just created.
+        WindowManagerBridge bridge = null;
+        int previous = -1;
+        boolean imeEnabled = false;
+        try {
+            bridge = new WindowManagerBridge();
+        } catch (Throwable ignored) {
+        }
+        if (bridge != null) {
+            try {
+                previous = bridge.getDisplayImePolicy(displayId);
+            } catch (Throwable ignored) {
+            }
+            try {
+                imeEnabled = bridge.setDisplayImePolicy(displayId, WindowManagerBridge.DISPLAY_IME_POLICY_LOCAL);
+            } catch (Throwable ignored) {
+            }
+        }
+        this.windowManager = bridge;
+        this.previousImePolicy = previous;
+        this.localImeEnabled = imeEnabled;
     }
 
     boolean localImeEnabled() {
@@ -79,6 +98,30 @@ final class DisplaySession {
                 lastError = e;
             }
         }
+        // Some OEM builds validate the scanout surface itself and refuse the
+        // whole call. Retry the same ladder with NO surface, then attach the
+        // reader surface afterwards — VirtualDisplay.setSurface is public API.
+        for (int flags : candidates) {
+            try {
+                VirtualDisplay display = manager.createVirtualDisplay("FluxCloneSh", width, height, dpi, null, flags);
+                if (display == null || display.getDisplay() == null) {
+                    continue;
+                }
+                try {
+                    display.setSurface(surface);
+                } catch (Throwable e2) {
+                    lastError = e2;
+                    try {
+                        display.release();
+                    } catch (Throwable ignored) {
+                    }
+                    continue;
+                }
+                return new DisplaySession(width, height, dpi, reader, display);
+            } catch (Throwable e) {
+                lastError = e;
+            }
+        }
         try {
             surface.release();
         } catch (Throwable ignored) {
@@ -97,7 +140,7 @@ final class DisplaySession {
 
     void release() {
         try {
-            if (previousImePolicy != -1) {
+            if (previousImePolicy != -1 && windowManager != null) {
                 windowManager.setDisplayImePolicy(displayId, previousImePolicy);
             }
         } catch (Throwable ignored) {

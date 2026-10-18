@@ -18,6 +18,9 @@ interface IShellVd {
     String info();
     void exit();
 
+    /** Recent service log lines, so the app can surface real shell-side errors. */
+    String[] logs();
+
     // Staged installs: the app uploads APK bytes over binder into /data/local/tmp
     // (no stdin piping), then the shell runs one pm install for them.
     long stageWrite(String path, long offset, in byte[] data);

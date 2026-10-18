@@ -475,6 +475,20 @@ object ShellVd {
         return "$op failed: ${t.message ?: name}"
     }
 
+    /**
+     * Snapshot of the service-side log (real shell-side errors live there:
+     * shell context init, createVirtualDisplay SecurityException, etc.).
+     * Returns null when the service is not bound.
+     */
+    fun serviceLogTail(limit: Int): List<String>? {
+        val remote = service ?: return null
+        return try {
+            remote.logs()?.takeLast(limit.coerceIn(1, 200))
+        } catch (t: Throwable) {
+            null
+        }
+    }
+
     private fun addLog(line: String) {
         Log.d(TAG, line)
         synchronized(lock) {
