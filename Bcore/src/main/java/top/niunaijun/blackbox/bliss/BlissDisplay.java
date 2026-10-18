@@ -6,6 +6,7 @@ import android.os.Bundle;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.lang.reflect.Method;
 
 /**
  * Bliss clone-space: tells BlackBox which (virtual) display clone apps should
@@ -61,8 +62,12 @@ public final class BlissDisplay {
             }
             ActivityOptions opts = null;
             if (existing != null) {
+                // ActivityOptions.fromBundle is hidden API; reflection is fine here
+                // because the host targets SDK 28 (no hidden-API enforcement).
                 try {
-                    opts = ActivityOptions.fromBundle(existing);
+                    Method m = ActivityOptions.class.getDeclaredMethod("fromBundle", Bundle.class);
+                    m.setAccessible(true);
+                    opts = (ActivityOptions) m.invoke(null, existing);
                 } catch (Throwable ignored) {
                     opts = null;
                 }
