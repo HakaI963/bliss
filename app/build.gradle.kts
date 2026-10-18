@@ -9,7 +9,7 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     // JVM screenshot rendering for CI UI verification (no device needed).
-    id("app.cash.paparazzi") version "2.0.0-alpha01"
+    id("app.cash.paparazzi") version "2.0.0-alpha02"
 }
 
 android {
@@ -270,7 +270,7 @@ dependencies {
     implementation(project(":termux-x11"))
 
     testImplementation(libs.junit)
-    testImplementation("app.cash.paparazzi:paparazzi:2.0.0-alpha01")
+    testImplementation("app.cash.paparazzi:paparazzi:2.0.0-alpha02")
     testImplementation(libs.okhttp.mockwebserver)
     testImplementation("org.json:json:20180813") // android.jar org.json is a stub in unit tests
     androidTestImplementation(libs.androidx.junit)
