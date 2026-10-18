@@ -18,6 +18,17 @@ enum class ThemeMode {
     SYSTEM
 }
 
+/**
+ * Palette skins for the dark schemes. CARBON is the original frost look and
+ * stays the default; [label] is the user-facing name in Settings.
+ */
+enum class ThemePalette(val label: String) {
+    CARBON("Carbon"),
+    SLATE("Slate"),
+    PLUM("Plum"),
+    SAND("Sand")
+}
+
 class ThemePreferences(context: Context) {
     private val prefs: SharedPreferences = context.getSharedPreferences("theme_prefs", Context.MODE_PRIVATE)
 

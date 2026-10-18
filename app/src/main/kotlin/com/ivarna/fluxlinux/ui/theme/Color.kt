@@ -5,6 +5,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import com.ivarna.fluxlinux.core.utils.ThemePalette
 
 // Bliss monochrome frost palette — matte deep carbon, no neon, no beige.
 val FolioBackground = Color(0xFF09090B)
@@ -33,6 +34,37 @@ val FolioSwitchCheckedThumb = FolioBackground
 val FolioSwitchUncheckedTrack = Color(0xFF27272A)
 val FolioSwitchUncheckedThumb = Color(0xFFE4E4E7)
 val FolioSwitchUncheckedBorder = Color(0xFF52525B)
+
+// ── Theme palette tokens (dark schemes) ───────────────────────────────────
+// Each palette swaps only these slots; text / hairline / danger tokens stay
+// shared so every scheme has the same frost structure. CARBON is the frost
+// set above and the default — its values are unchanged.
+// SLATE — cool blue-gray, muted.
+val SlateBackground = Color(0xFF0B0E12)
+val SlateSurface = Color(0xFF11151B)
+val SlateSurfaceVariant = Color(0xFF1A2028)
+val SlatePrimary = Color(0xFFA8C5E0)
+val SlateOutlineVariant = Color(0xFF232B35)
+// PLUM — muted violet-gray.
+val PlumBackground = Color(0xFF0F0C13)
+val PlumSurface = Color(0xFF16121C)
+val PlumSurfaceVariant = Color(0xFF1F1926)
+val PlumPrimary = Color(0xFFC9B8E8)
+val PlumOutlineVariant = Color(0xFF2A2333)
+// SAND — warm graphite.
+val SandBackground = Color(0xFF13110E)
+val SandSurface = Color(0xFF1A1713)
+val SandSurfaceVariant = Color(0xFF241F19)
+val SandPrimary = Color(0xFFD9C7A8)
+val SandOutlineVariant = Color(0xFF2E2820)
+
+/** Swatch dot for the palette picker: each palette's primary accent. */
+fun ThemePalette.accentColor(): Color = when (this) {
+    ThemePalette.CARBON -> PrimaryAction
+    ThemePalette.SLATE -> SlatePrimary
+    ThemePalette.PLUM -> PlumPrimary
+    ThemePalette.SAND -> SandPrimary
+}
 
 // Deprecated Flux aliases — mapped to monochrome so legacy call sites keep compiling.
 // Do not use in new Bliss UI.

@@ -19,6 +19,38 @@ object StateManager {
         _refreshTrigger.value += 1
     }
 
+    // ── Theme palette (UI skin) ───────────────────────────────────────────
+    // Persisted in "theme_prefs" (the same file ThemeMode uses, see
+    // ThemePreferences) so the pick survives restarts. The observable lets
+    // FluxLinuxTheme and the Settings picker react with no extra plumbing.
+    private val _themePalette = MutableStateFlow(ThemePalette.CARBON)
+    val themePalette: StateFlow<ThemePalette> = _themePalette.asStateFlow()
+
+    /**
+     * Read the persisted palette (defaults to CARBON) and hydrate the flow.
+     */
+    fun getThemePalette(context: Context): ThemePalette {
+        val prefs = context.getSharedPreferences("theme_prefs", Context.MODE_PRIVATE)
+        val paletteName = prefs.getString("theme_palette", ThemePalette.CARBON.name)
+        val palette = try {
+            ThemePalette.valueOf(paletteName ?: ThemePalette.CARBON.name)
+        } catch (e: IllegalArgumentException) {
+            ThemePalette.CARBON
+        }
+        _themePalette.value = palette
+        return palette
+    }
+
+    /**
+     * Persist [palette] and publish it to the flow.
+     */
+    fun setThemePalette(context: Context, palette: ThemePalette) {
+        val prefs = context.getSharedPreferences("theme_prefs", Context.MODE_PRIVATE)
+        prefs.edit().putString("theme_palette", palette.name).apply()
+        android.util.Log.d("StateManager", "Theme palette set to: ${palette.name}")
+        _themePalette.value = palette
+    }
+
     /**
      * Commands can run when either the embedded host is ready (in-app execution,
      * no external Termux) or an external Termux with RUN_COMMAND is installed.

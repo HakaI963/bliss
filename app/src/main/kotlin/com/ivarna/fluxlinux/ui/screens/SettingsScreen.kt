@@ -54,6 +54,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -80,10 +81,13 @@ import com.ivarna.fluxlinux.core.root.RootShell
 import com.ivarna.fluxlinux.core.system.CrashLog
 import com.ivarna.fluxlinux.core.system.PhantomProcessFixer
 import com.ivarna.fluxlinux.core.system.SharedStorageAccess
+import com.ivarna.fluxlinux.core.utils.StateManager
 import com.ivarna.fluxlinux.core.utils.ThemeMode
+import com.ivarna.fluxlinux.core.utils.ThemePalette
 import com.ivarna.fluxlinux.ui.components.FrostContainer
 import com.ivarna.fluxlinux.ui.components.FrostDivider
 import com.ivarna.fluxlinux.ui.components.FrostRow
+import com.ivarna.fluxlinux.ui.components.FrostTabPill
 import com.ivarna.fluxlinux.ui.components.folioSpring
 import com.ivarna.fluxlinux.ui.theme.FolioFrostBorder
 import com.ivarna.fluxlinux.ui.theme.FolioWordmarkStyle
@@ -92,6 +96,7 @@ import com.ivarna.fluxlinux.ui.theme.StatusDot
 import com.ivarna.fluxlinux.ui.theme.TextMuted
 import com.ivarna.fluxlinux.ui.theme.TextPrimary
 import com.ivarna.fluxlinux.ui.theme.TextSecondary
+import com.ivarna.fluxlinux.ui.theme.accentColor
 import com.ivarna.fluxlinux.ui.theme.rememberStaggerEntrance
 import com.ivarna.fluxlinux.ui.theme.rememberStaggerProgress
 import com.ivarna.fluxlinux.ui.theme.staggerIn
@@ -134,6 +139,9 @@ fun SettingsScreen(
     val _currentTheme = currentTheme
 
     val context = LocalContext.current
+
+    // Theme palette (persisted via StateManager; applied by FluxLinuxTheme).
+    val themePalette by StateManager.themePalette.collectAsState()
 
     // Shared-storage grant refreshes on resume (backend preserved).
     val storageDeclared = SharedStorageAccess.declared(context)
@@ -215,11 +223,24 @@ fun SettingsScreen(
                 modifier = Modifier.staggerIn(0, entrance).padding(top = 12.dp)
             )
 
-            // 1 — Environment & Host
+            // 1 — Theme
             SettingsSection(
-                title = "Environment & Host",
+                title = "Theme",
                 headerIndex = 1,
                 containerIndex = 2,
+                entrance = entrance
+            ) {
+                ThemePalettePicker(
+                    current = themePalette,
+                    onSelect = { StateManager.setThemePalette(context, it) }
+                )
+            }
+
+            // 2 — Environment & Host
+            SettingsSection(
+                title = "Environment & Host",
+                headerIndex = 3,
+                containerIndex = 4,
                 entrance = entrance
             ) {
                 if (storageDeclared) {
@@ -253,11 +274,11 @@ fun SettingsScreen(
                 )
             }
 
-            // 2 — Interface & Session
+            // 3 — Interface & Session
             SettingsSection(
                 title = "Interface & Session",
-                headerIndex = 3,
-                containerIndex = 4,
+                headerIndex = 5,
+                containerIndex = 6,
                 entrance = entrance
             ) {
                 FrostRow(
@@ -282,11 +303,11 @@ fun SettingsScreen(
                 )
             }
 
-            // 3 — Containers
+            // 4 — Containers
             SettingsSection(
                 title = "Containers",
-                headerIndex = 5,
-                containerIndex = 6,
+                headerIndex = 7,
+                containerIndex = 8,
                 entrance = entrance
             ) {
                 FrostRow(
@@ -304,11 +325,11 @@ fun SettingsScreen(
                 )
             }
 
-            // 4 — System & About
+            // 5 — System & About
             SettingsSection(
                 title = "System & About",
-                headerIndex = 7,
-                containerIndex = 8,
+                headerIndex = 9,
+                containerIndex = 10,
                 entrance = entrance
             ) {
                 if (onNavigateToOnboarding != null) {
@@ -593,6 +614,67 @@ private fun SettingsSectionHeader(
                 .graphicsLayer { alpha = 0.6f * progress }
                 .background(FrostHairline)
         )
+    }
+}
+
+/**
+ * Compact palette picker: one swatch pill per palette (primary-color dot +
+ * label). Selection writes through StateManager; FluxLinuxTheme observes the
+ * same flow, so the whole UI re-skins without leaving Settings.
+ */
+@Composable
+private fun ThemePalettePicker(
+    current: ThemePalette,
+    onSelect: (ThemePalette) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 10.dp)
+    ) {
+        Text(
+            text = "Palette",
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Medium,
+            color = TextPrimary,
+            modifier = Modifier.padding(start = 6.dp)
+        )
+        Text(
+            text = "Dark interface accent and surfaces",
+            fontSize = 12.sp,
+            color = TextMuted,
+            maxLines = 1,
+            modifier = Modifier.padding(start = 6.dp, top = 1.dp)
+        )
+        Spacer(Modifier.height(12.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            ThemePalette.entries.forEach { palette ->
+                FrostTabPill(
+                    selected = palette == current,
+                    onClick = { onSelect(palette) },
+                    icon = {
+                        Box(
+                            modifier = Modifier
+                                .size(10.dp)
+                                .clip(CircleShape)
+                                .background(palette.accentColor())
+                        )
+                    }
+                ) {
+                    Text(
+                        text = palette.label,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (palette == current) TextPrimary else TextSecondary,
+                        maxLines = 1
+                    )
+                }
+            }
+        }
     }
 }
 
