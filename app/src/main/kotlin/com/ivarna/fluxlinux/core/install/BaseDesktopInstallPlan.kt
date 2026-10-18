@@ -33,6 +33,13 @@ object BaseDesktopInstallPlan {
      * Phase list with stable ids (HOST/DL/ROOTFS/XFCE/CUSTOM). Labels track the
      * selected [desktops] (`FLUX_DESKTOPS` contract) so progress stays honest:
      * both selected → labels mention both, empty → terminal base.
+     *
+     * Weights encode the percent bands the progress panel reports:
+     * proot → HOST 0–10, DL 10–30 (bytes), ROOTFS 30–95 (extract → ~46, guest
+     * setup → 95), CUSTOM 95–100 (finish). chroot → R0 0–2, HOST 2–12,
+     * DL 12–25, ROOTFS 25–50 (extract → ~31), XFCE 50–88 (packages),
+     * CUSTOM 88–100. [OnboardingInstallRunner] drives in-phase fractions from
+     * download bytes / console markers, and postSuccess forces 100.
      */
     fun phasesFor(
         method: String,
@@ -45,10 +52,10 @@ object BaseDesktopInstallPlan {
         val terminalOnly = selected.isEmpty()
         return if (method == "chroot") {
             listOf(
-                Phase("R0", "Checking root access…", 5),
-                Phase("HOST", "Preparing host (may download bootstrap from GitHub)…", 15),
-                Phase("DL", "Downloading $displayName rootfs…", 10),
-                Phase("ROOTFS", "Installing $displayName chroot rootfs…", 30),
+                Phase("R0", "Checking root access…", 2),
+                Phase("HOST", "Preparing host (may download bootstrap from GitHub)…", 10),
+                Phase("DL", "Downloading $displayName rootfs…", 13),
+                Phase("ROOTFS", "Installing $displayName chroot rootfs…", 25),
                 Phase(
                     "XFCE",
                     when {
@@ -57,14 +64,14 @@ object BaseDesktopInstallPlan {
                         terminalOnly -> "Configuring terminal base…"
                         else -> "Installing XFCE desktop…"
                     },
-                    25
+                    38
                 ),
-                Phase("CUSTOM", customizationPhaseLabel(terminalOnly), 15),
+                Phase("CUSTOM", customizationPhaseLabel(terminalOnly), 12),
             )
         } else {
             listOf(
-                Phase("HOST", "Preparing host (may download bootstrap from GitHub)…", 20),
-                Phase("DL", "Downloading $displayName rootfs…", 15),
+                Phase("HOST", "Preparing host (may download bootstrap from GitHub)…", 10),
+                Phase("DL", "Downloading $displayName rootfs…", 20),
                 Phase(
                     "ROOTFS",
                     when {
@@ -73,9 +80,9 @@ object BaseDesktopInstallPlan {
                         terminalOnly -> "Installing $displayName rootfs (terminal base)…"
                         else -> "Installing $displayName rootfs + XFCE…"
                     },
-                    35
+                    65
                 ),
-                Phase("CUSTOM", customizationPhaseLabel(terminalOnly), 30),
+                Phase("CUSTOM", customizationPhaseLabel(terminalOnly), 5),
             )
         }
     }

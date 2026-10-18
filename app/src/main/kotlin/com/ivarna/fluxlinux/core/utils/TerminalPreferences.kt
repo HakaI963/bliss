@@ -16,8 +16,6 @@ object TerminalPreferences {
     private const val KEY_LEGACY_PROOT_LAUNCHER = "legacy_proot_launcher"
     private const val KEY_SHORTCUT_BAR = "shortcut_bar_config"
     private const val KEY_BANNER_QUALITY = "banner_quality"
-    private const val KEY_NSFW_ENABLED = "nsfw_enabled"
-    private const val KEY_NSFW_LEVEL = "nsfw_level"
 
     const val FONT_MIN = 10
     const val FONT_MAX = 48
@@ -28,10 +26,6 @@ object TerminalPreferences {
     private const val BANNER_QUALITY_MAX = 5
     private const val BANNER_QUALITY_DEFAULT = 2
 
-    /** NSFW art level (1..4); only used when [isNsfwEnabled]. */
-    private const val NSFW_LEVEL_MIN = 1
-    private const val NSFW_LEVEL_MAX = 4
-    private const val NSFW_LEVEL_DEFAULT = 1
 
     private fun prefs(context: Context) =
         context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -101,23 +95,6 @@ object TerminalPreferences {
             .apply()
     }
 
-    /** NSFW banner art enabled (18+ consent gate lives in the settings UI). */
-    fun isNsfwEnabled(context: Context): Boolean =
-        prefs(context).getBoolean(KEY_NSFW_ENABLED, false)
 
-    fun setNsfwEnabled(context: Context, enabled: Boolean) {
-        prefs(context).edit().putBoolean(KEY_NSFW_ENABLED, enabled).apply()
-    }
-
-    /** NSFW art level 1..4 (default 1), clamped. */
-    fun getNsfwLevel(context: Context): Int =
-        prefs(context).getInt(KEY_NSFW_LEVEL, NSFW_LEVEL_DEFAULT)
-            .coerceIn(NSFW_LEVEL_MIN, NSFW_LEVEL_MAX)
-
-    fun setNsfwLevel(context: Context, level: Int) {
-        prefs(context).edit()
-            .putInt(KEY_NSFW_LEVEL, level.coerceIn(NSFW_LEVEL_MIN, NSFW_LEVEL_MAX))
-            .apply()
-    }
 
 }

@@ -1,5 +1,5 @@
 #!/system/bin/sh
-# bliss-chroot v2.12
+# bliss-chroot v2.13
 # SSOT chroot runner for NativeCode Debian 13 (requires root).
 # Do not nest this under run_debian13_root.sh — it already owns mounts + one chroot.
 # Guest entry always uses env -i + Debian PATH (never Android /system PATH).
@@ -17,7 +17,7 @@
 #   FLUX_CHROOT  FLUX_PACKAGE  FLUX_HOST_TMP  FLUX_PREFIX  FLUX_BB  FLUX_SHELL
 set -u
 
-VERSION_STR="bliss-chroot v2.12"
+VERSION_STR="bliss-chroot v2.13"
 # Prefer caller-pinned env (RootShell / start_gui). Fallbacks cover both store flavors.
 if [ -z "${FLUX_PACKAGE:-}" ]; then
   if [ -d /data/data/com.zenithblue.fluxlinux/files/usr ]; then
@@ -499,17 +499,17 @@ FOLIO_THEME_EOF
   # `.banner-rev` refreshes existing installs on the next customization re-run.
   _fbdir="$_home/.config/bliss/banner"
   mkdir -p "$_fbdir" "$_home/.config/bliss" 2>/dev/null || true
-  _fbrev="8-l2"
+  _fbrev="9-l2"
   _fneed=0
   case "$(cat "$_fbdir/.banner-rev" 2>/dev/null || true)" in
-    8-*) ;;
+    9-*) ;;
     *) _fneed=1 ;;
   esac
   for _fb in 01-catgirl 02-catgirl-teal 03-catgirl-violet 04-arch-tan 05-arch-tan-violet 06-icecat 07-icecat-blush 08-maidfull 09-maidfull-rose 10-maidfull-lime 11-fandom 12-fandom-teal 13-fox 14-fox-sky 15-godette 16-godette-violet 17-godette-gobot 18-godette-gobot-mint 19-newsboy 20-newsboy-rose 21-newsboy-violet 22-rational 23-rational-indigo 24-lufthan 25-lufthan-teal 26-lufthan-violet 27-publicq 28-publicq-blue 29-publicq-violet 30-chibisq 31-chibisq-cyan 32-chibisq-amber 33-loveweb 34-loveweb-teal 35-kitsune 36-kitsune-jade 37-kitsune-azure 38-animegirl 39-animegirl-teal 40-animegirl-lime 41-moemiku 42-moemiku-azure 43-moemiku-blush 44-afrowikipe 45-afrowikipe-indigo 46-vocaloid 47-vocaloid-azure 48-vocaloid-blush 49-blossom; do
     [ -s "$_fbdir/$_fb.txt" ] || _fneed=1
   done
   [ -s "$_home/.config/bliss/banner.sh" ] || _fneed=1
-  grep -q "_bb_skip" "$_home/.config/bliss/banner.sh" 2>/dev/null || _fneed=1
+  grep -q "bliss-banner v9" "$_home/.config/bliss/banner.sh" 2>/dev/null || _fneed=1
   if [ "$_fneed" = "1" ]; then
     rm -f "$_fbdir"/*.txt 2>/dev/null || true
     cat > "$_fbdir/.bliss-banners.$$" <<'FOLIO_BANNER_ALL'
@@ -1371,9 +1371,11 @@ FOLIO_BANNER_ALL
     printf '%s\n' "$_fbrev" > "$_fbdir/.banner-rev" 2>/dev/null || true
     cat > "$_home/.config/bliss/banner.sh" <<'FB_SH'
 # bliss-banner.sh — Bliss launch sticker: truecolor half-block anime art,
-# one random design per interactive shell, printed at most ONCE per terminal
-# tab (even if several rc files or nested shells source it). Works with zsh,
-# bash and POSIX sh. Opt out at runtime: FLUX_NO_BANNER=1
+# one random design per interactive shell, printed exactly ONCE per shell
+# even when several rc files source it or nested shells inherit the
+# environment. Works with zsh, bash and POSIX sh.
+# Opt out at runtime: FLUX_NO_BANNER=1
+# bliss-banner v9
 bliss_banner_art() {
   # zsh: empty glob must not abort the function.
   if [ -n "${ZSH_VERSION:-}" ]; then
@@ -1407,51 +1409,14 @@ bliss_banner_art() {
 }
 bliss_banner() {
   [ "${FLUX_NO_BANNER:-0}" = "1" ] && return 0
+  # One sticker per shell process: exported, so nested shells and every
+  # re-sourced rc file in the same process skip instantly. A brand-new
+  # shell (new tab / new session) always prints exactly one design.
   [ -z "${_BLISS_BANNER_SHOWN:-}" ] || return 0
   case $- in
     *i*) ;;
     *) return 0 ;;
   esac
-  # Once per terminal tab. The exported guard covers nested shells that
-  # inherit the environment. A pty-keyed marker (pty node ctime + a short
-  # time window as fallback) covers shells that lose the environment
-  # (`su -` chains, re-sourced rc files in a fresh process): nested shells in
-  # the SAME tab never reprint, while a NEW tab - even one that reuses the
-  # same pty number quickly - gets its own sticker.
-  _bb_skip=0
-  _bb_tty="$(tty 2>/dev/null || true)"
-  case "$_bb_tty" in
-    /dev/*)
-      _bb_mark="${TMPDIR:-/tmp}/.bliss-banner$(printf '%s' "$_bb_tty" | tr -d ' /')"
-      _bb_now="$(date +%s 2>/dev/null || echo 0)"
-      case "$_bb_now" in ''|*[!0-9]*) _bb_now=0 ;; esac
-      # Sub-second pty node ctime: exact per-tab identity when the platform
-      # reports it; otherwise a tight open-chain window dedupes nested shells.
-      _bb_ct="$(stat -c %.9Z "$_bb_tty" 2>/dev/null || echo '')"
-      case "$_bb_ct" in
-        *.*) case "$_bb_ct" in *[!0-9.]*) _bb_ct="" ;; esac ;;
-        *) _bb_ct="" ;;
-      esac
-      if [ -f "$_bb_mark" ]; then
-        _bb_prev="$(sed -n 1p "$_bb_mark" 2>/dev/null || echo 0)"
-        _bb_ct_prev="$(sed -n 2p "$_bb_mark" 2>/dev/null || echo '')"
-        case "$_bb_prev" in ''|*[!0-9]*) _bb_prev=0 ;; esac
-        if [ -n "$_bb_ct" ] && [ "$_bb_ct" = "$_bb_ct_prev" ]; then
-          _bb_skip=1
-        elif [ -z "$_bb_ct" ] && [ "$_bb_now" -gt 0 ] && [ "$_bb_prev" -gt 0 ] && [ $((_bb_now - _bb_prev)) -lt 10 ]; then
-          _bb_skip=1
-        fi
-      fi
-      if [ "$_bb_skip" = "0" ]; then
-        printf '%s\n%s\n' "$_bb_now" "$_bb_ct" > "$_bb_mark" 2>/dev/null || true
-      fi
-      ;;
-  esac
-  if [ "$_bb_skip" = "1" ]; then
-    export _BLISS_BANNER_SHOWN=1
-    unset _bb_skip _bb_tty _bb_mark _bb_now _bb_prev _bb_ct _bb_ct_prev
-    return 0
-  fi
   export _BLISS_BANNER_SHOWN=1
   bliss_banner_art
   # Header: exactly one line, "bliss@<id>" (distro id only). ID= from
@@ -1465,7 +1430,7 @@ bliss_banner() {
   fi
   [ -n "$_bb_fid" ] || _bb_fid="linux"
   printf '%s\n' "bliss@$_bb_fid"
-  unset _bb_fid _bb_skip _bb_tty _bb_mark
+  unset _bb_fid
 }
 bliss_banner
 FB_SH

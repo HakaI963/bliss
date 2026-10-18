@@ -111,6 +111,7 @@ fun InstallConfigScreen(
     var failed by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var showLog by remember { mutableStateOf(true) }
+    var progressIndeterminate by remember { mutableStateOf(false) }
     val runner = remember { OnboardingInstallRunner(appCtx) }
 
     fun startInstall() {
@@ -121,6 +122,7 @@ fun InstallConfigScreen(
         phaseLabel = "Starting…"
         detail = ""
         logText = ""
+        progressIndeterminate = false
         phase = InstallPhase.RUNNING
         val desktops = selectedDesktops
         val extras: Set<InstallExtra> =
@@ -134,6 +136,7 @@ fun InstallConfigScreen(
             percent = progress.overallPercent
             phaseLabel = progress.phaseLabel
             detail = progress.detail
+            progressIndeterminate = progress.indeterminate
             progress.logLine?.let { line ->
                 logText = (logText + line + "\n").takeLast(12_000)
             }
@@ -180,6 +183,7 @@ fun InstallConfigScreen(
         percent = p.overallPercent
         phaseLabel = p.phaseLabel
         detail = p.detail
+        progressIndeterminate = p.indeterminate
         logText = live.logText
         failed = p.failed
         if (p.failed) errorMessage = p.errorMessage ?: p.detail
@@ -505,7 +509,8 @@ fun InstallConfigScreen(
                     // Cancel the live session, whichever runner instance owns it.
                     OnboardingInstallRunner.cancelActive()
                 },
-                isDone = phase == InstallPhase.DONE
+                isDone = phase == InstallPhase.DONE,
+                indeterminate = progressIndeterminate
             )
         }
     }

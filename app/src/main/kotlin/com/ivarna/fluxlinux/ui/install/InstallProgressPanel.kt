@@ -83,6 +83,8 @@ fun InstallProgressPanel(
     onDone: (() -> Unit)? = null,
     onCancel: (() -> Unit)? = null,
     isDone: Boolean = false,
+    /** No measurable percent — animate the bar and hide the frozen number. */
+    indeterminate: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val logScroll = rememberScrollState()
@@ -206,7 +208,7 @@ fun InstallProgressPanel(
                     )
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        text = "$percent%",
+                        text = if (indeterminate && !failed && !isDone) "…" else "$percent%",
                         fontSize = 22.sp,
                         fontWeight = FontWeight.Bold,
                         color = when {
@@ -219,20 +221,31 @@ fun InstallProgressPanel(
 
                 Spacer(Modifier.height(10.dp))
 
-                // Progress Bar
-                LinearProgressIndicator(
-                    progress = { percent / 100f },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(8.dp)
-                        .clip(RoundedCornerShape(4.dp)),
-                    color = when {
-                        failed -> colors.error
-                        isDone -> StatusDot
-                        else -> TextPrimary
-                    },
-                    trackColor = colors.surfaceVariant.copy(alpha = 0.5f)
-                )
+                // Progress Bar — determinate only when the phase reports real
+                // progress; otherwise animate so the card never reads as stuck.
+                val barColor = when {
+                    failed -> colors.error
+                    isDone -> StatusDot
+                    else -> TextPrimary
+                }
+                val barModifier = Modifier
+                    .fillMaxWidth()
+                    .height(8.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                if (indeterminate && !failed && !isDone) {
+                    LinearProgressIndicator(
+                        modifier = barModifier,
+                        color = barColor,
+                        trackColor = colors.surfaceVariant.copy(alpha = 0.5f)
+                    )
+                } else {
+                    LinearProgressIndicator(
+                        progress = { percent / 100f },
+                        modifier = barModifier,
+                        color = barColor,
+                        trackColor = colors.surfaceVariant.copy(alpha = 0.5f)
+                    )
+                }
 
                 if (detail.isNotBlank()) {
                     Spacer(Modifier.height(8.dp))

@@ -18,7 +18,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.rounded.ArrowBack
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -86,14 +85,6 @@ fun TerminalSettingsScreen(
     var bannerQuality by remember {
         mutableIntStateOf(TerminalPreferences.getBannerQuality(context))
     }
-    var nsfwEnabled by remember {
-        mutableStateOf(TerminalPreferences.isNsfwEnabled(context))
-    }
-    var nsfwLevel by remember {
-        mutableIntStateOf(TerminalPreferences.getNsfwLevel(context))
-    }
-    // Consent gate: the NSFW switch only flips after the 18+ dialog is confirmed.
-    var showNsfwConfirm by remember { mutableStateOf(false) }
 
     // Staggered card entrance (30ms steps) — visual only.
     val entrance = rememberStaggerEntrance()
@@ -372,138 +363,8 @@ fun TerminalSettingsScreen(
                 }
             }
 
-            GlassSettingCard(modifier = Modifier.staggerIn(5, entrance)) {
-                Column(Modifier.padding(20.dp).fillMaxWidth()) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                "NSFW banner art",
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Spacer(Modifier.height(4.dp))
-                            Text(
-                                "18+ only. Replaces the sticker with adult art from a built-in offline set. Off by default; turn it off anytime.",
-                                fontSize = 13.sp,
-                                lineHeight = 20.sp,
-                                color = fluxMutedText()
-                            )
-                        }
-                        Spacer(Modifier.width(12.dp))
-                        FluxSwitch(
-                            checked = nsfwEnabled,
-                            onCheckedChange = { on ->
-                                if (on) {
-                                    // Consent gate: persist only after "I am 18+ — enable".
-                                    showNsfwConfirm = true
-                                } else {
-                                    nsfwEnabled = false
-                                    TerminalPreferences.setNsfwEnabled(context, false)
-                                    BannerArtWriter.refreshAsync(context)
-                                }
-                            },
-                            modifier = Modifier.semantics {
-                                contentDescription = "NSFW banner art"
-                            }
-                        )
-                    }
-
-                    if (nsfwEnabled) {
-                        Spacer(Modifier.height(16.dp))
-                        Text(
-                            "Level",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Slider(
-                            value = nsfwLevel.toFloat(),
-                            onValueChange = { nsfwLevel = it.roundToInt() },
-                            onValueChangeFinished = {
-                                TerminalPreferences.setNsfwLevel(context, nsfwLevel)
-                                BannerArtWriter.refreshAsync(context)
-                            },
-                            valueRange = 1f..4f,
-                            steps = 2,
-                            colors = SliderDefaults.colors(
-                                thumbColor = TextPrimary,
-                                activeTrackColor = TextPrimary,
-                                inactiveTrackColor = FolioSwitchUncheckedTrack
-                            )
-                        )
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            nsfwLevelLabel(nsfwLevel),
-                            fontSize = 12.sp,
-                            color = fluxMutedText()
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        Text(
-                            "Built-in art set — works fully offline, no API or account needed.",
-                            fontSize = 12.sp,
-                            lineHeight = 18.sp,
-                            color = fluxMutedText()
-                        )
-                    }
-                }
-            }
-
             Spacer(Modifier.height(110.dp))
         }
-    }
-
-    // 18+ consent gate: the switch stays off until this dialog is confirmed.
-    if (showNsfwConfirm) {
-        AlertDialog(
-            onDismissRequest = { showNsfwConfirm = false },
-            containerColor = MaterialTheme.colorScheme.surface,
-            titleContentColor = MaterialTheme.colorScheme.onSurface,
-            textContentColor = MaterialTheme.colorScheme.onSurface,
-            title = {
-                Text(
-                    "Enable NSFW banner art?",
-                    fontWeight = FontWeight.Bold
-                )
-            },
-            text = {
-                Text(
-                    "18+ adult content from a built-in offline art set (no network, no account). " +
-                        "It is shown only in the terminal sticker and can be turned off anytime.",
-                    fontSize = 13.sp,
-                    lineHeight = 20.sp
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showNsfwConfirm = false
-                        nsfwEnabled = true
-                        TerminalPreferences.setNsfwEnabled(context, true)
-                        BannerArtWriter.refreshAsync(context)
-                    }
-                ) {
-                    Text(
-                        "I am 18+ — enable",
-                        color = MaterialTheme.colorScheme.secondary,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 13.sp
-                    )
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showNsfwConfirm = false }) {
-                    Text(
-                        "Cancel",
-                        color = MaterialTheme.colorScheme.secondary,
-                        fontSize = 13.sp
-                    )
-                }
-            }
-        )
     }
 }
 
@@ -516,13 +377,8 @@ private val BannerQualityStops = listOf(
     "Max" to 54
 )
 
-/** NSFW level labels, index 0 = level 1. */
-private val NsfwLevelLabels = listOf("Minimal", "Moderate", "Fan service", "Full")
-
 private fun bannerQualityLabel(quality: Int): String {
     val (name, columns) = BannerQualityStops[quality.coerceIn(1, BannerQualityStops.size) - 1]
     return "$name — $columns columns"
 }
 
-private fun nsfwLevelLabel(level: Int): String =
-    NsfwLevelLabels[level.coerceIn(1, NsfwLevelLabels.size) - 1]

@@ -140,6 +140,7 @@ fun OnboardingFlowScreen(
     var failed by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var showLog by remember { mutableStateOf(true) }
+    var progressIndeterminate by remember { mutableStateOf(false) }
 
     val runner = remember { OnboardingInstallRunner(context.applicationContext) }
     DisposableEffect(Unit) {
@@ -154,10 +155,12 @@ fun OnboardingFlowScreen(
         logText = ""
         failed = false
         errorMessage = null
+        progressIndeterminate = false
         runner.start(selectedDistroId, theme) { p ->
             percent = p.overallPercent
             phaseLabel = p.phaseLabel
             detail = p.detail
+            progressIndeterminate = p.indeterminate
             p.logLine?.let { line ->
                 logText = (logText + line + "\n").takeLast(12_000)
             }
@@ -229,7 +232,8 @@ fun OnboardingFlowScreen(
                 onBack = {
                     runner.cancel()
                     step = OnboardStep.Options
-                }
+                },
+                indeterminate = progressIndeterminate
             )
             OnboardStep.Done -> DonePage(
                 distroId = selectedDistroId,

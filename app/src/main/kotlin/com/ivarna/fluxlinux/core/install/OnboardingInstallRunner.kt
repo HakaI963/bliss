@@ -15,6 +15,7 @@ import com.ivarna.fluxlinux.core.terminal.TermuxHostPaths
 import com.ivarna.fluxlinux.core.utils.InstallationQueueManager
 import com.ivarna.fluxlinux.core.utils.StateManager
 import java.io.File
+import java.util.Locale
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
@@ -52,7 +53,9 @@ class OnboardingInstallRunner(private val ctx: Context) {
         val logLine: String? = null,
         val failed: Boolean = false,
         val finished: Boolean = false,
-        val errorMessage: String? = null
+        val errorMessage: String? = null,
+        /** Phase has no measurable progress — UI shows an indeterminate bar. */
+        val indeterminate: Boolean = false
     )
 
     private val appCtx = ctx.applicationContext
@@ -67,6 +70,16 @@ class OnboardingInstallRunner(private val ctx: Context) {
     @Volatile private var lastNotifLabel: String = ""
     /** Last overall percent from real phase updates (log lines must not thrash). */
     @Volatile private var lastOverallPercent: Int = 0
+    /** Monotonic sub-phase fraction driven by download bytes / console markers. */
+    @Volatile private var phaseFraction: Float = 0f
+    /** Latest status detail (log lines must never overwrite it with the phase label). */
+    @Volatile private var lastDetail: String = ""
+    /** Current phase has no measurable progress — UI shows an indeterminate bar. */
+    @Volatile private var lastIndeterminate: Boolean = false
+    /** Guest console reported the install finished (strong completion marker). */
+    @Volatile private var guestReportedDone: Boolean = false
+    /** Teardown watchdog armed once per session (proot can hang after the final line). */
+    @Volatile private var watchdogArmed: Boolean = false
     /** Session identity for live/queue publishing (set on start). */
     @Volatile private var sessionDistroId: String? = null
     @Volatile private var sessionTaskName: String = ""
@@ -136,6 +149,11 @@ class OnboardingInstallRunner(private val ctx: Context) {
         lastOverallPercent = 0
         lastNotifPercent = -1
         lastNotifLabel = ""
+        phaseFraction = 0f
+        lastDetail = ""
+        lastIndeterminate = false
+        guestReportedDone = false
+        watchdogArmed = false
         sessionLog = ""
 
         val profile = DistroInstallProfile.forId(distroId)
@@ -266,13 +284,13 @@ class OnboardingInstallRunner(private val ctx: Context) {
         val rootfsIdx = phaseIdx(phases, "ROOTFS")
         val customIdx = phaseIdx(phases, "CUSTOM")
 
-        enter(phases, hostIdx, onProgress, "Extracting bootstrap + deploying scripts…")
+        enter(phases, hostIdx, onProgress, "Extracting bootstrap + deploying scripts…", indeterminate = true)
         if (abortIfCancelled(gen, phases, onProgress)) return
         var lastHostPhase = ""
         val hostOk = TerminalLauncher.prepareHostBlocking(appCtx, forceHostSetup = false) { done, total, phase ->
             if (isStale(gen)) return@prepareHostBlocking
             val frac = if (total > 0) done.toFloat() / total else 0f
-            updateFraction(phases, hostIdx, frac, onProgress, phase)
+            updateFraction(phases, hostIdx, frac, onProgress, phase, indeterminate = total <= 0)
             if (phase.isNotBlank() && phase != lastHostPhase) {
                 lastHostPhase = phase
                 log(phases, hostIdx, onProgress, phase)
@@ -286,21 +304,13 @@ class OnboardingInstallRunner(private val ctx: Context) {
         completePhase(phases, hostIdx, onProgress, "Host ready")
 
         val profile = DistroInstallProfile.require(distroId)
-        enter(phases, dlIdx, onProgress, "Downloading ${profile.displayName} rootfs…")
+        enter(
+            phases, dlIdx, onProgress,
+            "Downloading ${profile.displayName} rootfs…",
+            indeterminate = true
+        )
         if (abortIfCancelled(gen, phases, onProgress)) return
-        val destDir = TermuxHostPaths.homeDir(appCtx)
-        val dlOk = RootfsDownloader.ensurePresent(
-            destDir, profile, RootfsDownloader.defaultClient,
-            isCancelled = { isStale(gen) }
-        ) { p ->
-            if (isStale(gen)) return@ensurePresent
-            val frac = if (p.totalBytes > 0) p.downloadedBytes.toFloat() / p.totalBytes else 0f
-            updateFraction(
-                phases, dlIdx, frac, onProgress,
-                "Downloaded ${p.downloadedBytes / 1_048_576} / " +
-                    "${p.totalBytes.coerceAtLeast(0) / 1_048_576} MiB"
-            )
-        }
+        val dlOk = downloadRootfs(profile, phases, dlIdx, onProgress, gen)
         if (abortIfCancelled(gen, phases, onProgress)) return
         if (!dlOk) {
             postFail(
@@ -312,7 +322,11 @@ class OnboardingInstallRunner(private val ctx: Context) {
         }
         completePhase(phases, dlIdx, onProgress, "Rootfs ready (${profile.rootfsFileName})")
 
-        enter(phases, rootfsIdx, onProgress, "Installing ${profile.displayName} via proot-distro…")
+        enter(
+            phases, rootfsIdx, onProgress,
+            "Extracting rootfs…",
+            indeterminate = true
+        )
         if (abortIfCancelled(gen, phases, onProgress)) return
         val bash = TermuxHostPaths.libBash(appCtx).absolutePath
         val installScript = TermuxHostPaths.hostScript(appCtx, "bliss_install.sh").absolutePath
@@ -346,7 +360,9 @@ class OnboardingInstallRunner(private val ctx: Context) {
             }
         )
         if (abortIfCancelled(gen, phases, onProgress)) return
-        if (exitInstall != 0) {
+        // The guest's final success marker wins over a teardown kill (proot can
+        // hang after the last line; see armTeardownWatchdog).
+        if (exitInstall != 0 && !guestReportedDone) {
             postFail(onProgress, phases, "${profile.displayName} install failed (exit $exitInstall)")
             return
         }
@@ -408,7 +424,8 @@ class OnboardingInstallRunner(private val ctx: Context) {
                 xfceSelected && kdeSelected -> "XFCE4 + KDE theming, wallpapers, fonts…"
                 kdeSelected -> "KDE theming, wallpapers, Zsh…"
                 else -> "Themes, wallpapers, fonts…"
-            }
+            },
+            indeterminate = true
         )
         if (abortIfCancelled(gen, phases, onProgress)) return
         var xfceCustomOk = false
@@ -569,13 +586,13 @@ class OnboardingInstallRunner(private val ctx: Context) {
         RootShell.ensureBusyBoxResolver(appCtx)
         val resolvedBb = RootShell.resolveBusyBox()
 
-        enter(phases, hostIdx, onProgress, "Extracting bootstrap + deploying scripts…")
+        enter(phases, hostIdx, onProgress, "Extracting bootstrap + deploying scripts…", indeterminate = true)
         if (abortIfCancelled(gen, phases, onProgress)) return
         var lastHostPhase = ""
         val hostOk = TerminalLauncher.prepareHostBlocking(appCtx, forceHostSetup = false) { done, total, phase ->
             if (isStale(gen)) return@prepareHostBlocking
             val frac = if (total > 0) done.toFloat() / total else 0f
-            updateFraction(phases, hostIdx, frac, onProgress, phase)
+            updateFraction(phases, hostIdx, frac, onProgress, phase, indeterminate = total <= 0)
             if (phase.isNotBlank() && phase != lastHostPhase) {
                 lastHostPhase = phase
                 log(phases, hostIdx, onProgress, phase)
@@ -592,21 +609,13 @@ class OnboardingInstallRunner(private val ctx: Context) {
 
         // DL after HOST only — R0 stays first so non-rooted devices fail
         // before any download (R6).
-        enter(phases, dlIdx, onProgress, "Downloading ${profile.displayName} rootfs…")
+        enter(
+            phases, dlIdx, onProgress,
+            "Downloading ${profile.displayName} rootfs…",
+            indeterminate = true
+        )
         if (abortIfCancelled(gen, phases, onProgress)) return
-        val destDir = TermuxHostPaths.homeDir(appCtx)
-        val dlOk = RootfsDownloader.ensurePresent(
-            destDir, profile, RootfsDownloader.defaultClient,
-            isCancelled = { isStale(gen) }
-        ) { p ->
-            if (isStale(gen)) return@ensurePresent
-            val frac = if (p.totalBytes > 0) p.downloadedBytes.toFloat() / p.totalBytes else 0f
-            updateFraction(
-                phases, dlIdx, frac, onProgress,
-                "Downloaded ${p.downloadedBytes / 1_048_576} / " +
-                    "${p.totalBytes.coerceAtLeast(0) / 1_048_576} MiB"
-            )
-        }
+        val dlOk = downloadRootfs(profile, phases, dlIdx, onProgress, gen)
         if (abortIfCancelled(gen, phases, onProgress)) return
         if (!dlOk) {
             postFail(
@@ -624,7 +633,11 @@ class OnboardingInstallRunner(private val ctx: Context) {
             ?: "scripts/chroot/setup_debian13_chroot.sh"
         val setupName = File(setupAsset).name
 
-        enter(phases, rootfsIdx, onProgress, "Extracting chroot rootfs (may take several minutes)…")
+        enter(
+            phases, rootfsIdx, onProgress,
+            "Extracting chroot rootfs (may take several minutes)…",
+            indeterminate = true
+        )
         if (abortIfCancelled(gen, phases, onProgress)) return
         val staged = RootShell.stageAsset(appCtx, setupAsset)
             ?: TermuxHostPaths.hostScript(appCtx, setupName).absolutePath
@@ -681,7 +694,8 @@ class OnboardingInstallRunner(private val ctx: Context) {
                 xfceSelected && kdeSelected -> "Installing XFCE + KDE Plasma packages…"
                 kdeSelected -> "Installing KDE Plasma packages…"
                 else -> "Installing XFCE packages…"
-            }
+            },
+            indeterminate = true
         )
         if (abortIfCancelled(gen, phases, onProgress)) return
         val familyPayload = BaseDesktopInstallPlan.familySetupPayload(
@@ -750,7 +764,8 @@ class OnboardingInstallRunner(private val ctx: Context) {
                 xfceSelected && kdeSelected -> "XFCE4 + KDE theming, wallpapers, fonts…"
                 kdeSelected -> "KDE theming, wallpapers, Zsh…"
                 else -> "Themes, wallpapers, fonts…"
-            }
+            },
+            indeterminate = true
         )
         if (abortIfCancelled(gen, phases, onProgress)) return
         var xfceCustomOk = false
@@ -897,8 +912,9 @@ class OnboardingInstallRunner(private val ctx: Context) {
                     prootName = profile.prootName,
                     scriptAssetPath = script,
                     envPrefix = "FLUX_GPU=${gpu.mode} FLUX_GPU_VENDOR=${gpu.vendorHint}" +
-                        driverEnv.entries.joinToString("") {
-                            " ${it.key}='${it.value.replace("'", "")}'"
+                        driverEnv.entries.joinToString("") { entry ->
+                            val sanitized = entry.value.replace("'", "")
+                            " ${entry.key}='$sanitized'"
                         }
                 )
             }
@@ -1021,16 +1037,72 @@ class OnboardingInstallRunner(private val ctx: Context) {
         return result.exitCode
     }
 
+    /**
+     * Download the distro rootfs with live byte/speed progress in the DL phase.
+     * Unknown totals fall back to an indeterminate detail — the bar is only
+     * shown as determinate when the byte count is actually known.
+     */
+    private fun downloadRootfs(
+        profile: DistroInstallProfile,
+        phases: List<BaseDesktopInstallPlan.Phase>,
+        index: Int,
+        onProgress: (Progress) -> Unit,
+        gen: Int
+    ): Boolean {
+        val destDir = TermuxHostPaths.homeDir(appCtx)
+        var lastBytes = 0L
+        var lastAt = 0L
+        return RootfsDownloader.ensurePresent(
+            destDir, profile, RootfsDownloader.defaultClient,
+            isCancelled = { isStale(gen) }
+        ) { p ->
+            if (isStale(gen)) return@ensurePresent
+            val now = System.currentTimeMillis()
+            val speed = if (lastAt > 0L) {
+                val dt = (now - lastAt).coerceAtLeast(1L)
+                (p.downloadedBytes - lastBytes).coerceAtLeast(0L) * 1000.0 / dt
+            } else {
+                0.0
+            }
+            lastBytes = p.downloadedBytes
+            lastAt = now
+            val speedText = if (speed >= 51_200.0) " · ${fmtMb(speed)}/s" else ""
+            if (p.totalBytes > 0L) {
+                updateFraction(
+                    phases, index,
+                    p.downloadedBytes.toFloat() / p.totalBytes.toFloat(),
+                    onProgress,
+                    "${fmtMb(p.downloadedBytes.toDouble())} / " +
+                        "${fmtMb(p.totalBytes.toDouble())} MB$speedText"
+                )
+            } else {
+                updateFraction(
+                    phases, index, 0f, onProgress,
+                    "${fmtMb(p.downloadedBytes.toDouble())} MB received$speedText",
+                    indeterminate = true
+                )
+            }
+        }
+    }
+
+    /** "12.3" — [bytes] rendered as MB with one decimal (US locale). */
+    private fun fmtMb(bytes: Double): String =
+        String.format(Locale.US, "%.1f", bytes / 1_048_576.0)
+
     // ── progress helpers ────────────────────────────────────────────────────
 
     private fun enter(
         phases: List<BaseDesktopInstallPlan.Phase>,
         index: Int,
         onProgress: (Progress) -> Unit,
-        detail: String
+        detail: String,
+        indeterminate: Boolean = false
     ) {
         val p = phases[index]
-        val pct = weightedPercent(phases, index, 0f)
+        phaseFraction = 0f
+        lastDetail = detail
+        lastIndeterminate = indeterminate
+        val pct = phasePercent(phases, index, 0f)
         lastOverallPercent = pct
         post(
             onProgress,
@@ -1041,7 +1113,8 @@ class OnboardingInstallRunner(private val ctx: Context) {
                 phaseCount = phases.size,
                 overallPercent = pct,
                 detail = detail,
-                logLine = "── ${p.label}: $detail"
+                logLine = "── ${p.label}: $detail",
+                indeterminate = indeterminate
             )
         )
     }
@@ -1053,7 +1126,10 @@ class OnboardingInstallRunner(private val ctx: Context) {
         detail: String
     ) {
         val p = phases[index]
-        val pct = weightedPercent(phases, index, 1f)
+        phaseFraction = 1f
+        lastDetail = detail
+        lastIndeterminate = false
+        val pct = phasePercent(phases, index, 1f)
         lastOverallPercent = pct
         post(
             onProgress,
@@ -1074,10 +1150,15 @@ class OnboardingInstallRunner(private val ctx: Context) {
         index: Int,
         frac: Float,
         onProgress: (Progress) -> Unit,
-        detail: String
+        detail: String,
+        indeterminate: Boolean = false
     ) {
         val p = phases[index]
-        val pct = weightedPercent(phases, index, frac.coerceIn(0f, 1f))
+        val clamped = frac.coerceIn(0f, 1f)
+        if (clamped > phaseFraction) phaseFraction = clamped
+        lastDetail = detail
+        lastIndeterminate = indeterminate
+        val pct = phasePercent(phases, index, phaseFraction)
         lastOverallPercent = pct
         post(
             onProgress,
@@ -1087,7 +1168,8 @@ class OnboardingInstallRunner(private val ctx: Context) {
                 phaseIndex = index,
                 phaseCount = phases.size,
                 overallPercent = pct,
-                detail = detail
+                detail = detail,
+                indeterminate = indeterminate
             )
         )
     }
@@ -1099,7 +1181,43 @@ class OnboardingInstallRunner(private val ctx: Context) {
         line: String
     ) {
         val p = phases.getOrNull(index) ?: return
-        // Keep prior overall percent — pure log lines must not snap the bar mid-phase.
+        // Console markers drive real in-phase progress so the bar can never sit
+        // at the phase-entry percent while the guest is already done.
+        val step = STEP_MARKER_RE.find(line)
+        val strongDone = GUEST_DONE_RE.containsMatchIn(line)
+        val softDone = GUEST_SETUP_DONE_RE.containsMatchIn(line)
+        if (strongDone || softDone) {
+            // Strong marker = the host install script is done. The weaker
+            // "setup complete" family marker only ends the guest setup band —
+            // desktop stages may still follow, so don't claim finishing yet.
+            if (strongDone) {
+                phaseFraction = 1f
+                lastDetail = "Finishing up…"
+                guestReportedDone = true
+                armTeardownWatchdog()
+            } else {
+                if (phaseFraction < 0.9f) phaseFraction = 0.9f
+                lastDetail = "Setting up packages…"
+            }
+            lastIndeterminate = false
+        } else if (step != null) {
+            val n = step.groupValues[1].toIntOrNull()
+            val m = step.groupValues[2].toIntOrNull()
+            if (n != null && m != null && m > 0 && n in 0..m) {
+                val base = if (p.id == "ROOTFS") EXTRACT_BAND else 0f
+                val frac = base + (1f - base) * (n.toFloat() / m.toFloat())
+                if (frac > phaseFraction) phaseFraction = frac
+                lastIndeterminate = false
+                lastDetail = "Setting up packages… (step $n/$m)"
+            }
+        } else if (EXTRACT_DONE_RE.containsMatchIn(line)) {
+            // Unpacking is over and guest setup started, but without step
+            // markers there is still no measurable fraction — stay indeterminate.
+            if (phaseFraction < EXTRACT_BAND) phaseFraction = EXTRACT_BAND
+            lastDetail = "Setting up packages…"
+        }
+        val pct = phasePercent(phases, index, phaseFraction)
+        lastOverallPercent = pct
         post(
             onProgress,
             Progress(
@@ -1107,11 +1225,44 @@ class OnboardingInstallRunner(private val ctx: Context) {
                 phaseLabel = p.label,
                 phaseIndex = index,
                 phaseCount = phases.size,
-                overallPercent = lastOverallPercent.coerceIn(0, 100),
-                detail = p.label,
-                logLine = line
+                overallPercent = pct,
+                detail = lastDetail.ifBlank { p.label },
+                logLine = line,
+                indeterminate = lastIndeterminate
             )
         )
+    }
+
+    /**
+     * proot-distro can print success and then hang on teardown. Once the guest
+     * announced completion, give the process a short grace period and force it
+     * down so the runner can finish and the UI flips to DONE.
+     */
+    private fun armTeardownWatchdog() {
+        if (watchdogArmed) return
+        val proc = activeProcess.get() ?: return
+        watchdogArmed = true
+        val gen = generation.get()
+        main.postDelayed({
+            watchdogArmed = false
+            if (generation.get() == gen && guestReportedDone && proc.isAlive) {
+                Log.w(TAG, "install reported success but process is still alive — forcing teardown")
+                proc.destroyForcibly()
+            }
+        }, TEARDOWN_GRACE_MS)
+    }
+
+    /**
+     * Monotonic percent: never below what has already been shown, so a
+     * guest-announced completion can never be followed by a lower value.
+     */
+    private fun phasePercent(
+        phases: List<BaseDesktopInstallPlan.Phase>,
+        index: Int,
+        fractionInPhase: Float
+    ): Int {
+        val computed = weightedPercent(phases, index, fractionInPhase)
+        return maxOf(computed, lastOverallPercent).coerceIn(0, 100)
     }
 
     private fun postSuccess(
@@ -1214,7 +1365,8 @@ class OnboardingInstallRunner(private val ctx: Context) {
         InstallationQueueManager.updateActiveInstall(
             taskName = sessionTaskName.ifBlank { distroId },
             phaseLabel = progress.phaseLabel,
-            overallPercent = progress.overallPercent,
+            // -1 = unknown/indeterminate (InstallTaskBar renders the shimmer).
+            overallPercent = if (progress.indeterminate) -1 else progress.overallPercent,
             detail = progress.detail,
             distroId = distroId,
             failed = progress.failed,
@@ -1292,6 +1444,30 @@ class OnboardingInstallRunner(private val ctx: Context) {
 
     companion object {
         private const val TAG = "OnboardingInstall"
+
+        /** Guest step markers: `(17/17) Installing…` from family scripts. */
+        private val STEP_MARKER_RE =
+            Regex("\\((\\d{1,4})\\s*/\\s*(\\d{1,4})\\)")
+
+        /** Absolute end-of-install markers (host install script). */
+        private val GUEST_DONE_RE =
+            Regex("completed successfully|Configuration Complete", RegexOption.IGNORE_CASE)
+
+        /** Family setup finished (host-side finish still pending). */
+        private val GUEST_SETUP_DONE_RE =
+            Regex("setup complete", RegexOption.IGNORE_CASE)
+
+        /** Unpack finished / guest package setup starting. */
+        private val EXTRACT_DONE_RE = Regex(
+            "Running setup inside proot|Installing packages|Setting up packages",
+            RegexOption.IGNORE_CASE
+        )
+
+        /** Fraction of the ROOTFS phase spent unpacking (rest = package setup). */
+        private const val EXTRACT_BAND = 0.25f
+
+        /** Grace after the guest announces success before a hung teardown is killed. */
+        private const val TEARDOWN_GRACE_MS = 4_000L
 
         /**
          * Freshest snapshot of the active/last install. Lets the task bar route
