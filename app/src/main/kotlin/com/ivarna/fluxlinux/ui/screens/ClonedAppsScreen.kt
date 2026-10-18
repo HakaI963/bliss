@@ -267,8 +267,11 @@ private fun DisplaySection(
     val running by CloneEngine.running.collectAsState()
     val dw by CloneEngine.displayW.collectAsState()
     val dh by CloneEngine.displayH.collectAsState()
+    val vdProbe by CloneEngine.vdProbe.collectAsState()
     var textInput by remember { mutableStateOf("") }
     val isRunning = running == app.packageName
+
+    LaunchedEffect(app.packageName) { CloneEngine.probeDisplay() }
 
     QCard {
         Column(
@@ -297,7 +300,21 @@ private fun DisplaySection(
             }
 
             if (!isRunning) {
-                QPrimaryButton("Open on hidden display") { CloneEngine.launch(app.packageName) }
+                QPrimaryButton("Run app") { CloneEngine.launch(app.packageName) }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        vdProbe ?: "Virtual display: checking…",
+                        fontSize = 11.sp,
+                        color = fluxMutedText(),
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(onClick = { CloneEngine.probeDisplay() }) {
+                        Text("Check", fontSize = 12.sp)
+                    }
+                }
             } else {
                 Screen(dw, dh, frameState?.bitmap)
 

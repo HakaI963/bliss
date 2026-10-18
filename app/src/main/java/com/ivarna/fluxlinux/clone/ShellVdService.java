@@ -37,6 +37,21 @@ import java.util.regex.Pattern;
  */
 public final class ShellVdService extends IShellVd.Stub {
 
+    /**
+     * Shizuku may instantiate user services with a (Context) constructor; the
+     * context it builds for the shell process is a proven-working source of
+     * framework services. Kept as the display fallback when our own shell
+     * context fabrication fails on a locked-down build.
+     */
+    @SuppressWarnings("unused")
+    public ShellVdService(android.content.Context context) {
+        serviceContext = context;
+    }
+
+    public ShellVdService() {
+        serviceContext = null;
+    }
+
     /** Shizuku destroy transaction: server side sends 16777115, aidl declares 16777114. */
     private static final int TRANSACTION_DESTROY_AIDL = 16777114;
     private static final int TRANSACTION_DESTROY_SERVER = 16777115;
@@ -55,6 +70,7 @@ public final class ShellVdService extends IShellVd.Stub {
     private final ArrayDeque<String> logBuffer = new ArrayDeque<>();
 
     private ShellContext shellContext;
+    private final android.content.Context serviceContext;
     private InputBridge inputBridge;
     private DisplaySession display;
 
@@ -79,14 +95,18 @@ public final class ShellVdService extends IShellVd.Stub {
             DisplaySession session = null;
             try {
                 ShellContext context = contextLocked();
-                if (context == null) {
-                    log("createDisplay: shell context unavailable");
+                android.content.Context displayContext = context != null ? context : fallbackContextLocked();
+                if (displayContext == null) {
+                    log("createDisplay: no usable context (ShellContext init failed and Shizuku passed none)");
                     return -1;
+                }
+                if (context == null) {
+                    log("createDisplay: ShellContext unavailable, using Shizuku service context");
                 }
                 int w = clamp(width, MIN_WIDTH, MAX_WIDTH);
                 int h = clamp(height, MIN_HEIGHT, MAX_HEIGHT);
                 int d = clamp(dpi, MIN_DPI, MAX_DPI);
-                session = DisplaySession.create(context, w, h, d);
+                session = DisplaySession.create(displayContext, w, h, d);
                 // The display is the expensive, capricious part; input and IME
                 // policy are optional helpers — if they fail here the display
                 // must survive (input retries on demand at first use).
@@ -474,6 +494,12 @@ public final class ShellVdService extends IShellVd.Stub {
     private ShellContext contextLocked() {
         if (shellContext == null) {
             try {
+                if (android.os.Looper.myLooper() == null) {
+                    android.os.Looper.prepare();
+                }
+            } catch (Throwable ignored) {
+            }
+            try {
                 ShellContext.init();
                 shellContext = ShellContext.get();
             } catch (Throwable t) {
@@ -482,6 +508,11 @@ public final class ShellVdService extends IShellVd.Stub {
             }
         }
         return shellContext;
+    }
+
+    /** Shizuku-provided context (may be null when built with the no-arg ctor). */
+    private android.content.Context fallbackContextLocked() {
+        return serviceContext;
     }
 
     private ShellContext context() {
@@ -652,8 +683,20 @@ public final class ShellVdService extends IShellVd.Stub {
         if (t == null) {
             return "unknown error";
         }
-        String message = t.getMessage();
-        return t.getClass().getSimpleName() + (message == null || message.isEmpty() ? "" : ": " + message);
+        StringBuilder sb = new StringBuilder();
+        Throwable cur = t;
+        int depth = 0;
+        while (cur != null && depth < 4) {
+            if (depth > 0) {
+                sb.append(" | caused by ");
+            }
+            String cls = cur.getClass().getSimpleName();
+            String msg = cur.getMessage();
+            sb.append(cls).append(msg == null || msg.isEmpty() ? "" : ": " + msg);
+            cur = cur.getCause();
+            depth++;
+        }
+        return sb.toString();
     }
 
     private static int clamp(int value, int min, int max) {

@@ -71,7 +71,7 @@ final class DisplaySession {
         return localImeEnabled;
     }
 
-    static DisplaySession create(ShellContext context, int width, int height, int dpi) {
+    static DisplaySession create(android.content.Context context, int width, int height, int dpi) {
         ImageReader reader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 3);
         Surface surface = reader.getSurface();
         DisplayManager manager = displayManager(context);
@@ -159,7 +159,7 @@ final class DisplaySession {
         }
     }
 
-    private static DisplayManager displayManager(ShellContext context) {
+    private static DisplayManager displayManager(android.content.Context context) {
         try {
             Constructor<DisplayManager> ctor = DisplayManager.class.getDeclaredConstructor(Context.class);
             ctor.setAccessible(true);

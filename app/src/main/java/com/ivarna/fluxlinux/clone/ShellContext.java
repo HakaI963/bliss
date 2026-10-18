@@ -19,21 +19,35 @@ import java.lang.reflect.Method;
  * System context for the shell (uid 2000) process. Ported from ShadowAuto's
  * ShellContext; the user service process is not a real application process, so
  * activity-thread plumbing has to be faked before framework services work.
+ *
+ * The heavy lifting is LAZY and retried: a failure inside the old static
+ * initializer marked the class erroneous forever (NoClassDefFoundError on
+ * every later use — seen on HyperOS). Now every step is individually optional
+ * and get() rebuilds the instance on demand after a failed attempt.
  */
 final class ShellContext extends ContextWrapper {
     static final String PACKAGE_NAME = "com.android.shell";
-    private static final ShellContext INSTANCE = new ShellContext();
+    private static volatile ShellContext INSTANCE;
 
     static void init() {
         Workarounds.apply();
     }
 
     static ShellContext get() {
-        return INSTANCE;
+        ShellContext i = INSTANCE;
+        if (i != null) {
+            return i;
+        }
+        synchronized (ShellContext.class) {
+            if (INSTANCE == null) {
+                INSTANCE = new ShellContext(Workarounds.systemContext());
+            }
+            return INSTANCE;
+        }
     }
 
-    private ShellContext() {
-        super(Workarounds.systemContext());
+    private ShellContext(Context base) {
+        super(base);
     }
 
     @Override
@@ -80,83 +94,115 @@ final class ShellContext extends ContextWrapper {
         return service;
     }
 
+    /**
+     * Activity-thread plumbing. Every step is optional; nothing may throw from
+     * a static initializer (that bricks the class for the whole process life).
+     */
     @SuppressLint("PrivateApi,DiscouragedPrivateApi")
     private static final class Workarounds {
-        private static final Class<?> ACTIVITY_THREAD_CLASS;
-        private static final Object ACTIVITY_THREAD;
+        private static Object activityThread;
 
-        static {
-            try {
-                ACTIVITY_THREAD_CLASS = Class.forName("android.app.ActivityThread");
-                Constructor<?> ctor = ACTIVITY_THREAD_CLASS.getDeclaredConstructor();
-                ctor.setAccessible(true);
-                ACTIVITY_THREAD = ctor.newInstance();
-                Field current = ACTIVITY_THREAD_CLASS.getDeclaredField("sCurrentActivityThread");
-                current.setAccessible(true);
-                current.set(null, ACTIVITY_THREAD);
-                Field system = ACTIVITY_THREAD_CLASS.getDeclaredField("mSystemThread");
-                system.setAccessible(true);
-                system.setBoolean(ACTIVITY_THREAD, true);
-            } catch (Exception e) {
-                throw new AssertionError(e);
-            }
+        private Workarounds() {
         }
 
+        /** Best-effort wiring; each failure is tolerated. */
         static void apply() {
+            try {
+                ensureActivityThread();
+            } catch (Throwable ignored) {
+            }
             if (Build.VERSION.SDK_INT >= 31) {
-                fillConfigurationController();
+                try {
+                    fillConfigurationController();
+                } catch (Throwable ignored) {
+                }
             }
-            fillAppInfo();
-            fillAppContext();
+            try {
+                fillAppInfo();
+            } catch (Throwable ignored) {
+            }
+            try {
+                fillAppContext();
+            } catch (Throwable ignored) {
+            }
         }
 
+        private static Object ensureActivityThread() throws Exception {
+            if (activityThread != null) {
+                return activityThread;
+            }
+            Class<?> cls = Class.forName("android.app.ActivityThread");
+            Constructor<?> ctor = cls.getDeclaredConstructor();
+            ctor.setAccessible(true);
+            Object at = ctor.newInstance();
+            Field current = cls.getDeclaredField("sCurrentActivityThread");
+            current.setAccessible(true);
+            current.set(null, at);
+            Field system = cls.getDeclaredField("mSystemThread");
+            system.setAccessible(true);
+            system.setBoolean(at, true);
+            activityThread = at;
+            return at;
+        }
+
+        /** The system context: getSystemContext, falling back to systemMain(). */
         static Context systemContext() {
+            Throwable first = null;
             try {
-                Method method = ACTIVITY_THREAD_CLASS.getDeclaredMethod("getSystemContext");
-                return (Context) method.invoke(ACTIVITY_THREAD);
-            } catch (Throwable e) {
-                throw new IllegalStateException("system context unavailable", e);
+                Object at = ensureActivityThread();
+                Method method = at.getClass().getMethod("getSystemContext");
+                return (Context) method.invoke(at);
+            } catch (Throwable t) {
+                first = t;
+            }
+            // Plan B: systemMain() runs the full system attach itself and
+            // builds the context through a different path.
+            try {
+                Object at = Class.forName("android.app.ActivityThread")
+                        .getMethod("systemMain").invoke(null);
+                activityThread = at;
+                Method method = at.getClass().getMethod("getSystemContext");
+                return (Context) method.invoke(at);
+            } catch (Throwable t2) {
+                IllegalStateException e = new IllegalStateException("system context unavailable");
+                e.addSuppressed(first);
+                e.addSuppressed(t2);
+                throw e;
             }
         }
 
-        private static void fillAppInfo() {
-            try {
-                Class<?> bindDataClass = Class.forName("android.app.ActivityThread$AppBindData");
-                Object bindData = bindDataClass.getDeclaredConstructor().newInstance();
-                ApplicationInfo appInfo = new ApplicationInfo();
-                appInfo.packageName = PACKAGE_NAME;
-                Field appInfoField = bindDataClass.getDeclaredField("appInfo");
-                appInfoField.setAccessible(true);
-                appInfoField.set(bindData, appInfo);
-                Field bound = ACTIVITY_THREAD_CLASS.getDeclaredField("mBoundApplication");
-                bound.setAccessible(true);
-                bound.set(ACTIVITY_THREAD, bindData);
-            } catch (Throwable ignored) {
-            }
+        private static void fillAppInfo() throws Exception {
+            Object at = ensureActivityThread();
+            Class<?> bindDataClass = Class.forName("android.app.ActivityThread$AppBindData");
+            Object bindData = bindDataClass.getDeclaredConstructor().newInstance();
+            ApplicationInfo appInfo = new ApplicationInfo();
+            appInfo.packageName = PACKAGE_NAME;
+            Field appInfoField = bindDataClass.getDeclaredField("appInfo");
+            appInfoField.setAccessible(true);
+            appInfoField.set(bindData, appInfo);
+            Field bound = at.getClass().getDeclaredField("mBoundApplication");
+            bound.setAccessible(true);
+            bound.set(at, bindData);
         }
 
-        private static void fillAppContext() {
-            try {
-                Application app = Instrumentation.newApplication(Application.class, ShellContext.get());
-                Field field = ACTIVITY_THREAD_CLASS.getDeclaredField("mInitialApplication");
-                field.setAccessible(true);
-                field.set(ACTIVITY_THREAD, app);
-            } catch (Throwable ignored) {
-            }
+        private static void fillAppContext() throws Exception {
+            Object at = ensureActivityThread();
+            Application app = Instrumentation.newApplication(Application.class, get());
+            Field field = at.getClass().getDeclaredField("mInitialApplication");
+            field.setAccessible(true);
+            field.set(at, app);
         }
 
-        private static void fillConfigurationController() {
-            try {
-                Class<?> controllerClass = Class.forName("android.app.ConfigurationController");
-                Class<?> internalClass = Class.forName("android.app.ActivityThreadInternal");
-                Constructor<?> ctor = controllerClass.getDeclaredConstructor(internalClass);
-                ctor.setAccessible(true);
-                Object controller = ctor.newInstance(ACTIVITY_THREAD);
-                Field field = ACTIVITY_THREAD_CLASS.getDeclaredField("mConfigurationController");
-                field.setAccessible(true);
-                field.set(ACTIVITY_THREAD, controller);
-            } catch (Throwable ignored) {
-            }
+        private static void fillConfigurationController() throws Exception {
+            Object at = ensureActivityThread();
+            Class<?> controllerClass = Class.forName("android.app.ConfigurationController");
+            Class<?> internalClass = Class.forName("android.app.ActivityThreadInternal");
+            Constructor<?> ctor = controllerClass.getDeclaredConstructor(internalClass);
+            ctor.setAccessible(true);
+            Object controller = ctor.newInstance(at);
+            Field field = at.getClass().getDeclaredField("mConfigurationController");
+            field.setAccessible(true);
+            field.set(at, controller);
         }
     }
 }

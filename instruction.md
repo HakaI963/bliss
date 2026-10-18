@@ -514,3 +514,19 @@ The historical "verify before restarting" checklist is fully resolved: nav crash
 - AIDL `IShellVd.logs()` + service impl: the service log ring buffer (max 200, the one containing `createDisplay failed: <describe>` / `shell context init failed`) is now fetchable; `ShellVd.serviceLogTail()` client helper.
 - `CloneEngine.ensureDisplay`/launch failure paths feed the **last 12 service log lines** into the app's clone Logs pane (`shell: …`), so the next failure screenshot shows the real engine-side error, not just id=-1.
 - versionCode 23→24 (Shizuku reloads the UserService on version change), 3.8.2.
+
+---
+
+## 17. Round 17 — ShellContext static-init brick fixed (NoClassDefFoundError), display probe + live view (2026-10-18)
+
+**User evidence (diagnostics now working as shipped in round 16):** clone Logs show `shell: createDisplay: shell context unavailable` / `shell: shell context init failed: NoClassDefFoundError: com.ivarna.fluxlinux.clone.ShellContext` repeating, with a bare `java.lang.reflect.InvocationTargetException` at the head. Verdict: the **first** attempt died inside `ShellContext`'s **static initializer** (a reflective `invoke` threw, cause hidden by the old single-line `describe`), which marked the class erroneous — every later reference then failed with `NoClassDefFoundError` before any recovery could run.
+
+**Fixes:**
+- **`ShellContext` rewritten to be lazy and un-brickable:** the ActivityThread fabrication and every fill step (`mConfigurationController`, `mBoundApplication`, initial application) are individually caught and optional; `INSTANCE` is built on demand in `get()` (no throwing static init), so a failed attempt can be retried on the next call.
+- **`systemContext()` ladder:** primary `getSystemContext()`; plan B `ActivityThread.systemMain()` (full system attach through its own path) then `getSystemContext()`; failures chained via `addSuppressed`.
+- **`Looper.prepare()` before init** in `contextLocked()` (EngineHost order — some ContextImpl paths want a looper on the calling thread).
+- **`ShellVdService(Context)` ctor**: Shizuku can instantiate user services with a context; it is now kept as a **display fallback** — if our fabricated context still fails, `DisplaySession.create` runs on the Shizuku-provided context instead of returning -1.
+- **`describe()` walks the cause chain** (up to 4 levels, `| caused by`), so `InvocationTargetException` no longer hides the inner error.
+- **Virtual display availability, in-app:** Display tab now auto-probes on entry and shows `Virtual display: available (id=N)` / `NOT available — <last shell log line>`, with a **Check** button (`CloneEngine.probeDisplayBlocking`, `vdProbe` flow).
+- **Button renamed** "Open on hidden display" → **"Run app"** (Display tab). The live virtual-display view below it was already wired (JPEG frame stream); it renders once the display actually comes up.
+- versionCode 24→25, 3.8.3.

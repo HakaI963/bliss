@@ -749,6 +749,35 @@ object CloneEngine {
         return null
     }
 
+    /** Virtual display availability line for the Display tab. */
+    val vdProbe = MutableStateFlow<String?>(null)
+    private var probeRunning = false
+
+    /** Probes the shell-side hidden display and returns a human verdict. */
+    fun probeDisplay() {
+        if (probeRunning) return
+        probeRunning = true
+        vdProbe.value = "Virtual display: checking…"
+        scope.launch {
+            vdProbe.value = withContext(Dispatchers.IO) { probeDisplayBlocking() }
+            probeRunning = false
+        }
+    }
+
+    private fun probeDisplayBlocking(): String {
+        val shellErr = requireShell()
+        if (shellErr != null) return "Virtual display: unavailable — $shellErr"
+        ShellVd.displayId.value.takeIf { it > 0 }?.let { return "Virtual display: available (id=$it)" }
+        val ok = ensureDisplay()
+        return if (ok) {
+            "Virtual display: available (id=${ShellVd.displayId.value})"
+        } else {
+            val tail = ShellVd.serviceLogTail(4) ?: emptyList()
+            val cause = tail.lastOrNull { it.isNotBlank() }?.let { " — " + it.trim() } ?: ""
+            "Virtual display: NOT available$cause"
+        }
+    }
+
     // ---------------------------------------------------------------- display (shell-side)
 
     /**
