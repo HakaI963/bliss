@@ -1,10 +1,10 @@
 package com.ivarna.fluxlinux.design
 
-import android.os.Bundle
 import androidx.activity.compose.LocalActivityResultRegistryOwner
 import androidx.activity.result.ActivityResultRegistry
 import androidx.activity.result.ActivityResultRegistryOwner
 import androidx.activity.result.contract.ActivityResultContract
+import androidx.core.app.ActivityOptionsCompat
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -125,11 +125,11 @@ class BlissDesignScreenshotsTest {
     /** Minimal owner so rememberLauncherForActivityResult() works off-device. */
     private object NoopRegistryOwner : ActivityResultRegistryOwner {
         override val activityResultRegistry: ActivityResultRegistry = object : ActivityResultRegistry() {
-            override fun <I : Any?, O : Any?> onLaunch(
+            override fun <I, O> onLaunch(
                 requestCode: Int,
                 contract: ActivityResultContract<I, O>,
                 input: I,
-                options: Bundle?,
+                options: ActivityOptionsCompat?,
             ) {
                 // no-op in screenshots
             }
