@@ -15,9 +15,9 @@ Quick facts:
 | App id / brand | `com.nopiece.bliss` / **"Bliss"** (renamed from "Foila Linux" in round 5; functional ids keep `folio`/`flux` internals) |
 | Source package | `com.ivarna.fluxlinux` |
 | Branch | `main` |
-| Latest green CI | run `39052434778` (commit `9ac5e64`, round 8) |
-| Released APK | [`bliss-debug-9ac5e64`](https://github.com/HakaI963/folio/releases/tag/bliss-debug-9ac5e64) `app-bliss-debug.apk` (173,737,161 B) — supersedes `bliss-debug-63b57ee` |
-| APK sha256 | `3f44790330258ce8720f2135b2ada59b7659d85a83c7d35525dac8bd8c53a40f` |
+| Latest green CI | run `39100260852` (commit `d9f8c57`, round 8.1) |
+| Released APK | [`bliss-debug-d9f8c57`](https://github.com/HakaI963/folio/releases/tag/bliss-debug-d9f8c57) `app-bliss-debug.apk` (174,244,324 B) — supersedes `bliss-debug-9ac5e64` |
+| APK sha256 | `c6be0558874bad9c3aab24548ff60b957a081637935b7380cbf185414d8d795d` |
 | Verify APK proof | package `com.nopiece.bliss`, `targetSdkVersion 28`, `assets/bootstrap.tar` packaged, libbash/libproot/libloader*.so packaged |
 | Signing | debug only (per-run keystore — uninstall before re-install) |
 | CI gate | `.github/workflows/build.yml` compiles **main sources only** (`assembleBlissDebug` + bootstrap assembly + Verify APK). Unit tests are not part of the gate. |
@@ -199,7 +199,9 @@ Fixes:
 - NSFW is now **hardcoded**: `assets/banner/nsfw/l<level>/l<quality>/` — 4 levels x 8 designs x 5 widths = 160 arts (~3.2 MB), rendered offline with the `hb_port.py` HalfBlockRenderer reference pipeline, validated (<=45 KB, literal `\033`, >=4 rows) and QA'd via contact sheets. Level 1 safe mix, level 2 50/50, levels 3/4 spicy tiers, designs distinct across levels. `NsfwArtFetcher.kt` deleted; `TerminalPreferences` API-URL/key accessors removed; the Settings card is toggle + level slider + "built-in offline set" note.
 - Launch polish: `TerminalScreen` first-layout `forceTerminalResize` nudge (session can no longer stay dead at 0x0); `MainActivity` maps each `SessionOpenResult` to its real toast; `versionCode 16 / 3.2.0`.
 
-Verification: battery green (90/90 scripts, 180 `.kt` balanced, 0 import problems, `setup_termux.sh` byte-identical); APK CRC + all 160 nsfw assets verified from the released artifact; CI run `39052434778` first-try green; GitHub asset digest matches local sha256 (`3f447903…`). A parallel art-generation subagent produced a second candidate set while CI ran; it was **not** shipped (some picks looked child-like — never ship those; the released set comes from the curated purrbot/nekos sources).
+**Round 8.1** (`d9f8c57`): the NSFW set was expanded to **12 designs per level** (240 arts; L1 mixed safe, L2 50/50, L3/L4 distinct adult tiers) with a full **age-safety screening pass** (10 young-reading designs replaced). Released as [`bliss-debug-d9f8c57`](https://github.com/HakaI963/folio/releases/tag/bliss-debug-d9f8c57) (run `39100260852`, first-try green; sha256 `c6be0558…`).
+
+Verification (round 8): battery green (90/90 scripts, 180 `.kt` balanced, 0 import problems, `setup_termux.sh` byte-identical); APK CRC + nsfw assets verified from the released artifact; CI run `39052434778` first-try green; GitHub asset digest matches local sha256 (`3f447903…`). A parallel art-generation subagent produced a second candidate set while CI ran; it was **not** shipped (some picks looked child-like — never ship those; the released set comes from the curated purrbot/nekos sources).
 
 
 ## 3. Standalone-host constraints (never regress these)
