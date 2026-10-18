@@ -25,8 +25,8 @@ android {
         // app targets 28 like Termux. bash/proot/loader/pulse stay pinned to
         // nativeLibraryDir (jniLibs) as belt-and-braces for future targetSdk bumps.
         targetSdk = 28
-        versionCode = 18
-        versionName = "3.4.0"
+        versionCode = 19
+        versionName = "3.5.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -248,6 +248,8 @@ dependencies {
     
     // Networking
     implementation(libs.okhttp)
+    // On-device OCR for the clone space (agent `clone ocr` / MCP bliss_clone_ocr).
+    implementation("com.google.mlkit:text-recognition:16.0.1")
     implementation(libs.shizuku.api)
     implementation(libs.shizuku.provider)
 

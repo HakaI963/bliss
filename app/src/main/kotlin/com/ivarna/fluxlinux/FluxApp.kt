@@ -22,10 +22,11 @@ class FluxApp : Application() {
                 object : ClientConfiguration() {
                     override fun getHostPackageName(): String = base.packageName
 
-                    // No splash activity: clone launches go straight to the proxy on the
-                    // hidden clone display instead of flashing a launcher on the real
-                    // screen first.
-                    override fun isEnableLauncherActivity(): Boolean = false
+                    // Keep the engine's splash path (most reliable first-launch
+                    // flow); the splash itself is routed to the hidden clone display
+                    // by the same BlissDisplay launch options, so nothing flashes on
+                    // the real screen.
+                    override fun isEnableLauncherActivity(): Boolean = true
                 },
             )
         }.onFailure { Log.w("FluxApp", "clone engine attach failed", it) }

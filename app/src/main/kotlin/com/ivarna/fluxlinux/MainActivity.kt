@@ -27,6 +27,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -801,8 +803,13 @@ class MainActivity : ComponentActivity() {
                                     onNavigateToInstall = onNavigateToInstall
                                 )
                             }
+                            BottomTab.APPS -> {
+                                com.ivarna.fluxlinux.ui.screens.ClonedAppsScreen()
+                            }
                             BottomTab.TOOLS -> {
-                                com.ivarna.fluxlinux.ui.screens.ToolsScreen()
+                                com.ivarna.fluxlinux.ui.screens.ToolsScreen(
+                                    onOpenApps = { currentTab = BottomTab.APPS }
+                                )
                             }
                             BottomTab.TERMINAL -> {
                                 com.ivarna.fluxlinux.ui.screens.TerminalScreen(
@@ -841,6 +848,7 @@ class MainActivity : ComponentActivity() {
                     hazeState: HazeState,
                     onOpenDisplay: () -> Unit,
                     displayLive: Boolean,
+                    onOpenSettings: () -> Unit,
                 ) {
                     Box(
                         modifier = Modifier
@@ -914,6 +922,14 @@ class MainActivity : ComponentActivity() {
                                             )
                                         }
                                     }
+                                }
+                                Spacer(modifier = Modifier.width(4.dp))
+                                IconButton(onClick = onOpenSettings) {
+                                    Icon(
+                                        Icons.Default.Settings,
+                                        contentDescription = "Settings",
+                                        tint = com.ivarna.fluxlinux.ui.theme.TextSecondary
+                                    )
                                 }
                             }
                         }
@@ -991,7 +1007,8 @@ class MainActivity : ComponentActivity() {
                                                 onOpenDisplay = {
                                                     com.ivarna.fluxlinux.core.desktop.DesktopLauncher.reopenDisplay(this@MainActivity)
                                                 },
-                                                displayLive = session != null
+                                                displayLive = session != null,
+                                                onOpenSettings = { currentScreen = Screen.SETTINGS }
                                             )
                                             // Live install strip (all tabs while chrome is
                                             // up): keeps downloads observable after the

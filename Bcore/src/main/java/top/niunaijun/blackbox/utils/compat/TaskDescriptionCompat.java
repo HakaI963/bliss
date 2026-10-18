@@ -34,7 +34,9 @@ public class TaskDescriptionCompat {
     }
 
     public static String getTaskDescriptionLabel(int userId, CharSequence label) {
-        return String.format(Locale.CHINA, "[B%d]%s", userId, label);
+        // Bliss: no "[B0]" prefix in recents — the virtual user id is an engine
+        // detail and previously leaked into the app switcher card.
+        return label == null ? "" : label.toString();
     }
 
     private static CharSequence getApplicationLabel() {

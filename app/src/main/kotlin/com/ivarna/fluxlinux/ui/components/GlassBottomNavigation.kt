@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Android
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.List
@@ -52,6 +53,7 @@ import dev.chrisbanes.haze.hazeChild
 enum class BottomTab(val title: String, val icon: ImageVector) {
     HOME("Home", Icons.Default.Home),
     DISTROS("Distros", Icons.Default.List),
+    APPS("Apps", Icons.Default.Android),
     TOOLS("Tools", Icons.Default.Build),
     TERMINAL("Terminal", Icons.Default.Terminal),
     SETTINGS("Settings", Icons.Default.Settings)
@@ -62,7 +64,7 @@ enum class BottomTab(val title: String, val icon: ImageVector) {
  * it) but the Terminal screen is reached from Home's shell button — the dock has
  * exactly three evenly distributed items, no dead placeholder column.
  */
-private val BottomNavItems = listOf(BottomTab.HOME, BottomTab.DISTROS, BottomTab.TOOLS, BottomTab.SETTINGS)
+private val BottomNavItems = listOf(BottomTab.HOME, BottomTab.DISTROS, BottomTab.APPS, BottomTab.TOOLS)
 
 private val NavHeight = 64.dp
 private val NavMargin = 16.dp

@@ -18,10 +18,12 @@ import top.niunaijun.blackbox.utils.compat.BuildCompat;
 
 public class DaemonService extends Service {
     public static final String TAG = "DaemonService";
-    private static final int NOTIFY_ID = BlackBoxCore.getHostPkg().hashCode();
-    private static final String CHANNEL_ID = "blackbox_daemon_channel";
-    private static final String CHANNEL_NAME = "BlackBox Daemon Service";
-    private static final String CHANNEL_DESCRIPTION = "Keeps BlackBox core services running";
+    // Bliss: reuse the clone-session notification slot so the daemon and the
+    // host CloneSessionService collapse into ONE visible notification.
+    private static final int NOTIFY_ID = 43;
+    private static final String CHANNEL_ID = "FluxLinuxCloneSession_v1";
+    private static final String CHANNEL_NAME = "Bliss Clone Space";
+    private static final String CHANNEL_DESCRIPTION = "Shows while clone apps run inside Bliss";
 
     @Override
     public IBinder onBind(Intent intent) {
@@ -97,7 +99,15 @@ public class DaemonService extends Service {
         }
     }
 
-    
+    private int resolveSmallIcon() {
+        try {
+            int res = getResources().getIdentifier("ic_stat_bliss", "drawable", getPackageName());
+            return res != 0 ? res : android.R.drawable.ic_dialog_info;
+        } catch (Throwable t) {
+            return android.R.drawable.ic_dialog_info;
+        }
+    }
+
     private boolean startForegroundService() {
         try {
             Notification notification = createNotification();
@@ -119,9 +129,9 @@ public class DaemonService extends Service {
     private Notification createNotification() {
         try {
             NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
-                .setContentTitle("BlackBox Core")
-                .setContentText("Core services are running")
-                .setSmallIcon(android.R.drawable.ic_dialog_info)
+                .setContentTitle("Bliss")
+                .setContentText("Clone space is active")
+                .setSmallIcon(resolveSmallIcon())
                 .setPriority(NotificationCompat.PRIORITY_LOW)
                 .setOngoing(true)
                 .setAutoCancel(false);
@@ -146,14 +156,8 @@ public class DaemonService extends Service {
             Log.i(TAG, "DaemonInnerService -> onStartCommand");
             
             try {
-                
-                NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-                if (nm != null) {
-                    nm.cancel(NOTIFY_ID);
-                    Log.d(TAG, "Notification cancelled successfully");
-                }
-                
-                
+                // Bliss: do NOT cancel the foreground notification here — it is the
+                // single merged "Bliss clone space" notification shared with the host.
                 stopSelf();
                 return START_NOT_STICKY;
                 

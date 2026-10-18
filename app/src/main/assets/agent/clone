@@ -1,0 +1,194 @@
+#!/bin/sh
+# Bliss clone CLI - drive apps running inside Bliss's clone space from any terminal.
+#
+# Apps "cloned" into Bliss run on a hidden virtual display. This script talks to
+# the running Bliss app through its file bridge and lets AI agents (OpenCode,
+# Claude, scripts) install/launch apps, take screenshots, OCR the screen, and
+# inject taps/swipes/text without touching the real phone screen.
+#
+# Usage:  clone <command> [args...]     (see: clone help)
+set -u
+
+find_bridge() {
+  # 1) explicit override  2) proot bind mount  3) app data dir (host shell / chroot)
+  for d in "${BLISS_CLONE_DIR:-}" /bliss/bridge /data/data/com.nopiece.bliss/files/clone/bridge; do
+    [ -n "$d" ] && [ -d "$d/req" ] && { printf '%s' "$d"; return 0; }
+  done
+  for d in "${BLISS_CLONE_DIR:-}" /bliss/bridge /data/data/com.nopiece.bliss/files/clone/bridge; do
+    [ -n "$d" ] && [ -d "$d" ] && { printf '%s' "$d"; return 0; }
+  done
+  return 1
+}
+
+BRIDGE=$(find_bridge) || {
+  echo "clone: bridge not found. Keep the Bliss app open (the clone engine must be running)." >&2
+  exit 2
+}
+REQ="$BRIDGE/req"
+RES="$BRIDGE/res"
+INBOX="$BRIDGE/inbox"
+mkdir -p "$REQ" "$RES" "$INBOX" 2>/dev/null
+
+wait_res() {
+  # $1 = id
+  _n=0
+  while [ ! -f "$RES/$1" ]; do
+    _n=$((_n + 1))
+    if [ "$_n" -gt 400 ]; then
+      rm -f "$REQ/$1" 2>/dev/null
+      echo "clone: timeout waiting for Bliss" >&2
+      exit 3
+    fi
+    sleep 0.2 2>/dev/null || sleep 1
+  done
+}
+
+new_id() {
+  _id="$$-$(date +%s)"
+  _i=0
+  while [ -e "$REQ/$_id" ]; do
+    _i=$((_i + 1))
+    _id="$$-$(date +%s)-$_i"
+  done
+  printf '%s' "$_id"
+}
+
+send() {
+  _cmd="$1"
+  shift
+  _id=$(new_id)
+  {
+    printf '%s\n' "$_cmd"
+    for _a in "$@"; do printf '%s\n' "$_a"; done
+  } > "$REQ/$_id" 2>/dev/null || {
+    echo "clone: cannot write to bridge (permissions?)" >&2
+    exit 2
+  }
+  wait_res "$_id"
+  _st=$(head -n 1 "$RES/$_id")
+  _body=$(tail -n +2 "$RES/$_id")
+  rm -f "$RES/$_id" 2>/dev/null
+  if [ "$_st" = "OK" ]; then
+    [ -n "$_body" ] && printf '%s\n' "$_body"
+    return 0
+  fi
+  echo "clone: ${_body:-command failed}" >&2
+  return 1
+}
+
+usage() {
+  cat <<'EOF'
+clone - control apps running inside Bliss (hidden clone display)
+
+Commands:
+  clone status                     engine / display / running app overview
+  clone list                       cloned apps (pkg|label|version per line)
+  clone install <file.apk|url>     install an APK into the clone space
+  clone uninstall <package>        remove a cloned app
+  clone launch <package>           open the app on the hidden display
+  clone kill <package>             force-stop the app
+  clone screenshot [out.png] [maxw]
+                                   save a PNG of what the app shows
+  clone ocr                        OCR the current screen (text|x|y|w|h lines)
+  clone tap <x> <y>                tap on the hidden display
+  clone swipe <x1> <y1> <x2> <y2> [ms]
+  clone text <text...>             type text into the focused field
+  clone key <BACK|HOME|ENTER>      send a key
+  clone mcp-config                 print the OpenCode/MCP config for AI agents
+  clone help                       this text
+
+Screenshots are 540-900 px wide (see Apps > Configure in Bliss).
+Coordinates are in display pixels (same as `clone status` reports).
+EOF
+}
+
+cmd="${1:-help}"
+[ $# -gt 0 ] && shift
+
+case "$cmd" in
+  status)   send status ;;
+  list)     send list ;;
+  help|-h|--help) usage ;;
+  install)
+    [ $# -ge 1 ] || { echo "usage: clone install <file.apk|url>" >&2; exit 2; }
+    case "$1" in
+      http://*|https://*) send install_url "$1" ;;
+      *)
+        [ -f "$1" ] || { echo "clone: file not found: $1" >&2; exit 2; }
+        _b=$(basename "$1")
+        cp -f "$1" "$INBOX/$_b" 2>/dev/null || { echo "clone: cannot copy APK into bridge inbox" >&2; exit 2; }
+        send install "inbox/$_b"
+        ;;
+    esac ;;
+  uninstall)
+    [ $# -ge 1 ] || { echo "usage: clone uninstall <package>" >&2; exit 2; }
+    send uninstall "$1" ;;
+  launch)
+    [ $# -ge 1 ] || { echo "usage: clone launch <package>" >&2; exit 2; }
+    send launch "$1" ;;
+  kill)
+    [ $# -ge 1 ] || { echo "usage: clone kill <package>" >&2; exit 2; }
+    send kill "$1" ;;
+  tap)
+    [ $# -ge 2 ] || { echo "usage: clone tap <x> <y>" >&2; exit 2; }
+    send tap "$1" "$2" ;;
+  swipe)
+    [ $# -ge 4 ] || { echo "usage: clone swipe <x1> <y1> <x2> <y2> [ms]" >&2; exit 2; }
+    send swipe "$1" "$2" "$3" "$4" "${5:-300}" ;;
+  text)
+    [ $# -ge 1 ] || { echo "usage: clone text <text...>" >&2; exit 2; }
+    send text "$*" ;;
+  key)
+    [ $# -ge 1 ] || { echo "usage: clone key <BACK|HOME|ENTER>" >&2; exit 2; }
+    send key "$1" ;;
+  ocr) send ocr ;;
+  screenshot)
+    _out="${1:-}"
+    _max="${2:-720}"
+    _id=$(new_id)
+    { printf 'screenshot\n%s\n' "$_max"; } > "$REQ/$_id"
+    wait_res "$_id"
+    _st=$(head -n 1 "$RES/$_id")
+    _body=$(tail -n +2 "$RES/$_id")
+    rm -f "$RES/$_id" 2>/dev/null
+    if [ "$_st" != "OK" ]; then
+      echo "clone: ${_body:-screenshot failed}" >&2
+      exit 1
+    fi
+    _file=$(printf '%s\n' "$_body" | sed -n 's/^FILE //p')
+    _size=$(printf '%s\n' "$_body" | sed -n 's/^SIZE //p')
+    if [ -z "$_file" ] || [ ! -f "$_file" ]; then
+      echo "clone: screenshot payload missing" >&2
+      exit 1
+    fi
+    if [ -n "$_out" ]; then
+      cp -f "$_file" "$_out" 2>/dev/null && rm -f "$_file"
+      echo "$_out ($_size)"
+    else
+      echo "$_file ($_size)"
+    fi ;;
+  mcp-config)
+    _dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+    cat <<EOF
+Add this to your OpenCode config (opencode.json in the project, or ~/.config/opencode/opencode.json):
+
+{
+  "\$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "bliss-clone": {
+      "type": "local",
+      "command": ["python3", "$_dir/bliss-clone-mcp"],
+      "enabled": true
+    }
+  }
+}
+
+Then prompt your agent, e.g.:
+  "use the bliss-clone tools: launch com.pinterest, take a screenshot and tell me what is on screen"
+EOF
+    ;;
+  *)
+    echo "clone: unknown command '$cmd'" >&2
+    usage
+    exit 2 ;;
+esac

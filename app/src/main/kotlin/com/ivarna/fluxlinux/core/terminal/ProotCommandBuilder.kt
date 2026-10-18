@@ -169,6 +169,12 @@ object ProotCommandBuilder {
         a += storageBinds()
         if (File("/data/data/$pkg/files/apps").isDirectory) a += "--bind=/data/data/$pkg/files/apps"
         a += "--bind=/data/data/$pkg/cache"
+        // Agent bridge for the clone space (CLI + MCP talk to Bliss through it).
+        val blissCloneDir = File("/data/data/$pkg/files/clone")
+        val blissBindTarget = File(r, "bliss")
+        if (blissCloneDir.isDirectory && blissBindTarget.isDirectory) {
+            a += "--bind=${blissCloneDir.path}:/bliss"
+        }
         a += "--bind=$termuxHome"
         for (p in SYSTEM_PATHS) {
             val real = runCatching { File(p).canonicalPath }.getOrNull() ?: continue
