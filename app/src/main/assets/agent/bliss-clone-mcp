@@ -315,16 +315,23 @@ TOOLS = [
 
 
 def respond(msg_id, result):
-    sys.stdout.write(json.dumps({"jsonrpc": "2.0", "id": msg_id, "result": result}) + "\n")
-    sys.stdout.flush()
+    try:
+        sys.stdout.write(json.dumps({"jsonrpc": "2.0", "id": msg_id, "result": result}) + "\n")
+        sys.stdout.flush()
+    except (BrokenPipeError, OSError):
+        # Client went away (e.g. was killed mid-call): exit quietly.
+        raise SystemExit(0)
 
 
 def respond_error(msg_id, code, message):
-    sys.stdout.write(json.dumps({
-        "jsonrpc": "2.0", "id": msg_id,
-        "error": {"code": code, "message": message},
-    }) + "\n")
-    sys.stdout.flush()
+    try:
+        sys.stdout.write(json.dumps({
+            "jsonrpc": "2.0", "id": msg_id,
+            "error": {"code": code, "message": message},
+        }) + "\n")
+        sys.stdout.flush()
+    except (BrokenPipeError, OSError):
+        raise SystemExit(0)
 
 
 def main():

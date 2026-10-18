@@ -5,6 +5,7 @@ import android.content.Context
 import android.util.Log
 import com.ivarna.fluxlinux.core.clone.CloneEngine
 import com.ivarna.fluxlinux.core.system.CrashLog
+import com.ivarna.fluxlinux.core.terminal.ShellIntegration
 import com.ivarna.fluxlinux.core.terminal.TermuxHostPaths
 import top.niunaijun.blackbox.BlackBoxCore
 import top.niunaijun.blackbox.app.configuration.ClientConfiguration
@@ -45,5 +46,16 @@ class FluxApp : Application() {
         runCatching { BlackBoxCore.get().doCreate() }
             .onFailure { Log.w("FluxApp", "clone engine create failed", it) }
         CloneEngine.init(this)
+        // Vendored ble.sh: bash syntax coloring + inline history suggestions
+        // (host shell + every installed guest distro). Version-stamped and
+        // idempotent, so this is a stat-only pass after the first run; keep it
+        // off the main thread (file copies + one optional su pass).
+        Thread {
+            runCatching { ShellIntegration.ensureInstalled(this) }
+                .onFailure { Log.w("FluxApp", "shell integration install failed", it) }
+        }.apply {
+            isDaemon = true
+            name = "bliss-shell-integration"
+        }.start()
     }
 }

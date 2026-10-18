@@ -177,6 +177,14 @@ object TermuxHostPaths {
             |    [ -r "${'$'}PREFIX/etc/profile" ] && . "${'$'}PREFIX/etc/profile"
             |    [ -r "${'$'}PREFIX/etc/bash.bashrc" ] && . "${'$'}PREFIX/etc/bash.bashrc"
             |fi
+            |# ble.sh (see ShellIntegration.kt): live syntax coloring (green valid /
+            |# red unknown) + inline history suggestions (Right arrow accepts).
+            |# Do NOT redirect stderr on the source line — ble.sh disables itself
+            |# when fd 2 is not a tty.
+            |if [ -n "${'$'}BASH_VERSION" ] && [ -z "${'$'}{BLE_VERSION-}" ] && [[ ${'$'}- == *i* ]] && [ -r "${'$'}PREFIX/share/bliss/ble.sh" ]; then
+            |    source "${'$'}PREFIX/share/bliss/ble.sh"
+            |    [ -r "${'$'}PREFIX/share/bliss/bliss-ble-conf.sh" ] && . "${'$'}PREFIX/share/bliss/bliss-ble-conf.sh"
+            |fi
             |""".trimMargin()
         )
     }

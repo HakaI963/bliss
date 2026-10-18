@@ -35,11 +35,50 @@ object GuestZshrcRepair {
      * [GuestRepairCache.zshrcKey]) so the banner/theme sweep runs exactly once
      * on existing installs even though the shared ZSHRC_VERSION is unchanged.
      * Bump when [DEFENSIVE_ZSHRC] / banner content changes again.
+     * r10: zsh shell integration block (syntax highlighting + autosuggestions).
      */
-    private const val REPAIR_REVISION = 9
+    private const val REPAIR_REVISION = 10
 
     /** Marker echoed by the root chroot repair payload on success. */
     internal const val CHROOT_OK_MARKER = "FOLIO_ZSH_OK"
+
+    /** Substring identifying the [BLISS_SHELL_BLOCK] marker pair. */
+    private const val SHELL_MARKER = "bliss shell integration v1"
+
+    /**
+     * Marker-guarded zsh shell integration: live syntax coloring
+     * (zsh-syntax-highlighting: green resolvable / red unknown) and inline
+     * history ghost text (zsh-autosuggestions).
+     *
+     * Loaded via OMZ's `plugins=(git zsh-autosuggestions zsh-syntax-highlighting)`
+     * when OMZ is present (syntax-highlighting last); the direct guarded sources
+     * are the fallback for bare/custom profiles. `ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE`
+     * is set both before OMZ (plugin load time) and here (idempotent).
+     *
+     * Right arrow / End already accept the suggestion by default
+     * (`ZSH_AUTOSUGGEST_ACCEPT_WIDGETS=(forward-char end-of-line ...)`, verified
+     * against zsh-autosuggestions v0.7.1 sources + README), so no bindkey is set.
+     */
+    internal val BLISS_SHELL_BLOCK = """
+# >>> bliss shell integration v1 >>>
+# Live syntax coloring (green = resolvable, red = wrong/unknown) + inline
+# history ghost text. OMZ loads both plugins above when available; the direct
+# sources below are the fallback for bare/custom zsh profiles and are guarded.
+# Right arrow / End accept the ghost suggestion (plugin default, no bindkey).
+ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=240'
+_omp="${'$'}{ZSH:-${'$'}HOME/.oh-my-zsh}/custom/plugins"
+if [ -r "${'$'}_omp/zsh-autosuggestions/zsh-autosuggestions.zsh" ] \
+    && (( ! ${'$'}{+functions[_zsh_autosuggest_start]} )); then
+  source "${'$'}_omp/zsh-autosuggestions/zsh-autosuggestions.zsh"
+fi
+# zsh-syntax-highlighting must be sourced LAST among the zle widgets.
+if [ -r "${'$'}_omp/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh" ] \
+    && (( ! ${'$'}{+ZSH_HIGHLIGHT_VERSION} )); then
+  source "${'$'}_omp/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh"
+fi
+unset _omp
+# <<< bliss shell integration v1 <<<
+""".trimStart()
 
     /** Defensive zshrc — mirrors setup_customization_debian.sh (post-fix). */
     private val DEFENSIVE_ZSHRC = """
@@ -85,6 +124,8 @@ if [ -f "${'$'}ZSH/oh-my-zsh.sh" ]; then
   DISABLE_UPDATE_PROMPT=true
   DISABLE_AUTO_UPDATE=true
   ZSH_DISABLE_COMPFIX=true
+  # Subtle ghost text for zsh-autosuggestions (set before OMZ loads it).
+  ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=240'
   plugins=(git zsh-autosuggestions zsh-syntax-highlighting)
   source "${'$'}ZSH/oh-my-zsh.sh"
 fi
@@ -94,7 +135,7 @@ fi
 
 # Bliss Linux appearance (wallpaper/colors/terminal; hash-guarded inside).
 [ -r "${'$'}HOME/.config/bliss/appearance-apply.sh" ] && sh "${'$'}HOME/.config/bliss/appearance-apply.sh" >/dev/null 2>&1 || true
-""".trimStart()
+""".trimStart() + "\n" + BLISS_SHELL_BLOCK
 
     /**
      * Patch or create guest flux `.zshrc` when needed.
@@ -194,12 +235,13 @@ PROMPT2='%F{240}> %f'
                 }
             }
             // Cheap re-verify so a reinstall / wiped profile still gets fixed:
-            // the banner source line in .zshrc is the single marker.
+            // the banner source line / shell-integration marker are the hooks.
             val wired = try {
                 if (!zshrc.isFile) false
                 else {
                     val text = zshrc.readText()
-                    text.contains("banner.sh") && text.contains("appearance-apply.sh")
+                    text.contains("banner.sh") && text.contains("appearance-apply.sh") &&
+                        text.contains(SHELL_MARKER)
                 }
             } catch (_: Exception) {
                 false
@@ -239,6 +281,14 @@ PROMPT2='%F{240}> %f'
                 ) {
                     zshrc.appendText("\n$APPEARANCE_SOURCE_BLOCK")
                     Log.i(TAG, "Appended appearance trigger to ${zshrc.absolutePath}")
+                }
+                // zsh shell integration (syntax coloring + autosuggestions):
+                // append once to healthy custom profiles; never rewrite them.
+                if (!needsRepair(text) && !text.contains(SHELL_MARKER) &&
+                    zshrc.canWrite()
+                ) {
+                    zshrc.appendText("\n$BLISS_SHELL_BLOCK")
+                    Log.i(TAG, "Appended shell integration block to ${zshrc.absolutePath}")
                 }
             } else {
                 // Create missing Bliss profile (Alpine used to never write .zshrc)
@@ -385,7 +435,17 @@ PROMPT2='%F{240}> %f'
             .append("sed -i 's|ZSH_THEME=\"agnosterzak\"|ZSH_THEME=\"bliss\"|' \"\$H/.zshrc\" 2>/dev/null || true\n")
         sb.append("  sed -i 's|/.config/folio/|/.config/bliss/|g' \"\$H/.zshrc\" 2>/dev/null || true\n")
         sb.append("fi\n")
+        // zsh shell integration (syntax coloring + autosuggestions): existing
+        // chroot profiles get the marker block appended once, like proot.
+        sb.append("if [ -f \"\$H/.zshrc\" ] && ! grep -q '").append(SHELL_MARKER)
+            .append("' \"\$H/.zshrc\" 2>/dev/null; then\n")
+        sb.append("  _put \"\$H/.zshrc.bliss-block\" '").append(b64(BLISS_SHELL_BLOCK)).append("'\n")
+        sb.append("  printf '\\n' >> \"\$H/.zshrc\" 2>/dev/null || true\n")
+        sb.append("  cat \"\$H/.zshrc.bliss-block\" >> \"\$H/.zshrc\" 2>/dev/null || true\n")
+        sb.append("  rm -f \"\$H/.zshrc.bliss-block\" 2>/dev/null || true\n")
+        sb.append("fi\n")
         sb.append("chown --reference=\"\$H\" \"\$H/.oh-my-zsh/custom/themes/bliss.zsh-theme\" 2>/dev/null || true\n")
+        sb.append("chown --reference=\"\$H\" \"\$H/.zshrc\" 2>/dev/null || true\n")
         return sb.toString()
     }
 
