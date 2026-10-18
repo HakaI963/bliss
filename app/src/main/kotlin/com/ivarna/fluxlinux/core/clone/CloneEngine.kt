@@ -85,7 +85,19 @@ object CloneEngine {
     // Configure tab (persisted in SharedPreferences).
     val displayFps = MutableStateFlow(15)
     val displayResPreset = MutableStateFlow(1)
-    val displayDpi = MutableStateFlow(280)
+    val displayDpi = MutableStateFlow(360)
+
+    /** DPI choices in Apps -> Configure; higher = smaller UI inside the clone display. */
+    val DPI_PRESETS = listOf(280, 320, 360, 420, 480)
+
+    // ---- Installed-app mode (runs REAL apps on the same hidden display) ----
+    data class SystemApp(val packageName: String, val label: String, val icon: Bitmap?)
+
+    val systemApps = MutableStateFlow<List<SystemApp>>(emptyList())
+    val runningIsSystem = MutableStateFlow(false)
+
+    /** Compatibility: launch clones on the phone's real screen (engine debugging). */
+    val cloneOnMainScreen = MutableStateFlow(false)
 
     private var appContext: Context? = null
     private var prefs: SharedPreferences? = null
@@ -111,7 +123,8 @@ object CloneEngine {
         prefs = app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).also { p ->
             displayFps.value = p.getInt("fps", 15).coerceIn(5, 60)
             displayResPreset.value = p.getInt("res", 1).coerceIn(0, RES_PRESETS.size - 1)
-            displayDpi.value = p.getInt("dpi", 280)
+            displayDpi.value = p.getInt("dpi", 360)
+            cloneOnMainScreen.value = p.getBoolean("clone_main_screen", false)
             val preset = RES_PRESETS[displayResPreset.value]
             displayW.value = preset.first
             displayH.value = preset.second
@@ -311,6 +324,13 @@ object CloneEngine {
     }
 
     fun kill(packageName: String) {
+        if (runningIsSystem.value && running.value == packageName) {
+            scope.launch {
+                val err = killSystem(packageName)
+                status.value = err ?: "Killed $packageName"
+            }
+            return
+        }
         scope.launch {
             runCatching { BlackBoxCore.get().stopPackage(packageName, USER_ID) }
             log("Killed $packageName")
@@ -448,7 +468,25 @@ object CloneEngine {
     // ---------------------------------------------------------------- launch
 
     fun launch(packageName: String) {
+        if (cloneOnMainScreen.value) {
+            // Compatibility path: engine launches on the real screen (no hidden display).
+            clearDisplayIdFile()
+            runningIsSystem.value = false
+            log("Launch requested (compatibility, main screen): $packageName")
+            val compatOk = runCatching { BlackBoxCore.get().launchApk(packageName, USER_ID) }
+                .getOrDefault(false)
+            if (compatOk) {
+                running.value = packageName
+                status.value = "Running on the phone screen (compatibility mode)"
+                appContext?.let { CloneSessionService.start(it) }
+            } else {
+                status.value = "Launch failed — see Tools > Diagnostics"
+                log("Compatibility launch rejected for $packageName")
+            }
+            return
+        }
         if (!ensureDisplay()) return
+        runningIsSystem.value = false
         log("Launch requested: $packageName")
         scope.launch {
             runCatching { BlackBoxCore.get().ensureBlackProcessInitialized() }
@@ -539,6 +577,119 @@ object CloneEngine {
         } catch (t: Throwable) {
             null
         }
+    }
+
+    // ---------------------------------------------------------------- installed apps on the hidden display
+
+    /**
+     * Real apps already installed on the phone (launchable ones). They run on
+     * the same hidden display through shell privileges (Shizuku/root), so the
+     * phone screen stays free; data stays the app's own (no clone).
+     */
+    fun refreshSystemApps() {
+        scope.launch {
+            val list = loadSystemAppsBlocking()
+            systemApps.value = list
+        }
+    }
+
+    /** Blocking list of launchable installed apps (bridge + diagnostics). */
+    fun loadSystemAppsBlocking(): List<SystemApp> {
+        val ctx = appContext ?: return emptyList()
+        val pm = ctx.packageManager
+        val intent = android.content.Intent(android.content.Intent.ACTION_MAIN)
+            .addCategory(android.content.Intent.CATEGORY_LAUNCHER)
+        val list = runCatching { pm.queryIntentActivities(intent, 0) }.getOrDefault(emptyList())
+        return list.asSequence()
+            .filter { ri ->
+                (ri.activityInfo.applicationInfo.flags and
+                    android.content.pm.ApplicationInfo.FLAG_SYSTEM) == 0
+            }
+            .map { ri ->
+                val ai = ri.activityInfo.applicationInfo
+                SystemApp(
+                    packageName = ai.packageName,
+                    label = runCatching { pm.getApplicationLabel(ai).toString() }
+                        .getOrDefault(ai.packageName),
+                    icon = runCatching { drawableToBitmap(ai.loadIcon(pm), 96, 96) }.getOrNull(),
+                )
+            }
+            .distinctBy { it.packageName }
+            .sortedBy { it.label.lowercase(Locale.ROOT) }
+            .toList()
+    }
+
+    /** pkg|label lines for the agent bridge. */
+    fun systemAppLines(): String {
+        val list = loadSystemAppsBlocking()
+        systemApps.value = list
+        return list.joinToString("\n") { "${it.packageName}|${it.label}" }
+    }
+
+    /** Launch an installed app on the hidden display (needs Shizuku or root). */
+    fun launchSystem(packageName: String): String? {
+        if (!ShellRunner.shizukuReady() && !com.ivarna.fluxlinux.core.utils.RootUtils.isRootAvailable()) {
+            return "Needs Shizuku (or root): installing/launching system apps on the hidden display uses shell privileges"
+        }
+        val ctx = appContext ?: return "no context"
+        val displayOk = runCatching {
+            kotlinx.coroutines.runBlocking {
+                kotlinx.coroutines.withContext(Dispatchers.Main) { ensureDisplay() }
+            }
+        }.getOrDefault(false)
+        if (!displayOk) return "clone display unavailable"
+        val id = currentDisplayId()
+        if (id <= 0) return "no display id"
+        val launchIntent = runCatching { ctx.packageManager.getLaunchIntentForPackage(packageName) }
+            .getOrNull()
+        val comp = launchIntent?.component ?: return "no launcher activity for $packageName"
+        val r = ShellRunner.exec(
+            "cmd", "activity", "start-activity",
+            "--display", id.toString(),
+            "--windowingMode", "1",
+            "-a", "android.intent.action.MAIN",
+            "-c", "android.intent.category.LAUNCHER",
+            "-n", comp.packageName + "/" + comp.className,
+        )
+        if (!r.ok) {
+            val err = r.stderr.ifBlank { "launch failed" }
+            log("System launch failed: ${err.take(200)}")
+            return err
+        }
+        running.value = packageName
+        runningIsSystem.value = true
+        status.value = null
+        CloneSessionService.start(ctx)
+        log("System launch: $packageName on display $id")
+        return null
+    }
+
+    /** Force-stop an installed app that was launched on the hidden display. */
+    fun killSystem(packageName: String): String? {
+        val r = ShellRunner.exec("am", "force-stop", packageName)
+        if (!r.ok) return r.stderr.ifBlank { "kill failed" }
+        log("System kill: $packageName")
+        if (running.value == packageName) {
+            running.value = null
+            runningIsSystem.value = false
+            appContext?.let { CloneSessionService.stop(it) }
+        }
+        return null
+    }
+
+    /** Tools toggle: run clone apps on the phone's own screen (engine debugging). */
+    fun setCloneOnMainScreen(enabled: Boolean) {
+        cloneOnMainScreen.value = enabled
+        prefs?.edit()?.putBoolean("clone_main_screen", enabled)?.apply()
+        log(if (enabled) "Compatibility: clones launch on the main screen" else "Compatibility off: clones launch on the hidden display")
+    }
+
+    /** Tail of the engine's own log file (files/logs/blackbox.log). */
+    fun engineLogTail(maxLines: Int = 120): List<String> {
+        val ctx = appContext ?: return emptyList()
+        val f = File(ctx.filesDir, "logs/blackbox.log")
+        if (!f.isFile) return emptyList()
+        return runCatching { f.readLines().takeLast(maxLines) }.getOrDefault(emptyList())
     }
 
     // ---------------------------------------------------------------- agent API (CLI / MCP bridge)

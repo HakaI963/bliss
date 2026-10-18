@@ -29,8 +29,9 @@ object CloneBridge {
     private var started = false
 
     private const val HELP = """Bliss clone bridge commands:
-status | list | install <path> | install_url <url> | launch <pkg> | kill <pkg> |
-uninstall <pkg> | screenshot [maxWidth] | ocr | tap <x> <y> |
+status | list | list_system | install <path> | install_url <url> |
+launch <pkg> | kill <pkg> | uninstall <pkg> | launch_system <pkg> | kill_system <pkg> |
+screenshot [maxWidth] | ocr | tap <x> <y> |
 swipe <x1> <y1> <x2> <y2> [ms] | text <value> | key <BACK|HOME|ENTER> | help"""
 
     fun start(ctx: Context) {
@@ -180,6 +181,22 @@ swipe <x1> <y1> <x2> <y2> [ms] | text <value> | key <BACK|HOME|ENTER> | help"""
                     } else {
                         ocrLines.joinToString("\n") { "${it.text}|${it.x}|${it.y}|${it.w}|${it.h}" }
                     }
+                }
+
+                "list_system" -> payload = CloneEngine.systemAppLines()
+
+                "launch_system" -> {
+                    val pkg = args.firstOrNull() ?: throw IllegalArgumentException("launch_system needs a package")
+                    val err = CloneEngine.launchSystem(pkg)
+                    if (err != null) throw IllegalStateException(err)
+                    payload = "launched $pkg on the hidden display"
+                }
+
+                "kill_system" -> {
+                    val pkg = args.firstOrNull() ?: throw IllegalArgumentException("kill_system needs a package")
+                    val err = CloneEngine.killSystem(pkg)
+                    if (err != null) throw IllegalStateException(err)
+                    payload = "killed $pkg"
                 }
 
                 "help" -> payload = HELP

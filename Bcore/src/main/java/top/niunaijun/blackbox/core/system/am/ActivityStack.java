@@ -286,7 +286,8 @@ public class ActivityStack {
         shadow.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         shadow.addFlags(launchMode);
 
-        BlackBoxCore.getContext().startActivity(shadow,
+        top.niunaijun.blackbox.bliss.BlissLaunchRelay.start(
+                BlackBoxCore.getContext(), shadow,
                 top.niunaijun.blackbox.bliss.BlissDisplay.launchOptions(
                         BlackBoxCore.getContext(), null));
         return 0;

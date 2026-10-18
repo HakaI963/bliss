@@ -66,8 +66,8 @@ enum class BottomTab(val title: String, val icon: ImageVector) {
  */
 private val BottomNavItems = listOf(BottomTab.HOME, BottomTab.DISTROS, BottomTab.APPS, BottomTab.TOOLS)
 
-private val NavHeight = 64.dp
-private val NavMargin = 16.dp
+private val NavHeight = 56.dp
+private val NavMargin = 12.dp
 private val NavEdgeWidth = 0.75.dp
 private val NavPillShape = RoundedCornerShape(percent = 50)
 private val NavItemShape = RoundedCornerShape(50)
