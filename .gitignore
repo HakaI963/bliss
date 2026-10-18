@@ -41,3 +41,4 @@ app/release
 .kotlin
 flux.jks
 keystore.properties
+__pycache__/

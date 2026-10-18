@@ -409,3 +409,60 @@ The historical "verify before restarting" checklist is fully resolved: nav crash
 - Every item in §4, §4b, §4c, §4d, §4e, §4f, §4g marked DONE — **done** (on-device confirmation is §10.4).
 - Branding: **"Bliss"** everywhere user-visible (Kotlin, XML, 90 scripts, prompts, logs) **and in file/asset names** (round 6); only functional identifiers (`FLUX_*`, `flux` user, `folio-banner` functions, `Folio*` class names, `Theme.Folio`, `com.ivarna.fluxlinux`) and the frozen host-contract names (`fluxlinux-host.env` dual-write, `~/.fluxlinux` marker) remain.
 - Working tree verified locally by: `bash -n` on all 90 scripts; art equality across the 6 writers (md5-identical payload) + `assets/banner/banner.sh` byte-identical to the canonical POSIX sticker; banner sandbox (once-per-shell, multi-source, opt-out, non-interactive; bash/zsh/dash); rc dedupe idempotency; nested-comment-aware brace/paren scan on all 181 `.kt` + import-resolution sweep; res color-literal check; byte-identical guard for `host/setup_termux.sh`; chunked-staging simulation (byte-exact reassembly, ≤81 KB argv); cross-file signature checks for every refactored API.
+
+---
+
+## 12. Round 11 — copy-space fixes, Apps tab, agent MCP bridge (2026-10-18)
+
+**User requests (screenshots ss1–ss4):**
+1. ss1: in every distro, live coloring of the typed command (invalid/half → red, valid → green) + history auto-suggestions accepted quickly (arrow key).
+2. ss2: recents card showed `[B0]Bliss` → must be `Bliss`.
+3. ss3: notification showed "BlackBox Core" → must be gone.
+4. ss4: clone app stuck on "loading" (never ran); plus a UI overhaul: dock = Home · Distros · **Apps** · **Tools**; Settings → small gear in the top bar (next to the embedded/X11 pill); Apps tab lists cloned apps and opens a per-app view with top tabs **Configure / Display / Logs**; Configure = fps, resolution, DPI; Display = watch/control the app; Logs = live input/engine log; AI agents (OpenCode in a distro) must be able to screenshot the hidden display, OCR it, and control apps via MCP.
+
+**Landed (commits `1d5f3a4`, `6633da3`, + shell-integration commit):**
+- ss2: `Bcore .../TaskDescriptionCompat.getTaskDescriptionLabel` returns the plain label (no `[B%d]` prefix); both hook call sites get it.
+- ss3: `DaemonService` notification rebranded to the Bliss clone channel/slot (`NOTIFY_ID = 43`, `FluxLinuxCloneSession_v1`, "Bliss — clone space is active", app icon); the inner-service notification-cancel hack removed; host `CloneSessionService` shares the slot → ONE merged notification.
+- ss4: engine splash path re-enabled (`isEnableLauncherActivity = true`) and `LauncherActivity.launch` routes the splash onto the hidden clone display via `BlissDisplay.launchOptions`; `CloneEngine.launch` calls `ensureBlackProcessInitialized`, logs every step, and a 15 s watchdog flags "no frames". Display create/release now always happen on the main thread (UI, Configure-apply and the agent bridge).
+- Dock: `BottomTab.APPS` added; `BottomNavItems = [HOME, DISTROS, APPS, TOOLS]`; Settings removed from the dock; gear `IconButton` in `TopBar` (`onOpenSettings` → `Screen.SETTINGS`).
+- New `ui/screens/ClonedAppsScreen.kt` (Apps tab): clone app list + install (file picker/URL) + per-app detail with Configure (fps 5–60, resolution presets 540×1170/720×1560/900×1950, DPI 240–360, Apply → `CloneEngine.applyDisplayConfig()`), Display (live frames + tap/swipe/type/Back/Home/Enter, Close keeps running, Kill), Logs (live tail).
+- `ToolsScreen` is now a hub: pointer to the Apps tab, agent card (`clone help`, `clone mcp-config`), engine status + last log lines.
+- `CloneEngine` additions: persisted display config, `logs` ring buffer (newest first), agent API (`installApkNow`, `installUrlNow`, `launchNow`, `killNow`, `uninstallNow`, `inputSync`, `statusLines`, `listLines`, `latestFrameBitmap`).
+- **Agent bridge** (`CloneBridge`): `<filesDir>/clone/bridge/{req,res,inbox}` file protocol (cmd + one arg per line; reply `OK|ERR` + payload; screenshots add `res/<id>.bin`). Commands: status/list/install/install_url/launch/kill/uninstall/screenshot/ocr/tap/swipe/text/key/help.
+- **Deployment** (`CloneAgentDeployer`): `assets/agent/clone` (POSIX sh CLI) + `assets/agent/bliss-clone-mcp` (stdlib Python MCP server) → host `usr/bin` + every proot rootfs `/usr/local/bin` + `/bliss` bind target; chroot rootfs via root staging + `mount --bind <filesDir>/clone <rootfs>/bliss` (best-effort).
+- `ProotCommandBuilder`: binds `<filesDir>/clone` at `/bliss` when the rootfs has the target dir.
+- **OCR**: ML Kit `text-recognition:16.0.1`, `CloneOcr` → `clone ocr` / `bliss_clone_ocr` return `text|x|y|w|h` lines.
+- **MCP tools**: `bliss_clone_status/list/install/launch/kill/uninstall/screenshot` (PNG image content)`/ocr/tap/swipe/text/key/help`; config via `clone mcp-config` (OpenCode `mcp` local server, `python3 /usr/local/bin/bliss-clone-mcp`).
+- Shell integration (ble.sh for bash + zsh plugin wiring for OMZ sessions) — see commit; deployed by `ShellIntegration` incl. host rc hook.
+
+**Known limits (next rounds):** split APK sets (.apks/.xapk/.apkm), UI-tree dump ("tap by text/class") via the engine's ProviderCall, floating mini-window, richer per-app engine compatibility.
+
+**Round 11 releases:** round-10 M1 = `bliss-debug-d9c9104` (173,931,078 B, sha256 b6de25af…); round 11 full = `bliss-debug-c281dd4` (run `39121707515`, 181,523,209 B, sha256 `649ff3adc32da815727f1e16fd2e35943c575fa0cfbea71381849ca33a1971bb`). New size from ML Kit OCR (~4 MB) + ble.sh assets (~2 MB).
+
+**Known pre-existing test drift (not from round 11):** `GuestZshrcRepairTest.repairIfNeeded_manjaro_createsPacmanWrappedZshrc` asserts `ZSH_THEME="agnosterzak"` / `pokemon-colorscripts` that `DEFENSIVE_ZSHRC` no longer contains; `repairIfNeeded_cachesCompletion_skipsSecondPass` recreates a deleted `.zshrc` on the cached path. Fix in a cleanup round.
+
+**Round 11 follow-ups (next):** .apks/.xapk/.apkm split installs; UI-tree dump + tap-by-text via engine ProviderCall (`_Black_|_init_process_` pattern in `ProxyContentProvider`); floating mini-window (window alpha/position for hidden mode); `clone ui`/`bliss_clone_ui` MCP tools; per-app engine compatibility passes; stale test repairs.
+
+---
+
+## 13. Round 12 — launch relay, installed-app mode, compact UI, themes (2026-10-18)
+
+**User feedback (round 11 build):** clone app still never rendered ("display just spinning"); the Apps tab must not carry clone *management* (that belongs in Tools) and should list runnable apps; the on-screen display window was too tall (needed scrolling); DPI too big; Kill must return to the list with a clear indicator; whole UI too big — wants compact, clean, modern, muted, theme options; ss1 coloring still absent in the Bliss (Alpine chroot, bash) screenshot while the flux flavor (Fedora chroot, zsh+OMZ) colored fine. Reference repo given: `vastobb/ShadowAuto-Build` (shell-side VirtualDisplay + uiautomator/OCR + display-targeted input) — used as the architecture reference only.
+
+**Root causes found:**
+- ss4: the engine daemon starts the clone proxy activity from a **background process**; Android 10+ BAL rules and MIUI's "display pop-up windows while running in background" gate drop those starts silently → spinner forever.
+- ss1: the chroot shell-integration pass never wired **Alpine** (`/etc/bash/bashrc`) or non-login interactive bash (`/root/.bashrc`); zsh sessions were already fine.
+
+**Landed (`dad746e`, `5f83881`, + shell-fix commit):**
+- **Launch relay**: `Bcore bliss/BlissLaunchRelay.java` + host `LaunchRelayReceiver` — the daemon broadcasts the proxy launch; the visible host process starts it (same ActivityOptions). `activity_alias`-free, no permissions.
+- **Engine log tee**: `Slog` appends to `files/logs/blackbox.log` (256 KB + rotation) → Tools > Diagnostics + Apps > Logs show real engine reasons on device (no adb).
+- **Installed-app mode** (ShadowAuto-style, but permissionless VD stays Bliss-owned): `CloneEngine.loadSystemAppsBlocking/launchSystem/killSystem` run REAL installed apps on the same hidden display via shell (`cmd activity start-activity --display N --windowingMode 1`, Shizuku or root; shell holds INTERNAL_SYSTEM_WINDOWINJECT/INTERACT_ACROSS_USERS per AOSP manifest). Bridge `list_system/launch_system/kill_system`; MCP `bliss_clone_list_installed/launch_installed/kill_installed` (16 tools).
+- **Apps tab**: list-only (Installed | Cloned pills), tap = run + watch; per-app Display/Configure/Logs; Kill → back to list with a "Killed x" notice; Display window auto-fits (34% of screen height, width- or height-driven, no scrolling).
+- **Tools tab**: clone management (APK file/URL install), Setup (Shizuku enable, overlay grant, MIUI background pop-up helper, compatibility switch "launch clones on the main screen"), Diagnostics (engine/display/running + engine log tail), agent one-liner.
+- **Themes**: `ThemePalette` CARBON/SLATE/PLUM/SAND (+ picker in Settings; Carbon unchanged; palette observed inside FolioTheme so MainActivity is untouched).
+- **Compact chrome**: dock 64→56 dp + margin 16→12; top bar padding 16/12→14/8; DPI presets 280/320/360/420/480 (default 360, everything smaller).
+- **Shell integration (bash/chroot)**: `ShellIntegration` now wires Alpine (`/etc/bash/bashrc`) + Debian (`/etc/bash.bashrc`) + `profile.d/bliss-shell.sh` + `/root/.bashrc` (+ guest user `.bashrc` in PRoot), copies the whole ble tree, and exposes `reportLines()` for Tools diagnostics.
+
+**Releases:** round 12 = `bliss-debug-<tbd>` (built from `5f83881` + shell fix).
+
+**Follow-ups:** port palette accents to the remaining hardcoded frost tokens (Frost.kt/GlassCard.kt) if the user wants stronger theming; UI-tree dump for the hidden display (uiautomator-style via shell, per ShadowAuto); H.264 screen streaming if the bitmap pipeline is too heavy; split APK installs.

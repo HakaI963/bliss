@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.sp
 import com.ivarna.fluxlinux.core.clone.CloneEngine
 import com.ivarna.fluxlinux.core.clone.ShellRunner
 import com.ivarna.fluxlinux.core.system.PhantomProcessFixer
+import com.ivarna.fluxlinux.core.terminal.ShellIntegration
 import com.ivarna.fluxlinux.ui.components.GlassSettingCard
 import com.ivarna.fluxlinux.ui.theme.fluxMutedText
 import com.ivarna.fluxlinux.ui.theme.rememberStaggerEntrance
@@ -255,6 +256,36 @@ fun ToolsScreen(onOpenApps: () -> Unit) {
                 StatusRow("Engine", if (engineReady) "Ready" else "Starting…")
                 StatusRow("Display", if (CloneEngine.currentDisplayId() > 0) "running" else "idle")
                 StatusRow("Running", running ?: "—")
+
+                Text(
+                    "Shell integration (colors + suggestions)",
+                    fontSize = 11.5.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = fluxMutedText(),
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+                Column(modifier = Modifier.heightIn(max = 140.dp).verticalScroll(rememberScrollState())) {
+                    val shellReport = remember(tick) {
+                        runCatching { ShellIntegration.reportLines(context) }.getOrDefault(emptyList())
+                    }
+                    if (shellReport.isEmpty()) {
+                        Text(
+                            "(no report yet)",
+                            fontSize = 10.sp,
+                            fontFamily = FontFamily.Monospace,
+                            color = fluxMutedText(),
+                        )
+                    } else {
+                        shellReport.forEach { line ->
+                            Text(
+                                line,
+                                fontSize = 10.sp,
+                                fontFamily = FontFamily.Monospace,
+                                color = fluxMutedText(),
+                            )
+                        }
+                    }
+                }
 
                 Text(
                     "Engine log",
