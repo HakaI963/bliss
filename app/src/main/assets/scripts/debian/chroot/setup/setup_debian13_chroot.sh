@@ -68,28 +68,48 @@ goodbye() {
     exit 1
 }
 
+# Mirror fallback for GitHub release assets: ISPs commonly block the
+# release-assets.githubusercontent.com redirect while github.com resolves.
+root_download_urls() {
+    echo "$1"
+    case "$1" in
+        https://github.com/*)
+            echo "https://ghfast.top/$1"
+            echo "https://gh-proxy.com/$1"
+            echo "https://ghproxy.net/$1"
+            ;;
+    esac
+}
+
 # Download Helper
 download_file() {
     progress "Downloading file..."
-    if [ -e "$1/$2" ]; then
+    if [ -e "$1/$2" ] && [ -s "$1/$2" ]; then
         printf "\033[1;33m[!] File already exists: %s\033[0m\n" "$2"
         printf "\033[1;33m[!] Skipping download...\033[0m\n"
-    else
-        # Try standard wget first (if available and working)
-        wget -O "$1/$2" "$3"
-        if [ $? -eq 0 ]; then
-            success "File downloaded successfully: $2"
-        else
-            error "Standard wget failed: $2."
-            progress "Trying fallback to Busybox wget..."
-            $BB wget -O "$1/$2" "$3"
-            if [ $? -eq 0 ]; then
-                 success "File downloaded successfully (Fallback)"
-            else
-                 goodbye
-            fi
-        fi
+        return 0
     fi
+    for _url in $(root_download_urls "$3"); do
+        if [ "$_url" != "$3" ]; then
+            progress "Trying mirror: $_url"
+        fi
+        rm -f "$1/$2" 2>/dev/null || true
+        # Try standard wget first (if available and working)
+        wget -O "$1/$2" "$_url"
+        if [ $? -eq 0 ] && [ -s "$1/$2" ]; then
+            success "File downloaded successfully: $2"
+            return 0
+        fi
+        error "Standard wget failed: $2."
+        progress "Trying fallback to Busybox wget..."
+        $BB wget -O "$1/$2" "$_url"
+        if [ $? -eq 0 ] && [ -s "$1/$2" ]; then
+             success "File downloaded successfully (Fallback)"
+             return 0
+        fi
+        rm -f "$1/$2" 2>/dev/null || true
+    done
+    goodbye
 }
 
 # Extraction Helper

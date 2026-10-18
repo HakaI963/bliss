@@ -62,6 +62,19 @@ resolve_rootfs_archive() {
     return 1
 }
 
+# Mirror fallback for GitHub release assets: ISPs commonly block the
+# release-assets.githubusercontent.com redirect while github.com resolves.
+root_download_urls() {
+    echo "$1"
+    case "$1" in
+        https://github.com/*)
+            echo "https://ghfast.top/$1"
+            echo "https://gh-proxy.com/$1"
+            echo "https://ghproxy.net/$1"
+            ;;
+    esac
+}
+
 download_file() {
     # $1=dir $2=filename $3=url
     progress "Downloading file..."
@@ -70,11 +83,18 @@ download_file() {
         return 0
     fi
     mkdir -p "$1" 2>/dev/null || true
-    if command -v wget >/dev/null 2>&1; then
-        wget -O "$1/$2" "$3" && success "File downloaded: $2" && return 0
-    fi
-    progress "Trying Busybox wget..."
-    $BB wget -O "$1/$2" "$3" && success "File downloaded (Fallback)" && return 0
+    for _url in $(root_download_urls "$3"); do
+        if [ "$_url" != "$3" ]; then
+            progress "Trying mirror: $_url"
+        fi
+        rm -f "$1/$2" 2>/dev/null || true
+        if command -v wget >/dev/null 2>&1; then
+            wget -O "$1/$2" "$_url" && [ -s "$1/$2" ] && success "File downloaded: $2" && return 0
+        fi
+        progress "Trying Busybox wget..."
+        $BB wget -O "$1/$2" "$_url" && [ -s "$1/$2" ] && success "File downloaded (Fallback)" && return 0
+        rm -f "$1/$2" 2>/dev/null || true
+    done
     goodbye
 }
 

@@ -29,7 +29,10 @@ import okhttp3.Request
  * access. Only then does it GET [DistroInstallProfile.rootfsUrl] from the
  * GitHub release tag `rootfs` into `<name>.partial` with HTTP Range resume
  * (D5), SHA256 + minimum-size gates (D4), cancellation, progress and a
- * free-space precheck (D11).
+ * free-space precheck (D11). Because ISPs commonly block GitHub's release
+ * asset redirect host (`release-assets.githubusercontent.com`), each download
+ * falls back to ordered public GitHub mirror proxies when the origin fails
+ * ([mirrorUrls]); a mirror that fails the SHA gate cannot poison the resume.
  *
  * Speed (B1): the first request sends `Range: bytes=<existing>-`. When the
  * server answers 206 with `Accept-Ranges: bytes`, a `Content-Range` that covers
@@ -68,6 +71,24 @@ object RootfsDownloader {
 
     /** `Content-Range: bytes <start>-<end>/<total>` (total only, never `*`). */
     private val CONTENT_RANGE_RE = Regex("""bytes\s+(\d+)-(\d+)/(\d+)""")
+
+    /** GitHub release asset URL (`https://github.com/<owner>/<repo>/releases/download/...`). */
+    private val GITHUB_RELEASE_RE =
+        Regex("""https://github\.com/[^/]+/[^/]+/releases/download/.+""")
+
+    /**
+     * Ordered public GitHub download proxies. Release-asset redirects land on
+     * `release-assets.githubusercontent.com`, which many ISPs block while
+     * `github.com` itself resolves — each prefix is tried at most once per
+     * download.
+     */
+    private val MIRROR_PREFIXES = listOf(
+        "https://ghfast.top/",
+        "https://gh-proxy.com/",
+        "https://ghproxy.net/",
+        "https://github.moeyy.xyz/",
+        "https://gh.llkk.cc/"
+    )
 
     data class Progress(
         val downloadedBytes: Long,
@@ -116,11 +137,15 @@ object RootfsDownloader {
      * 2. first verified local candidate (same concept as `bliss_install.sh`)
      *    copied into the destination → true (zero HTTP requests)
      * 3. otherwise OkHttp GET with Range resume into `<name>.partial`,
-     *    verify SHA + size, then atomic rename to the final filename.
+     *    verify SHA + size, then atomic rename to the final filename. The
+     *    origin URL is tried first, then each public GitHub mirror in order;
+     *    mirror candidates are skipped after their first hard failure.
      *
      * Cancellation and gate failures keep the `.partial` file (D5) so a later
      * call can resume. A downloaded file failing the SHA/min-size gate is
-     * deleted (D4).
+     * deleted (D4). Between mirrors the partial is kept on transport failures
+     * (identical bytes) but deleted after a gate failure so a bad mirror
+     * cannot poison the next candidate's resume.
      */
     fun ensurePresent(
         destDir: File,
@@ -183,8 +208,45 @@ object RootfsDownloader {
 
         if (isCancelled()) return false
 
-        // 3. Network download with Range resume.
-        return download(destDir, dest, archive, client, isCancelled, onProgress)
+        // 3. Network download with Range resume, trying the origin URL first
+        // and then each public GitHub mirror (release-assets redirect host is
+        // blocked by many ISPs). A SHA gate failure deletes the `.partial`
+        // before the next candidate so a bad mirror cannot poison the resume;
+        // transport failures keep it (all mirrors serve identical bytes).
+        // On the final candidate the partial is kept (D5 resume semantics).
+        // Cancellation stops the whole loop immediately.
+        val sources = mirrorUrls(archive.url)
+        for ((index, sourceUrl) in sources.withIndex()) {
+            if (isCancelled()) return false
+            if (index > 0) Log.w(TAG, "mirror failed, trying next: $sourceUrl")
+            when (download(destDir, dest, archive, sourceUrl, client, isCancelled, onProgress)) {
+                DownloadAttempt.OK -> return true
+                DownloadAttempt.GATE_FAILED -> {
+                    // Between mirrors only: a wrong mirror must not poison the
+                    // resume, but the last candidate keeps D5 semantics.
+                    if (index < sources.size - 1) {
+                        Log.w(TAG, "SHA gate failed — deleting partial before next mirror")
+                        File(destDir, archive.fileName + ".partial").delete()
+                    }
+                }
+                DownloadAttempt.FAILED -> Unit
+            }
+        }
+        return false
+    }
+
+    /** One mirror's network outcome — only [GATE_FAILED] may not resume. */
+    private enum class DownloadAttempt { OK, FAILED, GATE_FAILED }
+
+    /**
+     * Download candidates for [url]: the origin URL first, then each public
+     * GitHub proxy prefix + [url] when [url] is a GitHub release asset
+     * (`https://github.com/<owner>/<repo>/releases/download/...`).
+     * Non-release URLs return `listOf(url)`. Pure and unit-testable.
+     */
+    internal fun mirrorUrls(url: String): List<String> {
+        if (!GITHUB_RELEASE_RE.matches(url)) return listOf(url)
+        return listOf(url) + MIRROR_PREFIXES.map { prefix -> prefix + url }
     }
 
     // ── network ─────────────────────────────────────────────────────────────
@@ -193,10 +255,11 @@ object RootfsDownloader {
         destDir: File,
         dest: File,
         archive: PinnedReleaseArchive,
+        sourceUrl: String,
         client: OkHttpClient,
         isCancelled: () -> Boolean,
         onProgress: (Progress) -> Unit
-    ): Boolean {
+    ): DownloadAttempt {
         val partial = File(destDir, archive.fileName + ".partial")
 
         // Parallel segmented path (B1). The classic first request doubles as the
@@ -209,7 +272,7 @@ object RootfsDownloader {
         repeat(2) { attempt ->
             val existing = if (partial.isFile) partial.length() else 0L
             val request = Request.Builder()
-                .url(archive.url)
+                .url(sourceUrl)
                 .apply {
                     // Fresh download (attempt 0) still sends Range: bytes=0- so a
                     // range-capable server answers 206 and the parallel path can
@@ -225,7 +288,7 @@ object RootfsDownloader {
                 client.newCall(request).execute()
             } catch (e: IOException) {
                 Log.e(TAG, "Rootfs GET failed: ${e.message}")
-                return false
+                return DownloadAttempt.FAILED
             }
 
             response.use { resp ->
@@ -237,7 +300,7 @@ object RootfsDownloader {
                         partial.delete()
                         if (attempt >= 1) {
                             Log.e(TAG, "Second 416 — giving up")
-                            return false
+                            return DownloadAttempt.FAILED
                         }
                         return@use
                     }
@@ -245,7 +308,7 @@ object RootfsDownloader {
                         // Append to existing partial. If the server actually
                         // restarted the payload (200 behavior under 206), the
                         // SHA gate below deletes it — no corrupt append (D5).
-                        val body = resp.body ?: return false
+                        val body = resp.body ?: return DownloadAttempt.FAILED
                         val contentLength = body.contentLength()
                         val total = if (contentLength > 0L) existing + contentLength else -1L
                         // Parallel upgrade (B1): the open-ended 206 covers the
@@ -259,7 +322,7 @@ object RootfsDownloader {
                             )
                         ) {
                             if (!checkFreeSpace(destDir, contentLength, archive.minBytes)) {
-                                return false
+                                return DownloadAttempt.FAILED
                             }
                             Log.i(
                                 TAG,
@@ -267,38 +330,38 @@ object RootfsDownloader {
                                     "total=$total existing=$existing"
                             )
                             return downloadParallel(
-                                dest, partial, archive, client, isCancelled, onProgress,
+                                dest, partial, archive, sourceUrl, client, isCancelled, onProgress,
                                 total, existing, body
                             )
                         }
                         val remaining = if (contentLength > 0L) contentLength else -1L
                         if (!checkFreeSpace(destDir, remaining, archive.minBytes)) {
-                            return false
+                            return DownloadAttempt.FAILED
                         }
                         val ok = streamBody(body, partial, append = true, total, isCancelled, onProgress)
-                        if (!ok || isCancelled()) return false
+                        if (!ok || isCancelled()) return DownloadAttempt.FAILED
                         return finishVerified(dest, partial, archive)
                     }
                     resp.code == 200 -> {
                         // Full response — truncate/restart, never append a
                         // stale partial (D5).
-                        val body = resp.body ?: return false
+                        val body = resp.body ?: return DownloadAttempt.FAILED
                         val contentLength = body.contentLength()
                         if (!checkFreeSpace(destDir, contentLength, archive.minBytes)) {
-                            return false
+                            return DownloadAttempt.FAILED
                         }
                         val ok = streamBody(body, partial, append = false, contentLength, isCancelled, onProgress)
-                        if (!ok || isCancelled()) return false
+                        if (!ok || isCancelled()) return DownloadAttempt.FAILED
                         return finishVerified(dest, partial, archive)
                     }
                     else -> {
                         Log.e(TAG, "Rootfs download HTTP ${resp.code}")
-                        return false
+                        return DownloadAttempt.FAILED
                     }
                 }
             }
         }
-        return false
+        return DownloadAttempt.FAILED
     }
 
     /**
@@ -388,13 +451,14 @@ object RootfsDownloader {
         dest: File,
         partial: File,
         archive: PinnedReleaseArchive,
+        sourceUrl: String,
         client: OkHttpClient,
         isCancelled: () -> Boolean,
         onProgress: (Progress) -> Unit,
         total: Long,
         existing: Long,
         firstBody: okhttp3.ResponseBody
-    ): Boolean {
+    ): DownloadAttempt {
         val remaining = total - existing
         val base = remaining / PARALLEL_SEGMENTS
         val extra = remaining % PARALLEL_SEGMENTS
@@ -417,7 +481,7 @@ object RootfsDownloader {
             RandomAccessFile(partial, "rw")
         } catch (e: IOException) {
             Log.e(TAG, "parallel download: cannot open ${partial.absolutePath}: ${e.message}")
-            return false
+            return DownloadAttempt.FAILED
         }
         try {
             // Preallocate once the total is known; positional writes then never
@@ -427,7 +491,7 @@ object RootfsDownloader {
         } catch (e: IOException) {
             Log.e(TAG, "parallel download: cannot preallocate ${partial.absolutePath}: ${e.message}")
             closeQuietly(raf)
-            return false
+            return DownloadAttempt.FAILED
         }
 
         val executor = Executors.newFixedThreadPool(PARALLEL_SEGMENTS)
@@ -440,7 +504,7 @@ object RootfsDownloader {
                     executor.submit(
                         Callable {
                             runSegment(
-                                segment, raf.channel, archive.url, client, isCancelled,
+                                segment, raf.channel, sourceUrl, client, isCancelled,
                                 aborted, inFlight, written, bytesDone, total, lastEmit, onProgress
                             )
                         }
@@ -456,7 +520,7 @@ object RootfsDownloader {
             if (!segment0Ok && !aborted.get() && !isCancelled()) {
                 Log.i(TAG, "segment 0: adopted 206 body ended early — resuming via Range")
                 segment0Ok = runSegment(
-                    segments[0], raf.channel, archive.url, client, isCancelled,
+                    segments[0], raf.channel, sourceUrl, client, isCancelled,
                     aborted, inFlight, written, bytesDone, total, lastEmit, onProgress
                 )
             }
@@ -503,7 +567,7 @@ object RootfsDownloader {
         }
         closeQuietly(raf)
         Log.w(TAG, "parallel download incomplete — partial truncated to $watermark for resume")
-        return false
+        return DownloadAttempt.FAILED
     }
 
     /**
@@ -695,7 +759,7 @@ object RootfsDownloader {
         dest: File,
         partial: File,
         archive: PinnedReleaseArchive
-    ): Boolean {
+    ): DownloadAttempt {
         if (!isValid(partial, archive)) {
             // Delete the final output (D4). The partial is kept: a truncated
             // stream resumes via Range; a corrupt-complete partial self-heals
@@ -706,7 +770,7 @@ object RootfsDownloader {
                     "sha=${sha256(partial)} — keeping partial for resume"
             )
             dest.delete()
-            return false
+            return DownloadAttempt.GATE_FAILED
         }
         if (dest.exists()) dest.delete()
         if (!partial.renameTo(dest)) {
@@ -715,12 +779,12 @@ object RootfsDownloader {
             if (!partial.copyTo(dest, overwrite = true).isFile) {
                 Log.e(TAG, "Failed to finalize ${dest.absolutePath}")
                 partial.delete()
-                return false
+                return DownloadAttempt.FAILED
             }
             partial.delete()
         }
         Log.i(TAG, "Archive deployed: ${dest.absolutePath} (${dest.length()} bytes, SHA OK)")
-        return true
+        return DownloadAttempt.OK
     }
 
     // ── gates ───────────────────────────────────────────────────────────────

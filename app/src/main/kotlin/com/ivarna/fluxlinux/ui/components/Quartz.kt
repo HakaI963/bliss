@@ -189,7 +189,7 @@ fun QChevron(tint: Color = fluxMutedText()) {
 }
 
 @Composable
-fun QPill(text: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun QPill(text: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val bg = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
     val fg = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
     Text(
@@ -230,9 +230,9 @@ fun QStatusRow(label: String, value: String, valueColor: Color? = null) {
 @Composable
 fun QPrimaryButton(
     text: String,
-    onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    onClick: () -> Unit,
 ) {
     Button(
         onClick = onClick,

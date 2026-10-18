@@ -206,6 +206,19 @@ echo "TMPDIR=$TMPDIR"
 echo "DISTRO=$DISTRO"
 echo "----------------------------------------"
 
+# Mirror fallback for GitHub release assets: ISPs commonly block the
+# release-assets.githubusercontent.com redirect while github.com resolves.
+root_download_urls() {
+    echo "$1"
+    case "$1" in
+        https://github.com/*)
+            echo "https://ghfast.top/$1"
+            echo "https://gh-proxy.com/$1"
+            echo "https://ghproxy.net/$1"
+            ;;
+    esac
+}
+
 # Resolve local rootfs archive for proot-distro install ./path --name <distro>
 # Path must start with / ./ ../ or ~ so proot-distro treats it as a file, not registry.
 resolve_rootfs_archive() {
@@ -245,22 +258,28 @@ resolve_rootfs_archive() {
     mkdir -p "$CACHE_DIR" 2>/dev/null || true
     DEST="$CACHE_DIR/$ROOTFS_NAME"
     echo "Bliss: rootfs not in app paths — downloading $ROOTFS_URL"
-    if command -v curl >/dev/null 2>&1; then
-        if curl -fL --retry 3 --retry-delay 2 -o "$DEST.partial" "$ROOTFS_URL" \
-            && mv -f "$DEST.partial" "$DEST"; then
-            ROOTFS_ARCHIVE="$DEST"
-            echo "Bliss: rootfs downloaded: $ROOTFS_ARCHIVE"
-            return 0
+    for _url in $(root_download_urls "$ROOTFS_URL"); do
+        if [ "$_url" != "$ROOTFS_URL" ]; then
+            echo "Bliss: trying mirror: $_url"
         fi
         rm -f "$DEST.partial" 2>/dev/null || true
-    elif command -v wget >/dev/null 2>&1; then
-        if wget -O "$DEST.partial" "$ROOTFS_URL" && mv -f "$DEST.partial" "$DEST"; then
-            ROOTFS_ARCHIVE="$DEST"
-            echo "Bliss: rootfs downloaded: $ROOTFS_ARCHIVE"
-            return 0
+        if command -v curl >/dev/null 2>&1; then
+            if curl -fL --retry 3 --retry-delay 2 -o "$DEST.partial" "$_url" \
+                && [ -s "$DEST.partial" ] && mv -f "$DEST.partial" "$DEST"; then
+                ROOTFS_ARCHIVE="$DEST"
+                echo "Bliss: rootfs downloaded: $ROOTFS_ARCHIVE"
+                return 0
+            fi
+            rm -f "$DEST.partial" 2>/dev/null || true
+        elif command -v wget >/dev/null 2>&1; then
+            if wget -O "$DEST.partial" "$_url" && [ -s "$DEST.partial" ] && mv -f "$DEST.partial" "$DEST"; then
+                ROOTFS_ARCHIVE="$DEST"
+                echo "Bliss: rootfs downloaded: $ROOTFS_ARCHIVE"
+                return 0
+            fi
+            rm -f "$DEST.partial" 2>/dev/null || true
         fi
-        rm -f "$DEST.partial" 2>/dev/null || true
-    fi
+    done
 
     echo "Bliss: no rootfs archive found (expected $HOME/$ROOTFS_NAME from app assets)"
     return 1
