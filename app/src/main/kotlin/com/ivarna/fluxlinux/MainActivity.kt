@@ -801,6 +801,9 @@ class MainActivity : ComponentActivity() {
                                     onNavigateToInstall = onNavigateToInstall
                                 )
                             }
+                            BottomTab.TOOLS -> {
+                                com.ivarna.fluxlinux.ui.screens.ToolsScreen()
+                            }
                             BottomTab.TERMINAL -> {
                                 com.ivarna.fluxlinux.ui.screens.TerminalScreen(
                                     onBack = { currentTab = BottomTab.HOME },

@@ -258,6 +258,9 @@ dependencies {
         exclude(group = "com.github.termux.termux-app", module = "terminal-emulator")
     }
     implementation(project(":terminal-emulator"))
+    // Embedded BlackBox clone engine (Apache-2.0, see BLACKBOX-LICENSE.txt): runs
+    // cloned APKs inside Bliss on a hidden private virtual display.
+    implementation(project(":Bcore"))
 
     // Embedded Termux:X11 (cloned + integrated directly, same-package rendering)
     implementation(project(":termux-x11"))

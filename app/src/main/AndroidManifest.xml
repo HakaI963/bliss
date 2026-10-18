@@ -104,6 +104,17 @@
                 android:value="Keeps host GUI services (X11 / Pulse / desktop session) alive with a visible notification while XFCE is running." />
         </service>
 
+        <!-- Clone space keep-alive while a clone app runs on the hidden display -->
+        <service
+            android:name=".core.service.CloneSessionService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Keeps clone apps running on the hidden clone display alive, and stops them cleanly if the app is closed." />
+        </service>
+
     </application>
 
 </manifest>
