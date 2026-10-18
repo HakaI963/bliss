@@ -37,7 +37,7 @@ object GuestZshrcRepair {
      * Bump when [DEFENSIVE_ZSHRC] / banner content changes again.
      * r10: zsh shell integration block (syntax highlighting + autosuggestions).
      */
-    private const val REPAIR_REVISION = 10
+    private const val REPAIR_REVISION = 11
 
     /** Marker echoed by the root chroot repair payload on success. */
     internal const val CHROOT_OK_MARKER = "FOLIO_ZSH_OK"
@@ -313,6 +313,7 @@ PROMPT2='%F{240}> %f'
                 ensureFluxLoginShellZsh(rootfs)
                 writeLocaleProfile(rootfs)
                 writeEnsureLocaleScript(rootfs)
+                writeColorProfile(rootfs)
             }
             // Cache only after a completed pass (exception above leaves it unset).
             prefs.edit().putBoolean(cacheKey, true).apply()
@@ -519,6 +520,38 @@ exit 1
             Log.i(TAG, "Wrote ${dest.absolutePath}")
         } catch (e: Exception) {
             Log.w(TAG, "bliss-ensure-locale write failed: ${e.message}")
+        }
+    }
+
+    /**
+     * Colors for guests that never see our zsh theme: bash login shells
+     * (Alpine without zsh) get a green user@host / blue dir prompt that turns
+     * the marker red after a failed command, plus `ls --color`.
+     * ash/busybox-only guests keep their plain prompt (escapes differ there).
+     */
+    internal val COLOR_PROFILE = """
+# bliss colors (bash): green user@host, blue dir; red marker on failure.
+if [ -n "${'$'}BASH_VERSION" ] && [ -n "${'$'}PS1" ]; then
+  alias ls='ls --color=auto' 2>/dev/null
+  BLISS_PS1_OK='\[\e[32m\]\u@\h\[\e[0m\]:\[\e[34m\]\w\[\e[0m\]\$ '
+  BLISS_PS1_FAIL='\[\e[31m\]\u@\h\[\e[0m\]:\[\e[34m\]\w\[\e[0m\]\[\e[31m\]\$\[\e[0m\] '
+  PROMPT_COMMAND='[ "${'$'}?" = 0 ] && PS1="${'$'}BLISS_PS1_OK" || PS1="${'$'}BLISS_PS1_FAIL"'
+  PS1="${'$'}BLISS_PS1_OK"
+fi
+
+# ls colors for every shell, ash included (busybox ls knows --color).
+alias ls='ls --color=auto' 2>/dev/null
+""".trimStart()
+
+    internal fun writeColorProfile(rootfs: File) {
+        val dest = File(rootfs, "etc/profile.d/bliss-colors.sh")
+        try {
+            dest.parentFile?.mkdirs()
+            if (dest.isFile && !dest.canWrite()) return
+            dest.writeText(COLOR_PROFILE)
+            Log.i(TAG, "Wrote color profile at ${'$'}{dest.absolutePath}")
+        } catch (e: Exception) {
+            Log.w(TAG, "color profile write failed: ${'$'}{e.message}")
         }
     }
 

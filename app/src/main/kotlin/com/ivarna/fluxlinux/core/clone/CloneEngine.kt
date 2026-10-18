@@ -428,10 +428,16 @@ object CloneEngine {
 
     /** Install a staged APK or split-set zip. Returns null on success. */
     fun installStagedBlocking(file: File): String? {
+        val kindErr = kindError(classifyApk(file), file)
+        if (kindErr != null) return kindErr
         val (uid, err) = targetUserBlocking()
         if (err != null) return err
         val name = file.name.lowercase(Locale.ROOT)
-        return if (name.endsWith(".apks") || name.endsWith(".xapk") || name.endsWith(".apkm")) {
+        val kind = classifyApk(file)
+        return if (kind == ApkKind.SPLIT ||
+            (kind != ApkKind.SINGLE &&
+                (name.endsWith(".apks") || name.endsWith(".xapk") || name.endsWith(".apkm")))
+        ) {
             installSplitZipBlocking(file, uid)
         } else {
             installSingleBlocking(file, uid)
@@ -440,6 +446,19 @@ object CloneEngine {
 
     private fun installSingleBlocking(file: File, uid: Int): String? {
         if (!file.isFile) return "file not found: ${file.absolutePath}"
+        val ctx = appContext
+        // 1) Binder-staged install via the shell user service (no stdin piping).
+        if (ctx != null) {
+            val via = installViaUserService(ctx, listOf(file), uid)
+            if (via == "#fallback") {
+                // Service bind failed → legacy stdin path below.
+            } else if (via == null) {
+                return registerFromArchive(file) // installed
+            } else {
+                return via // pm gave an error
+            }
+        }
+        // 2) Legacy path: stream over Shizuku stdin (kept for old Shizuku versions).
         val backend = ShellRunner.backend()
         val size = file.length()
         val res = when (backend) {
@@ -462,6 +481,36 @@ object CloneEngine {
         val failure = installFailure(res)
         if (failure != null) return failure
         return registerFromArchive(file)
+    }
+
+    /**
+     * Uploads the APKs to /data/local/tmp over binder and runs one
+     * `pm install --user N -r <paths...>` from the shell. Returns:
+     * null = success, an install error string, or "#fallback" when the user
+     * service is unavailable (caller retries the legacy stdin path).
+     */
+    private fun installViaUserService(ctx: Context, files: List<File>, uid: Int): String? {
+        val bindErr = ShellVd.ensureService(ctx)
+        if (bindErr != null) {
+            log("Stage transport unavailable: $bindErr")
+            return "#fallback"
+        }
+        val remotes = ArrayList<String>(files.size)
+        try {
+            for ((i, f) in files.withIndex()) {
+                val name = "clone-" + System.currentTimeMillis() + "-" + i + "-" + f.name
+                val err = ShellVd.upload(f, name)
+                if (err != null) {
+                    log("Stage upload failed: $err")
+                    return "#fallback"
+                }
+                remotes.add(ShellVd.stagePath(name))
+            }
+            log("Staged ${files.size} apk(s) over binder, installing…")
+            return ShellVd.pmInstall(remotes, uid)
+        } finally {
+            if (remotes.isNotEmpty()) ShellVd.deleteStage(remotes)
+        }
     }
 
     /** .apks / .xapk / .apkm = zip with base.apk + split APKs. */
@@ -487,6 +536,13 @@ object CloneEngine {
         if (apks.isEmpty()) return "split set contains no APKs"
         val base = apks.firstOrNull { it.name.equals("base.apk", true) } ?: apks.first()
 
+        if (ctx != null) {
+            // Binder-staged multi-path install (base order first).
+            val ordered = apks.sortedBy { if (it == base) 0 else 1 }
+            val r = installViaUserService(ctx, ordered, uid)
+            if (r == null) return registerFromArchive(base)
+            if (r != "#fallback") return r
+        }
         val create = ShellRunner.exec("pm", "install-create", "--user", uid.toString(), "-r")
         val session = Regex("""\[(\d+)]""").find(create.combined)?.groupValues?.get(1)
             ?: return "could not create install session: ${create.combined.take(160)}"
@@ -550,6 +606,69 @@ object CloneEngine {
             saveMeta(pkg, label, runCatching { pm.getPackageInfo(pkg, 0).versionName }.getOrNull().orEmpty(), icon, null, uid)
         }
         return null
+    }
+
+    /** What the staged file actually is (content-based, not extension-based). */
+    private enum class ApkKind { SINGLE, SPLIT, WEBPAGE, UNKNOWN }
+
+    private fun classifyApk(file: File): ApkKind {
+        if (!file.isFile || file.length() < 8L) return ApkKind.UNKNOWN
+        val head = try {
+            file.inputStream().use { readFully(it, 4) }
+        } catch (t: Throwable) {
+            return ApkKind.UNKNOWN
+        }
+        if (head.size < 4 || head[0] != 'P'.code.toByte() || head[1] != 'K'.code.toByte()) {
+            val text = try {
+                file.inputStream().use { readFully(it, 256) }.toString(Charsets.UTF_8).lowercase()
+            } catch (t: Throwable) {
+                ""
+            }
+            return if (text.contains("<!doctype html") || text.contains("<html") ||
+                text.contains("{"error"") || text.contains("<title>")
+            ) {
+                ApkKind.WEBPAGE
+            } else {
+                ApkKind.UNKNOWN
+            }
+        }
+        // A real APK carries resources.arsc; a bundle (.xapk/.apks) carries apk members.
+        return try {
+            java.util.zip.ZipFile(file).use { zip ->
+                val names = zip.entries().asSequence().map { it.name.lowercase() }.toList()
+                val single = names.contains("androidmanifest.xml") && names.any { it == "resources.arsc" }
+                val bundle = names.any { it.endsWith(".apk") } || names.contains("manifest.json")
+                when {
+                    single -> ApkKind.SINGLE
+                    bundle -> ApkKind.SPLIT
+                    else -> ApkKind.SINGLE
+                }
+            }
+        } catch (t: Throwable) {
+            ApkKind.UNKNOWN
+        }
+    }
+
+    /** minSdk-safe bounded read (readNBytes is API 33+). */
+    private fun readFully(input: java.io.InputStream, max: Int): ByteArray {
+        val buf = java.io.ByteArrayOutputStream()
+        val chunk = ByteArray(4096)
+        var got = 0
+        while (got < max) {
+            val n = input.read(chunk, 0, minOf(chunk.size, max - got))
+            if (n <= 0) break
+            buf.write(chunk, 0, n)
+            got += n
+        }
+        return buf.toByteArray()
+    }
+
+    private fun kindError(kind: ApkKind, file: File): String? = when (kind) {
+        ApkKind.WEBPAGE ->
+            "That looks like a web page, not an app — open the page and copy the direct .apk/.xapk link"
+        ApkKind.UNKNOWN ->
+            "Not an app package (.apk / .xapk / .apks): ${file.name}"
+        else -> null
     }
 
     /** null when the install output means success, else a readable failure. */

@@ -1,13 +1,18 @@
 package com.ivarna.fluxlinux.ui.screens
 
+import android.app.Activity
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.ContextWrapper
 import android.graphics.Typeface
 import android.system.Os
 import android.system.OsConstants
 import android.view.KeyEvent
 import android.view.inputmethod.InputMethodManager
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateColorAsState
@@ -49,6 +54,8 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Keyboard
+import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.KeyboardHide
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalIconButton
@@ -59,12 +66,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -142,6 +151,28 @@ fun TerminalScreen(
     var shortcutConfig by remember { mutableStateOf(ShortcutBarStore.load(context)) }
     var showShortcutEditor by remember { mutableStateOf(false) }
     var showShortcutKeyEditor by remember { mutableStateOf(false) }
+
+    // Fullscreen: auto from Terminal settings, then toggled per session from
+    // the toolbar. Hides status + navigation bars; nothing else changes.
+    var immersive by rememberSaveable {
+        mutableStateOf(TerminalPreferences.isAutoFullscreen(context))
+    }
+    DisposableEffect(immersive) {
+        val window = activityWindow(context)
+        val controller = window?.let { WindowCompat.getInsetsController(it, it.decorView) }
+        if (controller != null) {
+            if (immersive) {
+                controller.systemBarsBehavior =
+                    WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                controller.hide(WindowInsetsCompat.Type.systemBars())
+            } else {
+                controller.show(WindowInsetsCompat.Type.systemBars())
+            }
+        }
+        onDispose {
+            if (immersive) controller?.show(WindowInsetsCompat.Type.systemBars())
+        }
+    }
     var editingShortcutKey by remember { mutableStateOf<TerminalShortcutKey?>(null) }
     // Launch-sticker splash: shown when the screen opens with a live session and
     // whenever a NEW session lands — not on plain switches between existing tabs.
@@ -360,7 +391,7 @@ fun TerminalScreen(
                     .only(WindowInsetsSides.Bottom)
             )
     ) {
-        Row(
+        if (!immersive) Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(48.dp)
@@ -403,6 +434,17 @@ fun TerminalScreen(
                     contentDescription = if (showExtraKeys) "Hide extra keys" else "Show extra keys",
                     tint = if (showExtraKeys) TextPrimary
                     else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+            IconButton(
+                onClick = { immersive = !immersive },
+                modifier = Modifier.size(36.dp)
+            ) {
+                Icon(
+                    imageVector = if (immersive) Icons.Filled.FullscreenExit else Icons.Filled.Fullscreen,
+                    contentDescription = if (immersive) "Exit fullscreen" else "Fullscreen",
+                    tint = TextPrimary,
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -806,4 +848,15 @@ private fun compactSessionLabel(title: String, type: String, method: String): St
     }
     val label = base + suffix
     return if (label.length <= 16) label else label.take(15) + "…"
+
+/** Unwraps ContextWrapper chains to the host Activity (for the system-bar controller). */
+private fun activityWindow(ctx: Context): android.view.Window? {
+    var c: Context = ctx
+    var hops = 0
+    while (c !is Activity && c is ContextWrapper && hops < 10) {
+        c = c.baseContext
+        hops++
+    }
+    return (c as? Activity)?.window
+}
 }

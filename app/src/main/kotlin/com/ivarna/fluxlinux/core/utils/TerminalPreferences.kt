@@ -16,6 +16,7 @@ object TerminalPreferences {
     private const val KEY_LEGACY_PROOT_LAUNCHER = "legacy_proot_launcher"
     private const val KEY_SHORTCUT_BAR = "shortcut_bar_config"
     private const val KEY_BANNER_QUALITY = "banner_quality"
+    private const val KEY_AUTO_FULLSCREEN = "auto_fullscreen"
 
     const val FONT_MIN = 10
     const val FONT_MAX = 48
@@ -55,6 +56,14 @@ object TerminalPreferences {
         prefs(context).edit()
             .putString(KEY_GUEST_LOGIN_SHELL, shell.id)
             .apply()
+    }
+
+    /** Auto-fullscreen: new terminals open with system bars hidden. */
+    fun isAutoFullscreen(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_AUTO_FULLSCREEN, false)
+
+    fun setAutoFullscreen(context: Context, on: Boolean) {
+        prefs(context).edit().putBoolean(KEY_AUTO_FULLSCREEN, on).apply()
     }
 
     /** true → open proot terminals via python `proot-distro login` (old path). */

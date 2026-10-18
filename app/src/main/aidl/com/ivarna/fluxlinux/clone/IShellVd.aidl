@@ -17,4 +17,10 @@ interface IShellVd {
     String kill(String pkg, int userId);
     String info();
     void exit();
+
+    // Staged installs: the app uploads APK bytes over binder into /data/local/tmp
+    // (no stdin piping), then the shell runs one pm install for them.
+    long stageWrite(String path, long offset, in byte[] data);
+    String pmInstall(in String[] paths, int userId);
+    void deleteStage(in String[] paths);
 }

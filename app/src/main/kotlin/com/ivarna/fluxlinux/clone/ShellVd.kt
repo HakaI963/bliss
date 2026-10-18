@@ -78,6 +78,11 @@ object ShellVd {
     private var frameMaxWidth = DEFAULT_MAX_FRAME_WIDTH
     private var frameQuality = DEFAULT_JPEG_QUALITY
 
+    // Staged installs (pm over binder; no stdin piping — the streamed `pm
+    // install -S` transport was unreliable on-device).
+    private var stageDir = "/data/local/tmp/bliss-stage"
+    private var uploadChunk = 256 * 1024
+
     // Latest-only JPEG decode queue: the oneway callback must return fast, so
     // frames are decoded on a single background thread and older pending
     // frames are dropped instead of queueing up.
@@ -257,6 +262,96 @@ object ShellVd {
             }
         } catch (t: Throwable) {
             remoteFailure("kill", t)
+        }
+    }
+
+    // ------------------------------------------------------- staged installs
+
+    /**
+     * Binds the user service only (no display). Blocking; call off the main
+     * thread. Returns null once the user service is attached, otherwise a
+     * human-readable error string ([bindIfNeeded] result).
+     */
+    fun ensureService(app: Context): String? {
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            return "ShellVd.ensureService() must be called from a background thread"
+        }
+        val context = app.applicationContext ?: app
+        return bindIfNeeded(context)
+    }
+
+    /**
+     * Remote staged path for a payload named [remoteName] — the exact path
+     * [upload] stages into; build the [pmInstall] argument list from it.
+     */
+    fun stagePath(remoteName: String): String {
+        val name = (remoteName.trim().ifBlank { System.currentTimeMillis().toString() + ".apk" })
+            .substringAfterLast('/')
+        return "$stageDir/$name"
+    }
+
+    /**
+     * Uploads a local APK file to /data/local/tmp over binder (chunked), so
+     * the shell service writes the bytes itself (no stdin). The stream is
+     * closed promptly after upload; the caller owns the file. Returns null on
+     * success.
+     */
+    fun upload(local: java.io.File, remoteName: String): String? {
+        val remote = service ?: return "ShellVd user service unavailable"
+        val remotePath = stagePath(remoteName)
+        return try {
+            java.io.FileInputStream(local).use { input ->
+                val chunk = ByteArray(uploadChunk)
+                var offset = 0L
+                while (true) {
+                    val read = input.read(chunk)
+                    if (read <= 0) break
+                    val payload = if (read == chunk.size) chunk else chunk.copyOf(read)
+                    val written = remote.stageWrite(remotePath, offset, payload)
+                    if (written < 0) {
+                        val message = "stageWrite failed at offset $offset ($remotePath)"
+                        addLog(message)
+                        return message
+                    }
+                    offset += written
+                }
+                addLog("staged $remotePath ($offset bytes)")
+                null
+            }
+        } catch (t: Throwable) {
+            remoteFailure("upload", t)
+        }
+    }
+
+    /**
+     * Runs one shell `pm install` over binder for the staged paths. Returns
+     * null on SUCCESS (the service saw "Success"), otherwise the pm output.
+     */
+    fun pmInstall(remotePaths: List<String>, userId: Int): String? {
+        val remote = service ?: return "ShellVd user service unavailable"
+        return try {
+            val text = remote.pmInstall(remotePaths.toTypedArray(), userId)
+            if (text == null || text.isEmpty()) {
+                null
+            } else {
+                addLog("pm install failed: $text")
+                text
+            }
+        } catch (t: Throwable) {
+            remoteFailure("pmInstall", t)
+        }
+    }
+
+    /** Best-effort deletion of staged payloads; every failure is ignored. */
+    fun deleteStage(remotePaths: List<String>) {
+        val remote = service
+        if (remote == null || remotePaths.isEmpty()) {
+            return
+        }
+        try {
+            remote.deleteStage(remotePaths.toTypedArray())
+        } catch (t: Throwable) {
+            addLog("deleteStage failed: ${t.message ?: t.javaClass.name}")
         }
     }
 

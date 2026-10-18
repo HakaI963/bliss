@@ -310,6 +310,104 @@ public final class ShellVdService extends IShellVd.Stub {
         }
     }
 
+    // ------------------------------------------------------------- installs
+
+    /**
+     * App-side upload of one chunk of a staged file. Only paths under
+     * {@code /data/local/tmp/} are accepted (writable by uid 2000); the write
+     * is always anchored at {@code offset} so a retried chunk overwrites itself
+     * instead of corrupting the payload. Returns the number of bytes written,
+     * or -1 on any failure (checked inputs, exceptions).
+     */
+    @Override
+    public long stageWrite(String path, long offset, byte[] data) {
+        if (path == null || data == null || !path.startsWith("/data/local/tmp/")) {
+            return -1L;
+        }
+        if (path.contains("..")) {
+            log("stageWrite rejected traversal: " + path);
+            return -1L;
+        }
+        try {
+            java.io.File file = new java.io.File(path);
+            java.io.File parent = file.getParentFile();
+            if (parent != null) {
+                parent.mkdirs();
+            }
+            try (java.io.RandomAccessFile raFile = new java.io.RandomAccessFile(file, "rw")) {
+                raFile.setLength(offset);
+                raFile.seek(offset);
+                raFile.write(data);
+            }
+            return (long) data.length;
+        } catch (Throwable t) {
+            log("stageWrite failed: " + describe(t));
+            return -1L;
+        }
+    }
+
+    /**
+     * Installs the currently staged APK(s) with the shell {@code pm install}:
+     * one process, merged stdout+stderr, "Success" anywhere in the output
+     * means the install went through. Returns "" on success, otherwise the
+     * captured output (tail-capped at 1500 chars) as an error string.
+     */
+    @Override
+    public String pmInstall(String[] paths, int userId) {
+        if (paths == null || paths.length == 0) {
+            return "no staged paths";
+        }
+        try {
+            java.lang.ProcessBuilder builder = new ProcessBuilder("pm", "install",
+                    "--user", String.valueOf(userId), "-r");
+            for (String path : paths) {
+                if (path != null && !path.isEmpty()) {
+                    builder.command().add(path);
+                }
+            }
+            builder.redirectErrorStream(true);
+            java.lang.Process process = builder.start();
+            StringBuilder output = new StringBuilder();
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    output.append(line).append('\n');
+                }
+            }
+            int code = process.waitFor();
+            String text = output.toString().trim();
+            log("pm install exit=" + code + " " + text);
+            if (text.contains("Success")) {
+                return "";
+            }
+            if (text.isEmpty()) {
+                return "pm install produced no output (exit=" + code + ")";
+            }
+            String detail = text.length() > 1500 ? text.substring(text.length() - 1500) : text;
+            return code != 0 ? "exit=" + code + ": " + detail : detail;
+        } catch (Throwable t) {
+            log("pmInstall failed: " + describe(t));
+            return "pmInstall failed: " + describe(t);
+        }
+    }
+
+    /** Best-effort removal of staged files; every failure is swallowed. */
+    @Override
+    public void deleteStage(String[] paths) {
+        if (paths == null) {
+            return;
+        }
+        for (String path : paths) {
+            if (path == null || path.isEmpty()) {
+                continue;
+            }
+            try {
+                new java.io.File(path).delete();
+            } catch (Throwable ignored) {
+            }
+        }
+    }
+
     // -------------------------------------------------------------------- misc
 
     @Override

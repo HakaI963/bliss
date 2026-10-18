@@ -485,3 +485,15 @@ The historical "verify before restarting" checklist is fully resolved: nav crash
 - Apps tab unchanged in shape: per-app Display/Configure/Logs, fit-to-screen live window fed by the shell frames.
 
 **Follow-ups:** host the user-service transport notes (bind-wait timeouts) in Diagnostics if the user reports flicker; consider JPEG quality/fps presets; drop `Bcore/` from the repo in a future cleanup.
+
+---
+
+## 15. Round 15 — clone install made reliable, Tools hub → Clone page, terminal colors + fullscreen (2026-10-18)
+
+**User feedback (first build of round 14):** 1) `INSTALL_PARSE_FAILED_NOT_APK: Failed to parse /data/app/vmdl*.tmp/base.apk` from Choose-APK / link installs — "can't clone at all". 2) Tools must be a hub again: `tools/clone` sub-page where ALL clone options appear (not everything on one page). 3) Terminal (Alpine session): no green/red colors, no fullscreen option. 4) One build, fast.
+
+**Root causes / fixes:**
+- **Parse failure:** installs streamed APK bytes over `Shizuku.newProcess` stdin (`pm install -S`) — a fragile transport, and a downloaded page/bundle misnamed `.apk` sails into a single-APK parse. Now: (a) **content-based sniffing** before install (`PK` header → zip member inspection → APK vs split bundle vs web page; friendly message for web pages), (b) installs moved to the **Shizuku UserService over binder** — `IShellVd.stageWrite` uploads the APK to `/data/local/tmp/bliss-stage/` in 256 KiB chunks (no stdin), then `pmInstall` runs one `pm install --user N -r <paths>` (multi-path = split sets), then `deleteStage`. The `-S` stdin path stays only as a fallback if the service bind fails.
+- **Tools structure:** `ToolsScreen` = hub with one "Clone apps" row; sub-page `Clone` holds every way to add apps: *Choose APK file*, *Install from link*, *From this phone* (device app list with per-app Clone buttons) + the `Added apps` list (Remove → row tap → Apps tab). BackHandler returns to the hub.
+- **Terminal colors existed only in the zsh theme; Alpine without zsh runs /etc/profile's plain bash PS1.** New `writeColorProfile()` (repair sweep, `REPAIR_REVISION` 10→11) writes `/etc/profile.d/bliss-color.sh` into the guest: green user@host, blue dir, **red `$` after a failed command**, `ls --color=auto` (bash-guarded, aliased for every shell).
+- **Fullscreen:** TerminalScreen gains a toolbar fullscreen toggle (Icons.Fullscreen/FullscreenExit) + `TerminalSettingsScreen` "Fullscreen" switch (`TerminalPreferences` key `auto_fullscreen`) so new sessions open bar-less; the header row hides while immersive; DisposableEffect restores bars on dispose.

@@ -85,6 +85,9 @@ fun TerminalSettingsScreen(
     var bannerQuality by remember {
         mutableIntStateOf(TerminalPreferences.getBannerQuality(context))
     }
+    var autoFullscreen by remember {
+        mutableStateOf(TerminalPreferences.isAutoFullscreen(context))
+    }
 
     // Staggered card entrance (30ms steps) — visual only.
     val entrance = rememberStaggerEntrance()
@@ -282,6 +285,42 @@ fun TerminalSettingsScreen(
                         modifier = Modifier.semantics {
                             contentDescription =
                                 "Guest login shell: ${if (guestShellZsh) "zsh" else "bash"}"
+                        }
+                    )
+                }
+            }
+
+            GlassSettingCard(modifier = Modifier.staggerIn(3, entrance)) {
+                Row(
+                    modifier = Modifier
+                        .padding(20.dp)
+                        .fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            "Fullscreen",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "Open terminals with the system bars hidden. The toolbar button toggles it for the current session too.",
+                            fontSize = 13.sp,
+                            lineHeight = 20.sp,
+                            color = fluxMutedText()
+                        )
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    FluxSwitch(
+                        checked = autoFullscreen,
+                        onCheckedChange = { on ->
+                            autoFullscreen = on
+                            TerminalPreferences.setAutoFullscreen(context, on)
+                        },
+                        modifier = Modifier.semantics {
+                            contentDescription = "Fullscreen terminal"
                         }
                     )
                 }
