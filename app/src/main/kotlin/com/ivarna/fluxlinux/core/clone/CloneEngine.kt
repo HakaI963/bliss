@@ -437,10 +437,10 @@ object CloneEngine {
                 runCatching { BlackBoxCore.get().stopPackage(pkg, USER_ID) }
                 running.value = null
             }
-            Handler(Looper.getMainLooper()).post { closeDisplay() }
+            kotlinx.coroutines.withContext(Dispatchers.Main) { closeDisplay() }
             delay(700)
-            if (pkg != null && ctx != null) {
-                launch(pkg)
+            if (pkg != null) {
+                launchNow(pkg)
             }
         }
     }
@@ -579,11 +579,21 @@ object CloneEngine {
 
     /** Blocking launch for the agent API. Returns null on success. */
     fun launchNow(packageName: String): String? {
-        if (!ensureDisplay()) return "clone display unavailable"
+        val displayOk = runCatching {
+            kotlinx.coroutines.runBlocking {
+                kotlinx.coroutines.withContext(Dispatchers.Main) { ensureDisplay() }
+            }
+        }.getOrDefault(false)
+        if (!displayOk) return "clone display unavailable"
         writeDisplayIdFile()
         runCatching { BlackBoxCore.get().ensureBlackProcessInitialized() }
-        val ok = runCatching { BlackBoxCore.get().launchApk(packageName, USER_ID) }
-            .getOrDefault(false)
+        val ok = runCatching {
+            kotlinx.coroutines.runBlocking {
+                kotlinx.coroutines.withContext(Dispatchers.Main) {
+                    BlackBoxCore.get().launchApk(packageName, USER_ID)
+                }
+            }
+        }.getOrDefault(false)
         if (!ok) {
             log("Agent launch rejected: $packageName")
             return "launch failed for $packageName"
