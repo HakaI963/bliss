@@ -1,10 +1,16 @@
 package com.ivarna.fluxlinux.design
 
+import android.os.Bundle
+import androidx.activity.compose.ActivityResultRegistryOwner
+import androidx.activity.compose.LocalActivityResultRegistryOwner
+import androidx.activity.result.ActivityResultRegistry
+import androidx.activity.result.contract.ActivityResultContract
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
@@ -107,8 +113,25 @@ class BlissDesignScreenshotsTest {
         paparazzi.snapshot {
             FluxLinuxTheme(themeMode = ThemeMode.DARK) {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    ToolsScreen(onOpenApps = {})
+                    // ToolsScreen owns a SAF picker; Paparazzi has no ActivityResultRegistryOwner.
+                    CompositionLocalProvider(LocalActivityResultRegistryOwner provides NoopRegistryOwner) {
+                        ToolsScreen(onOpenApps = {})
+                    }
                 }
+            }
+        }
+    }
+
+    /** Minimal owner so rememberLauncherForActivityResult() works off-device. */
+    private object NoopRegistryOwner : ActivityResultRegistryOwner {
+        override val activityResultRegistry: ActivityResultRegistry = object : ActivityResultRegistry() {
+            override fun <I : Any?, O : Any?> onLaunch(
+                requestCode: Int,
+                contract: ActivityResultContract<I, O>,
+                input: I,
+                options: Bundle?,
+            ) {
+                // no-op in screenshots
             }
         }
     }
