@@ -11,6 +11,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
@@ -43,6 +44,7 @@ object FolioMotion {
  */
 @Composable
 fun rememberStaggerEntrance(): Boolean {
+    if (isScreenshotRun()) return false
     var entering by remember { mutableStateOf(true) }
     LaunchedEffect(Unit) {
         delay(FolioMotion.StaggerWindowMs)
@@ -52,12 +54,24 @@ fun rememberStaggerEntrance(): Boolean {
 }
 
 /**
+ * True while rendering under Paparazzi (CI screenshots) or in a Compose
+ * preview: entrance animations never advance there, so content must start at
+ * rest instead of staying at alpha 0.
+ */
+@Composable
+private fun isScreenshotRun(): Boolean =
+    LocalInspectionMode.current ||
+        System.getProperty("paparazzi.test.record") != null ||
+        System.getProperty("paparazzi.test.verify") != null
+
+/**
  * One-shot stagger progress for [index]: 0 = not revealed yet, 1 = at rest.
  * Starts at 1 when [entrance] is already false (list recycling after the
  * entrance window), so recycled items never replay the animation.
  */
 @Composable
 fun rememberStaggerProgress(index: Int, entrance: Boolean): Float {
+    if (isScreenshotRun()) return 1f
     var shown by remember { mutableStateOf(!entrance) }
     LaunchedEffect(entrance, index) {
         if (entrance) {
