@@ -625,7 +625,7 @@ object CloneEngine {
                 ""
             }
             return if (text.contains("<!doctype html") || text.contains("<html") ||
-                text.contains("{"error"") || text.contains("<title>")
+                text.contains("{\"error\"") || text.contains("<title>")
             ) {
                 ApkKind.WEBPAGE
             } else {

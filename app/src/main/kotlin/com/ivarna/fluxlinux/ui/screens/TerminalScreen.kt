@@ -849,6 +849,8 @@ private fun compactSessionLabel(title: String, type: String, method: String): St
     val label = base + suffix
     return if (label.length <= 16) label else label.take(15) + "…"
 
+}
+
 /** Unwraps ContextWrapper chains to the host Activity (for the system-bar controller). */
 private fun activityWindow(ctx: Context): android.view.Window? {
     var c: Context = ctx
@@ -858,5 +860,4 @@ private fun activityWindow(ctx: Context): android.view.Window? {
         hops++
     }
     return (c as? Activity)?.window
-}
 }

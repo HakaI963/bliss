@@ -80,17 +80,15 @@ private fun ToolsHub(onOpenClone: () -> Unit) {
             .padding(horizontal = Quartz.ScreenPad, vertical = Quartz.Gap),
         verticalArrangement = Arrangement.spacedBy(Quartz.Gap),
     ) {
-        QScreenTitle("Tools", "Clone and manage apps.")
-        staggerIn(0, entrance) {
-            QSectionHeader("Features")
-            QCard {
-                QRow(
-                    title = "Clone apps",
-                    subtitle = "Add an APK, a link, or clone what is already on this phone.",
-                    onClick = onOpenClone,
-                    trailing = { QChevron() },
-                )
-            }
+        QScreenTitle("Tools", "Clone and manage apps.", modifier = Modifier.staggerIn(0, entrance))
+        QSectionHeader("Features", modifier = Modifier.staggerIn(0, entrance))
+        QCard(modifier = Modifier.staggerIn(0, entrance)) {
+            QRow(
+                title = "Clone apps",
+                subtitle = "Add an APK, a link, or clone what is already on this phone.",
+                onClick = onOpenClone,
+                trailing = { QChevron() },
+            )
         }
         Spacer(Modifier.height(96.dp))
     }
@@ -125,13 +123,10 @@ private fun CloneScreen(onOpenApps: () -> Unit, onBack: () -> Unit) {
             .padding(horizontal = Quartz.ScreenPad, vertical = Quartz.Gap),
         verticalArrangement = Arrangement.spacedBy(Quartz.Gap),
     ) {
-        staggerIn(0, entrance) {
-            QScreenTitle("Clone", "Every way to add apps to the clone space.")
-        }
+        QScreenTitle("Clone", "Every way to add apps to the clone space.", modifier = Modifier.staggerIn(0, entrance))
 
         if (backend == ShellRunner.Backend.NONE) {
-            staggerIn(0, entrance) {
-                QCard {
+            QCard(modifier = Modifier.staggerIn(0, entrance)) {
                     Text(
                         "Needs Shizuku (or root) — enable it, then retry.",
                         fontSize = 11.sp,
@@ -145,42 +140,36 @@ private fun CloneScreen(onOpenApps: () -> Unit, onBack: () -> Unit) {
                             Text("Enable Shizuku", fontSize = 12.sp)
                         }
                     }
-                }
             }
         }
 
         // 1) Add: APK file
-        staggerIn(1, entrance) {
-            QSectionHeader("APK file")
-            QCard {
-                QPrimaryButton(
-                    text = "Choose APK file",
-                    enabled = !busy,
-                ) { picker.launch(arrayOf("*/*")) }
-            }
+        QSectionHeader("APK file", modifier = Modifier.staggerIn(1, entrance))
+        QCard(modifier = Modifier.staggerIn(1, entrance)) {
+            QPrimaryButton(
+                text = "Choose APK file",
+                enabled = !busy,
+            ) { picker.launch(arrayOf("*/*")) }
         }
 
         // 2) Add: link
-        staggerIn(1, entrance) {
-            QSectionHeader("Website link")
-            QCard {
-                QTextField(
-                    value = url,
-                    onValueChange = { url = it },
-                    placeholder = "direct .apk / .xapk link",
-                )
-                QPrimaryButton(
-                    text = "Install from link",
-                    enabled = !busy && url.isNotBlank(),
-                ) { CloneEngine.installFromUrl(url) }
-            }
+        QSectionHeader("Website link", modifier = Modifier.staggerIn(1, entrance))
+        QCard(modifier = Modifier.staggerIn(1, entrance)) {
+            QTextField(
+                value = url,
+                onValueChange = { url = it },
+                placeholder = "direct .apk / .xapk link",
+            )
+            QPrimaryButton(
+                text = "Install from link",
+                enabled = !busy && url.isNotBlank(),
+            ) { CloneEngine.installFromUrl(url) }
         }
 
         // 3) Add: clone from this phone
-        staggerIn(2, entrance) {
-            QSectionHeader("From this phone")
-            QCard {
-                if (deviceApps.isEmpty()) {
+        QSectionHeader("From this phone", modifier = Modifier.staggerIn(2, entrance))
+        QCard(modifier = Modifier.staggerIn(2, entrance)) {
+            if (deviceApps.isEmpty()) {
                     Text(
                         "Loading installed apps…",
                         fontSize = 12.sp,
@@ -203,17 +192,15 @@ private fun CloneScreen(onOpenApps: () -> Unit, onBack: () -> Unit) {
                         )
                     }
                 }
-            }
         }
 
         if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
         status?.let { Text(it, fontSize = 12.sp, color = MaterialTheme.colorScheme.primary) }
 
         // Result: everything added lives here; per-app settings are in Apps.
-        staggerIn(3, entrance) {
-            QSectionHeader("Added apps")
-            QCard {
-                if (clones.isEmpty()) {
+        QSectionHeader("Added apps", modifier = Modifier.staggerIn(3, entrance))
+        QCard(modifier = Modifier.staggerIn(3, entrance)) {
+            if (clones.isEmpty()) {
                     QEmptyState("No apps added yet", "Pick an APK, paste a link, or clone from this phone.")
                 } else {
                     clones.forEachIndexed { index, app ->
@@ -247,7 +234,6 @@ private fun CloneScreen(onOpenApps: () -> Unit, onBack: () -> Unit) {
                         TextButton(onClick = onOpenApps) { Text("Open Apps", fontSize = 12.sp) }
                     }
                 }
-            }
         }
 
         if (backend != ShellRunner.Backend.NONE) {
