@@ -466,3 +466,22 @@ The historical "verify before restarting" checklist is fully resolved: nav crash
 **Releases:** round 12 = `bliss-debug-<tbd>` (built from `5f83881` + shell fix).
 
 **Follow-ups:** port palette accents to the remaining hardcoded frost tokens (Frost.kt/GlassCard.kt) if the user wants stronger theming; UI-tree dump for the hidden display (uiautomator-style via shell, per ShadowAuto); H.264 screen streaming if the bitmap pipeline is too heavy; split APK installs.
+
+---
+
+## 14. Round 14 — shell-side virtual display (ShadowAuto port), one-section Tools (2026-10-18)
+
+**User feedback (round 13 build):** Tools must have exactly ONE section — add APK — with the added apps listed right there (per-app settings live in the Apps tab); the tools sub-pages (Display/Setup/Diagnostics) were never asked for. The clone display showed nothing AND input leaked to the real screen (random taps, heat, had to reboot). "Use the ShadowAuto link — that works." Virtual display, not the device.
+
+**Root causes:**
+- Input: the app-side `input -d <id>` path is not a safe target — when the display id is not honoured the event can land on the default display (the phone). Any app-side display/injection path is a real-screen leak risk.
+- Display: app-owned VirtualDisplay + frames only in our process; nothing guaranteed the target app actually rendered there (cross-user `am start --display` on an app-owned display is not the proven path).
+
+**Landed:**
+- **Shell-side display (ShadowAuto model, binder only):** new Shizuku UserService — `IShellVd`/`IShellVdCallback` AIDL + `ShellVdService` (Java, ported from the reference: `ShellContext`, `VirtualDisplaySession` flag ladder with hidden SUPPORTS_TOUCH/OWN_FOCUS/TRUSTED, `InputBridge` with `setDisplayId`, `ScreenCapture`, `WindowManagerBridge` IME policy) — creates the VD as uid 2000 (`CAPTURE_VIDEO_OUTPUT`/`INTERNAL_SYSTEM_WINDOW`), streams JPEG frames via binder callback, injects touch/keys/text into that display only, and launches/kills apps with `am force-stop` + `am start --user U --display D -f 0x10008000 -n comp`.
+- App side `ShellVd.kt` client: bind user service (version = VERSION_CODE), `ensure(...)`, `startFrames/stopFrames`, `tap/swipe/key/text`, `launch/kill`, `frames` StateFlow. `CloneEngine` now only mirrors frames and forwards commands — **the app never injects input and never renders a display**, so leaks to the real screen are impossible.
+- Heat: default fps 10 (5-30), and killing the last clone app also `am stop-user -f <uid>` so the isolated user does not idle in the background.
+- **Tools = one section:** `Clone app` (APK file / link) + `Added apps` list (icon, name, pkg, Remove → `onOpenApps` for settings). No sub-pages, no permission cards.
+- Apps tab unchanged in shape: per-app Display/Configure/Logs, fit-to-screen live window fed by the shell frames.
+
+**Follow-ups:** host the user-service transport notes (bind-wait timeouts) in Diagnostics if the user reports flicker; consider JPEG quality/fps presets; drop `Bcore/` from the repo in a future cleanup.

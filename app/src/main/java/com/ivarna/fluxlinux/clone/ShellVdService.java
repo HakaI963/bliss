@@ -1,0 +1,642 @@
+package com.ivarna.fluxlinux.clone;
+
+import android.content.ComponentName;
+import android.content.Intent;
+import android.graphics.Bitmap;
+import android.media.Image;
+import android.os.Handler;
+import android.os.HandlerThread;
+import android.os.Parcel;
+import android.os.Process;
+import android.os.SystemClock;
+
+import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStreamReader;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.regex.Pattern;
+
+/**
+ * Shell-side (Shizuku UserService, uid 2000) owner of the clone virtual
+ * display and of everything that needs shell privileges: creating the hidden
+ * display, injecting input on it, streaming JPEG frames to the app, and
+ * launching/killing clone apps with `am`.
+ *
+ * This process is not a real application process, so all framework access goes
+ * through {@link ShellContext} and hidden APIs via reflection (allowed here:
+ * user service processes are exempt from the non-SDK interface restrictions).
+ * The class name is referenced by {@link ShellVd#ensure} through
+ * {@code UserServiceArgs}; keep the name stable. Bump nothing here — the
+ * service version comes from {@code BuildConfig.VERSION_CODE}.
+ *
+ * Everything runs behind a single lock, is null-safe and never throws across
+ * binder boundaries. The frame pump only talks to the callback through a
+ * captured reference and always closes its Image.
+ */
+public final class ShellVdService extends IShellVd.Stub {
+
+    /** Shizuku destroy transaction: server side sends 16777115, aidl declares 16777114. */
+    private static final int TRANSACTION_DESTROY_AIDL = 16777114;
+    private static final int TRANSACTION_DESTROY_SERVER = 16777115;
+
+    private static final int MAX_LOGS = 200;
+    private static final int MIN_WIDTH = 320;
+    private static final int MAX_WIDTH = 2000;
+    private static final int MIN_HEIGHT = 320;
+    private static final int MAX_HEIGHT = 2500;
+    private static final int MIN_DPI = 120;
+    private static final int MAX_DPI = 640;
+    private static final long MIN_FRAME_INTERVAL_MS = 33L;
+    private static final Pattern SAFE_PACKAGE = Pattern.compile("[A-Za-z0-9._]+");
+
+    private final Object lock = new Object();
+    private final ArrayDeque<String> logBuffer = new ArrayDeque<>();
+
+    private ShellContext shellContext;
+    private InputBridge inputBridge;
+    private DisplaySession display;
+
+    private int currentDisplayId;
+    private int displayWidth;
+    private int displayHeight;
+    private int displayDpi;
+
+    private IShellVdCallback frameCallback;
+    private HandlerThread frameThread;
+    private FramePump framePump;
+    private volatile boolean frameRunning;
+    private long framesSent;
+
+    // ------------------------------------------------------------------ display
+
+    @Override
+    public int createDisplay(int width, int height, int dpi) {
+        synchronized (lock) {
+            stopFramesLocked();
+            releaseDisplayLocked();
+            DisplaySession session = null;
+            try {
+                ShellContext context = contextLocked();
+                if (context == null) {
+                    log("createDisplay: shell context unavailable");
+                    return -1;
+                }
+                int w = clamp(width, MIN_WIDTH, MAX_WIDTH);
+                int h = clamp(height, MIN_HEIGHT, MAX_HEIGHT);
+                int d = clamp(dpi, MIN_DPI, MAX_DPI);
+                session = DisplaySession.create(context, w, h, d);
+                InputBridge bridge = new InputBridge(context);
+                display = session;
+                inputBridge = bridge;
+                currentDisplayId = session.displayId;
+                displayWidth = w;
+                displayHeight = h;
+                displayDpi = d;
+                log("display created id=" + session.displayId + " " + w + "x" + h + " dpi=" + d
+                        + (session.localImeEnabled() ? " ime=local" : " ime=unavailable"));
+                return session.displayId;
+            } catch (Throwable t) {
+                if (session != null) {
+                    try {
+                        session.release();
+                    } catch (Throwable ignored) {
+                    }
+                }
+                display = null;
+                inputBridge = null;
+                currentDisplayId = 0;
+                displayWidth = 0;
+                displayHeight = 0;
+                displayDpi = 0;
+                log("createDisplay failed: " + describe(t));
+                return -1;
+            }
+        }
+    }
+
+    @Override
+    public int displayId() {
+        synchronized (lock) {
+            return currentDisplayId;
+        }
+    }
+
+    // -------------------------------------------------------------------- input
+
+    @Override
+    public boolean tap(int x, int y) {
+        InputBridge bridge = inputBridge();
+        int id = currentDisplayIdSnapshot();
+        if (bridge == null || id <= 0) {
+            return false;
+        }
+        try {
+            return bridge.tap(id, x, y);
+        } catch (Throwable t) {
+            log("tap failed: " + describe(t));
+            return false;
+        }
+    }
+
+    @Override
+    public boolean longPress(int x, int y, int ms) {
+        InputBridge bridge = inputBridge();
+        int id = currentDisplayIdSnapshot();
+        if (bridge == null || id <= 0) {
+            return false;
+        }
+        try {
+            return bridge.longPress(id, x, y, ms);
+        } catch (Throwable t) {
+            log("longPress failed: " + describe(t));
+            return false;
+        }
+    }
+
+    @Override
+    public boolean swipe(int x1, int y1, int x2, int y2, int ms) {
+        InputBridge bridge = inputBridge();
+        int id = currentDisplayIdSnapshot();
+        if (bridge == null || id <= 0) {
+            return false;
+        }
+        try {
+            return bridge.swipe(id, x1, y1, x2, y2, ms);
+        } catch (Throwable t) {
+            log("swipe failed: " + describe(t));
+            return false;
+        }
+    }
+
+    @Override
+    public boolean key(int keyCode) {
+        InputBridge bridge = inputBridge();
+        int id = currentDisplayIdSnapshot();
+        if (bridge == null || id <= 0) {
+            return false;
+        }
+        try {
+            return bridge.key(id, keyCode);
+        } catch (Throwable t) {
+            log("key failed: " + describe(t));
+            return false;
+        }
+    }
+
+    @Override
+    public boolean text(String value) {
+        InputBridge bridge = inputBridge();
+        int id = currentDisplayIdSnapshot();
+        if (bridge == null || id <= 0 || value == null) {
+            return false;
+        }
+        try {
+            return bridge.text(id, value);
+        } catch (Throwable t) {
+            log("text failed: " + describe(t));
+            return false;
+        }
+    }
+
+    // ------------------------------------------------------------------- frames
+
+    @Override
+    public void startFrames(IShellVdCallback cb, int maxWidth, int jpegQuality, int fps) {
+        if (cb == null) {
+            return;
+        }
+        List<String> pendingLogs;
+        synchronized (lock) {
+            stopFramesLocked();
+            if (display == null) {
+                log("startFrames: no display");
+                return;
+            }
+            int quality = clamp(jpegQuality, 10, 100);
+            int rate = clamp(fps, 1, 30);
+            int cap = maxWidth <= 0 ? 0 : clamp(maxWidth, 120, 4000);
+            long interval = Math.max(MIN_FRAME_INTERVAL_MS, 1000L / rate);
+            frameCallback = cb;
+            appendLogLocked("frames started fps=" + rate + " maxWidth=" + cap + " quality=" + quality);
+            pendingLogs = new ArrayList<>(logBuffer);
+            logBuffer.clear();
+            frameThread = new HandlerThread("ShellVdFrames", Process.THREAD_PRIORITY_DISPLAY);
+            frameThread.start();
+            Handler handler = new Handler(frameThread.getLooper());
+            framePump = new FramePump(display, cb, handler, cap, quality, interval);
+            frameRunning = true;
+            handler.post(framePump);
+        }
+        for (String line : pendingLogs) {
+            try {
+                cb.onLog(line);
+            } catch (Throwable ignored) {
+            }
+        }
+    }
+
+    @Override
+    public void stopFrames() {
+        synchronized (lock) {
+            stopFramesLocked();
+            log("frames stopped");
+        }
+    }
+
+    @Override
+    public void releaseDisplay() {
+        synchronized (lock) {
+            stopFramesLocked();
+            releaseDisplayLocked();
+            log("display released");
+        }
+    }
+
+    // -------------------------------------------------------------------- apps
+
+    @Override
+    public String launch(String pkg, int userId) {
+        String packageName = pkg == null ? "" : pkg.trim();
+        if (packageName.isEmpty()) {
+            return "package required";
+        }
+        if (!SAFE_PACKAGE.matcher(packageName).matches()) {
+            return "invalid package: " + packageName;
+        }
+        int id = currentDisplayIdSnapshot();
+        if (id <= 0) {
+            return "no display";
+        }
+        String userArg = userId > 0 ? " --user " + userId : "";
+        try {
+            String component = resolveLaunchComponent(packageName, userId);
+            if (component.isEmpty()) {
+                return "no launch component for " + packageName;
+            }
+            runShell("am force-stop" + userArg + " " + shellQuote(packageName));
+            String command = "am start" + userArg
+                    + " --display " + id
+                    + " -f 0x10008000 -n " + shellQuote(component);
+            ShellResult result = runShell(command);
+            String output = result.output == null ? "" : result.output.trim();
+            log("am start " + component + " exit=" + result.exitCode + " " + output);
+            return failure(result) ? output : "";
+        } catch (Throwable t) {
+            log("launch failed: " + describe(t));
+            return "launch failed: " + describe(t);
+        }
+    }
+
+    @Override
+    public String kill(String pkg, int userId) {
+        String packageName = pkg == null ? "" : pkg.trim();
+        if (packageName.isEmpty()) {
+            return "package required";
+        }
+        if (!SAFE_PACKAGE.matcher(packageName).matches()) {
+            return "invalid package: " + packageName;
+        }
+        String userArg = userId > 0 ? " --user " + userId : "";
+        try {
+            ShellResult result = runShell("am force-stop" + userArg + " " + shellQuote(packageName));
+            String output = result.output == null ? "" : result.output.trim();
+            log("am force-stop " + packageName + " exit=" + result.exitCode + " " + output);
+            return failure(result) ? output : "";
+        } catch (Throwable t) {
+            log("kill failed: " + describe(t));
+            return "kill failed: " + describe(t);
+        }
+    }
+
+    // -------------------------------------------------------------------- misc
+
+    @Override
+    public String info() {
+        StringBuilder out = new StringBuilder();
+        synchronized (lock) {
+            out.append("displayId=").append(currentDisplayId).append('\n');
+            out.append("width=").append(displayWidth).append('\n');
+            out.append("height=").append(displayHeight).append('\n');
+            out.append("dpi=").append(displayDpi).append('\n');
+            out.append("frames=").append(framesSent).append('\n');
+            out.append("pumping=").append(frameRunning ? 1 : 0).append('\n');
+            out.append("logs=").append(logBuffer.size()).append('\n');
+        }
+        return out.toString();
+    }
+
+    @Override
+    public void exit() {
+        synchronized (lock) {
+            stopFramesLocked();
+            releaseDisplayLocked();
+            log("exit requested");
+        }
+        Thread thread = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                SystemClock.sleep(200);
+                System.exit(0);
+            }
+        }, "ShellVdExit");
+        thread.setDaemon(false);
+        thread.start();
+    }
+
+    @Override
+    public boolean onTransact(int code, Parcel data, Parcel reply, int flags) throws android.os.RemoteException {
+        if (code == TRANSACTION_DESTROY_SERVER || code == TRANSACTION_DESTROY_AIDL) {
+            // Shizuku asks the user service to die when it is unbound with remove=true.
+            exit();
+            return true;
+        }
+        return super.onTransact(code, data, reply, flags);
+    }
+
+    // ----------------------------------------------------------------- helpers
+
+    private ShellContext contextLocked() {
+        if (shellContext == null) {
+            try {
+                ShellContext.init();
+                shellContext = ShellContext.get();
+            } catch (Throwable t) {
+                shellContext = null;
+                log("shell context init failed: " + describe(t));
+            }
+        }
+        return shellContext;
+    }
+
+    private ShellContext context() {
+        synchronized (lock) {
+            return contextLocked();
+        }
+    }
+
+    private InputBridge inputBridge() {
+        synchronized (lock) {
+            return inputBridge;
+        }
+    }
+
+    private int currentDisplayIdSnapshot() {
+        synchronized (lock) {
+            return currentDisplayId;
+        }
+    }
+
+    private void releaseDisplayLocked() {
+        DisplaySession session = display;
+        display = null;
+        inputBridge = null;
+        currentDisplayId = 0;
+        displayWidth = 0;
+        displayHeight = 0;
+        displayDpi = 0;
+        if (session != null) {
+            try {
+                session.release();
+            } catch (Throwable t) {
+                log("display release failed: " + describe(t));
+            }
+        }
+    }
+
+    private void stopFramesLocked() {
+        frameRunning = false;
+        HandlerThread thread = frameThread;
+        frameThread = null;
+        FramePump pump = framePump;
+        framePump = null;
+        frameCallback = null;
+        if (pump != null) {
+            try {
+                pump.handler.removeCallbacks(pump);
+            } catch (Throwable ignored) {
+            }
+        }
+        if (thread != null) {
+            try {
+                thread.quitSafely();
+            } catch (Throwable ignored) {
+            }
+        }
+    }
+
+    private void log(String line) {
+        String message = line == null ? "" : line;
+        IShellVdCallback cb;
+        synchronized (lock) {
+            appendLogLocked(message);
+            cb = frameCallback;
+        }
+        if (cb != null) {
+            try {
+                cb.onLog(message);
+            } catch (Throwable ignored) {
+            }
+        }
+    }
+
+    private void appendLogLocked(String message) {
+        while (logBuffer.size() >= MAX_LOGS) {
+            logBuffer.removeFirst();
+        }
+        logBuffer.addLast(message);
+    }
+
+    private String resolveLaunchComponent(String packageName, int userId) throws Exception {
+        if (userId <= 0) {
+            try {
+                ShellContext context = context();
+                if (context != null) {
+                    Intent intent = context.getPackageManager().getLaunchIntentForPackage(packageName);
+                    ComponentName component = intent == null ? null : intent.getComponent();
+                    if (component != null) {
+                        return component.flattenToShortString();
+                    }
+                }
+            } catch (Throwable t) {
+                log("getLaunchIntentForPackage failed: " + describe(t));
+            }
+        }
+        // Install state for another user is not visible to this process's
+        // PackageManager, so ask the shell `cmd` for the launcher activity.
+        String command = "cmd package query-activities --brief --user " + Math.max(userId, 0)
+                + " -a android.intent.action.MAIN -c android.intent.category.LAUNCHER"
+                + " | grep '^" + packageName + "/' | head -1";
+        ShellResult result = runShell(command);
+        if (result.output != null) {
+            for (String line : result.output.split("\n")) {
+                String trimmed = line.trim();
+                if (trimmed.startsWith(packageName + "/")) {
+                    return trimmed;
+                }
+            }
+        }
+        return "";
+    }
+
+    private static boolean failure(ShellResult result) {
+        if (result.exitCode != 0) {
+            return true;
+        }
+        String output = result.output == null ? "" : result.output;
+        return output.contains("Error") || output.contains("Exception");
+    }
+
+    private static ShellResult runShell(String command) throws Exception {
+        java.lang.Process process = new ProcessBuilder("sh", "-c", command).redirectErrorStream(true).start();
+        StringBuilder output = new StringBuilder();
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                output.append(line).append('\n');
+            }
+        }
+        int code = process.waitFor();
+        return new ShellResult(code, output.toString());
+    }
+
+    private static String shellQuote(String value) {
+        return "'" + value.replace("'", "'\\''") + "'";
+    }
+
+    private static byte[] encodeJpeg(Bitmap bitmap, int quality) {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        try {
+            if (!bitmap.compress(Bitmap.CompressFormat.JPEG, quality, out)) {
+                return null;
+            }
+            return out.toByteArray();
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    private static boolean isDeadObject(Throwable t) {
+        for (Throwable current = t; current != null; current = current.getCause()) {
+            if (current.getClass().getName().contains("DeadObjectException")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static String describe(Throwable t) {
+        if (t == null) {
+            return "unknown error";
+        }
+        String message = t.getMessage();
+        return t.getClass().getSimpleName() + (message == null || message.isEmpty() ? "" : ": " + message);
+    }
+
+    private static int clamp(int value, int min, int max) {
+        return Math.max(min, Math.min(max, value));
+    }
+
+    private static final class ShellResult {
+        final int exitCode;
+        final String output;
+
+        ShellResult(int exitCode, String output) {
+            this.exitCode = exitCode;
+            this.output = output;
+        }
+    }
+
+    /**
+     * Reads the newest composed frame at the requested rate, downscales it to
+     * maxWidth (0 = native size), JPEG-encodes it and hands it to the app
+     * through the oneway callback. A dead callback stops the pump; anything
+     * else is treated as a transient error and the pump keeps going.
+     */
+    private final class FramePump implements Runnable {
+        private final DisplaySession session;
+        private final IShellVdCallback callback;
+        private final Handler handler;
+        private final int maxWidth;
+        private final int quality;
+        private final long intervalMs;
+
+        FramePump(DisplaySession session, IShellVdCallback callback, Handler handler,
+                  int maxWidth, int quality, long intervalMs) {
+            this.session = session;
+            this.callback = callback;
+            this.handler = handler;
+            this.maxWidth = maxWidth;
+            this.quality = quality;
+            this.intervalMs = intervalMs;
+        }
+
+        @Override
+        public void run() {
+            if (!frameRunning) {
+                return;
+            }
+            long started = SystemClock.uptimeMillis();
+            Image image = null;
+            Bitmap decoded = null;
+            Bitmap output = null;
+            try {
+                image = session.acquireLatestImage();
+                if (image != null) {
+                    decoded = ScreenCapture.bitmapFromImage(image);
+                }
+                if (decoded != null) {
+                    output = decoded;
+                    if (maxWidth > 0 && decoded.getWidth() > maxWidth) {
+                        int targetHeight = Math.max(1,
+                                Math.round(decoded.getHeight() * (maxWidth / (float) decoded.getWidth())));
+                        Bitmap scaled = Bitmap.createScaledBitmap(decoded, maxWidth, targetHeight, true);
+                        if (scaled != null && scaled != decoded) {
+                            output = scaled;
+                            decoded.recycle();
+                            decoded = null;
+                        }
+                    }
+                    byte[] jpeg = encodeJpeg(output, quality);
+                    if (jpeg != null && jpeg.length > 0) {
+                        callback.onFrame(jpeg, output.getWidth(), output.getHeight());
+                        synchronized (lock) {
+                            framesSent++;
+                        }
+                    }
+                }
+            } catch (Throwable t) {
+                if (isDeadObject(t)) {
+                    log("frame callback died, stopping pump");
+                    frameRunning = false;
+                    return;
+                }
+                log("frame error: " + describe(t));
+            } finally {
+                if (output != null && output != decoded) {
+                    try {
+                        output.recycle();
+                    } catch (Throwable ignored) {
+                    }
+                }
+                if (decoded != null) {
+                    try {
+                        decoded.recycle();
+                    } catch (Throwable ignored) {
+                    }
+                }
+                if (image != null) {
+                    try {
+                        image.close();
+                    } catch (Throwable ignored) {
+                    }
+                }
+            }
+            if (frameRunning) {
+                long elapsed = SystemClock.uptimeMillis() - started;
+                handler.postDelayed(this, Math.max(1L, intervalMs - elapsed));
+            }
+        }
+    }
+}
