@@ -1,9 +1,9 @@
 package com.ivarna.fluxlinux.design
 
 import android.os.Bundle
-import androidx.activity.compose.ActivityResultRegistryOwner
 import androidx.activity.compose.LocalActivityResultRegistryOwner
 import androidx.activity.result.ActivityResultRegistry
+import androidx.activity.result.ActivityResultRegistryOwner
 import androidx.activity.result.contract.ActivityResultContract
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
