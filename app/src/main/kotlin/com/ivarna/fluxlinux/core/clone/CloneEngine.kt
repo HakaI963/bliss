@@ -624,7 +624,7 @@ object CloneEngine {
     /** Synchronous input injection for the agent API (input -d <display> ...). */
     fun inputSync(args: List<String>): Boolean {
         val base = displayArgs() ?: return false
-        val r = ShellRunner.exec(*(base + args).toTypedArray())
+        val r = ShellRunner.exec(*base, *args.toTypedArray())
         log("Agent input ${args.joinToString(" ")} -> ${if (r.ok) "ok" else "failed"}")
         return r.ok
     }

@@ -61,7 +61,7 @@ swipe <x1> <y1> <x2> <y2> [ms] | text <value> | key <BACK|HOME|ENTER> | help"""
         }
     }
 
-    private fun handle(base: File, requestFile: File) {
+    private suspend fun handle(base: File, requestFile: File) {
         val id = requestFile.name
         val lines = runCatching { requestFile.readLines() }.getOrDefault(emptyList())
         val cmd = lines.firstOrNull()?.trim().orEmpty()
