@@ -104,13 +104,6 @@
                 android:value="Keeps host GUI services (X11 / Pulse / desktop session) alive with a visible notification while XFCE is running." />
         </service>
 
-        <!-- Engine launch relay: starts clone proxy activities from the visible host
-             process so Android/MIUI background-activity-start rules can't drop them. -->
-        <receiver
-            android:name=".core.clone.LaunchRelayReceiver"
-            android:enabled="true"
-            android:exported="false" />
-
         <!-- Clone space keep-alive while a clone app runs on the hidden display -->
         <service
             android:name=".core.service.CloneSessionService"

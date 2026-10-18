@@ -182,18 +182,14 @@ def call_tool(name, args):
         ok, body = bridge_call("key", str(args.get("key", "BACK")))
         return text_result(body if ok else "error: " + body, not ok)
 
-    if name == "bliss_clone_list_installed":
-        ok, body = bridge_call("list_system", timeout=60)
+    if name == "bliss_clone_list_device":
+        ok, body = bridge_call("list_device", timeout=60)
         if not ok:
             return text_result("error: " + body, True)
-        return text_result(body if body else "(no launchable installed apps)")
+        return text_result(body if body else "(no apps available to clone)")
 
-    if name == "bliss_clone_launch_installed":
-        ok, body = bridge_call("launch_system", args.get("package", ""), timeout=60)
-        return text_result(body if ok else "error: " + body, not ok)
-
-    if name == "bliss_clone_kill_installed":
-        ok, body = bridge_call("kill_system", args.get("package", ""))
+    if name == "bliss_clone_clone_device":
+        ok, body = bridge_call("clone_device", args.get("package", ""), timeout=600)
         return text_result(body if ok else "error: " + body, not ok)
 
     if name == "bliss_clone_help":
@@ -202,20 +198,21 @@ def call_tool(name, args):
     return text_result("error: unknown tool %s" % name, True)
 
 
-HELP_TEXT = """Bliss clone tools drive apps on a hidden virtual display (phone screen stays free).
+HELP_TEXT = """Bliss clone tools run apps inside Bliss on a hidden display (phone screen stays free).
 
-Two ways to run an app:
-  A) Installed apps on the phone (recommended for Instagram / Pinterest / LINE ...):
-     1. bliss_clone_list_installed                    -> packages
-     2. bliss_clone_launch_installed {package}        -> open on the hidden display
-     3. bliss_clone_screenshot / bliss_clone_ocr      -> see it
-     4. bliss_clone_tap / swipe / text / key          -> control it
-     5. bliss_clone_kill_installed {package}          -> stop
-  B) APKs that live inside Bliss (clone space):
-     bliss_clone_install -> bliss_clone_launch -> screenshot/ocr/tap -> bliss_clone_kill
+The classic loop (Instagram / Pinterest / LINE / any clone):
+  1. bliss_clone_list                 -> what is cloned inside Bliss already
+  2. bliss_clone_list_device          -> apps on the phone that can be cloned (one time)
+     bliss_clone_clone_device {package}  -> copy an installed app into the Bliss space
+     (or bliss_clone_install_url {url} / bliss_clone_install {apk path})
+  3. bliss_clone_launch {package}     -> open it on the hidden display
+  4. bliss_clone_screenshot / bliss_clone_ocr   -> see the screen
+  5. bliss_clone_tap / swipe / text / key       -> act on it
+  6. bliss_clone_kill {package}       -> stop when done
 
-bliss_clone_status reports the display size; every screenshot/OCR coordinate is
-in those display pixels. Requires Shizuku (or root) for launching + touch.
+bliss_clone_status reports the display size; screenshot/OCR coordinates are in
+those display pixels. Cloned apps keep their own data (separate Android user),
+so log in inside the clone once and it stays signed in.
 """
 
 TOOLS = [
@@ -323,22 +320,13 @@ TOOLS = [
         },
     },
     {
-        "name": "bliss_clone_list_installed",
-        "description": "List apps already installed on the phone that can run on the hidden display (package|label).",
+        "name": "bliss_clone_list_device",
+        "description": "List apps installed on the phone that can be cloned into the Bliss space (package|label).",
         "inputSchema": {"type": "object", "properties": {}},
     },
     {
-        "name": "bliss_clone_launch_installed",
-        "description": "Open an installed app (Instagram, Pinterest, LINE, ...) on the hidden display without touching the phone screen.",
-        "inputSchema": {
-            "type": "object",
-            "properties": {"package": {"type": "string"}},
-            "required": ["package"],
-        },
-    },
-    {
-        "name": "bliss_clone_kill_installed",
-        "description": "Force-stop an installed app that was launched on the hidden display.",
+        "name": "bliss_clone_clone_device",
+        "description": "Clone an app installed on the phone into the Bliss space (its APK/splits are copied; the original is untouched).",
         "inputSchema": {
             "type": "object",
             "properties": {"package": {"type": "string"}},

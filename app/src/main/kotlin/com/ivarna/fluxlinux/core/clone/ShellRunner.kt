@@ -3,14 +3,17 @@ package com.ivarna.fluxlinux.core.clone
 import android.content.pm.PackageManager
 import com.ivarna.fluxlinux.core.utils.RootUtils
 import rikka.shizuku.Shizuku
+import java.io.File
+import java.io.InputStream
 
 /**
  * Privileged shell for the clone space.
  *
  * Backend order: Shizuku (shell uid, user-granted) -> root (su) -> none.
- * Everything the clone feature needs at shell level (touch injection into the
- * hidden clone display, key events, text) goes through here, so the same code
- * works on a stock non-rooted phone with Shizuku, or on a rooted one.
+ * Everything the clone feature needs at shell level (creating the isolated
+ * clone user, installing APKs for it, launching apps on the hidden display,
+ * touch injection) goes through here, so the same code works on a stock
+ * non-rooted phone with Shizuku, or on a rooted one.
  */
 object ShellRunner {
 
@@ -22,6 +25,7 @@ object ShellRunner {
 
     data class Result(val code: Int, val stdout: String, val stderr: String) {
         val ok: Boolean get() = code == 0
+        val combined: String get() = (stdout + "\n" + stderr).trim()
     }
 
     fun backend(): Backend = when {
@@ -43,16 +47,67 @@ object ShellRunner {
         return Result(-1, "", "no shell backend")
     }
 
+    /**
+     * Run a command as shell with [stdin] piped in (used by `pm install -S`).
+     * Shizuku only — the root path copies files to a shell-readable location
+     * instead (root can read the app's private files directly).
+     */
+    fun execWithStdin(stdin: File, vararg args: String): Result {
+        if (args.isEmpty()) return Result(-1, "", "empty command")
+        val p = shizukuProcess(*args)
+            ?: return Result(-1, "", "stdin install needs Shizuku")
+        val out = StringBuilder()
+        val err = StringBuilder()
+        val outThread = pump(p.inputStream, out)
+        val errThread = pump(p.errorStream, err)
+        try {
+            stdin.inputStream().use { ins ->
+                p.outputStream.use { os -> ins.copyTo(os, 128 * 1024) }
+            }
+        } catch (t: Throwable) {
+            runCatching { p.destroy() }
+            return Result(-1, out.toString(), "stdin write failed: ${t.message}")
+        }
+        val code = runCatching { p.waitFor() }.getOrDefault(-1)
+        runCatching { outThread.join(2000) }
+        runCatching { errThread.join(2000) }
+        return Result(code, out.toString().trim(), err.toString().trim())
+    }
+
+    private fun pump(stream: InputStream, into: StringBuilder): Thread {
+        val t = Thread {
+            runCatching {
+                stream.bufferedReader().use { reader ->
+                    val buf = CharArray(8 * 1024)
+                    while (true) {
+                        val n = reader.read(buf)
+                        if (n <= 0) break
+                        synchronized(into) { into.append(buf, 0, n) }
+                    }
+                }
+            }
+        }
+        t.isDaemon = true
+        t.start()
+        return t
+    }
+
     // ponytail: Shizuku.newProcess is hidden in the public 13.x API; reflection keeps
     // us off a custom AIDL UserService (same trick as PhantomProcessFixer).
-    private fun shizukuExec(args: Array<out String>): Result? = try {
+    private fun shizukuProcess(vararg args: String): Process? = try {
         val m = Shizuku::class.java.getDeclaredMethod(
             "newProcess",
             Array<String>::class.java,
             Array<String>::class.java,
             String::class.java,
         ).apply { isAccessible = true }
-        val p = m.invoke(null, arrayOf(*args), null, null) as Process
+        m.invoke(null, arrayOf(*args), null, null) as Process
+    } catch (t: Throwable) {
+        null
+    }
+
+    private fun shizukuExec(args: Array<out String>): Result? = try {
+        val p = shizukuProcess(*args) ?: return null
         p.outputStream.close()
         val out = p.inputStream.bufferedReader().readText()
         val err = p.errorStream.bufferedReader().readText()

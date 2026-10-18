@@ -83,6 +83,8 @@ clone - control apps running inside Bliss (hidden clone display)
 Commands:
   clone status                     engine / display / running app overview
   clone list                       cloned apps (pkg|label|version per line)
+  clone devices                    apps on the phone available to clone
+  clone clone <package>            clone a phone app into the Bliss space
   clone install <file.apk|url>     install an APK into the clone space
   clone uninstall <package>        remove a cloned app
   clone launch <package>           open the app on the hidden display
@@ -108,7 +110,11 @@ cmd="${1:-help}"
 case "$cmd" in
   status)   send status ;;
   list)     send list ;;
+  devices)  send list_device ;;
   help|-h|--help) usage ;;
+  clone)
+    [ $# -ge 1 ] || { echo "usage: clone clone <package>" >&2; exit 2; }
+    send clone_device "$1" ;;
   install)
     [ $# -ge 1 ] || { echo "usage: clone install <file.apk|url>" >&2; exit 2; }
     case "$1" in

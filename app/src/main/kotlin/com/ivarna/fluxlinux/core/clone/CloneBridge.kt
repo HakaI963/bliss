@@ -29,10 +29,13 @@ object CloneBridge {
     private var started = false
 
     private const val HELP = """Bliss clone bridge commands:
-status | list | list_system | install <path> | install_url <url> |
-launch <pkg> | kill <pkg> | uninstall <pkg> | launch_system <pkg> | kill_system <pkg> |
+status | list | list_device | clone_device <pkg> | install <path> |
+install_url <url> | launch <pkg> | kill <pkg> | uninstall <pkg> |
 screenshot [maxWidth] | ocr | tap <x> <y> |
-swipe <x1> <y1> <x2> <y2> [ms] | text <value> | key <BACK|HOME|ENTER> | help"""
+swipe <x1> <y1> <x2> <y2> [ms] | text <value> | key <BACK|HOME|ENTER> | help
+
+Apps live in the Bliss clone space: clone_device copies an app installed on the
+phone, install/install_url add APK files. Everything runs on the hidden display."""
 
     fun start(ctx: Context) {
         if (started) return
@@ -183,20 +186,13 @@ swipe <x1> <y1> <x2> <y2> [ms] | text <value> | key <BACK|HOME|ENTER> | help"""
                     }
                 }
 
-                "list_system" -> payload = CloneEngine.systemAppLines()
+                "list_device" -> payload = CloneEngine.deviceAppLines()
 
-                "launch_system" -> {
-                    val pkg = args.firstOrNull() ?: throw IllegalArgumentException("launch_system needs a package")
-                    val err = CloneEngine.launchSystem(pkg)
+                "clone_device" -> {
+                    val pkg = args.firstOrNull() ?: throw IllegalArgumentException("clone_device needs a package")
+                    val err = CloneEngine.cloneDeviceNow(pkg)
                     if (err != null) throw IllegalStateException(err)
-                    payload = "launched $pkg on the hidden display"
-                }
-
-                "kill_system" -> {
-                    val pkg = args.firstOrNull() ?: throw IllegalArgumentException("kill_system needs a package")
-                    val err = CloneEngine.killSystem(pkg)
-                    if (err != null) throw IllegalStateException(err)
-                    payload = "killed $pkg"
+                    payload = "cloned $pkg into the Bliss space"
                 }
 
                 "help" -> payload = HELP

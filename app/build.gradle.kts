@@ -8,6 +8,8 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    // JVM screenshot rendering for CI UI verification (no device needed).
+    id("app.cash.paparazzi") version "2.0.0-alpha01"
 }
 
 android {
@@ -25,8 +27,8 @@ android {
         // app targets 28 like Termux. bash/proot/loader/pulse stay pinned to
         // nativeLibraryDir (jniLibs) as belt-and-braces for future targetSdk bumps.
         targetSdk = 28
-        versionCode = 20
-        versionName = "3.6.0"
+        versionCode = 21
+        versionName = "3.7.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -260,14 +262,15 @@ dependencies {
         exclude(group = "com.github.termux.termux-app", module = "terminal-emulator")
     }
     implementation(project(":terminal-emulator"))
-    // Embedded BlackBox clone engine (Apache-2.0, see BLACKBOX-LICENSE.txt): runs
-    // cloned APKs inside Bliss on a hidden private virtual display.
-    implementation(project(":Bcore"))
+    // Clone space (round 13): shell-based, no embedded engine — see
+    // core/clone/CloneEngine.kt. The old BlackBox sources stay under Bcore/ as
+    // vendored reference only and are no longer built.
 
     // Embedded Termux:X11 (cloned + integrated directly, same-package rendering)
     implementation(project(":termux-x11"))
 
     testImplementation(libs.junit)
+    testImplementation("app.cash.paparazzi:paparazzi:2.0.0-alpha01")
     testImplementation(libs.okhttp.mockwebserver)
     testImplementation("org.json:json:20180813") // android.jar org.json is a stub in unit tests
     androidTestImplementation(libs.androidx.junit)

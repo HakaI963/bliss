@@ -8,9 +8,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -33,9 +35,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -44,7 +44,6 @@ import androidx.compose.ui.unit.sp
 import com.ivarna.fluxlinux.ui.theme.FolioBackground
 import com.ivarna.fluxlinux.ui.theme.FolioFrostBorder
 import com.ivarna.fluxlinux.ui.theme.FrostSurface
-import com.ivarna.fluxlinux.ui.theme.FrostTopSheen
 import com.ivarna.fluxlinux.ui.theme.TextMuted
 import com.ivarna.fluxlinux.ui.theme.TextPrimary
 import dev.chrisbanes.haze.HazeState
@@ -59,23 +58,18 @@ enum class BottomTab(val title: String, val icon: ImageVector) {
     SETTINGS("Settings", Icons.Default.Settings)
 }
 
-/**
- * Visible dock slots. `BottomTab.TERMINAL` stays in the enum (state still uses
- * it) but the Terminal screen is reached from Home's shell button — the dock has
- * exactly three evenly distributed items, no dead placeholder column.
- */
+/** Dock slots, evenly distributed. Terminal is reached from Home. */
 private val BottomNavItems = listOf(BottomTab.HOME, BottomTab.DISTROS, BottomTab.APPS, BottomTab.TOOLS)
 
-private val NavHeight = 56.dp
+private val NavHeight = 62.dp
 private val NavMargin = 12.dp
 private val NavEdgeWidth = 0.75.dp
 private val NavPillShape = RoundedCornerShape(percent = 50)
 private val NavItemShape = RoundedCornerShape(50)
 
 /**
- * Floating monochrome dock. 64dp frosted pill with restrained 16dp margins and a
- * 0.75dp hairline; the three tabs share the width evenly. The selected tab gets an
- * inverted white pill behind its icon with a spring, inactive tabs stay dim gray.
+ * Floating dock: icon + label per tab, labels always visible. The selected tab
+ * gets an inverted pill behind its icon; everything else stays quiet.
  */
 @Composable
 fun GlassBottomNavigation(
@@ -104,24 +98,10 @@ fun GlassBottomNavigation(
             }
             .border(border = BorderStroke(NavEdgeWidth, FolioFrostBorder), shape = NavPillShape)
     ) {
-        // Frost top sheen — same lit-from-above edge as FrostContainer.
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .drawBehind {
-                    drawRect(
-                        brush = Brush.verticalGradient(
-                            0f to FrostTopSheen,
-                            1f to Color.White.copy(alpha = 0f),
-                            endY = 20.dp.toPx()
-                        )
-                    )
-                }
-        )
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 6.dp, vertical = 6.dp),
+                .padding(horizontal = 6.dp, vertical = 5.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             BottomNavItems.forEach { tab ->
@@ -136,11 +116,7 @@ fun GlassBottomNavigation(
     }
 }
 
-/**
- * One dock slot: icon pill above the label. Selection springs the pill from
- * transparent/dim to inverted white with a black glyph; the label brightens with
- * it. No ripple — the pill itself is the feedback (frost system style).
- */
+/** One dock slot: icon pill above an always-visible label. */
 @Composable
 private fun NavItem(
     tab: BottomTab,
@@ -164,7 +140,7 @@ private fun NavItem(
         label = "navPillColor"
     )
     val pillSize by animateDpAsState(
-        targetValue = if (selected) 36.dp else 30.dp,
+        targetValue = if (selected) 32.dp else 28.dp,
         animationSpec = spring(dampingRatio = 0.78f, stiffness = 380f),
         label = "navPillSize"
     )
@@ -180,7 +156,10 @@ private fun NavItem(
             ),
         contentAlignment = Alignment.Center
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
             Box(
                 modifier = Modifier
                     .size(pillSize)
@@ -192,12 +171,14 @@ private fun NavItem(
                     imageVector = tab.icon,
                     contentDescription = tab.title,
                     tint = iconTint,
-                    modifier = Modifier.size(22.dp)
+                    modifier = Modifier.size(19.dp)
                 )
             }
+            Spacer(Modifier.height(2.dp))
             Text(
                 text = tab.title,
-                fontSize = 10.sp,
+                fontSize = 10.5.sp,
+                lineHeight = 11.sp,
                 fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
                 color = labelColor,
                 maxLines = 1
