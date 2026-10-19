@@ -6,31 +6,37 @@ import android.hardware.display.DisplayManager;
 import android.hardware.display.VirtualDisplay;
 import android.media.Image;
 import android.media.ImageReader;
+import android.os.Handler;
+import android.os.HandlerThread;
 import android.os.SystemClock;
 import android.view.Surface;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * The clone display, owned by the shell (uid 2000) process.
  *
- * <p>Ported verbatim from ShadowAuto's {@code VirtualDisplaySession}: the
- * display is created with a <b>null output surface</b>. It exists for windows,
- * input injection and accessibility, not for a live video pipe. Still frames
- * are captured on demand by swapping an {@code RGBA_8888} ImageReader surface
- * in with {@link VirtualDisplay#setSurface}, taking one image, and swapping the
- * null surface back.
+ * <p>Ported from ShadowAuto's <b>working</b> display path (VideoTest /
+ * AutomationEngine), not the MCP screenshot variant: the VirtualDisplay is
+ * created <b>with the capture surface already attached</b>. Diagnostics on
+ * HyperOS proved why this matters — a display created with a null surface
+ * reports {@code state OFF, committedState UNKNOWN}, and SurfaceFlinger never
+ * composites it: no encoder samples, no ImageReader frames, no activity
+ * resumption. Attaching a surface at creation makes the display ON from the
+ * first frame.
  *
- * <p>There is no MediaCodec here on purpose. The previous architecture made an
- * H.264 encoder input surface the display output and decoded it in the app;
- * that decoder is what repeatedly killed the client process, and it was never
- * how the reference implementation worked.
+ * <p>The attached surface is an {@code RGBA_8888} ImageReader. A consumer
+ * thread drains it continuously (so the buffer queue never applies
+ * backpressure to the display) and keeps the latest converted Bitmap;
+ * {@link #captureBitmap} returns that. No surface swapping, no MediaCodec.
  *
- * <p>Flags are tried as a candidate ladder (hidden SUPPORTS_TOUCH / OWN_FOCUS /
- * TRUSTED first) so the display behaves like a real secondary screen. The IME
- * policy is set to LOCAL so the clone keyboard shows up on the clone display,
- * never on the phone screen.
+ * <p>Flags are ShadowAuto's exact ladder (hidden SUPPORTS_TOUCH / OWN_FOCUS /
+ * TRUSTED first). The IME policy is set to LOCAL so the clone keyboard shows
+ * up on the clone display, never on the phone screen.
  */
 final class DisplaySession {
     final int displayId;
@@ -38,26 +44,40 @@ final class DisplaySession {
     final int height;
     final int dpi;
     final int flagsUsed;
+    final List<String> diagnostics = new ArrayList<>();
 
     private final ImageReader captureReader;
     private final Surface captureSurface;
-    private Surface outputSurface;
     private final VirtualDisplay display;
+    private final HandlerThread captureThread;
     private final WindowManagerBridge windowManager; // optional: may be null on locked-down builds
     private final int previousImePolicy;
     private final boolean localImeEnabled;
 
+    private final Object frameLock = new Object();
+    private Bitmap latestFrame;
+    private long latestAt;
+    private long framesProduced;
+
     private DisplaySession(int width, int height, int dpi, ImageReader captureReader,
-                           Surface outputSurface, VirtualDisplay display, int flagsUsed) {
+                           VirtualDisplay display, int flagsUsed) {
         this.width = width;
         this.height = height;
         this.dpi = dpi;
         this.flagsUsed = flagsUsed;
         this.captureReader = captureReader;
         this.captureSurface = captureReader.getSurface();
-        this.outputSurface = outputSurface;
         this.display = display;
         this.displayId = display.getDisplay().getDisplayId();
+        HandlerThread thread = new HandlerThread("BlissCapture");
+        thread.start();
+        this.captureThread = thread;
+        captureReader.setOnImageAvailableListener(new ImageReader.OnImageAvailableListener() {
+            @Override
+            public void onImageAvailable(ImageReader reader) {
+                consumeFrame(reader);
+            }
+        }, new Handler(thread.getLooper()));
         // IME policy is best-effort: a WindowManagerBridge failure must not
         // destroy a display that was just created.
         WindowManagerBridge bridge = null;
@@ -88,7 +108,7 @@ final class DisplaySession {
 
     static DisplaySession create(android.content.Context context, int width, int height, int dpi) {
         DisplayManager manager = displayManager(context);
-        ImageReader captureReader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 3);
+        ImageReader captureReader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 4);
         int baseFlags = DisplayManager.VIRTUAL_DISPLAY_FLAG_PUBLIC
                 | DisplayManager.VIRTUAL_DISPLAY_FLAG_PRESENTATION
                 | DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY;
@@ -104,12 +124,14 @@ final class DisplaySession {
         Throwable lastError = null;
         for (int flags : candidates) {
             try {
-                // Null surface: the display has no live output. Windows still
-                // compose into it, and captureBitmap() swaps a reader in.
+                // Surface attached at creation: this is what puts the display
+                // in state ON (a null-surface create stays OFF on HyperOS).
                 VirtualDisplay display = manager.createVirtualDisplay("Bliss", width, height, dpi,
-                        null, flags);
+                        captureReader.getSurface(), flags);
                 if (display != null && display.getDisplay() != null) {
-                    return new DisplaySession(width, height, dpi, captureReader, null, display, flags);
+                    DisplaySession session = new DisplaySession(width, height, dpi, captureReader, display, flags);
+                    session.forceDisplayOn();
+                    return session;
                 }
             } catch (Throwable e) {
                 lastError = e;
@@ -123,55 +145,70 @@ final class DisplaySession {
     }
 
     /**
-     * One still frame of the display: swap the capture surface in, wait for the
-     * compositor to produce an image, then restore the previous output surface.
-     * Returns null when nothing composed within the retry window.
+     * Latest composed frame of the display. The reader is drained continuously
+     * by the consumer thread, so this never swaps surfaces and never blocks
+     * composition. Waits up to (retries+1)*delayMs for the first frame.
      */
-    synchronized Bitmap captureBitmap(int retries, long delayMs) {
-        Surface restoreSurface = outputSurface;
-        Image image = null;
-        try {
-            drainCaptureReader();
-            display.setSurface(captureSurface);
-            for (int i = 0; i <= retries; i++) {
-                SystemClock.sleep(delayMs);
-                image = captureReader.acquireLatestImage();
-                if (image != null) {
-                    return ScreenCapture.bitmapFromImage(image);
+    Bitmap captureBitmap(int retries, long delayMs) {
+        long deadline = SystemClock.uptimeMillis() + Math.max(0, retries) * Math.max(1, delayMs);
+        synchronized (frameLock) {
+            while (true) {
+                if (latestFrame != null && !latestFrame.isRecycled()) {
+                    return latestFrame;
+                }
+                long left = deadline - SystemClock.uptimeMillis();
+                if (left <= 0) {
+                    return null;
+                }
+                try {
+                    frameLock.wait(Math.min(left, 120L));
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return null;
                 }
             }
-            return null;
-        } catch (Throwable t) {
-            return null;
+        }
+    }
+
+    /** Number of frames the consumer has converted (diagnostics). */
+    long framesProduced() {
+        synchronized (frameLock) {
+            return framesProduced;
+        }
+    }
+
+    private void consumeFrame(ImageReader reader) {
+        Image image = null;
+        try {
+            image = reader.acquireLatestImage();
+            if (image == null) {
+                return;
+            }
+            // Convert at most ~5/s; drain the rest immediately so the buffer
+            // queue never pushes back on the compositor.
+            long now = SystemClock.uptimeMillis();
+            synchronized (frameLock) {
+                if (latestAt != 0 && now - latestAt < 180) {
+                    return;
+                }
+                latestAt = now;
+            }
+            Bitmap bitmap = ScreenCapture.bitmapFromImage(image);
+            if (bitmap == null) {
+                return;
+            }
+            synchronized (frameLock) {
+                latestFrame = bitmap;
+                framesProduced++;
+                frameLock.notifyAll();
+            }
+        } catch (Throwable ignored) {
         } finally {
             if (image != null) {
                 try {
                     image.close();
                 } catch (Throwable ignored) {
                 }
-            }
-            try {
-                display.setSurface(restoreSurface);
-                outputSurface = restoreSurface;
-            } catch (Throwable ignored) {
-            }
-        }
-    }
-
-    private void drainCaptureReader() {
-        while (true) {
-            Image image;
-            try {
-                image = captureReader.acquireLatestImage();
-            } catch (Throwable t) {
-                return;
-            }
-            if (image == null) {
-                return;
-            }
-            try {
-                image.close();
-            } catch (Throwable ignored) {
             }
         }
     }
@@ -186,7 +223,126 @@ final class DisplaySession {
         }
     }
 
+    /**
+     * Diagnostic power-on ladder for ROMs that leave a fresh virtual display in
+     * state OFF (HyperOS). Tries the hidden framework paths in order and records
+     * which one the platform accepts; any success puts the display in state ON
+     * so the compositor starts producing frames.
+     */
+    private void forceDisplayOn() {
+        Object token = virtualDisplayToken();
+        diagnostics.add("vdisplay token=" + (token == null ? "null" : token.getClass().getName()));
+        try {
+            Object global = Class.forName("android.hardware.display.DisplayManagerGlobal")
+                    .getMethod("getInstance").invoke(null);
+            if (global != null && token != null) {
+                Method direct = findMethod(global.getClass(), "setVirtualDisplayState", 2);
+                if (direct != null) {
+                    try {
+                        direct.setAccessible(true);
+                        Object r = direct.invoke(global, token, Boolean.TRUE);
+                        diagnostics.add("setVirtualDisplayState(global)=" + r);
+                        return;
+                    } catch (Throwable t) {
+                        diagnostics.add("setVirtualDisplayState(global) failed: " + t);
+                    }
+                }
+                try {
+                    Field dmField = global.getClass().getDeclaredField("mDm");
+                    dmField.setAccessible(true);
+                    Object dm = dmField.get(global);
+                    Method viaDm = dm == null ? null : findMethod(dm.getClass(), "setVirtualDisplayState", 2);
+                    if (viaDm != null) {
+                        try {
+                            Object r = viaDm.invoke(dm, token, Boolean.TRUE);
+                            diagnostics.add("setVirtualDisplayState(dm)=" + r);
+                            return;
+                        } catch (Throwable t) {
+                            diagnostics.add("setVirtualDisplayState(dm) failed: " + t);
+                        }
+                    } else {
+                        diagnostics.add("mDm.setVirtualDisplayState not found");
+                    }
+                } catch (Throwable t) {
+                    diagnostics.add("mDm lookup failed: " + t);
+                }
+            }
+        } catch (Throwable t) {
+            diagnostics.add("DisplayManagerGlobal lookup failed: " + t);
+        }
+        try {
+            if (token instanceof android.os.IBinder) {
+                Class<?> txClass = Class.forName("android.view.SurfaceControl$Transaction");
+                Method power = findMethod(txClass, "setDisplayPowerMode", 2);
+                if (power != null) {
+                    Object tx = txClass.getConstructor().newInstance();
+                    power.invoke(tx, token, 1); // POWER_MODE_NORMAL
+                    Method apply = findMethod(txClass, "apply", 0);
+                    if (apply != null) {
+                        apply.invoke(tx);
+                    }
+                    diagnostics.add("SurfaceControl.setDisplayPowerMode(NORMAL) applied");
+                    return;
+                }
+                diagnostics.add("setDisplayPowerMode not found");
+            } else {
+                diagnostics.add("setDisplayPowerMode skipped: token is "
+                        + (token == null ? "null" : token.getClass().getName()));
+            }
+        } catch (Throwable t) {
+            diagnostics.add("setDisplayPowerMode failed: " + t);
+        }
+    }
+
+    /** The VirtualDisplay's first binder-ish field (display token or callback). */
+    private Object virtualDisplayToken() {
+        try {
+            for (Field f : VirtualDisplay.class.getDeclaredFields()) {
+                diagnostics.add("vdisplay field " + f.getName() + " : " + f.getType().getName());
+            }
+            for (Field f : VirtualDisplay.class.getDeclaredFields()) {
+                if (!android.os.IBinder.class.isAssignableFrom(f.getType())
+                        && !android.os.IInterface.class.isAssignableFrom(f.getType())) {
+                    continue;
+                }
+                f.setAccessible(true);
+                Object value = f.get(display);
+                if (value instanceof android.os.IBinder) {
+                    return value;
+                }
+                if (value instanceof android.os.IInterface) {
+                    return ((android.os.IInterface) value).asBinder();
+                }
+            }
+        } catch (Throwable t) {
+            diagnostics.add("token scan failed: " + t);
+        }
+        return null;
+    }
+
+    private static Method findMethod(Class<?> type, String name, int params) {
+        for (Method m : type.getMethods()) {
+            if (m.getName().equals(name) && m.getParameterTypes().length == params) {
+                return m;
+            }
+        }
+        for (Method m : type.getDeclaredMethods()) {
+            if (m.getName().equals(name) && m.getParameterTypes().length == params) {
+                return m;
+            }
+        }
+        return null;
+    }
+
     void release() {
+        try {
+            captureReader.setOnImageAvailableListener(null, null);
+        } catch (Throwable ignored) {
+        }
+        try {
+            captureThread.quitSafely();
+        } catch (Throwable ignored) {
+        }
         try {
             if (previousImePolicy != -1 && windowManager != null) {
                 windowManager.setDisplayImePolicy(displayId, previousImePolicy);
@@ -204,6 +360,10 @@ final class DisplaySession {
         try {
             captureReader.close();
         } catch (Throwable ignored) {
+        }
+        synchronized (frameLock) {
+            latestFrame = null;
+            frameLock.notifyAll();
         }
     }
 

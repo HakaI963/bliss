@@ -146,16 +146,22 @@ public final class ShellVdService extends IShellVd.Stub {
                 int d = clamp(dpi, MIN_DPI, MAX_DPI);
                 log("createDisplay: context ok, creating display");
                 session = DisplaySession.create(displayContext, w, h, d);
-                log("createDisplay: created id=" + session.displayId + " (null surface, on-demand capture, flags=0x"
+                log("createDisplay: created id=" + session.displayId + " (surface attached, flags=0x"
                         + Integer.toHexString(session.flagsUsed) + ")");
+                for (String diag : session.diagnostics) {
+                    log("displayInit: " + diag);
+                }
+                try {
+                    ShellResult st = runShell("dumpsys display 2>/dev/null"
+                            + " | grep 'DisplayDeviceInfo{\"Bliss\"' | grep -o 'state [A-Z]*' | head -1");
+                    String state = st == null || st.output == null ? "" : st.output.trim();
+                    log("display state after create: " + (state.isEmpty() ? "unknown" : state));
+                } catch (Throwable ignored) {
+                }
                 android.graphics.Bitmap probe = session.captureBitmap(2, 250);
                 if (probe != null) {
                     log("probe capture: " + probe.getWidth() + "x" + probe.getHeight()
-                            + " (display composites with no app)");
-                    try {
-                        probe.recycle();
-                    } catch (Throwable ignored) {
-                    }
+                            + " (display composites with no app, produced=" + session.framesProduced() + ")");
                 } else {
                     log("probe capture: null (display produced no frame before launch)");
                 }
@@ -393,11 +399,6 @@ public final class ShellVdService extends IShellVd.Stub {
             }
         } catch (Throwable t) {
             log("capture encode failed: " + describe(t));
-        } finally {
-            try {
-                bitmap.recycle();
-            } catch (Throwable ignored) {
-            }
         }
         if (png == null) {
             return;

@@ -689,3 +689,21 @@ versionCode 36, 3.9.5.
 - At miss #4: one-shot state dump — `dumpsys display` device info/state, resumed activity/mFocusedApp with displayId, power wakefulness, the display's window block, and SurfaceFlinger layers matching the app.
 
 versionCode 37, 3.9.6.
+
+---
+
+## 30. Round 30 — display was state OFF; surface attached at creation + power-on ladder (2026-10-19)
+
+**Round-29 diagnostics were decisive:**
+```
+DisplayDeviceInfo{"Bliss": ... 720x1560 ... type VIRTUAL ... state OFF, committedState UNKNOWN,
+  owner com.android.shell, ... FLAG_SECURE, FLAG_PRESENTATION, FLAG_OWN_CONTENT_ONLY, FLAG_TRUSTED, FLAG_OWN_FOCUS}
+```
+The display was **OFF** the whole time — SurfaceFlinger never composites an OFF display, so every surface model (permanent ImageReader, swap-in reader, H.264 encoder surface) correctly received zero frames, and the clone activity never became visible (`ResumedActivity` was only Bliss's own MainActivity). The null-surface creation used by ShadowAuto's MCP session leaves the display OFF on HyperOS; ShadowAuto's working VideoTest/AutomationEngine path creates the display **with the surface attached**.
+
+**Changes:**
+1. `DisplaySession`: display created **with the RGBA_8888 capture surface attached from the start** (state ON), no surface swapping. Continuous `ImageReader` consumer thread (`BlissCapture`) drains the queue (no backpressure) and keeps the latest Bitmap; `captureBitmap()` returns it (waits up to retries*delay for the first frame). No MediaCodec, no YUV, no PNG round-trip per frame.
+2. `forceDisplayOn()`: guarded hidden-API ladder with diagnostics — `DisplayManagerGlobal#setVirtualDisplayState(token,true)` (direct or via `mDm`), then `SurfaceControl.Transaction#setDisplayPowerMode(token, POWER_MODE_NORMAL)`. Token discovered from VirtualDisplay binder-ish fields; every step logged (`displayInit: ...`) so the log names what the ROM accepts.
+3. Service logs `display state after create: state ON|OFF`, `probe capture: WxH (produced=N)`, then per-capture lines.
+
+versionCode 38, 3.9.7.
