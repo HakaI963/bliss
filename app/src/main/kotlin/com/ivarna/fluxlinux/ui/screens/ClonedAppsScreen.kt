@@ -21,8 +21,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -48,7 +50,9 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntSize
@@ -481,6 +485,7 @@ private fun LogsSection() {
     var tick by remember { mutableIntStateOf(0) }
     val logs by CloneEngine.logs.collectAsState()
     val tail = remember(tick, logs.size) { CloneEngine.engineLogTail(80) }
+    val clipboard = LocalClipboardManager.current
 
     QCard {
         Column(
@@ -504,6 +509,33 @@ private fun LogsSection() {
                     Icon(
                         Icons.Default.Refresh,
                         contentDescription = "Refresh",
+                        tint = fluxMutedText(),
+                        modifier = Modifier.size(17.dp),
+                    )
+                }
+                IconButton(
+                    onClick = {
+                        log.value = emptyList()
+                        CloneEngine.clearLogs()
+                    },
+                    modifier = Modifier.size(30.dp),
+                ) {
+                    Icon(
+                        Icons.Outlined.Delete,
+                        contentDescription = "Clear log",
+                        tint = fluxMutedText(),
+                        modifier = Modifier.size(17.dp),
+                    )
+                }
+                IconButton(
+                    onClick = {
+                        clipboard.setText(AnnotatedString((tail.ifEmpty { logs }).joinToString("\n")))
+                    },
+                    modifier = Modifier.size(30.dp),
+                ) {
+                    Icon(
+                        Icons.Default.ContentCopy,
+                        contentDescription = "Copy log",
                         tint = fluxMutedText(),
                         modifier = Modifier.size(17.dp),
                     )

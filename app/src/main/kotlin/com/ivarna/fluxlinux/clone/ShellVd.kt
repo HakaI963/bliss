@@ -504,10 +504,17 @@ object ShellVd {
         }
     }
 
+    /** Service-side lines (frame pump, placements, rejects) forwarded to the pane. */
+    var logSink: ((String) -> Unit)? = null
+
     private fun addLog(line: String) {
         Log.d(TAG, line)
         synchronized(lock) {
             logs.value = (logs.value + line).takeLast(MAX_LOGS)
+        }
+        try {
+            logSink?.invoke(line)
+        } catch (ignored: Throwable) {
         }
     }
 

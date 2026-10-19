@@ -27,6 +27,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -47,7 +49,16 @@ import kotlin.math.roundToInt
  */
 object CloneEngine {
 
+    /** Serializes display ensure across probe/launch/heal callers. */
+    private val ensureMutex = Mutex()
+
     private const val TAG = "BlissClone"
+
+    init {
+        // The shell service streams its own log lines here live (placements,
+        // pump heartbeat, reject reasons) so the pane shows its side directly.
+        ShellVd.logSink = { line -> log("  shell: $line") }
+    }
     private const val PREFS = "bliss_clone_cfg"
     private const val CLONE_USER_NAME = "Bliss"
 
@@ -170,6 +181,12 @@ object CloneEngine {
         val f = logFile()
         if (!f.isFile) return emptyList()
         return runCatching { f.readLines().takeLast(maxLines) }.getOrDefault(emptyList())
+    }
+
+    /** Wipes the activity pane (Logs card clear icon). */
+    fun clearLogs() {
+        logs.value = emptyList()
+        runCatching { logFile().delete() }
     }
 
     // ---------------------------------------------------------------- shell + user
@@ -764,7 +781,7 @@ object CloneEngine {
         }
     }
 
-    private fun probeDisplayBlocking(): String {
+    private suspend fun probeDisplayBlocking(): String {
         val shellErr = requireShell()
         if (shellErr != null) return "Virtual display: unavailable — $shellErr"
         ShellVd.displayId.value.takeIf { it > 0 }?.let { return "Virtual display: available (id=$it)" }
@@ -783,33 +800,38 @@ object CloneEngine {
     /**
      * Creates the hidden display inside the Shizuku (shell) process. Blocking —
      * always called from the engine's IO scope, never from the UI thread.
+     * Serialized: concurrent probe/launch/heal callers must not create
+     * displays in parallel (the device saw ids 19..22 appear in one second).
      */
-    fun ensureDisplay(): Boolean {
+    suspend fun ensureDisplay(): Boolean {
         val ctx = appContext ?: return false
         val preset = RES_PRESETS[displayResPreset.value.coerceIn(0, RES_PRESETS.size - 1)]
         displayW.value = preset.first
         displayH.value = preset.second
-        // Reuse a live display: the service keeps it across app restarts, and
-        // re-creating on every probe/run leaks display ids on the device.
-        val remote = ShellVd.remoteDisplayId()
-        if (remote > 0) {
-            if (ShellVd.displayId.value != remote) ShellVd.adoptDisplayId(remote)
-            return true
+        ensureMutex.withLock {
+            // Reuse a live display: the service keeps it across app restarts,
+            // and re-creating on every probe/run leaks display ids. Re-checked
+            // inside the lock — a concurrent ensure may have just made one.
+            val remote = ShellVd.remoteDisplayId()
+            if (remote > 0) {
+                if (ShellVd.displayId.value != remote) ShellVd.adoptDisplayId(remote)
+                return true
+            }
+            val err = ShellVd.ensure(
+                ctx,
+                preset.first,
+                preset.second,
+                displayDpi.value.coerceIn(120, 640),
+                displayFps.value.coerceIn(5, 60),
+            )
+            if (err != null) {
+                status.value = err
+                log("Display failed: $err")
+                for (line in ShellVd.serviceLogTail(12) ?: emptyList()) log("  shell: $line")
+                return false
+            }
+            log("Display ready: id=${ShellVd.displayId.value} ${preset.first}x${preset.second} dpi=${displayDpi.value} fps=${displayFps.value}")
         }
-        val err = ShellVd.ensure(
-            ctx,
-            preset.first,
-            preset.second,
-            displayDpi.value.coerceIn(120, 640),
-            displayFps.value.coerceIn(5, 60),
-        )
-        if (err != null) {
-            status.value = err
-            log("Display failed: $err")
-            for (line in ShellVd.serviceLogTail(12) ?: emptyList()) log("  shell: $line")
-            return false
-        }
-        log("Display ready: id=${ShellVd.displayId.value} ${preset.first}x${preset.second} dpi=${displayDpi.value} fps=${displayFps.value}")
         return true
     }
 

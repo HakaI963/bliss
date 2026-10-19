@@ -563,3 +563,19 @@ The historical "verify before restarting" checklist is fully resolved: nav crash
 - **Crash catcher:** uncaught exceptions any thread are appended to `/data/local/tmp/bliss-stage/crash.log` (thread name + full cause-chain stack), then the chain re-delegates. `logs()`/`serviceLogTail` prepend the previous process's crash tail with a `PREVIOUS PROCESS CRASH` marker — the exact crash appears in the pane after the service dies and respawns.
 - **Live breadcrumbs:** `log()` now pushes to the client over the shell callback, so every service-side line reaches the Logs pane in real time: create ladder (`context ok` → `created id=N` → `display created`), `alive t+1..4s: display id=N frames sent=K` ticks after each creation (pin the death window to ±1s), `frames: no image for Xs` heartbeat, `tap rejected: display gone`, and the **placement verdict** (`window(s) of <pkg> on hidden display` vs `NO window …`) ~4s after every launch — previously it was logged but only fetched by a watchdog that skipped once a black frame had landed.
 - versionCode 27→28 (forces Shizuku to reload), 3.8.6.
+
+---
+
+## 21. Round 21 — launch placement: framework start with the display option (the shadow-src delta) (2026-10-19)
+
+**User evidence (5 screenshots):** display alive 80+s with the pump running (`frames: no image for 80s … sent=0`), one session composited only the initial black frame, inputs rejected. Verdict: **`am start --user 10 --display N` is being dropped/ignored by HyperOS for cross-user starts — the activity never lands on our display.** Also visible: four displays created inside one second (client-side probe/launch/heal race), and the round-20 live pushes landing in ShellVd's internal log instead of the pane.
+
+**Shadow-src delta (what we were "missing"):** ShadowAuto's launch is user-0-only (`am start --display N -n comp`); its VirtualDisplaySession, flags, pump and binder model are identical to ours. Nothing in their source covers launching a **different user** onto the display — that is exactly the part we built blind and that HyperOS eats. The portable piece they do have that we didn't: nothing launch-related — so the fix is to carry the display in the options bundle via the framework's own start path.
+
+**Fixes:**
+- **Framework-side launch**: `startViaFramework` builds the MAIN/LAUNCHER intent, `ActivityOptions.makeBasic().setLaunchDisplayId(D)`, and dispatches via reflection (`startActivityAsUser` on Context or ContextImpl with `UserHandle.of(U)`), bypassing the am binary. The placement probe now escalates automatically: NO window at +4s → framework start → verify again at +10s.
+- **Idempotent createDisplay**: same-geometry calls reuse the live display id instead of releasing and re-creating (orphan churn).
+- **`ensureDisplay` serialized** (Mutex + recheck inside the lock) — no more concurrent probe/launch/heal creations (the 19/20/21/22 pile-up).
+- **Service log reaches the pane live**: `ShellVd.logSink` forwards every service-side line as `shell: …` into the engine pane in real time (placements, heartbeat, reject reasons, crash merges).
+- **Logs card: Clear (delete icon) + Copy (copy icon)** next to Refresh, plus engine `clearLogs()`.
+- versionCode 28→29, 3.8.7.

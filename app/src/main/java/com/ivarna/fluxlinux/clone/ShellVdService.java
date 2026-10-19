@@ -116,6 +116,16 @@ public final class ShellVdService extends IShellVd.Stub {
     @Override
     public int createDisplay(int width, int height, int dpi) {
         synchronized (lock) {
+            int reuseW = clamp(width, MIN_WIDTH, MAX_WIDTH);
+            int reuseH = clamp(height, MIN_HEIGHT, MAX_HEIGHT);
+            int reuseD = clamp(dpi, MIN_DPI, MAX_DPI);
+            synchronized (lock) {
+                if (display != null && currentDisplayId > 0
+                        && displayWidth == reuseW && displayHeight == reuseH && displayDpi == reuseD) {
+                    log("createDisplay: reuse id=" + currentDisplayId + " (same geometry)");
+                    return currentDisplayId;
+                }
+            }
             stopFramesLocked();
             releaseDisplayLocked();
             DisplaySession session = null;
@@ -372,7 +382,7 @@ public final class ShellVdService extends IShellVd.Stub {
             String output = result.output == null ? "" : result.output.trim();
             log("am start " + component + " exit=" + result.exitCode + " " + output);
             if (!failure(result)) {
-                schedulePlacementProbe(packageName, id);
+                schedulePlacementProbe(packageName, userId, id);
             }
             return failure(result) ? output : "";
         } catch (Throwable t) {
@@ -700,7 +710,12 @@ public final class ShellVdService extends IShellVd.Stub {
      * hidden display. If it does not, no frames will ever arrive and the
      * Logs pane says so explicitly instead of a spinner with no story.
      */
-    private void schedulePlacementProbe(String packageName, int displayId) {
+    private void schedulePlacementProbe(String packageName, int userId, int displayId) {
+        schedulePlacementProbe(packageName, userId, displayId, true);
+    }
+
+    private void schedulePlacementProbe(final String packageName, final int userId,
+                                        final int displayId, final boolean escalate) {
         try {
             HandlerThread probe = new HandlerThread("ShellVdProbe");
             probe.start();
@@ -721,11 +736,16 @@ public final class ShellVdService extends IShellVd.Stub {
                         if (present) {
                             log("placement: window(s) of " + packageName + " on hidden display id="
                                     + displayId + " (frames sent=" + sent + ")");
-                        } else {
+                        } else if (escalate) {
                             log("placement: NO window of " + packageName
                                     + " on hidden display id=" + displayId
-                                    + " - launch went to another screen or the app died"
-                                    + " (frames sent=" + sent + ")");
+                                    + " - retrying via framework start (display option)");
+                            startViaFramework(packageName, userId, displayId);
+                            schedulePlacementProbe(packageName, userId, displayId, false);
+                        } else {
+                            log("placement: STILL no window of " + packageName
+                                    + " on hidden display id=" + displayId
+                                    + " after framework retry (frames sent=" + sent + ")");
                         }
                     } catch (Throwable t) {
                         log("placement probe failed: " + describe(t));
@@ -832,6 +852,55 @@ public final class ShellVdService extends IShellVd.Stub {
             }
         } catch (Throwable t) {
             log("alive ticks failed: " + describe(t));
+        }
+    }
+
+    /**
+     * Starts the app via the framework itself, carrying the target display
+     * inside ActivityOptions — bypasses the am binary so OEM builds cannot
+     * drop the display argument on cross-user starts.
+     */
+    private boolean startViaFramework(String packageName, int userId, int displayId) {
+        try {
+            ShellContext context = contextLocked();
+            android.content.Context ctx = context != null ? context : serviceContext;
+            if (ctx == null) {
+                log("startViaFramework: no context");
+                return false;
+            }
+            android.content.Intent intent = new android.content.Intent(
+                    android.content.Intent.ACTION_MAIN);
+            intent.addCategory(android.content.Intent.CATEGORY_LAUNCHER);
+            intent.setPackage(packageName);
+            intent.addFlags(0x10000000 | 0x00008000); // NEW_TASK | RESET_TASK_IF_NEEDED
+            Class<?> optsClass = Class.forName("android.app.ActivityOptions");
+            Object opts = optsClass.getMethod("makeBasic").invoke(null);
+            optsClass.getMethod("setLaunchDisplayId", int.class).invoke(opts, displayId);
+            android.os.Bundle bundle = (android.os.Bundle) optsClass.getMethod("toBundle").invoke(opts);
+            if (userId > 0) {
+                android.os.UserHandle user = (android.os.UserHandle) android.os.UserHandle.class
+                        .getMethod("of", int.class).invoke(null, userId);
+                Throwable last = null;
+                for (Class<?> type : new Class[]{android.content.Context.class, ctx.getClass()}) {
+                    try {
+                        type.getMethod("startActivityAsUser", android.content.Intent.class,
+                                        android.os.Bundle.class, android.os.UserHandle.class)
+                                .invoke(ctx, intent, bundle, user);
+                        log("startViaFramework: dispatched " + packageName
+                                + " user " + userId + " display " + displayId);
+                        return true;
+                    } catch (Throwable t) {
+                        last = t;
+                    }
+                }
+                throw last != null ? last : new IllegalStateException("startActivityAsUser unavailable");
+            }
+            ctx.startActivity(intent, bundle);
+            log("startViaFramework: dispatched " + packageName + " display " + displayId);
+            return true;
+        } catch (Throwable t) {
+            log("startViaFramework failed: " + describe(t));
+            return false;
         }
     }
 
