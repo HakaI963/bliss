@@ -615,39 +615,60 @@ object ShellVd {
         }
 
         private fun onImage(rdr: ImageReader) {
-            val image = try {
-                rdr.acquireLatestImage()
-            } catch (t: Throwable) {
-                null
-            } ?: return
-            if (!converting.compareAndSet(false, true)) {
-                try {
-                    image.close()
-                } catch (ignored: Throwable) {
-                }
-                return
-            }
-            val imgW = image.width
-            val imgH = image.height
-            convertExecutor?.execute {
-                try {
-                    val jpeg = yuvToJpeg(image, 85)
-                    if (jpeg != null) {
-                        val bitmap = BitmapFactory.decodeByteArray(jpeg, 0, jpeg.size)
-                        if (bitmap != null) {
-                            ShellVd.frames.value = bitmap
-                            ShellVd.framesSeq.value += 1L
-                        }
-                    }
+            try {
+                val image = try {
+                    rdr.acquireLatestImage()
                 } catch (t: Throwable) {
-                    Log.w(TAG, "frame convert failed", t)
-                } finally {
+                    null
+                } ?: return
+                if (!converting.compareAndSet(false, true)) {
                     try {
                         image.close()
                     } catch (ignored: Throwable) {
                     }
-                    converting.set(false)
+                    return
                 }
+                val ex = convertExecutor
+                if (ex == null) {
+                    converting.set(false)
+                    try {
+                        image.close()
+                    } catch (ignored: Throwable) {
+                    }
+                    return
+                }
+                try {
+                    ex.execute {
+                        try {
+                            val jpeg = yuvToJpeg(image, 85)
+                            if (jpeg != null) {
+                                val bitmap = BitmapFactory.decodeByteArray(jpeg, 0, jpeg.size)
+                                if (bitmap != null) {
+                                    ShellVd.frames.value = bitmap
+                                    ShellVd.framesSeq.value += 1L
+                                }
+                            }
+                        } catch (t: Throwable) {
+                            Log.w(TAG, "frame convert failed", t)
+                        } finally {
+                            try {
+                                image.close()
+                            } catch (ignored: Throwable) {
+                            }
+                            converting.set(false)
+                        }
+                    }
+                } catch (t: Throwable) {
+                    // RejectedExecutionException etc.: never let the executor edge
+                    // escape the ImageReader callback as an uncaught throwable.
+                    converting.set(false)
+                    try {
+                        image.close()
+                    } catch (ignored: Throwable) {
+                    }
+                }
+            } catch (t: Throwable) {
+                Log.w(TAG, "onImage failed", t)
             }
         }
 

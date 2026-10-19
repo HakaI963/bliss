@@ -27,8 +27,8 @@ android {
         // app targets 28 like Termux. bash/proot/loader/pulse stay pinned to
         // nativeLibraryDir (jniLibs) as belt-and-braces for future targetSdk bumps.
         targetSdk = 28
-        versionCode = 34
-        versionName = "3.9.3"
+        versionCode = 35
+        versionName = "3.9.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -91,10 +91,25 @@ android {
                 keyPassword = keystoreProperties["keyPassword"] as String
             }
         }
+        // Stable debug key checked into the repo. CI runners generate a fresh random
+        // ~/.android/debug.keystore on every build, which changes the signature each
+        // time and forces an uninstall before install — wiping filesDir/crashlog, the
+        // on-device crash evidence, on exactly the builds we need it for.
+        val stableDebugFile = rootProject.file("debug.keystore")
+        if (stableDebugFile.exists()) {
+            create("stableDebug") {
+                storeFile = stableDebugFile
+                storePassword = "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
+            }
+        }
     }
 
     buildTypes {
         debug {
+            signingConfig = signingConfigs.findByName("stableDebug")
+                ?: signingConfigs.getByName("debug")
             isDebuggable = true
             packaging {
                 resources.excludes.add("META-INF/**")

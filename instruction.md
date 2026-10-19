@@ -639,3 +639,15 @@ The historical "verify before restarting" checklist is fully resolved: nav crash
 2. **VideoDecoder throttle**: ≤ ~10 full-res conversions/second, config/keyframes always accepted — 30 fps of 720×1560 YUV→Bitmap garbage was the strongest candidate for the in-the-second OOM/crash.
 3. **StubActivity hardened**: window flags wrapped, `LAYOUT_NO_LIMITS` dropped (never on an activity window), fully crash-tolerant.
 4. versionCode 33→34, 3.9.3.
+
+---
+
+## 27. Round 27 — stable debug key + device crash buffer in Logs (2026-10-19)
+
+**Round-26 log (14:23):** the keepAlive pin works, the encoder produced samples, the client decoder initialized (`decoder started 720x1560`) — and Bliss died right there. All Java decode paths are already try/caught, so the remaining suspects are a native codec death (invisible to CrashLog) or a hop outside the catches.
+
+**Fixes:**
+1. **Stable debug keystore checked in** (`debug.keystore`, standard androiddebugkey/android): CI generated a random `~/.android/debug.keystore` per run, so every install required uninstall — wiping `filesDir/crashlog` right when we need it. Debug builds now sign with the repo key: from this build on, installs are plain updates and on-device crash evidence survives.
+2. **`crashBufferTail()`**: `logs()` now also dumps the system-wide `logcat -b crash` tail filtered to this app — survives reinstalls and captures **native** crashes (signal/backtrace) that never reach the Java handler. Shows in the pane as `--- DEVICE CRASH BUFFER (logcat -b crash) ---`.
+3. VideoDecoder.onImage fully wrapped (whole body + executor `execute` rejection edge).
+4. versionCode 34→35, 3.9.4.

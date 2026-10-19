@@ -202,6 +202,14 @@ public final class ShellVdService extends IShellVd.Stub {
                 }
                 out.add("--- current process ---");
             }
+            String deviceCrash = crashBufferTail();
+            if (!deviceCrash.isEmpty()) {
+                out.add("--- DEVICE CRASH BUFFER (logcat -b crash) ---");
+                for (String line : deviceCrash.split("\n")) {
+                    out.add(line);
+                }
+                out.add("--- end crash buffer ---");
+            }
             for (Object line : logBuffer) {
                 out.add((String) line);
             }
@@ -863,6 +871,46 @@ public final class ShellVdService extends IShellVd.Stub {
     }
 
     /** Last lines of a previous process's crash log (empty when none). */
+    /**
+     * The system-wide logcat crash buffer, filtered to this app's process. Unlike
+     * filesDir/crashlog it survives uninstall, and unlike the Java CrashLog handler
+     * it also captures native (codec/signal) deaths that never reach a Throwable.
+     */
+    private static String crashBufferTail() {
+        try {
+            ShellResult result = runShell("logcat -d -b crash -t 400 -v threadtime 2>/dev/null");
+            if (result == null || result.output == null || result.output.isEmpty()) {
+                return "";
+            }
+            StringBuilder kept = new StringBuilder();
+            StringBuilder block = new StringBuilder();
+            boolean blockHit = false;
+            int blocksKept = 0;
+            for (String line : result.output.split("\n")) {
+                if (line.matches("\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}\\.\\d+\\s+\\d+.*")) {
+                    if (blockHit && blocksKept < 25) {
+                        kept.append(block);
+                        blocksKept++;
+                    }
+                    block.setLength(0);
+                    blockHit = false;
+                }
+                block.append(line).append('\n');
+                String lower = line.toLowerCase(java.util.Locale.ROOT);
+                if (lower.contains("nopiece") || lower.contains("ivarna")
+                        || lower.contains("fluxlinux") || lower.contains("bliss")) {
+                    blockHit = true;
+                }
+            }
+            if (blockHit && blocksKept < 25) {
+                kept.append(block);
+            }
+            return kept.toString().trim();
+        } catch (Throwable t) {
+            return "";
+        }
+    }
+
     private static String crashFileTail() {
         try {
             File file = new File(CRASH_FILE);
