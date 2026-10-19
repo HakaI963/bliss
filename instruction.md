@@ -541,3 +541,14 @@ The historical "verify before restarting" checklist is fully resolved: nav crash
 - `resolveLaunchComponent` for clones in **user 10** relied on `cmd package query-activities … | grep '^<pkg>/'` — the `^` anchor breaks on indented output lines, and the whole resolve fails when the service process cannot see that user's install state. Now: anchored grep removed (unanchored `-F pkg/` + tolerant Java-side trim parse), second ladder `cmd package resolve-activity --brief`, raw outputs logged on failure, and — decisive — **framework-side resolve fallback**: `am start --user U --display N -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -p <pkg>` lets `am` resolve the launcher activity for the target user itself. Resolution can no longer be wrong about user install state.
 - **Display churn**: probe + Run created a new display each time (ids 7,8,9,10). `ensureDisplay()` now **reuses** the service-owned display: `ShellVd.remoteDisplayId()` (`displayId()` AIDL) → adopt; only a dead/absent display is re-created.
 - versionCode 25→26, 3.8.4.
+
+---
+
+## 19. Round 19 — no-frames diagnosis in-app + lost-display self-heal (2026-10-19)
+
+**User evidence:** App Manager runs (Live · 720×1560) but the window shows the loading spinner forever; logs show `No frames after 20s` twice and every tap/swipe/key "rejected by shell service". Meaning: the display came up, the launch reported OK, but (a) frames never arrived in any burst and (b) by the time of input tests the shell service no longer owned a display (its reject path only triggers on `id <= 0` / missing bridge) — consistent with the Shizuku service process dying and re-spawning between attempts, orphaning the display.
+
+**Fixes:**
+- **The chain now narrates itself in the Logs pane:** watchdog at 12s dumps the last 15 service log lines; the frame pump logs a heartbeat while no image arrives (`frames: no image for Xs (display id=N sent=K)`); input rejects now say WHY (`tap rejected: display gone` vs `no input bridge`); and 4s after every `am start` a **placement probe** reports `window(s) of <pkg> on hidden display` or `NO window … launch went to another screen or the app died` (dumpsys window grep of the hidden display's section).
+- **Self-heal:** when the watchdog finds the display gone (service restarted), the engine re-creates the display, re-launches, and restarts frames — one automatic recovery per launch.
+- versionCode 26→27, 3.8.5.

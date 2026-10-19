@@ -887,16 +887,33 @@ object CloneEngine {
         appContext?.let { CloneSessionService.start(it) }
         ShellVd.startFrames()
         log("Launch: $packageName (user $uid, display ${ShellVd.displayId.value})")
-        // Watchdog: report when nothing ever rendered on the hidden display.
+        // Watchdog: when nothing ever rendered on the hidden display, dump the
+        // service's own log tail (the shell-side truth) into the pane and
+        // self-heal a shell service that lost (or never kept) its display.
         val seqAtLaunch = ShellVd.framesSeq.value
         scope.launch {
-            delay(20_000)
-            if (running.value == packageName && ShellVd.framesSeq.value == seqAtLaunch) {
-                log("No frames after 20s for $packageName")
-                status.value = "No picture yet — see Logs"
-            }
+            delay(12_000)
+            if (running.value != packageName || ShellVd.framesSeq.value != seqAtLaunch) return@launch
+            val healed = withContext(Dispatchers.IO) { healLostDisplayNow(packageName) }
+            log("No frames after 12s for $packageName" + (healed?.let { " — $it" } ?: ""))
+            for (line in ShellVd.serviceLogTail(15) ?: emptyList()) log("  shell: $line")
+            status.value = "No picture yet — see Logs"
         }
         return null
+    }
+
+    /** Re-creates the display and re-launches once if the shell service lost it. */
+    private suspend fun healLostDisplayNow(packageName: String): String? {
+        val remote = ShellVd.remoteDisplayId()
+        if (remote > 0) return null
+        log("Hidden display lost (service restarted) — re-creating…")
+        if (!ensureDisplay()) return "display re-creation failed"
+        val (uid, err) = targetUserBlocking()
+        if (err != null) return "relaunch failed: $err"
+        val launchErr = ShellVd.launch(packageName, uid)
+        if (!launchErr.isNullOrEmpty()) return "relaunch failed: $launchErr"
+        ShellVd.startFrames()
+        return "re-created and re-launched (display ${ShellVd.displayId.value})"
     }
 
     // ---------------------------------------------------------------- input (shell-side)

@@ -165,6 +165,7 @@ public final class ShellVdService extends IShellVd.Stub {
     public boolean tap(int x, int y) {
         InputBridge bridge = inputBridge();
         int id = currentDisplayIdSnapshot();
+        log("tap rejected: " + (id <= 0 ? "display gone" : "no input bridge"));
         if (bridge == null || id <= 0) {
             return false;
         }
@@ -180,6 +181,7 @@ public final class ShellVdService extends IShellVd.Stub {
     public boolean longPress(int x, int y, int ms) {
         InputBridge bridge = inputBridge();
         int id = currentDisplayIdSnapshot();
+        log("longPress rejected: " + (id <= 0 ? "display gone" : "no input bridge"));
         if (bridge == null || id <= 0) {
             return false;
         }
@@ -195,6 +197,7 @@ public final class ShellVdService extends IShellVd.Stub {
     public boolean swipe(int x1, int y1, int x2, int y2, int ms) {
         InputBridge bridge = inputBridge();
         int id = currentDisplayIdSnapshot();
+        log("swipe rejected: " + (id <= 0 ? "display gone" : "no input bridge"));
         if (bridge == null || id <= 0) {
             return false;
         }
@@ -210,6 +213,7 @@ public final class ShellVdService extends IShellVd.Stub {
     public boolean key(int keyCode) {
         InputBridge bridge = inputBridge();
         int id = currentDisplayIdSnapshot();
+        log("key rejected: " + (id <= 0 ? "display gone" : "no input bridge"));
         if (bridge == null || id <= 0) {
             return false;
         }
@@ -225,6 +229,7 @@ public final class ShellVdService extends IShellVd.Stub {
     public boolean text(String value) {
         InputBridge bridge = inputBridge();
         int id = currentDisplayIdSnapshot();
+        log("text rejected: " + (id <= 0 ? "display gone" : "no input bridge"));
         if (bridge == null || id <= 0 || value == null) {
             return false;
         }
@@ -255,7 +260,7 @@ public final class ShellVdService extends IShellVd.Stub {
             int cap = maxWidth <= 0 ? 0 : clamp(maxWidth, 120, 4000);
             long interval = Math.max(MIN_FRAME_INTERVAL_MS, 1000L / rate);
             frameCallback = cb;
-            appendLogLocked("frames started fps=" + rate + " maxWidth=" + cap + " quality=" + quality);
+            appendLogLocked("frames started on display " + currentDisplayId + " fps=" + rate + " maxWidth=" + cap + " quality=" + quality);
             pendingLogs = new ArrayList<>(logBuffer);
             logBuffer.clear();
             frameThread = new HandlerThread("ShellVdFrames", Process.THREAD_PRIORITY_DISPLAY);
@@ -325,6 +330,9 @@ public final class ShellVdService extends IShellVd.Stub {
             ShellResult result = runShell(command);
             String output = result.output == null ? "" : result.output.trim();
             log("am start " + component + " exit=" + result.exitCode + " " + output);
+            if (!failure(result)) {
+                schedulePlacementProbe(packageName, id);
+            }
             return failure(result) ? output : "";
         } catch (Throwable t) {
             log("launch failed: " + describe(t));
@@ -646,6 +654,50 @@ public final class ShellVdService extends IShellVd.Stub {
         return "";
     }
 
+    /**
+     * Logs, ~4s after a launch, whether the app actually has windows on the
+     * hidden display. If it does not, no frames will ever arrive and the
+     * Logs pane says so explicitly instead of a spinner with no story.
+     */
+    private void schedulePlacementProbe(String packageName, int displayId) {
+        try {
+            HandlerThread probe = new HandlerThread("ShellVdProbe");
+            probe.start();
+            new Handler(probe.getLooper()).postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        ShellResult r = runShell("dumpsys window displays 2>/dev/null"
+                                + " | grep -A400 'displayId=" + displayId + "'"
+                                + " | grep -m 4 -F '" + packageName + "/'");
+                        boolean present = r.exitCode == 0 && r.output != null && !r.output.trim().isEmpty();
+                        long sent;
+                        int id;
+                        synchronized (lock) {
+                            id = currentDisplayId;
+                            sent = framesSent;
+                        }
+                        if (present) {
+                            log("placement: window(s) of " + packageName + " on hidden display id="
+                                    + displayId + " (frames sent=" + sent + ")");
+                        } else {
+                            log("placement: NO window of " + packageName
+                                    + " on hidden display id=" + displayId
+                                    + " - launch went to another screen or the app died"
+                                    + " (frames sent=" + sent + ")");
+                        }
+                    } catch (Throwable t) {
+                        log("placement probe failed: " + describe(t));
+                    } finally {
+                        probe.quitSafely();
+                    }
+                }
+            }, 4000);
+        } catch (Throwable t) {
+            log("placement probe schedule failed: " + describe(t));
+        }
+    }
+
     /** First output line of the form {@code pkg/component} (tolerant of padding). */
     private static String firstComponent(ShellResult result, String packageName) {
         if (result.output == null) {
@@ -761,6 +813,7 @@ public final class ShellVdService extends IShellVd.Stub {
         private final int maxWidth;
         private final int quality;
         private final long intervalMs;
+        private int silentLoops;
 
         FramePump(DisplaySession session, IShellVdCallback callback, Handler handler,
                   int maxWidth, int quality, long intervalMs) {
@@ -785,6 +838,22 @@ public final class ShellVdService extends IShellVd.Stub {
                 image = session.acquireLatestImage();
                 if (image != null) {
                     decoded = ScreenCapture.bitmapFromImage(image);
+                    silentLoops = 0;
+                } else {
+                    silentLoops++;
+                    // Heartbeat while the empty streak grows: tells the Logs
+                    // pane whether the display draws nothing (activity not on
+                    // it) versus a broken pipeline.
+                    if (silentLoops % 40 == 0) {
+                        int id;
+                        long sent;
+                        synchronized (lock) {
+                            id = currentDisplayId;
+                            sent = framesSent;
+                        }
+                        log("frames: no image for " + (silentLoops / 4) + "s"
+                                + " (display id=" + id + " sent=" + sent + ")");
+                    }
                 }
                 if (decoded != null) {
                     output = decoded;
