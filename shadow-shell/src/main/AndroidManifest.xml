@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    ShadowAuto's shell engine, vendored for Bliss (Apache-2.0).
+
+    This APK is never installed: it is bundled in the Bliss APK's assets,
+    staged to /data/local/tmp by the shell service and executed through
+    app_process (CLASSPATH=... app_process /system/bin com.silentauto.shell.Main),
+    exactly as ShadowAuto's README documents. It therefore runs with the shell
+    user's privileges, not with the permissions declared here.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET" />
+    <application
+        android:label="ShadowAuto Shell (Bliss)"
+        android:usesCleartextTraffic="true" />
+</manifest>

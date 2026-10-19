@@ -51,6 +51,7 @@ final class VirtualDisplaySession {
     private Bitmap latestFrame;
     private long latestFrameAt;
     private volatile boolean draining = true;
+    private long lastConvertAt;
     private final Thread drainThread;
 
     private VirtualDisplaySession(int width, int height, int dpi, ImageReader captureReader, Surface outputSurface, VirtualDisplay display) {
@@ -139,6 +140,13 @@ final class VirtualDisplaySession {
                     SystemClock.sleep(30);
                     continue;
                 }
+                // Convert at most ~5 frames/second: the display renders at
+                // 60 fps and every conversion allocates a full-res bitmap.
+                long now = SystemClock.uptimeMillis();
+                if (now - lastConvertAt < 200) {
+                    continue;
+                }
+                lastConvertAt = now;
                 Bitmap bitmap = ScreenCapture.bitmapFromImage(image);
                 if (bitmap != null) {
                     synchronized (frameLock) {
