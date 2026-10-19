@@ -651,3 +651,25 @@ The historical "verify before restarting" checklist is fully resolved: nav crash
 2. **`crashBufferTail()`**: `logs()` now also dumps the system-wide `logcat -b crash` tail filtered to this app — survives reinstalls and captures **native** crashes (signal/backtrace) that never reach the Java handler. Shows in the pane as `--- DEVICE CRASH BUFFER (logcat -b crash) ---`.
 3. VideoDecoder.onImage fully wrapped (whole body + executor `execute` rejection edge).
 4. versionCode 34→35, 3.9.4.
+
+---
+
+## 28. Round 28 — ShadowAuto model ported; H.264 stack deleted (2026-10-19)
+
+**User instruction:** stop patching the home-grown pipeline, implement ShadowAuto's system. Reference read: `android-shell/.../VirtualDisplaySession.java`, `McpSessions.java`, `VideoStreamer.java`, `ScreenCapture.java`.
+
+**Why every prior round failed:** ShadowAuto never puts a MediaCodec surface on the display. `VirtualDisplaySession.create(..., outputSurface)` is called with **null** from `McpSessions.openSession`; frames are captured on demand by `display.setSurface(captureSurface)` → `acquireLatestImage()` → `setSurface(restore)`. The H.264 encoder-input-surface model was my invention; its client-side decoder is what killed the app process repeatedly.
+
+**Deleted outright:**
+- `DisplaySession` encoder, `VideoSink`, `startEncoder`, `pauseDelivery`, `lastEncoderError`, config cache.
+- Client `VideoDecoder` (MediaCodec AVC → ImageReader YUV → NV21 → JPEG → Bitmap) — the crash site.
+- `StubActivity` + manifest entry + `startKeepAlive` AIDL/service/client (null-surface displays need no screen-on pinning).
+- `onVideoSample` callback → `onScreenshot(byte[] data, w, h)`; new `captureFrame()` AIDL method.
+
+**Ported verbatim:**
+- `DisplaySession`: null-surface `createVirtualDisplay`, candidate flag ladder (PUBLIC|PRESENTATION|OWN_CONTENT_ONLY + hidden SUPPORTS_TOUCH/OWN_FOCUS/TRUSTED), `ImageReader.newInstance(w,h,RGBA_8888,3)`, `captureBitmap(retries,delay)` swap-in/restore, `drainCaptureReader()`, IME policy LOCAL.
+- `ScreenCapture.bitmapFromImage`: rowStride/pixelStride padded bitmap → cropped.
+- Service `captureFrame()`: capture → JPEG q85 → `onScreenshot`.
+- Client: `onScreenshot` decodes (inSampleSize 2 on ≥600px), publishes `frames`/`framesSeq`; capture loop requests stills at 3–4/s (≥300ms).
+
+versionCode 36, 3.9.5.

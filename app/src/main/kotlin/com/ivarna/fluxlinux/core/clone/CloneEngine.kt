@@ -950,7 +950,6 @@ object CloneEngine {
         status.value = null
         appContext?.let { CloneSessionService.start(it) }
         ShellVd.startFrames()
-        ShellVd.startKeepAliveStub(BuildConfig.APPLICATION_ID)
         log("Launch: $packageName (user $uid, display ${ShellVd.displayId.value})")
         // Watchdog: when nothing ever rendered on the hidden display, dump the
         // service's own log tail (the shell-side truth) into the pane and
@@ -960,7 +959,7 @@ object CloneEngine {
             delay(12_000)
             if (running.value != packageName || ShellVd.framesSeq.value != seqAtLaunch) return@launch
             val healed = withContext(Dispatchers.IO) { healLostDisplayNow(packageName) }
-            log("No frames after 12s for $packageName" + (healed?.let { " — $it" } ?: ""))
+            log("No still frame after 12s for $packageName" + (healed?.let { " — $it" } ?: ""))
             logShellTail(15)
             status.value = "No picture yet — see Logs"
         }
@@ -978,7 +977,6 @@ object CloneEngine {
         val launchErr = ShellVd.launch(packageName, uid)
         if (!launchErr.isNullOrEmpty()) return "relaunch failed: $launchErr"
         ShellVd.startFrames()
-        ShellVd.startKeepAliveStub(BuildConfig.APPLICATION_ID)
         return "re-created and re-launched (display ${ShellVd.displayId.value})"
     }
 

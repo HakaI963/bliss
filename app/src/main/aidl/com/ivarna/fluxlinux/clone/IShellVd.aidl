@@ -10,14 +10,14 @@ interface IShellVd {
     boolean swipe(int x1, int y1, int x2, int y2, int ms);
     boolean key(int keyCode);
     boolean text(String value);
+    /** Registers the callback that receives on-demand still frames. */
     void startFrames(IShellVdCallback cb, int maxWidth, int jpegQuality, int fps);
+    /** Captures one still frame and delivers it to onScreenshot. */
+    void captureFrame();
     void stopFrames();
     void releaseDisplay();
     String launch(String pkg, int userId);
     String kill(String pkg, int userId);
-
-    /** Pins the keep-screen-on stub activity onto the current display. */
-    void startKeepAlive(String component, int userId);
     String info();
     void exit();
 

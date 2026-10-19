@@ -109,6 +109,7 @@ public final class ShellVdService extends IShellVd.Stub {
     private HandlerThread frameThread;
     private volatile boolean frameRunning;
     private long framesSent;
+    private long captureMisses;
 
     // ------------------------------------------------------------------ display
 
@@ -141,16 +142,9 @@ public final class ShellVdService extends IShellVd.Stub {
                 int w = clamp(width, MIN_WIDTH, MAX_WIDTH);
                 int h = clamp(height, MIN_HEIGHT, MAX_HEIGHT);
                 int d = clamp(dpi, MIN_DPI, MAX_DPI);
-                log("createDisplay: context ok, creating display with surface");
+                log("createDisplay: context ok, creating display");
                 session = DisplaySession.create(displayContext, w, h, d);
-                log("createDisplay: created id=" + session.displayId + " (H.264 surface)");
-                session.startEncoder(new DisplaySession.VideoSink() {
-                    @Override
-                    public void onVideo(byte[] data, long ptsUs, boolean keyframe, boolean format,
-                                        int width, int height) {
-                        onVideoFromDisplay(data, ptsUs, keyframe, format, width, height);
-                    }
-                });
+                log("createDisplay: created id=" + session.displayId + " (null surface, on-demand capture)");
                 // The display is the expensive, capricious part; input and IME
                 // policy are optional helpers — if they fail here the display
                 // must survive (input retries on demand at first use).
@@ -313,9 +307,7 @@ public final class ShellVdService extends IShellVd.Stub {
         if (cb == null) {
             return;
         }
-        byte[] config;
         List<String> pendingLogs;
-        DisplaySession session;
         synchronized (lock) {
             if (display == null) {
                 log("startFrames: no display");
@@ -323,18 +315,10 @@ public final class ShellVdService extends IShellVd.Stub {
             }
             frameCallback = cb;
             frameRunning = true;
-            session = display;
-            config = session.lastConfig();
-            appendLogLocked("video streaming on display " + currentDisplayId
-                    + " (H.264, encoder samples of a " + displayWidth + "x" + displayHeight + " screen)");
+            appendLogLocked("frame capture armed on display " + currentDisplayId
+                    + " (" + displayWidth + "x" + displayHeight + " on-demand stills)");
             pendingLogs = new ArrayList<>(logBuffer);
             logBuffer.clear();
-        }
-        try {
-            if (config != null) {
-                cb.onVideoSample(config, 0L, false, true, displayWidth, displayHeight);
-            }
-        } catch (Throwable ignored) {
         }
         for (String line : pendingLogs) {
             try {
@@ -342,30 +326,61 @@ public final class ShellVdService extends IShellVd.Stub {
             } catch (Throwable ignored) {
             }
         }
+        // Prime the window with one frame right away.
+        captureFrame();
     }
 
-    /** Encoder sample from the display: cached config + live forwarding to the client. */
-    private void onVideoFromDisplay(byte[] data, long ptsUs, boolean keyframe, boolean format,
-                                    int width, int height) {
-        if (data == null || data.length == 0) {
-            return;
-        }
+    /**
+     * ShadowAuto's capture path: swap the ImageReader surface into the display,
+     * grab one composed frame, restore the null surface, ship PNG to the client.
+     */
+    @Override
+    public void captureFrame() {
+        DisplaySession session;
         IShellVdCallback cb;
         synchronized (lock) {
-            if (!frameRunning && !format) {
+            session = display;
+            cb = frameCallback;
+            if (session == null || cb == null) {
                 return;
             }
-            cb = frameCallback;
         }
-        if (cb == null) {
+        Bitmap bitmap;
+        try {
+            bitmap = session.captureBitmap(8, 120);
+        } catch (Throwable t) {
+            log("capture failed: " + describe(t));
+            return;
+        }
+        if (bitmap == null) {
+            synchronized (lock) {
+                captureMisses++;
+            }
+            return;
+        }
+        byte[] png = null;
+        int w = bitmap.getWidth();
+        int h = bitmap.getHeight();
+        try {
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            if (bitmap.compress(Bitmap.CompressFormat.JPEG, 85, out)) {
+                png = out.toByteArray();
+            }
+        } catch (Throwable t) {
+            log("capture encode failed: " + describe(t));
+        } finally {
+            try {
+                bitmap.recycle();
+            } catch (Throwable ignored) {
+            }
+        }
+        if (png == null) {
             return;
         }
         try {
-            cb.onVideoSample(data, ptsUs, keyframe, format, width, height);
-            if (!format) {
-                synchronized (lock) {
-                    framesSent++;
-                }
+            cb.onScreenshot(png, w, h);
+            synchronized (lock) {
+                framesSent++;
             }
         } catch (Throwable t) {
             if (isDeadObject(t)) {
@@ -373,7 +388,7 @@ public final class ShellVdService extends IShellVd.Stub {
                     frameCallback = null;
                     frameRunning = false;
                 }
-                log("video callback died, streaming paused");
+                log("frame callback died, capture paused");
             }
         }
     }
@@ -396,38 +411,6 @@ public final class ShellVdService extends IShellVd.Stub {
     }
 
     // -------------------------------------------------------------------- apps
-
-    /** Pins the (invisible) keep-screen-on stub activity onto the current display. */
-    @Override
-    public void startKeepAlive(String component, int userId) {
-        String name = component == null ? "" : component.trim();
-        if (name.isEmpty()) {
-            return;
-        }
-        int id = currentDisplayIdSnapshot();
-        if (id <= 0) {
-            log("keepAlive: no display");
-            return;
-        }
-        String head = name.split("/", 2)[0];
-        if (!SAFE_PACKAGE.matcher(head).matches() || name.startsWith("/")
-                || !name.contains("/") || name.split("/", 2)[1].trim().isEmpty()) {
-            log("keepAlive: invalid component");
-            return;
-        }
-        String userArg = userId > 0 ? " --user " + userId : "";
-        ShellResult result;
-        try {
-            result = runShell("am start" + userArg + " --display " + id
-                + " -f 0x10000000 -n '" + name.replace("'", "'\''") + "'");
-        } catch (Throwable t) {
-            log("keepAlive failed: " + describe(t));
-            return;
-        }
-        String output = result.output == null ? "" : result.output.trim();
-        log("keepAlive: am start -n " + name + " --display " + id + " exit=" + result.exitCode
-                + " " + (output.length() > 140 ? output.substring(0, 140) : output));
-    }
 
     @Override
     public String launch(String pkg, int userId) {
@@ -601,7 +584,7 @@ public final class ShellVdService extends IShellVd.Stub {
             out.append("width=").append(displayWidth).append('\n');
             out.append("height=").append(displayHeight).append('\n');
             out.append("dpi=").append(displayDpi).append('\n');
-            out.append("frames=").append(framesSent).append('\n');
+            out.append("frames=").append(framesSent).append(" misses=").append(captureMisses).append('\n');
             out.append("pumping=").append(frameRunning ? 1 : 0).append('\n');
             out.append("logs=").append(logBuffer.size()).append('\n');
         }
@@ -707,9 +690,6 @@ public final class ShellVdService extends IShellVd.Stub {
 
     private void stopFramesLocked() {
         frameRunning = false;
-        if (display != null) {
-            display.pauseDelivery();
-        }
         HandlerThread thread = frameThread;
         frameThread = null;
         frameCallback = null;
@@ -961,9 +941,8 @@ public final class ShellVdService extends IShellVd.Stub {
                             id = display == null ? -1 : displayId;
                             sent = framesSent;
                         }
-                        String err = display == null ? "" : display.lastEncoderError();
                         log("alive t+" + delay / 1000 + "s: display id=" + id
-                                + " samples sent=" + sent + (err.isEmpty() ? "" : " err=" + err));
+                                + " frames sent=" + sent);
                     }
                 }, delay);
             }

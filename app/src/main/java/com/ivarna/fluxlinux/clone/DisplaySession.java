@@ -1,66 +1,59 @@
 package com.ivarna.fluxlinux.clone;
 
-import android.content.Context;
+import android.graphics.Bitmap;
+import android.graphics.PixelFormat;
 import android.hardware.display.DisplayManager;
 import android.hardware.display.VirtualDisplay;
-import android.media.MediaCodec;
-import android.media.MediaCodecInfo;
-import android.media.MediaFormat;
-import android.os.Handler;
-import android.os.HandlerThread;
+import android.media.Image;
+import android.media.ImageReader;
 import android.os.SystemClock;
 import android.view.Surface;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
-import java.nio.ByteBuffer;
 
 /**
  * The clone display, owned by the shell (uid 2000) process.
  *
- * ShadowAuto's production model, ported exactly: the display is created with
- * a MediaCodec H.264 encoder input surface as its output, and the frame
- * stream is the encoder's output samples (real video, like screen recording).
- * Plain ImageReader surfaces — attached permanently or swapped in on demand —
- * never receive a single composed frame on some OEM builds; the encoder
- * surface is the path the whole screen-recording stack is validated on.
+ * <p>Ported verbatim from ShadowAuto's {@code VirtualDisplaySession}: the
+ * display is created with a <b>null output surface</b>. It exists for windows,
+ * input injection and accessibility, not for a live video pipe. Still frames
+ * are captured on demand by swapping an {@code RGBA_8888} ImageReader surface
+ * in with {@link VirtualDisplay#setSurface}, taking one image, and swapping the
+ * null surface back.
  *
- * Flags are tried as a candidate ladder (hidden SUPPORTS_TOUCH / OWN_FOCUS /
+ * <p>There is no MediaCodec here on purpose. The previous architecture made an
+ * H.264 encoder input surface the display output and decoded it in the app;
+ * that decoder is what repeatedly killed the client process, and it was never
+ * how the reference implementation worked.
+ *
+ * <p>Flags are tried as a candidate ladder (hidden SUPPORTS_TOUCH / OWN_FOCUS /
  * TRUSTED first) so the display behaves like a real secondary screen. The IME
  * policy is set to LOCAL so the clone keyboard shows up on the clone display,
  * never on the phone screen.
  */
 final class DisplaySession {
-    interface VideoSink {
-        void onVideo(byte[] data, long ptsUs, boolean keyframe, boolean format, int width, int height);
-    }
-
     final int displayId;
     final int width;
     final int height;
     final int dpi;
 
-    private final MediaCodec encoder;
-    private final Surface encoderSurface;
+    private final ImageReader captureReader;
+    private final Surface captureSurface;
+    private Surface outputSurface;
     private final VirtualDisplay display;
     private final WindowManagerBridge windowManager; // optional: may be null on locked-down builds
     private final int previousImePolicy;
     private final boolean localImeEnabled;
 
-    private volatile VideoSink sink;
-    private volatile boolean encoderRunning;
-    private volatile long lastSampleAt;
-    private volatile long samplesSent;
-    private volatile byte[] lastConfig;
-    private volatile String lastEncoderError;
-
-    private DisplaySession(int width, int height, int dpi, MediaCodec encoder,
-                           Surface encoderSurface, VirtualDisplay display) {
+    private DisplaySession(int width, int height, int dpi, ImageReader captureReader,
+                           Surface outputSurface, VirtualDisplay display) {
         this.width = width;
         this.height = height;
         this.dpi = dpi;
-        this.encoder = encoder;
-        this.encoderSurface = encoderSurface;
+        this.captureReader = captureReader;
+        this.captureSurface = captureReader.getSurface();
+        this.outputSurface = outputSurface;
         this.display = display;
         this.displayId = display.getDisplay().getDisplayId();
         // IME policy is best-effort: a WindowManagerBridge failure must not
@@ -92,32 +85,8 @@ final class DisplaySession {
     }
 
     static DisplaySession create(android.content.Context context, int width, int height, int dpi) {
-        MediaCodec encoder;
-        Surface inputSurface;
-        try {
-            encoder = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC);
-            MediaFormat format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, width, height);
-            format.setInteger(MediaFormat.KEY_COLOR_FORMAT,
-                    MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface);
-            format.setInteger(MediaFormat.KEY_BIT_RATE, bitRateFor(width, height));
-            format.setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR);
-            format.setInteger(MediaFormat.KEY_FRAME_RATE, 30);
-            format.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1);
-            // Reference-engine pacing: keep the surface producing even when
-            // display content is static, and keep latency low.
-            format.setLong(MediaFormat.KEY_REPEAT_PREVIOUS_FRAME_AFTER, 150_000L);
-            format.setInteger(MediaFormat.KEY_PRIORITY, 0);
-            format.setInteger(MediaFormat.KEY_MAX_B_FRAMES, 0);
-            format.setFloat(MediaFormat.KEY_MAX_FPS_TO_ENCODER, 30f);
-            if (android.os.Build.VERSION.SDK_INT >= 30) {
-                format.setInteger(MediaFormat.KEY_LOW_LATENCY, 1);
-            }
-            encoder.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
-            inputSurface = encoder.createInputSurface();
-        } catch (Throwable t) {
-            throw new IllegalStateException("encoder setup failed", t);
-        }
         DisplayManager manager = displayManager(context);
+        ImageReader captureReader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 3);
         int baseFlags = DisplayManager.VIRTUAL_DISPLAY_FLAG_PUBLIC
                 | DisplayManager.VIRTUAL_DISPLAY_FLAG_PRESENTATION
                 | DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY;
@@ -133,108 +102,86 @@ final class DisplaySession {
         Throwable lastError = null;
         for (int flags : candidates) {
             try {
-                VirtualDisplay display = manager.createVirtualDisplay("FluxClone", width, height, dpi,
-                        inputSurface, flags);
+                // Null surface: the display has no live output. Windows still
+                // compose into it, and captureBitmap() swaps a reader in.
+                VirtualDisplay display = manager.createVirtualDisplay("Bliss", width, height, dpi,
+                        null, flags);
                 if (display != null && display.getDisplay() != null) {
-                    return new DisplaySession(width, height, dpi, encoder, inputSurface, display);
+                    return new DisplaySession(width, height, dpi, captureReader, null, display);
                 }
             } catch (Throwable e) {
                 lastError = e;
             }
         }
         try {
-            encoder.release();
+            captureReader.close();
         } catch (Throwable ignored) {
         }
         throw new IllegalStateException("createVirtualDisplay failed", lastError);
     }
 
-    private static int bitRateFor(int width, int height) {
-        int bitRate = (int) (width * (long) height * 0.07d * 30d);
-        return Math.max(1_000_000, Math.min(8_000_000, bitRate));
-    }
-
-    /** Starts H.264 encoding of the display output; samples go to the sink. */
-    synchronized void startEncoder(final VideoSink videoSink) {
-        this.sink = videoSink;
-        if (encoderRunning) {
-            return;
-        }
+    /**
+     * One still frame of the display: swap the capture surface in, wait for the
+     * compositor to produce an image, then restore the previous output surface.
+     * Returns null when nothing composed within the retry window.
+     */
+    synchronized Bitmap captureBitmap(int retries, long delayMs) {
+        Surface restoreSurface = outputSurface;
+        Image image = null;
         try {
-            final HandlerThread thread = new HandlerThread("ShellVdEnc");
-            thread.start();
-            encoder.setCallback(new MediaCodec.Callback() {
-                @Override
-                public void onInputBufferAvailable(MediaCodec codec, int index) {
-                    // Surface input mode: no client input buffers.
+            drainCaptureReader();
+            display.setSurface(captureSurface);
+            for (int i = 0; i <= retries; i++) {
+                SystemClock.sleep(delayMs);
+                image = captureReader.acquireLatestImage();
+                if (image != null) {
+                    return ScreenCapture.bitmapFromImage(image);
                 }
-
-                @Override
-                public void onOutputBufferAvailable(MediaCodec codec, int index, MediaCodec.BufferInfo info) {
-                    try {
-                        ByteBuffer buffer = codec.getOutputBuffer(index);
-                        if (buffer != null && info.size > 0) {
-                            byte[] data = new byte[info.size];
-                            buffer.position(info.offset);
-                            buffer.limit(info.offset + info.size);
-                            buffer.get(data);
-                            boolean config = (info.flags & MediaCodec.BUFFER_FLAG_CODEC_CONFIG) != 0;
-                            boolean keyframe = (info.flags & MediaCodec.BUFFER_FLAG_KEY_FRAME) != 0;
-                            if (config) {
-                                lastConfig = data;
-                            }
-                            lastSampleAt = SystemClock.uptimeMillis();
-                            samplesSent++;
-                            VideoSink s = sink;
-                            if (s != null) {
-                                s.onVideo(data, info.presentationTimeUs, keyframe, config, width, height);
-                            }
-                        }
-                    } catch (Throwable t) {
-                        lastEncoderError = String.valueOf(t);
-                    } finally {
-                        try {
-                            codec.releaseOutputBuffer(index, false);
-                        } catch (Throwable ignored) {
-                        }
-                    }
-                }
-
-                @Override
-                public void onOutputFormatChanged(MediaCodec codec, MediaFormat format) {
-                }
-
-                @Override
-                public void onError(MediaCodec codec, MediaCodec.CodecException e) {
-                    lastEncoderError = String.valueOf(e);
-                }
-            }, new Handler(thread.getLooper()));
-            encoder.start();
-            encoderRunning = true;
+            }
+            return null;
         } catch (Throwable t) {
-            lastEncoderError = String.valueOf(t);
+            return null;
+        } finally {
+            if (image != null) {
+                try {
+                    image.close();
+                } catch (Throwable ignored) {
+                }
+            }
+            try {
+                display.setSurface(restoreSurface);
+                outputSurface = restoreSurface;
+            } catch (Throwable ignored) {
+            }
         }
     }
 
-    /** Pauses delivery (encoder keeps running; samples are cheap when idle). */
-    void pauseDelivery() {
-        sink = null;
+    private void drainCaptureReader() {
+        while (true) {
+            Image image;
+            try {
+                image = captureReader.acquireLatestImage();
+            } catch (Throwable t) {
+                return;
+            }
+            if (image == null) {
+                return;
+            }
+            try {
+                image.close();
+            } catch (Throwable ignored) {
+            }
+        }
     }
 
-    byte[] lastConfig() {
-        return lastConfig;
-    }
-
-    long lastSampleAt() {
-        return lastSampleAt;
-    }
-
-    long samplesSent() {
-        return samplesSent;
-    }
-
-    String lastEncoderError() {
-        return lastEncoderError;
+    private static DisplayManager displayManager(android.content.Context context) {
+        try {
+            Constructor<DisplayManager> ctor = DisplayManager.class.getDeclaredConstructor(android.content.Context.class);
+            ctor.setAccessible(true);
+            return ctor.newInstance(context);
+        } catch (Throwable ignored) {
+            return (DisplayManager) context.getSystemService(android.content.Context.DISPLAY_SERVICE);
+        }
     }
 
     void release() {
@@ -244,32 +191,17 @@ final class DisplaySession {
             }
         } catch (Throwable ignored) {
         }
-        sink = null;
-        try {
-            encoder.stop();
-        } catch (Throwable ignored) {
-        }
-        try {
-            encoder.release();
-        } catch (Throwable ignored) {
-        }
         try {
             display.release();
         } catch (Throwable ignored) {
         }
         try {
-            encoderSurface.release();
+            captureSurface.release();
         } catch (Throwable ignored) {
         }
-    }
-
-    private static DisplayManager displayManager(android.content.Context context) {
         try {
-            Constructor<DisplayManager> ctor = DisplayManager.class.getDeclaredConstructor(Context.class);
-            ctor.setAccessible(true);
-            return ctor.newInstance(context);
+            captureReader.close();
         } catch (Throwable ignored) {
-            return (DisplayManager) context.getSystemService(Context.DISPLAY_SERVICE);
         }
     }
 

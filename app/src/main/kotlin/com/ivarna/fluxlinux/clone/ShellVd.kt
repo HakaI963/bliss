@@ -93,20 +93,20 @@ object ShellVd {
     private var uploadChunk = 256 * 1024
 
 
-    /** H.264 access units from the shell encoder are decoded here. */
-    private val videoDecoder = VideoDecoder()
-
     private val callback: IShellVdCallback = object : IShellVdCallback.Stub() {
-        override fun onVideoSample(
-            data: ByteArray?,
-            ptsUs: Long,
-            keyframe: Boolean,
-            format: Boolean,
-            width: Int,
-            height: Int,
-        ) {
-            if (data == null || data.isEmpty()) return
-            videoDecoder.feed(data, keyframe, format, width, height)
+        override fun onScreenshot(png: ByteArray?, width: Int, height: Int) {
+            if (png == null || png.isEmpty()) return
+            try {
+                // Stills are a preview, not a video pipe: halve the decoded size
+                // on large displays so the UI never churns full-res bitmaps.
+                val opts = BitmapFactory.Options()
+                if (width >= 600) opts.inSampleSize = 2
+                val bitmap = BitmapFactory.decodeByteArray(png, 0, png.size, opts) ?: return
+                frames.value = bitmap
+                framesSeq.value += 1L
+            } catch (t: Throwable) {
+                Log.w(TAG, "screenshot decode failed", t)
+            }
         }
 
         override fun onLog(line: String?) {
@@ -194,15 +194,62 @@ object ShellVd {
         frameFps = frameRate
         return try {
             remote.startFrames(callback, widthCap, jpegQuality, frameRate)
+            startCaptureLoop()
             null
         } catch (t: Throwable) {
             remoteFailure("startFrames", t)
         }
     }
 
+    /**
+     * Still-frame refresh: ShadowAuto captures on demand, so the client asks for
+     * one frame at a time on a timer instead of receiving a video pipe.
+     */
+    private var captureThread: Thread? = null
+
+    @Volatile private var capturing = false
+
+    @Synchronized
+    private fun startCaptureLoop() {
+        if (captureThread != null) return
+        capturing = true
+        val thread = Thread {
+            while (capturing) {
+                val remote = service
+                if (remote != null) {
+                    try {
+                        remote.captureFrame()
+                    } catch (t: Throwable) {
+                        if (capturing) Log.w(TAG, "captureFrame failed", t)
+                    }
+                }
+                try {
+                    // 3-4 stills/second is plenty for a tappable preview and
+                    // keeps allocation pressure far from the old crash zone.
+                    Thread.sleep((1000L / frameFps.coerceIn(1, 30)).coerceAtLeast(300L))
+                } catch (ignored: InterruptedException) {
+                    return@Thread
+                }
+            }
+        }.apply {
+            name = "ShellVd-capture"
+            isDaemon = true
+        }
+        captureThread = thread
+        thread.start()
+    }
+
+    @Synchronized
+    private fun stopCaptureLoop() {
+        capturing = false
+        captureThread?.interrupt()
+        captureThread = null
+    }
+
     /** Stops the frame stream (the display and its apps keep running). Returns null on success. */
     fun stopFrames(): String? {
         val remote = service ?: return "ShellVd user service unavailable"
+        stopCaptureLoop()
         return try {
             remote.stopFrames()
             null
@@ -214,6 +261,7 @@ object ShellVd {
     /** Releases the virtual display but keeps the user service bound. Returns null on success. */
     fun releaseDisplay(): String? {
         val remote = service ?: return "ShellVd user service unavailable"
+        stopCaptureLoop()
         return try {
             remote.releaseDisplay()
             frames.value = null
@@ -403,7 +451,7 @@ object ShellVd {
         displayId.value = 0
         running.value = null
         frames.value = null
-        videoDecoder.release()
+        stopCaptureLoop()
         addLog("released")
     }
 
@@ -498,12 +546,6 @@ object ShellVd {
         if (id > 0) displayId.value = id
     }
 
-    /** Pins the invisible keep-screen-on stub activity on the current display. */
-    fun startKeepAliveStub(appId: String) {
-        val component = "$appId/com.ivarna.fluxlinux.clone.StubActivity"
-        send("keepAlive") { it.startKeepAlive(component, 0); true }?.let { addLog("keepAlive: $it") }
-    }
-
     /**
      * Snapshot of the service-side log (real shell-side errors live there:
      * shell context init, createVirtualDisplay SecurityException, etc.).
@@ -539,201 +581,4 @@ object ShellVd {
      * while a conversion is in flight are dropped unless they are
      * configuration or keyframes, keeping the oneway callback cheap.
      */
-    private class VideoDecoder {
-        private val decoderLock = Any()
-        private var codec: MediaCodec? = null
-        private var reader: ImageReader? = null
-        private var imageThread: HandlerThread? = null
-        private var convertExecutor: ExecutorService? = null
-        private var width = 0
-        private var height = 0
-        private val converting = java.util.concurrent.atomic.AtomicBoolean(false)
-
-        private var lastAcceptedAt = 0L
-
-        fun feed(data: ByteArray, keyframe: Boolean, format: Boolean, w: Int, h: Int) {
-            try {
-                val c = ensureCodec(w, h) ?: return
-                if (!format) {
-                    // Throttle to ~10 conversions/second: full-res YUV->Bitmap
-                    // every frame would flood the allocator and OOM the client.
-                    val now = android.os.SystemClock.uptimeMillis()
-                    if (now - lastAcceptedAt < 90 && (converting.get() || !keyframe)) return
-                    lastAcceptedAt = now
-                }
-                if (converting.get() && !format && !keyframe) return
-                val index = c.dequeueInputBuffer(0)
-                if (index < 0) return
-                val buffer = c.getInputBuffer(index) ?: return
-                buffer.clear()
-                if (data.size > buffer.capacity()) return
-                buffer.put(data)
-                var flags = 0
-                if (format) flags = flags or MediaCodec.BUFFER_FLAG_CODEC_CONFIG
-                if (keyframe) flags = flags or MediaCodec.BUFFER_FLAG_KEY_FRAME
-                c.queueInputBuffer(index, 0, data.size, System.nanoTime() / 1000, flags)
-                drainOutput(c)
-            } catch (t: Throwable) {
-                Log.w(TAG, "video feed failed", t)
-            }
-        }
-
-        private fun drainOutput(c: MediaCodec) {
-            val info = MediaCodec.BufferInfo()
-            for (i in 0 until 8) {
-                val index = c.dequeueOutputBuffer(info, 0)
-                if (index == MediaCodec.INFO_TRY_AGAIN_LATER) return
-                if (index == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) continue
-                if (index >= 0) c.releaseOutputBuffer(index, true)
-                if (index < 0) return
-            }
-        }
-
-        private fun ensureCodec(w: Int, h: Int): MediaCodec? {
-            synchronized(decoderLock) {
-                codec?.let { return it }
-                if (w <= 0 || h <= 0) return null
-                width = w
-                height = h
-                val thread = HandlerThread("ShellVdDec")
-                thread.start()
-                imageThread = thread
-                val r = ImageReader.newInstance(w, h, ImageFormat.YUV_420_888, 2)
-                r.setOnImageAvailableListener({ rdr -> onImage(rdr) }, Handler(thread.looper))
-                reader = r
-                val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, w, h)
-                val c = MediaCodec.createDecoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
-                c.configure(format, r.surface, null, 0)
-                c.start()
-                convertExecutor = Executors.newSingleThreadExecutor { runnable ->
-                    Thread(runnable, "ShellVd-yuv").apply { isDaemon = true }
-                }
-                codec = c
-                ShellVd.addLog("decoder started ${w}x$h")
-                return c
-            }
-        }
-
-        private fun onImage(rdr: ImageReader) {
-            try {
-                val image = try {
-                    rdr.acquireLatestImage()
-                } catch (t: Throwable) {
-                    null
-                } ?: return
-                if (!converting.compareAndSet(false, true)) {
-                    try {
-                        image.close()
-                    } catch (ignored: Throwable) {
-                    }
-                    return
-                }
-                val ex = convertExecutor
-                if (ex == null) {
-                    converting.set(false)
-                    try {
-                        image.close()
-                    } catch (ignored: Throwable) {
-                    }
-                    return
-                }
-                try {
-                    ex.execute {
-                        try {
-                            val jpeg = yuvToJpeg(image, 85)
-                            if (jpeg != null) {
-                                val bitmap = BitmapFactory.decodeByteArray(jpeg, 0, jpeg.size)
-                                if (bitmap != null) {
-                                    ShellVd.frames.value = bitmap
-                                    ShellVd.framesSeq.value += 1L
-                                }
-                            }
-                        } catch (t: Throwable) {
-                            Log.w(TAG, "frame convert failed", t)
-                        } finally {
-                            try {
-                                image.close()
-                            } catch (ignored: Throwable) {
-                            }
-                            converting.set(false)
-                        }
-                    }
-                } catch (t: Throwable) {
-                    // RejectedExecutionException etc.: never let the executor edge
-                    // escape the ImageReader callback as an uncaught throwable.
-                    converting.set(false)
-                    try {
-                        image.close()
-                    } catch (ignored: Throwable) {
-                    }
-                }
-            } catch (t: Throwable) {
-                Log.w(TAG, "onImage failed", t)
-            }
-        }
-
-        private fun yuvToJpeg(image: Image, quality: Int): ByteArray? {
-            val imgW = image.width
-            val imgH = image.height
-            val planes = image.planes
-            val y = planes[0]
-            val u = planes[1]
-            val v = planes[2]
-            val nv21 = ByteArray(imgW * imgH * 3 / 2)
-            val yBuffer = y.buffer
-            val yRowStride = y.rowStride
-            val yPixelStride = y.pixelStride
-            var pos = 0
-            for (row in 0 until imgH) {
-                var col = 0
-                while (col < imgW) {
-                    nv21[pos++] = yBuffer.get(row * yRowStride + col * yPixelStride)
-                    col++
-                }
-            }
-            val uBuffer = u.buffer
-            val vBuffer = v.buffer
-            val uRowStride = u.rowStride
-            val vRowStride = v.rowStride
-            val uPixelStride = u.pixelStride
-            val vPixelStride = v.pixelStride
-            val chromaHeight = imgH / 2
-            val chromaWidth = imgW / 2
-            for (row in 0 until chromaHeight) {
-                var col = 0
-                while (col < chromaWidth) {
-                    nv21[pos++] = vBuffer.get(row * vRowStride + col * vPixelStride)
-                    nv21[pos++] = uBuffer.get(row * uRowStride + col * uPixelStride)
-                    col++
-                }
-            }
-            val yuv = YuvImage(nv21, ImageFormat.NV21, imgW, imgH, null)
-            val out = java.io.ByteArrayOutputStream()
-            if (!yuv.compressToJpeg(Rect(0, 0, imgW, imgH), quality, out)) return null
-            return out.toByteArray()
-        }
-
-        fun release() {
-            synchronized(decoderLock) {
-                try {
-                    codec?.stop()
-                } catch (ignored: Throwable) {
-                }
-                try {
-                    codec?.release()
-                } catch (ignored: Throwable) {
-                }
-                codec = null
-                try {
-                    reader?.close()
-                } catch (ignored: Throwable) {
-                }
-                reader = null
-                convertExecutor?.shutdownNow()
-                convertExecutor = null
-                imageThread?.quitSafely()
-                imageThread = null
-            }
-        }
-    }
 }
