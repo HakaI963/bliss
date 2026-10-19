@@ -552,3 +552,14 @@ The historical "verify before restarting" checklist is fully resolved: nav crash
 - **The chain now narrates itself in the Logs pane:** watchdog at 12s dumps the last 15 service log lines; the frame pump logs a heartbeat while no image arrives (`frames: no image for Xs (display id=N sent=K)`); input rejects now say WHY (`tap rejected: display gone` vs `no input bridge`); and 4s after every `am start` a **placement probe** reports `window(s) of <pkg> on hidden display` or `NO window … launch went to another screen or the app died` (dumpsys window grep of the hidden display's section).
 - **Self-heal:** when the watchdog finds the display gone (service restarted), the engine re-creates the display, re-launches, and restarts frames — one automatic recovery per launch.
 - versionCode 26→27, 3.8.5.
+
+---
+
+## 20. Round 20 — crash catcher + live breadcrumbs (frame pipeline confirmed working) (2026-10-19)
+
+**User evidence (round-19 build):** no spinner — a **solid black frame renders in the live window** ⇒ the frame pump, callback, and JPEG round-trip all work end to end. What's on the display is simply the initial black composite; the app's windows never draw there. Meanwhile the shell service lost its display within seconds (ids 14→15 recreated inside one second; input rejects on a respawned `id=0` instance) — a real process death ~1-4s after display creation, cause unknown from the pane so far (uncaught handler output never persisted).
+
+**Fixes:**
+- **Crash catcher:** uncaught exceptions any thread are appended to `/data/local/tmp/bliss-stage/crash.log` (thread name + full cause-chain stack), then the chain re-delegates. `logs()`/`serviceLogTail` prepend the previous process's crash tail with a `PREVIOUS PROCESS CRASH` marker — the exact crash appears in the pane after the service dies and respawns.
+- **Live breadcrumbs:** `log()` now pushes to the client over the shell callback, so every service-side line reaches the Logs pane in real time: create ladder (`context ok` → `created id=N` → `display created`), `alive t+1..4s: display id=N frames sent=K` ticks after each creation (pin the death window to ±1s), `frames: no image for Xs` heartbeat, `tap rejected: display gone`, and the **placement verdict** (`window(s) of <pkg> on hidden display` vs `NO window …`) ~4s after every launch — previously it was logged but only fetched by a watchdog that skipped once a black frame had landed.
+- versionCode 27→28 (forces Shizuku to reload), 3.8.6.

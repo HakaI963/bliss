@@ -10,9 +10,13 @@ import android.os.Parcel;
 import android.os.Process;
 import android.os.SystemClock;
 
+import java.io.File;
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
+import java.io.FileReader;
 import java.io.InputStreamReader;
+import java.io.FileWriter;
+import java.io.Writer;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
@@ -36,6 +40,28 @@ import java.util.regex.Pattern;
  * captured reference and always closes its Image.
  */
 public final class ShellVdService extends IShellVd.Stub {
+
+    static {
+        try {
+            final Thread.UncaughtExceptionHandler previous =
+                    Thread.getDefaultUncaughtExceptionHandler();
+            Thread.setDefaultUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
+                @Override
+                public void uncaughtException(Thread t, Throwable e) {
+                    try {
+                        writeCrashLog(t, e);
+                    } catch (Throwable ignored) {
+                    }
+                    if (previous != null) {
+                        previous.uncaughtException(t, e);
+                    } else {
+                        Runtime.getRuntime().exit(2);
+                    }
+                }
+            });
+        } catch (Throwable ignored) {
+        }
+    }
 
     /**
      * Shizuku may instantiate user services with a (Context) constructor; the
@@ -106,7 +132,9 @@ public final class ShellVdService extends IShellVd.Stub {
                 int w = clamp(width, MIN_WIDTH, MAX_WIDTH);
                 int h = clamp(height, MIN_HEIGHT, MAX_HEIGHT);
                 int d = clamp(dpi, MIN_DPI, MAX_DPI);
+                log("createDisplay: context ok, creating display with surface");
                 session = DisplaySession.create(displayContext, w, h, d);
+                log("createDisplay: created id=" + session.displayId);
                 // The display is the expensive, capricious part; input and IME
                 // policy are optional helpers — if they fail here the display
                 // must survive (input retries on demand at first use).
@@ -125,6 +153,7 @@ public final class ShellVdService extends IShellVd.Stub {
                 log("display created id=" + session.displayId + " " + w + "x" + h + " dpi=" + d
                         + " input=" + (bridge != null ? "ok" : "retry-on-demand")
                         + (session.localImeEnabled() ? " ime=local" : " ime=default"));
+                scheduleAliveTicks(session.displayId);
                 return session.displayId;
             } catch (Throwable t) {
                 if (session != null) {
@@ -148,7 +177,19 @@ public final class ShellVdService extends IShellVd.Stub {
     @Override
     public String[] logs() {
         synchronized (lock) {
-            return logBuffer.toArray(new String[0]);
+            java.util.ArrayList<String> out = new java.util.ArrayList<>();
+            String crash = crashFileTail();
+            if (!crash.isEmpty()) {
+                out.add("--- PREVIOUS PROCESS CRASH ---");
+                for (String line : crash.split("\n")) {
+                    out.add(line);
+                }
+                out.add("--- current process ---");
+            }
+            for (Object line : logBuffer) {
+                out.add((String) line);
+            }
+            return out.toArray(new String[0]);
         }
     }
 
@@ -695,6 +736,102 @@ public final class ShellVdService extends IShellVd.Stub {
             }, 4000);
         } catch (Throwable t) {
             log("placement probe schedule failed: " + describe(t));
+        }
+    }
+
+    private static final String CRASH_DIR = "/data/local/tmp/bliss-stage";
+    private static final String CRASH_FILE = CRASH_DIR + "/crash.log";
+    private static final long CRASH_LIMIT = 200_000L;
+
+    private static void writeCrashLog(Thread thread, Throwable throwable) throws Exception {
+        File dir = new File(CRASH_DIR);
+        if (!dir.exists()) {
+            dir.mkdirs();
+        }
+        File file = new File(CRASH_FILE);
+        if (file.length() > CRASH_LIMIT) {
+            file.delete();
+        }
+        Writer writer = new FileWriter(file, true);
+        try {
+            writer.write("\n");
+            writer.write("--- crash " + new java.util.Date() + " thread=" + thread.getName() + " ---\n");
+            Throwable cur = throwable;
+            int depth = 0;
+            while (cur != null && depth < 6) {
+                writer.write(cur.toString() + "\n");
+                for (StackTraceElement el : cur.getStackTrace()) {
+                    writer.write("      at " + el.toString() + "\n");
+                }
+                cur = cur.getCause();
+                depth++;
+            }
+        } finally {
+            try {
+                writer.close();
+            } catch (Throwable ignored) {
+            }
+        }
+    }
+
+    /** Last lines of a previous process's crash log (empty when none). */
+    private static String crashFileTail() {
+        try {
+            File file = new File(CRASH_FILE);
+            if (!file.exists() || file.length() == 0) {
+                return "";
+            }
+            StringBuilder tail = new StringBuilder();
+            BufferedReader reader = new BufferedReader(new FileReader(file));
+            try {
+                java.util.ArrayList<String> lines = new java.util.ArrayList<>();
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    lines.add(line);
+                }
+                int from = Math.max(0, lines.size() - 12);
+                for (int i = from; i < lines.size(); i++) {
+                    if (tail.length() > 0) {
+                        tail.append('\n');
+                    }
+                    tail.append(lines.get(i));
+                }
+            } finally {
+                try {
+                    reader.close();
+                } catch (Throwable ignored) {
+                }
+            }
+            return tail.toString();
+        } catch (Throwable ignored) {
+            return "";
+        }
+    }
+
+    /** t+Ns quotes emitted after creation so the process death window is visible. */
+    private void scheduleAliveTicks(final int displayId) {
+        try {
+            HandlerThread ops = new HandlerThread("ShellVdOps");
+            ops.start();
+            Handler handler = new Handler(ops.getLooper());
+            for (int n = 1; n <= 4; n++) {
+                final long delay = n * 1000L;
+                handler.postDelayed(new Runnable() {
+                    @Override
+                    public void run() {
+                        long sent;
+                        int id;
+                        synchronized (lock) {
+                            id = display == null ? -1 : displayId;
+                            sent = framesSent;
+                        }
+                        log("alive t+" + delay / 1000 + "s: display id=" + id
+                                + " frames sent=" + sent);
+                    }
+                }, delay);
+            }
+        } catch (Throwable t) {
+            log("alive ticks failed: " + describe(t));
         }
     }
 
