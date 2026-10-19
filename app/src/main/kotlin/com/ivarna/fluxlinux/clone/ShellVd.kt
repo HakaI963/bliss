@@ -549,9 +549,18 @@ object ShellVd {
         private var height = 0
         private val converting = java.util.concurrent.atomic.AtomicBoolean(false)
 
+        private var lastAcceptedAt = 0L
+
         fun feed(data: ByteArray, keyframe: Boolean, format: Boolean, w: Int, h: Int) {
             try {
                 val c = ensureCodec(w, h) ?: return
+                if (!format) {
+                    // Throttle to ~10 conversions/second: full-res YUV->Bitmap
+                    // every frame would flood the allocator and OOM the client.
+                    val now = android.os.SystemClock.uptimeMillis()
+                    if (now - lastAcceptedAt < 90 && (converting.get() || !keyframe)) return
+                    lastAcceptedAt = now
+                }
                 if (converting.get() && !format && !keyframe) return
                 val index = c.dequeueInputBuffer(0)
                 if (index < 0) return

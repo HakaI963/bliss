@@ -627,3 +627,15 @@ The historical "verify before restarting" checklist is fully resolved: nav crash
 ## 25. Round 25 — keepAlive validator fix (2026-10-19)
 
 **Round-24 log:** `keepAlive: invalid component` — the stub never pinned. Bug: `String.split("/", 1)` has limit semantics meaning "no split", so the whole `pkg/cls` component was matched against the package-only pattern and rejected. Fixed with limit 2, plus component sanity (package head matches, class part non-empty). Service disconnect at 12:00:06 noted — if it was a crash, the next session's pane shows the persisted `PREVIOUS PROCESS CRASH` block.
+
+---
+
+## 26. Round 26 — app crash evidence surfaced + survival hardening (2026-10-19)
+
+**User evidence (screen recording 13:51):** with the round-25 build, display id=35 came up (H.264 surface), video streaming started — and **Bliss itself died within the second**. The app-level stack is on the device in `filesDir/crashlog/` (CrashLog recorder).
+
+**Fixes:**
+1. **Previous app crash surfaces in the clone Logs pane** on next launch (`PREVIOUS APP CRASH (crash-…txt)` + the stack head, from `CrashLog.dir`) — the next screenshot names the exact client stack.
+2. **VideoDecoder throttle**: ≤ ~10 full-res conversions/second, config/keyframes always accepted — 30 fps of 720×1560 YUV→Bitmap garbage was the strongest candidate for the in-the-second OOM/crash.
+3. **StubActivity hardened**: window flags wrapped, `LAYOUT_NO_LIMITS` dropped (never on an activity window), fully crash-tolerant.
+4. versionCode 33→34, 3.9.3.

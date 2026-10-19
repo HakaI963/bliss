@@ -27,8 +27,8 @@ android {
         // app targets 28 like Termux. bash/proot/loader/pulse stay pinned to
         // nativeLibraryDir (jniLibs) as belt-and-braces for future targetSdk bumps.
         targetSdk = 28
-        versionCode = 33
-        versionName = "3.9.2"
+        versionCode = 34
+        versionName = "3.9.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

@@ -18,10 +18,12 @@ import android.view.WindowManager
 class StubActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        window!!.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        window!!.addFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE)
-        window!!.addFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE)
-        window!!.addFlags(WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS)
-        window!!.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+        try {
+            window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            window?.addFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE)
+            window?.addFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE)
+            window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+        } catch (ignored: Throwable) {
+        }
     }
 }

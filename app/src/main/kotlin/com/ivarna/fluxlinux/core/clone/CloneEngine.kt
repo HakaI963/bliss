@@ -142,6 +142,7 @@ object CloneEngine {
         initialized = true
         appContext = app.applicationContext
         touchBackend.value = ShellRunner.backend()
+        surfacePreviousCrash(app)
         if (!isMainProcess(app)) return
         prefs = app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).also { p ->
             displayFps.value = p.getInt("fps", 10).coerceIn(5, 30)
@@ -208,6 +209,20 @@ object CloneEngine {
         val f = logFile()
         if (!f.isFile) return emptyList()
         return runCatching { f.readLines().takeLast(maxLines) }.getOrDefault(emptyList())
+    }
+
+    /** Adds the newest persisted app crash to the pane, if any. */
+    private fun surfacePreviousCrash(app: Application) {
+        runCatching {
+            val dir = com.ivarna.fluxlinux.core.system.CrashLog.dir(app)
+            val latest = dir.listFiles()?.maxByOrNull { it.name } ?: return
+            if (!latest.name.startsWith("crash-")) return
+            val stack = latest.readLines().take(14)
+            if (stack.isEmpty()) return
+            log("--- PREVIOUS APP CRASH (${latest.name}) ---")
+            for (line in stack) log(line.take(400))
+            log("--- end previous app crash ---")
+        }
     }
 
     /** Wipes the activity pane (Logs card clear icon). */
