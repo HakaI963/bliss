@@ -609,3 +609,15 @@ The historical "verify before restarting" checklist is fully resolved: nav crash
 - Client `VideoDecoder`: MediaCodec AVC decoder -> ImageReader(YUV_420_888) -> NV21 -> JPEG(q85) -> Bitmap -> existing `frames/framesSeq` state (live window, watchdog, screenshot all unchanged). Config + keyframes always accepted, non-key samples dropped while a conversion is in flight.
 - Input-bridge reject logs moved inside the guard (they printed on every input call — misleading).
 - versionCode 30→31, **3.9.0**.
+
+---
+
+## 24. Round 24 — display power wake (keep-screen-on stub) + shadow-exact encoder config (2026-10-19)
+
+**User evidence (H.264 build live):** windows verifiably on the display and the encoder streaming path armed, but `samples sent=0` — the fresh virtual display's power group stays **OFF** on HyperOS until something on that display asks for the screen.
+
+**Fixes:**
+1. **Keep-screen-on stub activity**: an invisible, non-focusable, non-touchable, fully-transparent `StubActivity` (KEEP_SCREEN_ON) is pinned onto the hidden display right after every launch (new `IShellVd.startKeepAlive` AIDL + client `startKeepAliveStub`, called after launch and after self-heal relaunch). A visible-but-transparent window asking for the screen forces the display group ON.
+2. **Encoder config now shadow-exact**: CBR bitrate mode, `KEY_REPEAT_PREVIOUS_FRAME_AFTER=150ms`, priority 0, B-frames 0, max-fps-to-encoder 30, low latency on S+ (keys taken verbatim from the reference `VideoStreamer`).
+3. Alive ticks now show encoder errors (`samples sent=N err=…`).
+4. versionCode 31→32, 3.9.1.

@@ -498,6 +498,12 @@ object ShellVd {
         if (id > 0) displayId.value = id
     }
 
+    /** Pins the invisible keep-screen-on stub activity on the current display. */
+    fun startKeepAliveStub(appId: String) {
+        val component = "$appId/com.ivarna.fluxlinux.clone.StubActivity"
+        send("keepAlive") { it.startKeepAlive(component, 0); true }?.let { addLog("keepAlive: $it") }
+    }
+
     /**
      * Snapshot of the service-side log (real shell-side errors live there:
      * shell context init, createVirtualDisplay SecurityException, etc.).

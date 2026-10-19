@@ -15,6 +15,9 @@ interface IShellVd {
     void releaseDisplay();
     String launch(String pkg, int userId);
     String kill(String pkg, int userId);
+
+    /** Pins the keep-screen-on stub activity onto the current display. */
+    void startKeepAlive(String component, int userId);
     String info();
     void exit();
 

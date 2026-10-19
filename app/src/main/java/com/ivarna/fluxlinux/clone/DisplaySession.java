@@ -100,8 +100,18 @@ final class DisplaySession {
             format.setInteger(MediaFormat.KEY_COLOR_FORMAT,
                     MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface);
             format.setInteger(MediaFormat.KEY_BIT_RATE, bitRateFor(width, height));
+            format.setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR);
             format.setInteger(MediaFormat.KEY_FRAME_RATE, 30);
             format.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1);
+            // Reference-engine pacing: keep the surface producing even when
+            // display content is static, and keep latency low.
+            format.setLong(MediaFormat.KEY_REPEAT_PREVIOUS_FRAME_AFTER, 150_000L);
+            format.setInteger(MediaFormat.KEY_PRIORITY, 0);
+            format.setInteger(MediaFormat.KEY_MAX_B_FRAMES, 0);
+            format.setFloat(MediaFormat.KEY_MAX_FPS_TO_ENCODER, 30f);
+            if (android.os.Build.VERSION.SDK_INT >= 30) {
+                format.setInteger(MediaFormat.KEY_LOW_LATENCY, 1);
+            }
             encoder.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
             inputSurface = encoder.createInputSurface();
         } catch (Throwable t) {

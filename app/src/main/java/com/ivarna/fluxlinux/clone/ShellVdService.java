@@ -389,6 +389,37 @@ public final class ShellVdService extends IShellVd.Stub {
 
     // -------------------------------------------------------------------- apps
 
+    /** Pins the (invisible) keep-screen-on stub activity onto the current display. */
+    @Override
+    public void startKeepAlive(String component, int userId) {
+        String name = component == null ? "" : component.trim();
+        if (name.isEmpty()) {
+            return;
+        }
+        int id = currentDisplayIdSnapshot();
+        if (id <= 0) {
+            log("keepAlive: no display");
+            return;
+        }
+        String head = name.split("/", 1)[0];
+        if (!SAFE_PACKAGE.matcher(head).matches() || name.startsWith("/")) {
+            log("keepAlive: invalid component");
+            return;
+        }
+        String userArg = userId > 0 ? " --user " + userId : "";
+        ShellResult result;
+        try {
+            result = runShell("am start" + userArg + " --display " + id
+                + " -f 0x10000000 -n '" + name.replace("'", "'\''") + "'");
+        } catch (Throwable t) {
+            log("keepAlive failed: " + describe(t));
+            return;
+        }
+        String output = result.output == null ? "" : result.output.trim();
+        log("keepAlive: am start -n " + name + " --display " + id + " exit=" + result.exitCode
+                + " " + (output.length() > 140 ? output.substring(0, 140) : output));
+    }
+
     @Override
     public String launch(String pkg, int userId) {
         String packageName = pkg == null ? "" : pkg.trim();
@@ -881,8 +912,9 @@ public final class ShellVdService extends IShellVd.Stub {
                             id = display == null ? -1 : displayId;
                             sent = framesSent;
                         }
+                        String err = display == null ? "" : display.lastEncoderError();
                         log("alive t+" + delay / 1000 + "s: display id=" + id
-                                + " frames sent=" + sent);
+                                + " samples sent=" + sent + (err.isEmpty() ? "" : " err=" + err));
                     }
                 }, delay);
             }

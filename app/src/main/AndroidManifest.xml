@@ -67,6 +67,13 @@
             </intent-filter>
         </activity>
 
+        <!-- Invisible keep-screen-on holder pinned onto the hidden clone display. -->
+        <activity
+            android:name="com.ivarna.fluxlinux.clone.StubActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
         <service
             android:name=".core.service.InstallServerService"
             android:exported="false"
