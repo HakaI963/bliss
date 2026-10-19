@@ -1,11 +1,13 @@
 package com.ivarna.fluxlinux.clone;
 
 import android.content.Context;
+import android.graphics.Bitmap;
 import android.graphics.PixelFormat;
 import android.hardware.display.DisplayManager;
 import android.hardware.display.VirtualDisplay;
 import android.media.Image;
 import android.media.ImageReader;
+import android.os.SystemClock;
 import android.view.Surface;
 
 import java.lang.reflect.Constructor;
@@ -14,13 +16,14 @@ import java.lang.reflect.Field;
 /**
  * The clone display, owned by the shell (uid 2000) process.
  *
- * Ported from ShadowAuto's VirtualDisplaySession, adapted to a continuous
- * frame pump: the ImageReader surface is the display output for the whole
- * lifetime of the display, and the service reads the latest composed frame
- * from it. Flags are tried as a candidate ladder (hidden SUPPORTS_TOUCH /
- * OWN_FOCUS / TRUSTED first) so the display behaves like a real secondary
- * screen across Android versions. The IME policy is set to LOCAL so the clone
- * keyboard shows up on the clone display, never on the phone screen.
+ * Ported from ShadowAuto's VirtualDisplaySession: the display is created
+ * with no persistent scanout surface; captures swap the ImageReader surface
+ * in on demand (setSurface -> grab -> setSurface(null)). A permanently
+ * attached reader produces no frames at all on some OEM builds. Flags are
+ * tried as a candidate ladder (hidden SUPPORTS_TOUCH / OWN_FOCUS / TRUSTED
+ * first) so the display behaves like a real secondary screen. The IME policy
+ * is set to LOCAL so the clone keyboard shows up on the clone display, never
+ * on the phone screen.
  */
 final class DisplaySession {
     final int displayId;
@@ -73,7 +76,6 @@ final class DisplaySession {
 
     static DisplaySession create(android.content.Context context, int width, int height, int dpi) {
         ImageReader reader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 3);
-        Surface surface = reader.getSurface();
         DisplayManager manager = displayManager(context);
         int baseFlags = DisplayManager.VIRTUAL_DISPLAY_FLAG_PUBLIC
                 | DisplayManager.VIRTUAL_DISPLAY_FLAG_PRESENTATION
@@ -88,43 +90,19 @@ final class DisplaySession {
                 baseFlags
         };
         Throwable lastError = null;
+        // Shadow model: the display is created with NO persistent scanout
+        // surface. A permanently attached ImageReader never receives a single
+        // composed frame on some OEM builds; swapping the reader surface in on
+        // demand (setSurface -> capture -> setSurface(null)) always does.
         for (int flags : candidates) {
             try {
-                VirtualDisplay display = manager.createVirtualDisplay("FluxClone", width, height, dpi, surface, flags);
+                VirtualDisplay display = manager.createVirtualDisplay("FluxClone", width, height, dpi, null, flags);
                 if (display != null && display.getDisplay() != null) {
                     return new DisplaySession(width, height, dpi, reader, display);
                 }
             } catch (Throwable e) {
                 lastError = e;
             }
-        }
-        // Some OEM builds validate the scanout surface itself and refuse the
-        // whole call. Retry the same ladder with NO surface, then attach the
-        // reader surface afterwards — VirtualDisplay.setSurface is public API.
-        for (int flags : candidates) {
-            try {
-                VirtualDisplay display = manager.createVirtualDisplay("FluxCloneSh", width, height, dpi, null, flags);
-                if (display == null || display.getDisplay() == null) {
-                    continue;
-                }
-                try {
-                    display.setSurface(surface);
-                } catch (Throwable e2) {
-                    lastError = e2;
-                    try {
-                        display.release();
-                    } catch (Throwable ignored) {
-                    }
-                    continue;
-                }
-                return new DisplaySession(width, height, dpi, reader, display);
-            } catch (Throwable e) {
-                lastError = e;
-            }
-        }
-        try {
-            surface.release();
-        } catch (Throwable ignored) {
         }
         try {
             reader.close();
@@ -133,9 +111,44 @@ final class DisplaySession {
         throw new IllegalStateException("createVirtualDisplay failed", lastError);
     }
 
-    /** Latest composed frame, or null when the display has nothing new. Caller must close. */
-    Image acquireLatestImage() {
-        return reader.acquireLatestImage();
+    /**
+     * Swaps the reader surface in, waits for SurfaceFlinger to compose the
+     * current content into it, and returns the latest frame as a Bitmap (null
+     * when nothing arrived). The display's output is restored to null before
+     * returning — exactly the reference engine's capture model.
+     */
+    synchronized Bitmap captureBitmap(int retries, long delayMs) {
+        Image image = null;
+        try {
+            display.setSurface(readerSurface);
+        } catch (Throwable t) {
+            return null;
+        }
+        try {
+            for (int i = 0; i <= retries; i++) {
+                if (delayMs > 0) {
+                    SystemClock.sleep(delayMs);
+                }
+                image = reader.acquireLatestImage();
+                if (image != null) {
+                    return ScreenCapture.bitmapFromImage(image);
+                }
+            }
+            return null;
+        } catch (Throwable t) {
+            return null;
+        } finally {
+            if (image != null) {
+                try {
+                    image.close();
+                } catch (Throwable ignored) {
+                }
+            }
+            try {
+                display.setSurface(null);
+            } catch (Throwable ignored) {
+            }
+        }
     }
 
     void release() {
@@ -147,10 +160,6 @@ final class DisplaySession {
         }
         try {
             display.release();
-        } catch (Throwable ignored) {
-        }
-        try {
-            readerSurface.release();
         } catch (Throwable ignored) {
         }
         try {

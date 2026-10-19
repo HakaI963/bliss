@@ -57,7 +57,33 @@ object CloneEngine {
     init {
         // The shell service streams its own log lines here live (placements,
         // pump heartbeat, reject reasons) so the pane shows its side directly.
-        ShellVd.logSink = { line -> log("  shell: $line") }
+        ShellVd.logSink = { line -> shellLine(line)?.let { log("  shell: $it") } }
+    }
+
+    /** Recent shell lines already shown, so ring re-dumps do not duplicate. */
+    private val shownShellLines = java.util.LinkedHashSet<String>()
+
+    private fun shellLine(line: String): String? {
+        synchronized(shownShellLines) {
+            if (!shownShellLines.add(line)) {
+                return null
+            }
+            while (shownShellLines.size > 400) {
+                val it = shownShellLines.iterator()
+                if (it.hasNext()) {
+                    it.next()
+                    it.remove()
+                }
+            }
+        }
+        return line
+    }
+
+    /** Dumps unseen service log lines into the pane, previous dumps excluded. */
+    fun logShellTail(limit: Int) {
+        for (line in ShellVd.serviceLogTail(limit) ?: emptyList()) {
+            shellLine(line)?.let { log("  shell: $it") }
+        }
     }
     private const val PREFS = "bliss_clone_cfg"
     private const val CLONE_USER_NAME = "Bliss"
@@ -827,7 +853,7 @@ object CloneEngine {
             if (err != null) {
                 status.value = err
                 log("Display failed: $err")
-                for (line in ShellVd.serviceLogTail(12) ?: emptyList()) log("  shell: $line")
+                logShellTail(12)
                 return false
             }
             log("Display ready: id=${ShellVd.displayId.value} ${preset.first}x${preset.second} dpi=${displayDpi.value} fps=${displayFps.value}")
@@ -898,7 +924,7 @@ object CloneEngine {
         if (!ensureDisplay()) return "hidden display unavailable"
         val launchErr = ShellVd.launch(packageName, uid)
         if (!launchErr.isNullOrEmpty()) {
-            for (line in ShellVd.serviceLogTail(12) ?: emptyList()) log("  shell: $line")
+            logShellTail(12)
         }
         if (launchErr != null) {
             log("Launch failed: ${launchErr.take(240)}")
@@ -918,7 +944,7 @@ object CloneEngine {
             if (running.value != packageName || ShellVd.framesSeq.value != seqAtLaunch) return@launch
             val healed = withContext(Dispatchers.IO) { healLostDisplayNow(packageName) }
             log("No frames after 12s for $packageName" + (healed?.let { " — $it" } ?: ""))
-            for (line in ShellVd.serviceLogTail(15) ?: emptyList()) log("  shell: $line")
+            logShellTail(15)
             status.value = "No picture yet — see Logs"
         }
         return null

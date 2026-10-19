@@ -579,3 +579,17 @@ The historical "verify before restarting" checklist is fully resolved: nav crash
 - **Service log reaches the pane live**: `ShellVd.logSink` forwards every service-side line as `shell: …` into the engine pane in real time (placements, heartbeat, reject reasons, crash merges).
 - **Logs card: Clear (delete icon) + Copy (copy icon)** next to Refresh, plus engine `clearLogs()`.
 - versionCode 28→29, 3.8.7.
+
+---
+
+## 22. Round 22 — the shadow-src capture model ported: swap-in reader surface (2026-10-19)
+
+**User evidence (round-21 build log):** the framework launch worked — `placement: window(s) of <pkg> on hidden display id=26` — the app's windows ARE on our display now. But `frames sent=0` forever: the permanently attached ImageReader receives nothing. Input rejects said `no input bridge` on a live display (secondary).
+
+**The shadow-src difference (finally found by diffing frame source line by line):** ShadowAuto never keeps a surface attached. `McpSessions.create(w,h,dpi,null)` — **null output surface** — and every capture does `display.setSurface(captureSurface)` → sleep → `acquireLatestImage` (with retries) → restore `setSurface(null)`/previous. A permanently attached reader produces zero frames on this HyperOS build; the swap-in capture always makes SurfaceFlinger recompose into the reader.
+
+**Fixes:**
+- `DisplaySession.create` always uses the null-surface ladder (no surface argument at create).
+- New `captureBitmap(retries, delayMs)`: swaps the reader in, waits, grabs the latest image, restores null — shadow's exact model. FramePump now calls it per tick (retries=2, delayMs=50; pump self-paces).
+- **Shell-log de-dup:** `CloneEngine.shellLine()` keeps the last 400 shown lines; both the live sink and every tail dump skip repeats — no more ring-replay spam (the previous log had the same lines three times).
+- versionCode 29→30, 3.8.8. Input bridge reject on the live display noted for next round.

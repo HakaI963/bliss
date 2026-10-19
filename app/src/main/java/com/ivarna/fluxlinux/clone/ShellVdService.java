@@ -1037,13 +1037,11 @@ public final class ShellVdService extends IShellVd.Stub {
                 return;
             }
             long started = SystemClock.uptimeMillis();
-            Image image = null;
             Bitmap decoded = null;
             Bitmap output = null;
             try {
-                image = session.acquireLatestImage();
-                if (image != null) {
-                    decoded = ScreenCapture.bitmapFromImage(image);
+                decoded = session.captureBitmap(2, 50);
+                if (decoded != null) {
                     silentLoops = 0;
                 } else {
                     silentLoops++;
@@ -1098,12 +1096,6 @@ public final class ShellVdService extends IShellVd.Stub {
                 if (decoded != null) {
                     try {
                         decoded.recycle();
-                    } catch (Throwable ignored) {
-                    }
-                }
-                if (image != null) {
-                    try {
-                        image.close();
                     } catch (Throwable ignored) {
                     }
                 }
