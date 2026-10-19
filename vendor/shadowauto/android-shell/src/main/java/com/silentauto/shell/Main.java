@@ -27,10 +27,18 @@ public final class Main {
     private static void run(String[] args) throws Exception {
         Config config = Config.from(args);
         LogHub logs = new LogHub();
+        if (hasFlag(args, "--ocr-test")) {
+            OcrTest.run(logs);
+            return;
+        }
         prepareLooper();
         killExistingShellProcesses();
         ShellContext.init();
-        Engine engine = new Engine(logs);
+        if (hasFlag(args, "--video-test")) {
+            VideoTest.run(logs);
+            return;
+        }
+        AutomationEngine engine = new AutomationEngine(config, logs);
         logs.info("silent shell listening on 127.0.0.1:" + config.port);
         Thread rpcThread = new Thread(() -> runRpcServer(config, logs, engine), "rpc-server");
         rpcThread.start();
@@ -69,7 +77,7 @@ public final class Main {
         }
     }
 
-    private static void runRpcServer(Config config, LogHub logs, Engine engine) {
+    private static void runRpcServer(Config config, LogHub logs, AutomationEngine engine) {
         try {
             new RpcServer(config.port, engine, logs).run();
         } catch (Throwable e) {

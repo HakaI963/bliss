@@ -103,12 +103,12 @@ final class McpSessions {
         return array;
     }
 
-    synchronized JsonObject launchApp(String sessionId, String packageName, int userId) throws Exception {
+    synchronized JsonObject launchApp(String sessionId, String packageName) throws Exception {
         Session session = require(sessionId);
         if (Config.empty(packageName)) {
             throw new IllegalArgumentException("packageName is required");
         }
-        appCatalog.launchPackage(session.id, packageName.trim(), session.display.displayId, userId);
+        appCatalog.launchPackage(session.id, packageName.trim(), session.display.displayId);
         logs.task(session.id, "mcp launched " + packageName.trim()
                 + " on virtual display " + session.display.displayId);
         SystemClock.sleep(1500);
@@ -420,15 +420,6 @@ final class McpSessions {
 
     private static int keyCode(String key) {
         String value = Config.empty(key) ? "" : key.toLowerCase(Locale.US);
-        // Bliss sends raw Android key codes for keys the named set does not
-        // cover (HOME, DEL, APP_SWITCH).
-        if (value.matches("\\d+")) {
-            try {
-                return Integer.parseInt(value);
-            } catch (NumberFormatException ignored) {
-                return 0;
-            }
-        }
         if ("back".equals(value)) {
             return KeyEvent.KEYCODE_BACK;
         }

@@ -4,6 +4,8 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.ServiceConnection
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.os.IBinder
 import android.os.Looper
 import android.os.RemoteException
@@ -15,15 +17,13 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import rikka.shizuku.Shizuku
 
 /**
- * App-side client for the shell-side helper ([ShellVdService], Shizuku
+ * App-side client for the shell-side display owner ([ShellVdService], Shizuku
  * UserService, uid 2000).
  *
- * The virtual display itself is **not** created here any more: it lives in
- * the vendored ShadowAuto engine ([ShadowEngine]), which this service starts
- * as an `app_process` and which Bliss then drives over JSON-RPC. What stays
- * on the binder side is everything that needs shell privileges but is not the
- * display engine: staging files into /data/local/tmp, installing staged APKs,
- * starting/stopping the engine, and force-stopping clone apps.
+ * The virtual display, its capture path and the input injection are
+ * ShadowAuto's implementation running inside that shell process (see
+ * [ShadowDisplay], [ShadowInput]); this object is the binder half: it
+ * creates the display, receives the still frames and forwards input.
  *
  * Threading contract:
  *  - [ensureService] MUST be called from a background thread: it blocks up to
@@ -39,11 +39,20 @@ object ShellVd {
     private const val BIND_TIMEOUT_MS = 10_000L
     private const val MAX_LOGS = 200
 
+    /** Latest frame of the clone display (null before the first frame). */
+    val frames = MutableStateFlow<Bitmap?>(null)
+
+    /** Display id owned by the shell service; 0 means "no display". */
+    val displayId = MutableStateFlow(0)
+
     /** Recent client + service log lines (newest last, capped at [MAX_LOGS]). */
     val logs = MutableStateFlow<List<String>>(emptyList())
 
     /** Package most recently launched on the clone display, null = none. */
     val running = MutableStateFlow<String?>(null)
+
+    /** Monotonic counter incremented for every received frame. */
+    val framesSeq = MutableStateFlow(0L)
 
     private val lock = Any()
     @Volatile private var service: IShellVd? = null
@@ -55,6 +64,17 @@ object ShellVd {
     private var stageDir = "/data/local/tmp/bliss-stage"
 
     private val callback: IShellVdCallback = object : IShellVdCallback.Stub() {
+        override fun onScreenshot(jpeg: ByteArray?, width: Int, height: Int) {
+            if (jpeg == null || jpeg.isEmpty()) return
+            try {
+                val bitmap = BitmapFactory.decodeByteArray(jpeg, 0, jpeg.size) ?: return
+                frames.value = bitmap
+                framesSeq.value += 1L
+            } catch (t: Throwable) {
+                Log.w(TAG, "frame decode failed", t)
+            }
+        }
+
         override fun onLog(line: String?) {
             if (line != null) addLog(line)
         }
@@ -109,10 +129,11 @@ object ShellVd {
         return bindIfNeeded(context)
     }
 
-    /** Stops the engine and drops the binder connection. */
+    /** Releases the display and drops the binder connection. */
     fun release() {
         try {
-            service?.stopEngine()
+            service?.stopFrames()
+            service?.releaseDisplay()
         } catch (ignored: Throwable) {
         }
         val args = userServiceArgs
@@ -127,36 +148,114 @@ object ShellVd {
             connectLatch = null
         }
         running.value = null
+        frames.value = null
+        displayId.value = 0
         addLog("released")
     }
 
-    // ---------------------------------------------------------------- engine
+    // ---------------------------------------------------------------- display
 
-    /** Starts the ShadowAuto engine process. Returns null on success. */
-    fun startEngine(apkPath: String, port: Int): String? {
+    /**
+     * Creates (or reuses) the clone display at `width x height @ dpi`.
+     * Blocking; call off the main thread. Returns null on success, otherwise a
+     * human-readable error string.
+     */
+    fun ensure(app: Context, width: Int, height: Int, dpi: Int, fps: Int): String? {
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            return "ShellVd.ensure() must be called from a background thread"
+        }
+        val context = app.applicationContext ?: app
+        val bindError = bindIfNeeded(context)
+        if (bindError != null) return bindError
         val remote = service ?: return "ShellVd user service unavailable"
         return try {
-            val error = remote.startEngine(apkPath, port)
-            if (error.isNullOrEmpty()) {
-                addLog("engine started ($apkPath, port $port)")
-                null
-            } else {
-                addLog("engine start failed: $error")
-                error
+            val id = remote.createDisplay(width, height, dpi)
+            if (id <= 0) {
+                val message = "createDisplay failed (id=$id)"
+                addLog(message)
+                return message
             }
+            displayId.value = id
+            addLog("display $id created (${width}x$height dpi=$dpi)")
+            null
         } catch (t: Throwable) {
-            remoteFailure("startEngine", t)
+            remoteFailure("createDisplay", t)
         }
     }
 
-    /** Stops the engine process. */
-    fun stopEngine() {
-        val remote = service ?: return
-        try {
-            remote.stopEngine()
-            addLog("engine stopped")
+    /** Display id the service owns; -1 when unbound. */
+    fun remoteDisplayId(): Int {
+        val remote = service ?: return -1
+        return try {
+            remote.displayId()
         } catch (t: Throwable) {
-            addLog("stopEngine failed: ${t.message ?: t.javaClass.simpleName}")
+            -1
+        }
+    }
+
+    /** Starts the still-frame stream. */
+    fun startFrames(maxWidth: Int = 540, quality: Int = 80, fps: Int = 3): String? {
+        val remote = service ?: return "ShellVd user service unavailable"
+        return try {
+            remote.startFrames(callback, maxWidth, quality, fps)
+            null
+        } catch (t: Throwable) {
+            remoteFailure("startFrames", t)
+        }
+    }
+
+    fun stopFrames(): String? {
+        val remote = service ?: return "ShellVd user service unavailable"
+        return try {
+            remote.stopFrames()
+            null
+        } catch (t: Throwable) {
+            remoteFailure("stopFrames", t)
+        }
+    }
+
+    fun releaseDisplay(): String? {
+        val remote = service ?: return "ShellVd user service unavailable"
+        return try {
+            remote.releaseDisplay()
+            frames.value = null
+            displayId.value = 0
+            null
+        } catch (t: Throwable) {
+            remoteFailure("releaseDisplay", t)
+        }
+    }
+
+    // ----------------------------------------------------------------- input
+
+    fun tap(x: Int, y: Int): String? = send("tap") { it.tap(x, y) }
+
+    fun longPress(x: Int, y: Int, ms: Int): String? = send("longPress") { it.longPress(x, y, ms) }
+
+    fun swipe(x1: Int, y1: Int, x2: Int, y2: Int, ms: Int): String? =
+        send("swipe") { it.swipe(x1, y1, x2, y2, ms) }
+
+    fun key(keyCode: Int): String? = send("key") { it.key(keyCode) }
+
+    fun text(value: String): String? = send("text") { it.text(value) }
+
+    // ------------------------------------------------------------------ apps
+
+    /** Launches a package on the clone display. Returns null on success. */
+    fun launch(pkg: String, userId: Int): String? {
+        val remote = service ?: return "ShellVd user service unavailable"
+        return try {
+            val output = remote.launch(pkg, userId).orEmpty()
+            if (output.isEmpty()) {
+                running.value = pkg
+                addLog("launched $pkg (user $userId)")
+                null
+            } else {
+                addLog("launch $pkg failed: $output")
+                output
+            }
+        } catch (t: Throwable) {
+            remoteFailure("launch", t)
         }
     }
 
@@ -345,6 +444,15 @@ object ShellVd {
             "ShellVd user service failed to attach"
         } else {
             "ShellVd user service start timed out"
+        }
+    }
+
+    private inline fun send(op: String, block: (IShellVd) -> Boolean): String? {
+        val remote = service ?: return "ShellVd user service unavailable"
+        return try {
+            if (block(remote)) null else "$op rejected by shell service"
+        } catch (t: Throwable) {
+            remoteFailure(op, t)
         }
     }
 

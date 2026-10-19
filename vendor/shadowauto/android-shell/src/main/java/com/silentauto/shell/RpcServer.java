@@ -15,10 +15,10 @@ import java.nio.charset.StandardCharsets;
 
 final class RpcServer {
     private final int port;
-    private final Engine engine;
+    private final AutomationEngine engine;
     private final LogHub logs;
 
-    RpcServer(int port, Engine engine, LogHub logs) {
+    RpcServer(int port, AutomationEngine engine, LogHub logs) {
         this.port = port;
         this.engine = engine;
         this.logs = logs;
@@ -106,8 +106,7 @@ final class RpcServer {
             if ("launchApp".equals(method)) {
                 return JsonRpc.result(id, engine.mcp().launchApp(
                         JsonRpc.text(params, "sessionId"),
-                        JsonRpc.text(params, "packageName"),
-                        integer(params, "userId", 0)
+                        JsonRpc.text(params, "packageName")
                 ));
             }
             if ("screenshot".equals(method)) {
@@ -189,13 +188,13 @@ final class RpcServer {
                 return JsonRpc.result(id, "stopped");
             }
             if ("startTask".equals(method)) {
-                String taskId = engine.startTask(
+                String taskId = engine.startTask(new AutomationEngine.TaskRequest(
                         JsonRpc.text(params, "taskId"),
                         JsonRpc.text(params, "goal"),
                         JsonRpc.text(params, "apiKey"),
                         JsonRpc.text(params, "apiBase"),
                         JsonRpc.text(params, "model")
-                );
+                ));
                 JsonObject value = new JsonObject();
                 value.addProperty("taskId", taskId);
                 value.addProperty("value", "started");

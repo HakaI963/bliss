@@ -1,44 +1,63 @@
 package com.ivarna.fluxlinux.clone;
 
-import android.content.ComponentName;
-import android.os.Parcel;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.os.Process;
 
 import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileWriter;
 import java.io.InputStreamReader;
+import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Pattern;
 
 /**
- * Shell-side (Shizuku UserService, uid 2000) helper.
+ * Shell-side (Shizuku UserService, uid 2000) owner of the clone display.
  *
- * <p>It no longer owns a virtual display: the display, capture and input all
- * live in the vendored ShadowAuto engine (see the {@code shadow-shell} module),
- * which this service starts as an {@code app_process} and which Bliss then
- * drives over JSON-RPC.
+ * <p>The display itself, the capture path and the input injection are
+ * ShadowAuto's implementation, ported into this package:
+ * {@link ShadowDisplay} (their {@code VirtualDisplaySession}),
+ * {@link ShadowScreenCapture}, {@link ShadowInput} and
+ * {@link ShadowWindowManager}. See shadow-shell/LICENSE (Apache-2.0).
  *
- * <p>What is left here is everything that needs shell privileges but is not
- * part of the display engine: staging files into /data/local/tmp, installing
- * staged APKs, starting/stopping the engine process, force-stopping clone
- * apps, and reporting shell-side errors (including the device crash buffer).
- *
- * <p>The class name is referenced by {@link ShellVd#ensure} through
- * {@code UserServiceArgs}; keep the name stable. The service version comes
- * from {@code BuildConfig.VERSION_CODE}.
+ * <p>What this class adds around them is the plumbing Bliss needs: the
+ * binder surface, the still-frame pump that ships JPEG frames to the app,
+ * the cross-user launch (clones live in another Android user), and the
+ * shell-side error reporting (including the device crash buffer).
  */
 public class ShellVdService extends IShellVd.Stub {
     private static final String TAG = "ShellVdService";
     private static final String CRASH_FILE = "/data/local/tmp/bliss-stage/crash.log";
-    private static final String ENGINE_LOG = "/data/local/tmp/bliss-shadow/engine.log";
-    private static final String ENGINE_PID = "/data/local/tmp/bliss-shadow/engine.pid";
     private static final int MAX_LOG_LINES = 300;
+    private static final int MIN_WIDTH = 320;
+    private static final int MAX_WIDTH = 1920;
+    private static final int MIN_HEIGHT = 320;
+    private static final int MAX_HEIGHT = 1920;
+    private static final int MIN_DPI = 120;
+    private static final int MAX_DPI = 640;
+    private static final Pattern SAFE_PACKAGE = Pattern.compile("[A-Za-z0-9._]+");
 
     private final Object lock = new Object();
     private final List<String> logBuffer = new ArrayList<>();
-    private IShellVdCallback callback;
+
+    private ShadowDisplay display;
+    private ShadowInput input;
+    private int currentDisplayId;
+    private int displayWidth;
+    private int displayHeight;
+    private int displayDpi;
+
+    private IShellVdCallback frameCallback;
+    private Thread frameThread;
+    private volatile boolean frameRunning;
+    private volatile int frameFps = 3;
+    private volatile int frameMaxWidth = 540;
+    private volatile int frameQuality = 80;
+    private volatile long framesSent;
 
     static {
         installCrashHandler();
@@ -48,111 +67,324 @@ public class ShellVdService extends IShellVd.Stub {
     }
 
     public ShellVdService(android.content.Context context) {
-        // Shizuku hands over a context; keep it for the crash handler.
+        // Shizuku hands over a context; the display owner works from its own
+        // system context (ShadowShellContext), so nothing is needed here.
     }
 
+    // ---------------------------------------------------------------- display
+
     @Override
-    public String[] logs() {
+    public int createDisplay(int width, int height, int dpi) {
+        int w = clamp(width, MIN_WIDTH, MAX_WIDTH);
+        int h = clamp(height, MIN_HEIGHT, MAX_HEIGHT);
+        int d = clamp(dpi, MIN_DPI, MAX_DPI);
         synchronized (lock) {
-            ArrayList<String> out = new ArrayList<>();
-            String crash = crashFileTail();
-            if (!crash.isEmpty()) {
-                out.add("--- PREVIOUS PROCESS CRASH ---");
-                for (String line : crash.split("\n")) {
-                    out.add(line);
+            if (display != null && currentDisplayId > 0
+                    && displayWidth == w && displayHeight == h && displayDpi == d) {
+                log("createDisplay: reuse id=" + currentDisplayId);
+                return currentDisplayId;
+            }
+            stopFramesLocked();
+            releaseDisplayLocked();
+            try {
+                log("createDisplay: creating " + w + "x" + h + " dpi=" + d);
+                ShadowDisplay session = ShadowDisplay.create(w, h, d);
+                log("createDisplay: created id=" + session.displayId
+                        + " flags=0x" + Integer.toHexString(session.flagsUsed)
+                        + " (non-secure, capture surface attached)");
+                ShadowInput bridge = null;
+                try {
+                    bridge = new ShadowInput();
+                } catch (Throwable t) {
+                    log("input bridge unavailable (display kept): " + describe(t));
                 }
-                out.add("--- current process ---");
+                display = session;
+                input = bridge;
+                currentDisplayId = session.displayId;
+                displayWidth = w;
+                displayHeight = h;
+                displayDpi = d;
+                log("display created id=" + session.displayId + " " + w + "x" + h
+                        + " input=" + (bridge != null ? "ok" : "retry-on-demand")
+                        + (session.localImeEnabled() ? " ime=local" : " ime=default"));
+                return session.displayId;
+            } catch (Throwable t) {
+                log("createDisplay failed: " + describe(t));
+                display = null;
+                input = null;
+                currentDisplayId = 0;
+                return -1;
             }
-            String deviceCrash = crashBufferTail();
-            if (!deviceCrash.isEmpty()) {
-                out.add("--- DEVICE CRASH BUFFER (logcat -b crash) ---");
-                for (String line : deviceCrash.split("\n")) {
-                    out.add(line);
-                }
-                out.add("--- end crash buffer ---");
-            }
-            for (Object line : logBuffer) {
-                out.add((String) line);
-            }
-            return out.toArray(new String[0]);
         }
     }
 
-    // ---------------------------------------------------------------- engine
-
-    /**
-     * Starts the ShadowAuto engine: {@code CLASSPATH=<apk> app_process
-     * /system/bin com.silentauto.shell.Main --port=<port>}. Runs detached so
-     * the binder call returns immediately; the engine then serves JSON-RPC on
-     * loopback.
-     */
     @Override
-    public String startEngine(String apkPath, int port) {
-        if (apkPath == null || apkPath.isEmpty()) {
-            return "engine apk path required";
+    public int displayId() {
+        synchronized (lock) {
+            return currentDisplayId;
         }
-        if (!apkPath.startsWith("/data/local/tmp/")) {
-            return "engine apk must live under /data/local/tmp";
+    }
+
+    @Override
+    public void releaseDisplay() {
+        synchronized (lock) {
+            stopFramesLocked();
+            releaseDisplayLocked();
+            log("display released");
         }
-        File apk = new File(apkPath);
-        if (!apk.exists() || apk.length() == 0) {
-            return "engine apk missing: " + apkPath;
+    }
+
+    private void releaseDisplayLocked() {
+        if (display != null) {
+            try {
+                display.release();
+            } catch (Throwable t) {
+                log("display release failed: " + describe(t));
+            }
         }
-        stopEngine();
+        display = null;
+        input = null;
+        currentDisplayId = 0;
+        displayWidth = 0;
+        displayHeight = 0;
+        displayDpi = 0;
+    }
+
+    // ----------------------------------------------------------------- frames
+
+    @Override
+    public void startFrames(IShellVdCallback cb, int maxWidth, int jpegQuality, int fps) {
+        if (cb == null) {
+            return;
+        }
+        synchronized (lock) {
+            if (display == null) {
+                log("startFrames: no display");
+                return;
+            }
+            frameCallback = cb;
+            frameFps = clamp(fps, 1, 10);
+            frameMaxWidth = clamp(maxWidth, 240, 1920);
+            frameQuality = clamp(jpegQuality, 40, 95);
+            if (frameThread != null) {
+                return;
+            }
+            frameRunning = true;
+            frameThread = new Thread(this::framePump, "bliss-frames");
+            frameThread.setDaemon(true);
+            frameThread.start();
+            log("frame pump started: " + frameFps + " fps, max " + frameMaxWidth
+                    + "px, q" + frameQuality);
+        }
+    }
+
+    @Override
+    public void stopFrames() {
+        synchronized (lock) {
+            stopFramesLocked();
+            log("frames stopped");
+        }
+    }
+
+    private void stopFramesLocked() {
+        frameRunning = false;
+        Thread thread = frameThread;
+        frameThread = null;
+        frameCallback = null;
+        if (thread != null) {
+            try {
+                thread.join(800);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+    }
+
+    /** Captures still frames and ships them to the app as JPEG. */
+    private void framePump() {
+        while (frameRunning) {
+            ShadowDisplay session;
+            IShellVdCallback cb;
+            synchronized (lock) {
+                session = display;
+                cb = frameCallback;
+            }
+            if (session != null && cb != null) {
+                try {
+                    Bitmap bitmap = session.captureBitmap(2, 120);
+                    if (bitmap != null) {
+                        Bitmap scaled = scaleDown(bitmap, frameMaxWidth);
+                        byte[] jpeg = encodeJpeg(scaled, frameQuality);
+                        if (jpeg != null) {
+                            try {
+                                cb.onScreenshot(jpeg, scaled.getWidth(), scaled.getHeight());
+                                framesSent++;
+                            } catch (Throwable t) {
+                                if (isDeadObject(t)) {
+                                    log("frame callback died, pump stopping");
+                                    frameRunning = false;
+                                }
+                            }
+                        }
+                    }
+                } catch (Throwable t) {
+                    log("frame pump error: " + describe(t));
+                }
+            }
+            try {
+                Thread.sleep(Math.max(200, 1000 / Math.max(1, frameFps)));
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+        }
+    }
+
+    private static Bitmap scaleDown(Bitmap bitmap, int maxWidth) {
         try {
-            new File("/data/local/tmp/bliss-shadow").mkdirs();
-            String command = "CLASSPATH=" + apkPath + " nohup sh -c 'exec app_process /system/bin"
-                    + " com.silentauto.shell.Main --port=" + port + "' > " + ENGINE_LOG
-                    + " 2>&1 </dev/null & echo $! > " + ENGINE_PID;
+            if (bitmap.getWidth() <= maxWidth) {
+                return bitmap;
+            }
+            int width = maxWidth;
+            int height = Math.max(1, Math.round(bitmap.getHeight() * (width / (float) bitmap.getWidth())));
+            return Bitmap.createScaledBitmap(bitmap, width, height, true);
+        } catch (Throwable t) {
+            return bitmap;
+        }
+    }
+
+    // ------------------------------------------------------------------ input
+
+    @Override
+    public boolean tap(int x, int y) {
+        return inject("tap", bridge -> bridge.tap(currentDisplayIdSnapshot(), x, y));
+    }
+
+    @Override
+    public boolean longPress(int x, int y, int ms) {
+        return inject("longPress", bridge -> bridge.longPress(currentDisplayIdSnapshot(), x, y, ms));
+    }
+
+    @Override
+    public boolean swipe(int x1, int y1, int x2, int y2, int ms) {
+        return inject("swipe", bridge -> bridge.swipe(currentDisplayIdSnapshot(), x1, y1, x2, y2, ms));
+    }
+
+    @Override
+    public boolean key(int keyCode) {
+        return inject("key", bridge -> bridge.key(currentDisplayIdSnapshot(), keyCode));
+    }
+
+    @Override
+    public boolean text(String value) {
+        return inject("text", bridge -> bridge.text(currentDisplayIdSnapshot(), value));
+    }
+
+    private interface Injection {
+        boolean run(ShadowInput bridge) throws Exception;
+    }
+
+    private boolean inject(String name, Injection injection) {
+        ShadowInput bridge;
+        int id = currentDisplayIdSnapshot();
+        if (id <= 0) {
+            log(name + ": no display");
+            return false;
+        }
+        synchronized (lock) {
+            bridge = input;
+        }
+        if (bridge == null) {
+            try {
+                bridge = new ShadowInput();
+                synchronized (lock) {
+                    input = bridge;
+                }
+            } catch (Throwable t) {
+                log(name + ": input bridge unavailable: " + describe(t));
+                return false;
+            }
+        }
+        try {
+            boolean ok = injection.run(bridge);
+            if (!ok) {
+                log(name + ": injection rejected");
+            }
+            return ok;
+        } catch (Throwable t) {
+            log(name + " failed: " + describe(t));
+            return false;
+        }
+    }
+
+    // ------------------------------------------------------------------- apps
+
+    @Override
+    public String launch(String pkg, int userId) {
+        String packageName = pkg == null ? "" : pkg.trim();
+        if (packageName.isEmpty()) {
+            return "package required";
+        }
+        if (!SAFE_PACKAGE.matcher(packageName).matches()) {
+            return "invalid package: " + packageName;
+        }
+        int id = currentDisplayIdSnapshot();
+        if (id <= 0) {
+            return "no display";
+        }
+        String userArg = userId > 0 ? " --user " + userId : "";
+        try {
+            runShell("am force-stop" + userArg + " " + shellQuote(packageName));
+            String component = resolveLaunchComponent(packageName, userId);
+            if (component.isEmpty()) {
+                return "no launch activity for " + packageName;
+            }
+            // ShadowAuto's launch form, with the target user appended.
+            String command = "am start" + userArg + " --display " + id
+                    + " -f 0x10008000 -n " + shellQuote(component);
             ShellResult result = runShell(command);
-            log("engine start: exit=" + result.exitCode + " " + trim(result.output, 200));
-            // Give app_process a moment, then report whether it is alive.
-            Thread.sleep(600);
-            String pid = readPid();
-            log("engine pid=" + (pid.isEmpty() ? "?" : pid) + " log=" + ENGINE_LOG);
+            String output = result.output == null ? "" : result.output.trim();
+            log("am start" + userArg + " --display " + id + " exit=" + result.exitCode + " " + output);
+            if (result.exitCode != 0) {
+                return output.isEmpty() ? ("am start failed: exit " + result.exitCode) : output;
+            }
             return null;
         } catch (Throwable t) {
-            String error = "engine start failed: " + describe(t);
+            String error = "launch failed: " + describe(t);
             log(error);
             return error;
         }
     }
 
-    @Override
-    public String stopEngine() {
+    /** Resolves the launcher activity of a package in the given user. */
+    private String resolveLaunchComponent(String packageName, int userId) {
+        String userArg = userId > 0 ? " --user " + userId : "";
         try {
-            String pid = readPid();
-            if (!pid.isEmpty()) {
-                runShell("kill " + pid);
-            }
-            runShell("pkill -f com.silentauto.shell.Main");
-            new File(ENGINE_PID).delete();
-            log("engine stopped");
-        } catch (Throwable t) {
-            log("engine stop failed: " + describe(t));
-        }
-        return null;
-    }
-
-    private String readPid() {
-        try {
-            File file = new File(ENGINE_PID);
-            if (!file.exists()) {
-                return "";
-            }
-            BufferedReader reader = new BufferedReader(new InputStreamReader(new FileInputStream(file)));
-            try {
-                String line = reader.readLine();
-                return line == null ? "" : line.trim();
-            } finally {
-                reader.close();
+            ShellResult r = runShell("cmd package query-activities --brief" + userArg + " " + shellQuote(packageName));
+            for (String line : r.output.split("\n")) {
+                String value = line.trim();
+                if (value.startsWith(packageName + "/")) {
+                    return value;
+                }
+                int slash = value.indexOf('/');
+                if (slash > 0 && value.contains(".") && !value.contains(" ")) {
+                    return value;
+                }
             }
         } catch (Throwable ignored) {
-            return "";
         }
+        try {
+            ShellResult r2 = runShell("cmd package resolve-activity --brief" + userArg + " " + shellQuote(packageName));
+            for (String line : r2.output.split("\n")) {
+                String value = line.trim();
+                if (value.contains("/") && !value.contains(" ")) {
+                    return value;
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return "";
     }
-
-    // ------------------------------------------------------------------ apps
 
     @Override
     public String kill(String pkg, int userId) {
@@ -261,19 +493,56 @@ public class ShellVdService extends IShellVd.Stub {
     // ------------------------------------------------------------------ misc
 
     @Override
+    public void attach(IShellVdCallback cb) {
+        synchronized (lock) {
+            callback = cb;
+        }
+    }
+
+    private IShellVdCallback callback;
+
+    @Override
     public void exit() {
         try {
-            stopEngine();
+            synchronized (lock) {
+                stopFramesLocked();
+                releaseDisplayLocked();
+            }
         } catch (Throwable ignored) {
         }
         Process.killProcess(Process.myPid());
     }
 
-    /** Registers the callback used for live log lines. */
     @Override
-    public void attach(IShellVdCallback cb) {
+    public String[] logs() {
         synchronized (lock) {
-            callback = cb;
+            ArrayList<String> out = new ArrayList<>();
+            String crash = crashFileTail();
+            if (!crash.isEmpty()) {
+                out.add("--- PREVIOUS PROCESS CRASH ---");
+                for (String line : crash.split("\n")) {
+                    out.add(line);
+                }
+                out.add("--- current process ---");
+            }
+            String deviceCrash = crashBufferTail();
+            if (!deviceCrash.isEmpty()) {
+                out.add("--- DEVICE CRASH BUFFER (logcat -b crash) ---");
+                for (String line : deviceCrash.split("\n")) {
+                    out.add(line);
+                }
+                out.add("--- end crash buffer ---");
+            }
+            for (Object line : logBuffer) {
+                out.add((String) line);
+            }
+            return out.toArray(new String[0]);
+        }
+    }
+
+    private int currentDisplayIdSnapshot() {
+        synchronized (lock) {
+            return currentDisplayId;
         }
     }
 
@@ -294,6 +563,20 @@ public class ShellVdService extends IShellVd.Stub {
         }
     }
 
+    // ----------------------------------------------------------------- helpers
+
+    private static byte[] encodeJpeg(Bitmap bitmap, int quality) {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        try {
+            if (!bitmap.compress(Bitmap.CompressFormat.JPEG, quality, out)) {
+                return null;
+            }
+            return out.toByteArray();
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
     private static ShellResult runShell(String command) throws Exception {
         java.lang.Process process = new ProcessBuilder("sh", "-c", command).redirectErrorStream(true).start();
         StringBuilder output = new StringBuilder();
@@ -311,6 +594,10 @@ public class ShellVdService extends IShellVd.Stub {
         return "'" + value.replace("'", "'\\''") + "'";
     }
 
+    private static int clamp(int value, int min, int max) {
+        return Math.max(min, Math.min(max, value));
+    }
+
     private static String trim(String value, int max) {
         if (value == null) {
             return "";
@@ -324,7 +611,7 @@ public class ShellVdService extends IShellVd.Stub {
             Thread.setDefaultUncaughtExceptionHandler((thread, error) -> {
                 try {
                     new File("/data/local/tmp/bliss-stage").mkdirs();
-                    java.io.PrintWriter writer = new java.io.PrintWriter(new FileWriter(CRASH_FILE, true));
+                    PrintWriter writer = new PrintWriter(new FileWriter(CRASH_FILE, true));
                     try {
                         writer.println("--- " + System.currentTimeMillis() + " " + thread.getName() + " ---");
                         error.printStackTrace(writer);
@@ -394,6 +681,15 @@ public class ShellVdService extends IShellVd.Stub {
         } catch (Throwable ignored) {
             return "";
         }
+    }
+
+    private static boolean isDeadObject(Throwable t) {
+        for (Throwable current = t; current != null; current = current.getCause()) {
+            if (current.getClass().getName().contains("DeadObjectException")) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static String describe(Throwable t) {

@@ -749,3 +749,33 @@ versionCode 39, 3.9.8.
 3. Cross-user launch: `am start --user N --display D` (clones live in user 10).
 
 versionCode 40, 3.10.0.
+
+---
+
+## 33. Round 33 — ShadowAuto's display path remade inside Bliss; MCP/AI link removed (2026-10-19)
+
+**User instruction:** stop patching, compare the full ShadowAuto source against the full Bliss
+source, add what ShadowAuto has and Bliss lacks, do not modify ShadowAuto itself, drop the
+AI/agent/MCP link, and remake rather than patch.
+
+**What was done**
+- `vendor/shadowauto/` — the **pristine** upstream `android-shell` + `android-stubs` (Apache-2.0,
+  licence included) is now in-tree as the reference, with `vendor/shadowauto/README.md` and the
+  full file-by-file comparison in `docs/shadowauto-parity.md`. Nothing in it is built or patched.
+- **Bliss now runs ShadowAuto's display path in its own shell-uid process** (new ports in
+  `app/src/main/java/com/ivarna/fluxlinux/clone/`):
+  `ShadowDisplay` (their `VirtualDisplaySession`), `ShadowScreenCapture`, `ShadowInput`,
+  `ShadowWindowManager` (verbatim ports) and `ShadowShellContext` (their `ShellContext`, made lazy
+  so it cannot brick the service).
+- `ShellVdService` rewritten around them: display creation, a still-frame pump that ships JPEG
+  frames to the app, display-scoped input injection, and ShadowAuto's launch form
+  (`am start --user N --display D -f 0x10008000 -n pkg/cls`).
+- **Removed the AI/agent/MCP link**: `ShadowEngine.kt` (the JSON-RPC client), the staged engine APK
+  and its CI bundling step are gone; the display lives in the app's own shell service again.
+- Two HyperOS deviations from upstream, both device-verified and documented in the parity doc:
+  no `VIRTUAL_DISPLAY_FLAG_TRUSTED` (on this ROM it is the *secure* flag — a secure display is
+  never composited into a non-secure surface, which is why every earlier capture path saw zero
+  frames and the launched app never left its splash screen), and the capture surface attached at
+  creation (a null-surface display comes up OFF) with a continuous drain thread.
+
+versionCode 41, 3.10.1.

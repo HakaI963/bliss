@@ -1,6 +1,5 @@
-package com.silentauto.shell;
+package com.ivarna.fluxlinux.clone;
 
-import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.PixelFormat;
 import android.hardware.display.DisplayManager;
@@ -14,58 +13,80 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 
 /**
- * Virtual display session — vendored from ShadowAuto (Apache-2.0) and adapted
- * for Bliss.
+ * The clone display, owned by the shell (uid 2000) process.
  *
- * <p>Bliss changes, both verified against HyperOS:
+ * <p>Ported from ShadowAuto's {@code VirtualDisplaySession} (Apache-2.0) —
+ * see shadow-shell/LICENSE. Two HyperOS-specific deviations, both verified on
+ * the device:
  *
  * <ol>
- *   <li><b>Non-secure flags.</b> {@code VIRTUAL_DISPLAY_FLAG_TRUSTED} is the
- *       secure flag on this ROM (the created display reports
- *       {@code FLAG_SECURE}). A secure display is never composited into a
- *       non-secure destination surface, so the capture reader attached to it
- *       received zero frames while SurfaceFlinger happily held the app's
- *       layers. The trusted flag is therefore not set.</li>
- *   <li><b>Surface attached at creation.</b> The capture reader's surface is
- *       passed to {@code createVirtualDisplay} instead of {@code null}: a
- *       null-surface display comes up in state OFF and never composites.</li>
- *   <li><b>Continuous drain.</b> A background thread drains the reader so the
- *       buffer queue never applies backpressure to the compositor, keeping the
- *       most recent frame available for {@link #captureBitmap}.</li>
+ *   <li><b>No {@code VIRTUAL_DISPLAY_FLAG_TRUSTED}.</b> On this ROM the
+ *       trusted flag <i>is</i> the secure flag: the created display reports
+ *       {@code FLAG_SECURE}. A secure display is never composited into a
+ *       non-secure destination surface, so every capture path (ImageReader,
+ *       MediaCodec encoder surface, screencap) saw zero frames while the
+ *       display sat ON with the app's layers present in SurfaceFlinger — and
+ *       the launched app never got past its splash screen.</li>
+ *   <li><b>The capture surface is attached at creation.</b> A display created
+ *       with a null output surface comes up in state OFF on this ROM and
+ *       never composites at all. The reader is drained continuously by a
+ *       background thread, so the buffer queue never applies backpressure to
+ *       the compositor, and the most recent frame is kept for capture.</li>
  * </ol>
  */
-final class VirtualDisplaySession {
+final class ShadowDisplay {
     final int displayId;
     final int width;
     final int height;
     final int dpi;
+    final int flagsUsed;
+
     private final ImageReader captureReader;
     private final Surface captureSurface;
-    private Surface outputSurface;
     private final VirtualDisplay display;
-    private final WindowManagerBridge windowManager;
+    private final ShadowWindowManager windowManager;
     private final int previousImePolicy;
     private final boolean localImeEnabled;
 
     private final Object frameLock = new Object();
     private Bitmap latestFrame;
     private long latestFrameAt;
+    private long framesProduced;
     private volatile boolean draining = true;
-    private long lastConvertAt;
     private final Thread drainThread;
 
-    private VirtualDisplaySession(int width, int height, int dpi, ImageReader captureReader, Surface outputSurface, VirtualDisplay display) {
+    private ShadowDisplay(int width, int height, int dpi, ImageReader captureReader,
+                          VirtualDisplay display, int flagsUsed) {
         this.width = width;
         this.height = height;
         this.dpi = dpi;
+        this.flagsUsed = flagsUsed;
         this.captureReader = captureReader;
         this.captureSurface = captureReader.getSurface();
-        this.outputSurface = outputSurface;
         this.display = display;
         this.displayId = display.getDisplay().getDisplayId();
-        this.windowManager = new WindowManagerBridge();
-        this.previousImePolicy = windowManager.getDisplayImePolicy(displayId);
-        this.localImeEnabled = windowManager.setDisplayImePolicy(displayId, WindowManagerBridge.DISPLAY_IME_POLICY_LOCAL);
+
+        ShadowWindowManager bridge = null;
+        int previous = -1;
+        boolean imeEnabled = false;
+        try {
+            bridge = new ShadowWindowManager();
+        } catch (Throwable ignored) {
+        }
+        if (bridge != null) {
+            try {
+                previous = bridge.getDisplayImePolicy(displayId);
+            } catch (Throwable ignored) {
+            }
+            try {
+                imeEnabled = bridge.setDisplayImePolicy(displayId, ShadowWindowManager.DISPLAY_IME_POLICY_LOCAL);
+            } catch (Throwable ignored) {
+            }
+        }
+        this.windowManager = bridge;
+        this.previousImePolicy = previous;
+        this.localImeEnabled = imeEnabled;
+
         this.drainThread = new Thread(this::drainLoop, "shadow-drain");
         this.drainThread.setDaemon(true);
         this.drainThread.start();
@@ -75,17 +96,18 @@ final class VirtualDisplaySession {
         return localImeEnabled;
     }
 
-    static VirtualDisplaySession create(int width, int height, int dpi, Surface outputSurface) {
-        DisplayManager manager = displayManager();
+    static ShadowDisplay create(int width, int height, int dpi) {
+        android.content.Context context = ShadowShellContext.get();
+        DisplayManager manager = displayManager(context);
         ImageReader captureReader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 3);
         int baseFlags = DisplayManager.VIRTUAL_DISPLAY_FLAG_PUBLIC
                 | DisplayManager.VIRTUAL_DISPLAY_FLAG_PRESENTATION
                 | DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY;
         int touchFlag = hiddenFlag("VIRTUAL_DISPLAY_FLAG_SUPPORTS_TOUCH");
         int focusFlag = hiddenFlag("VIRTUAL_DISPLAY_FLAG_OWN_FOCUS");
-        // NOTE (Bliss): no VIRTUAL_DISPLAY_FLAG_TRUSTED — on HyperOS that is the
-        // secure flag, and a secure display never composites into a
-        // non-secure capture surface (zero frames, screencap refused).
+        // NOTE: VIRTUAL_DISPLAY_FLAG_TRUSTED is intentionally NOT set — on
+        // HyperOS it is the secure flag and a secure display never composites
+        // into our capture surface.
         int[] candidates = new int[]{
                 baseFlags | touchFlag | focusFlag,
                 baseFlags | touchFlag,
@@ -94,44 +116,59 @@ final class VirtualDisplaySession {
         Throwable lastError = null;
         for (int flags : candidates) {
             try {
-                // The capture surface is attached at creation: a null-surface
-                // display comes up OFF and never composites on this ROM.
-                Surface target = outputSurface != null ? outputSurface : captureReader.getSurface();
-                VirtualDisplay display = manager.createVirtualDisplay("ShadowAuto", width, height, dpi, target, flags);
+                VirtualDisplay display = manager.createVirtualDisplay("Bliss", width, height, dpi,
+                        captureReader.getSurface(), flags);
                 if (display != null && display.getDisplay() != null) {
-                    return new VirtualDisplaySession(width, height, dpi, captureReader, target, display);
+                    return new ShadowDisplay(width, height, dpi, captureReader, display, flags);
                 }
             } catch (Throwable e) {
                 lastError = e;
             }
         }
-        captureReader.close();
+        try {
+            captureReader.close();
+        } catch (Throwable ignored) {
+        }
         throw new IllegalStateException("createVirtualDisplay failed", lastError);
     }
 
-    /** Latest composed frame; waits up to (retries+1)*delayMs for a fresh one. */
-    synchronized Bitmap captureBitmap(int retries, long delayMs) {
+    /**
+     * Latest composed frame. Waits up to (retries+1)*delayMs for a frame
+     * newer than the one handed out last time, so callers get a fresh picture.
+     */
+    Bitmap captureBitmap(int retries, long delayMs) {
         long deadline = SystemClock.uptimeMillis() + Math.max(0, retries) * Math.max(1, delayMs);
-        long since = 0;
+        Bitmap previous = null;
         while (true) {
             Bitmap frame = null;
+            long age;
             synchronized (frameLock) {
                 if (latestFrame != null && !latestFrame.isRecycled()) {
                     frame = latestFrame;
-                    since = SystemClock.uptimeMillis() - latestFrameAt;
+                    age = SystemClock.uptimeMillis() - latestFrameAt;
+                } else {
+                    age = Long.MAX_VALUE;
                 }
             }
-            if (frame != null && (since < 400 || SystemClock.uptimeMillis() >= deadline)) {
+            if (frame != null && (frame != previous || age > 400 || SystemClock.uptimeMillis() >= deadline)) {
                 return frame;
             }
             if (SystemClock.uptimeMillis() >= deadline) {
                 return frame;
             }
+            previous = frame;
             SystemClock.sleep(40);
         }
     }
 
+    long framesProduced() {
+        synchronized (frameLock) {
+            return framesProduced;
+        }
+    }
+
     private void drainLoop() {
+        long lastConvertAt = 0;
         while (draining) {
             Image image = null;
             try {
@@ -147,12 +184,13 @@ final class VirtualDisplaySession {
                     continue;
                 }
                 lastConvertAt = now;
-                Bitmap bitmap = ScreenCapture.bitmapFromImage(image);
+                Bitmap bitmap = ShadowScreenCapture.bitmapFromImage(image);
                 if (bitmap != null) {
                     synchronized (frameLock) {
                         Bitmap old = latestFrame;
                         latestFrame = bitmap;
-                        latestFrameAt = SystemClock.uptimeMillis();
+                        latestFrameAt = now;
+                        framesProduced++;
                         if (old != null && old != bitmap) {
                             try {
                                 old.recycle();
@@ -173,20 +211,20 @@ final class VirtualDisplaySession {
         }
     }
 
-    private static DisplayManager displayManager() {
+    private static DisplayManager displayManager(android.content.Context context) {
         try {
-            Constructor<DisplayManager> ctor = DisplayManager.class.getDeclaredConstructor(Context.class);
+            Constructor<DisplayManager> ctor = DisplayManager.class.getDeclaredConstructor(android.content.Context.class);
             ctor.setAccessible(true);
-            return ctor.newInstance(ShellContext.get());
+            return ctor.newInstance(context);
         } catch (Throwable ignored) {
-            return (DisplayManager) ShellContext.get().getSystemService(Context.DISPLAY_SERVICE);
+            return (DisplayManager) context.getSystemService(android.content.Context.DISPLAY_SERVICE);
         }
     }
 
     void release() {
         draining = false;
         try {
-            if (previousImePolicy != -1) {
+            if (previousImePolicy != -1 && windowManager != null) {
                 windowManager.setDisplayImePolicy(displayId, previousImePolicy);
             }
         } catch (Throwable ignored) {

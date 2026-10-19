@@ -59,7 +59,7 @@ final class AppCatalog {
         return "";
     }
 
-    void launchPackage(String taskId, String packageName, int displayId, int userId) throws Exception {
+    void launchPackage(String taskId, String packageName, int displayId) throws Exception {
         PackageManager pm = ShellContext.get().getPackageManager();
         Intent intent = pm.getLaunchIntentForPackage(packageName);
         if (intent == null) {
@@ -69,9 +69,8 @@ final class AppCatalog {
         if (component == null) {
             throw new IllegalStateException("no launch component for " + packageName);
         }
-        String userArg = userId > 0 ? " --user " + userId : "";
-        new ProcessBuilder("sh", "-c", "am force-stop" + userArg + " " + shellQuote(packageName)).start().waitFor();
-        String command = "am start" + userArg + " --display " + displayId
+        new ProcessBuilder("sh", "-c", "am force-stop " + shellQuote(packageName)).start().waitFor();
+        String command = "am start --display " + displayId
                 + " -f 0x10008000 -n " + shellQuote(component.flattenToShortString());
         Process process = new ProcessBuilder("sh", "-c", command).redirectErrorStream(true).start();
         StringBuilder output = new StringBuilder();

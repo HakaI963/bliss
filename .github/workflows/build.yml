@@ -55,15 +55,6 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Build ShadowAuto engine APK (vendored, Apache-2.0)
-        run: ./gradlew :shadow-shell:assembleDebug --stacktrace
-
-      - name: Bundle the engine into the Bliss APK assets
-        run: |
-          mkdir -p app/src/main/assets
-          cp shadow-shell/build/outputs/apk/debug/shadow-shell-debug.apk app/src/main/assets/shadow-shell.apk
-          ls -la app/src/main/assets/shadow-shell.apk
-
       - name: Build debug APK (bliss flavor, separate app com.nopiece.bliss)
         run: ./gradlew assembleBlissDebug --stacktrace
         env:
