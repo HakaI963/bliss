@@ -707,3 +707,15 @@ The display was **OFF** the whole time — SurfaceFlinger never composites an OF
 3. Service logs `display state after create: state ON|OFF`, `probe capture: WxH (produced=N)`, then per-capture lines.
 
 versionCode 38, 3.9.7.
+
+---
+
+## 31. Round 31 — screencap front-buffer capture (2026-10-19)
+
+**Round-30 log:** display now reports `state ON` (surface attached at creation worked) and SurfaceFlinger shows the clone app's layers on it — `RequestedLayerState{ActivityRecord{... u10 com.allanime.animechicken/.MainActivity}}` plus two **Splash Screen** layers. So the app starts and the display has content, but the VirtualDisplay's *output surface* still never receives a composed frame: `probe capture: null`, `capture #n -> null`.
+
+**Change:** capture the display's **front buffer** with `screencap -d <displayId> -p <file>` (shell uid, reads SF directly) instead of relying on the VirtualDisplay's surface. PNG is decoded in the shell process and re-encoded to JPEG q85 for the binder (PNG of 720x1560 would exceed the 1 MB transaction limit). The attached ImageReader stays as a fallback source. `screencap` errors are logged verbatim (`screencap: no image for display N (exit=…) <shell output>`), plus an `sf-display` diagnostic row for HWC/display state.
+
+Also noted: the round-29/30 dumps matched the *previous* display's DisplayDeviceInfo (uniqueId `…Bliss,41` / `…Bliss,42`) rather than the live one — hence the misleading `state OFF` read.
+
+versionCode 39, 3.9.8.

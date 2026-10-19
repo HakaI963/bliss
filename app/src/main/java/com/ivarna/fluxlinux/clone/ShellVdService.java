@@ -3,6 +3,8 @@ package com.ivarna.fluxlinux.clone;
 import android.content.ComponentName;
 import android.content.Intent;
 import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import java.io.FileInputStream;
 import android.media.Image;
 import android.os.Handler;
 import android.os.HandlerThread;
@@ -365,12 +367,23 @@ public final class ShellVdService extends IShellVd.Stub {
                 return;
             }
         }
-        Bitmap bitmap;
+        Bitmap bitmap = null;
+        // Primary path: read the display's front buffer with screencap. This
+        // does not depend on the VirtualDisplay's output surface at all, so it
+        // works even on ROMs where the display's own surface never receives a
+        // composed frame.
         try {
-            bitmap = session.captureBitmap(8, 120);
+            bitmap = screencapDisplay(currentDisplayIdSnapshot());
         } catch (Throwable t) {
-            log("capture failed: " + describe(t));
-            return;
+            log("screencap failed: " + describe(t));
+        }
+        if (bitmap == null) {
+            // Fallback: the attached ImageReader (works when SF feeds it).
+            try {
+                bitmap = session.captureBitmap(0, 1);
+            } catch (Throwable t) {
+                log("capture failed: " + describe(t));
+            }
         }
         if (bitmap == null) {
             long misses;
@@ -945,9 +958,71 @@ public final class ShellVdService extends IShellVd.Stub {
             pkg = currentPackage;
         }
         if (!pkg.isEmpty()) {
-            dumpCommand("sf-layers", "dumpsys SurfaceFlinger --list 2>/dev/null | grep -F "
+            dumpCommand("sf-display", "dumpsys SurfaceFlinger 2>/dev/null | grep -E 'HWC display|mHasContent|state=' | head -16");
+        dumpCommand("sf-layers", "dumpsys SurfaceFlinger --list 2>/dev/null | grep -F "
                     + shellQuote(pkg) + " | head -12");
         }
+    }
+
+    /**
+     * screencap -d <displayId> reads a display's front buffer straight out of
+     * SurfaceFlinger. Returns a Bitmap, or null when the capture failed (the
+     * shell's own error text is logged so the reason is visible).
+     */
+    private Bitmap screencapDisplay(int displayId) {
+        if (displayId <= 0) {
+            return null;
+        }
+        String path = "/data/local/tmp/bliss-shot-" + displayId + ".png";
+        ShellResult r;
+        try {
+            r = runShell("screencap -d " + displayId + " -p " + path);
+        } catch (Throwable t) {
+            log("screencap error: " + describe(t));
+            return null;
+        }
+        File file = new File(path);
+        byte[] data = null;
+        try {
+            if (file.exists() && file.length() > 0) {
+                java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+                FileInputStream in = new FileInputStream(file);
+                try {
+                    byte[] chunk = new byte[64 * 1024];
+                    int n;
+                    while ((n = in.read(chunk)) > 0) {
+                        bos.write(chunk, 0, n);
+                    }
+                } finally {
+                    in.close();
+                }
+                data = bos.toByteArray();
+            }
+        } catch (Throwable t) {
+            log("screencap read failed: " + describe(t));
+        } finally {
+            try {
+                file.delete();
+            } catch (Throwable ignored) {
+            }
+        }
+        if (data == null || data.length == 0) {
+            String out = r == null || r.output == null ? "" : r.output.trim();
+            log("screencap: no image for display " + displayId + " (exit="
+                    + (r == null ? -1 : r.exitCode) + ") " + (out.length() > 120 ? out.substring(0, 120) : out));
+            return null;
+        }
+        Bitmap bitmap = null;
+        try {
+            bitmap = BitmapFactory.decodeByteArray(data, 0, data.length);
+        } catch (Throwable t) {
+            log("screencap decode failed: " + describe(t));
+        }
+        if (bitmap == null) {
+            log("screencap: undecodable image for display " + displayId + " ("
+                    + data.length + " bytes)");
+        }
+        return bitmap;
     }
 
     private void dumpCommand(String label, String command) {
