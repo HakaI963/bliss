@@ -37,6 +37,7 @@ final class DisplaySession {
     final int width;
     final int height;
     final int dpi;
+    final int flagsUsed;
 
     private final ImageReader captureReader;
     private final Surface captureSurface;
@@ -47,10 +48,11 @@ final class DisplaySession {
     private final boolean localImeEnabled;
 
     private DisplaySession(int width, int height, int dpi, ImageReader captureReader,
-                           Surface outputSurface, VirtualDisplay display) {
+                           Surface outputSurface, VirtualDisplay display, int flagsUsed) {
         this.width = width;
         this.height = height;
         this.dpi = dpi;
+        this.flagsUsed = flagsUsed;
         this.captureReader = captureReader;
         this.captureSurface = captureReader.getSurface();
         this.outputSurface = outputSurface;
@@ -107,7 +109,7 @@ final class DisplaySession {
                 VirtualDisplay display = manager.createVirtualDisplay("Bliss", width, height, dpi,
                         null, flags);
                 if (display != null && display.getDisplay() != null) {
-                    return new DisplaySession(width, height, dpi, captureReader, null, display);
+                    return new DisplaySession(width, height, dpi, captureReader, null, display, flags);
                 }
             } catch (Throwable e) {
                 lastError = e;

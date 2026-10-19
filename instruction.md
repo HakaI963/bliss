@@ -673,3 +673,19 @@ The historical "verify before restarting" checklist is fully resolved: nav crash
 - Client: `onScreenshot` decodes (inSampleSize 2 on ≥600px), publishes `frames`/`framesSeq`; capture loop requests stills at 3–4/s (≥300ms).
 
 versionCode 36, 3.9.5.
+
+---
+
+## 29. Round 29 — on-device state diagnostics (2026-10-19)
+
+**Crash proven and already removed.** Round 28's pane dumped `logcat -b crash`: `Fatal signal 6 (SIGABRT) ... name: ShellVd-yuv >>> com.nopiece.bliss`, backtrace frames `VideoDecoder.yuvToJpeg`, `VideoDecoder.onImage$lambda$5`, `VideoDecoder$$ExternalSyntheticLambda2.run`. The old client decoder aborted in native code inside the YUV→JPEG path. That code no longer exists.
+
+**New symptom:** ShadowAuto capture model runs (`frame capture armed`), but `frames sent=0` for 12s — same zero-composition symptom as every prior surface model (permanent ImageReader, swap-in reader, encoder surface). Windows are placed on the display (`placement: window(s) ... id=40`), so the question is whether the display/app ever composes.
+
+**Diagnostics added:**
+- Log the exact display flags used (`flags=0x...`).
+- Immediate probe capture right after display creation, before launch: `probe capture: WxH` (display composites idle) or `probe capture: null` (display not compositing at all).
+- Every capture logs `capture #n -> WxH|null (misses=m)` (first 4 + every 10th miss).
+- At miss #4: one-shot state dump — `dumpsys display` device info/state, resumed activity/mFocusedApp with displayId, power wakefulness, the display's window block, and SurfaceFlinger layers matching the app.
+
+versionCode 37, 3.9.6.

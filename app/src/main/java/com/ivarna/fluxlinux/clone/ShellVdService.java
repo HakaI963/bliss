@@ -110,6 +110,8 @@ public final class ShellVdService extends IShellVd.Stub {
     private volatile boolean frameRunning;
     private long framesSent;
     private long captureMisses;
+    private String currentPackage = "";
+    private long captureCalls;
 
     // ------------------------------------------------------------------ display
 
@@ -144,7 +146,19 @@ public final class ShellVdService extends IShellVd.Stub {
                 int d = clamp(dpi, MIN_DPI, MAX_DPI);
                 log("createDisplay: context ok, creating display");
                 session = DisplaySession.create(displayContext, w, h, d);
-                log("createDisplay: created id=" + session.displayId + " (null surface, on-demand capture)");
+                log("createDisplay: created id=" + session.displayId + " (null surface, on-demand capture, flags=0x"
+                        + Integer.toHexString(session.flagsUsed) + ")");
+                android.graphics.Bitmap probe = session.captureBitmap(2, 250);
+                if (probe != null) {
+                    log("probe capture: " + probe.getWidth() + "x" + probe.getHeight()
+                            + " (display composites with no app)");
+                    try {
+                        probe.recycle();
+                    } catch (Throwable ignored) {
+                    }
+                } else {
+                    log("probe capture: null (display produced no frame before launch)");
+                }
                 // The display is the expensive, capricious part; input and IME
                 // policy are optional helpers — if they fail here the display
                 // must survive (input retries on demand at first use).
@@ -353,8 +367,19 @@ public final class ShellVdService extends IShellVd.Stub {
             return;
         }
         if (bitmap == null) {
+            long misses;
+            long calls;
             synchronized (lock) {
                 captureMisses++;
+                misses = captureMisses;
+                captureCalls++;
+                calls = captureCalls;
+            }
+            if (calls <= 4 || misses % 10 == 0) {
+                log("capture #" + calls + " -> null (misses=" + misses + ")");
+            }
+            if (misses == 4) {
+                dumpDisplayState();
             }
             return;
         }
@@ -379,8 +404,14 @@ public final class ShellVdService extends IShellVd.Stub {
         }
         try {
             cb.onScreenshot(png, w, h);
+            long calls;
             synchronized (lock) {
                 framesSent++;
+                captureCalls++;
+                calls = captureCalls;
+            }
+            if (calls <= 4) {
+                log("capture #" + calls + " -> " + w + "x" + h);
             }
         } catch (Throwable t) {
             if (isDeadObject(t)) {
@@ -424,6 +455,9 @@ public final class ShellVdService extends IShellVd.Stub {
         int id = currentDisplayIdSnapshot();
         if (id <= 0) {
             return "no display";
+        }
+        synchronized (lock) {
+            currentPackage = packageName;
         }
         String userArg = userId > 0 ? " --user " + userId : "";
         try {
@@ -888,6 +922,51 @@ public final class ShellVdService extends IShellVd.Stub {
             return kept.toString().trim();
         } catch (Throwable t) {
             return "";
+        }
+    }
+
+    /** One-shot display/activity/window state dump when capture keeps missing. */
+    private void dumpDisplayState() {
+        int id;
+        synchronized (lock) {
+            id = currentDisplayId;
+        }
+        if (id <= 0) {
+            return;
+        }
+        log("diagnostics: display=" + id + " — dumping state");
+        dumpCommand("display-device", "dumpsys display 2>/dev/null | grep -E 'DisplayDeviceInfo|mDisplayStates|mDisplayId=" + id + "' | head -20");
+        dumpCommand("activity", "dumpsys activity activities 2>/dev/null | grep -E 'ResumedActivity|mFocusedApp|displayId=" + id + "' | head -20");
+        dumpCommand("power", "dumpsys power 2>/dev/null | grep -E 'mWakefulness|Display Power|mScreenOn' | head -8");
+        dumpCommand("window", "dumpsys window displays 2>/dev/null | grep -A30 'displayId=" + id + "' | head -30");
+        String pkg;
+        synchronized (lock) {
+            pkg = currentPackage;
+        }
+        if (!pkg.isEmpty()) {
+            dumpCommand("sf-layers", "dumpsys SurfaceFlinger --list 2>/dev/null | grep -F "
+                    + shellQuote(pkg) + " | head -12");
+        }
+    }
+
+    private void dumpCommand(String label, String command) {
+        try {
+            ShellResult r = runShell(command);
+            String out = r == null || r.output == null ? "" : r.output.trim();
+            if (out.isEmpty()) {
+                log("diag[" + label + "]: (empty)");
+                return;
+            }
+            int n = 0;
+            for (String line : out.split("\n")) {
+                if (n++ >= 24) {
+                    log("diag[" + label + "]: …");
+                    break;
+                }
+                log("diag[" + label + "]: " + line.trim());
+            }
+        } catch (Throwable t) {
+            log("diag[" + label + "] failed: " + describe(t));
         }
     }
 

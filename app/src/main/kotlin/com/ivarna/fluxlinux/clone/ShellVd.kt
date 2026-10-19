@@ -208,6 +208,7 @@ object ShellVd {
     private var captureThread: Thread? = null
 
     @Volatile private var capturing = false
+    @Volatile private var captureErrors = 0
 
     @Synchronized
     private fun startCaptureLoop() {
@@ -220,7 +221,13 @@ object ShellVd {
                     try {
                         remote.captureFrame()
                     } catch (t: Throwable) {
-                        if (capturing) Log.w(TAG, "captureFrame failed", t)
+                        if (capturing) {
+                            Log.w(TAG, "captureFrame failed", t)
+                            if (captureErrors < 3) {
+                                captureErrors++
+                                addLog("captureFrame failed: " + (t.message ?: t.javaClass.simpleName))
+                            }
+                        }
                     }
                 }
                 try {
