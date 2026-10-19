@@ -1,28 +1,23 @@
-package com.ivarna.fluxlinux.clone;
+package com.silentauto.shell;
 
 import android.content.Context;
 import android.os.SystemClock;
 import android.view.InputDevice;
 import android.view.InputEvent;
-import android.view.KeyCharacterMap;
 import android.view.KeyEvent;
+import android.view.KeyCharacterMap;
 import android.view.MotionEvent;
 
 import java.lang.reflect.Method;
 
-/**
- * Input injection inside the shell process. Every event is tagged with the
- * clone display id, so nothing can leak to the real screen. Ported from
- * ShadowAuto's InputBridge.
- */
 final class InputBridge {
     private static final int INJECT_WAIT_FOR_FINISH = 2;
     private final Object inputManager;
     private final Method inject;
     private final Method setDisplayId;
 
-    InputBridge(ShellContext context) throws Exception {
-        inputManager = context.getSystemService(Context.INPUT_SERVICE);
+    InputBridge() throws Exception {
+        inputManager = ShellContext.get().getSystemService(Context.INPUT_SERVICE);
         inject = inputManager.getClass().getMethod("injectInputEvent", InputEvent.class, int.class);
         setDisplayId = InputEvent.class.getMethod("setDisplayId", int.class);
     }
@@ -68,6 +63,18 @@ final class InputBridge {
         return downOk && upOk;
     }
 
+    boolean selectAll(int displayId) throws Exception {
+        return chord(displayId, KeyEvent.KEYCODE_CTRL_LEFT, KeyEvent.META_CTRL_LEFT_ON | KeyEvent.META_CTRL_ON, KeyEvent.KEYCODE_A);
+    }
+
+    boolean delete(int displayId) throws Exception {
+        return key(displayId, KeyEvent.KEYCODE_DEL);
+    }
+
+    boolean paste(int displayId) throws Exception {
+        return key(displayId, KeyEvent.KEYCODE_PASTE);
+    }
+
     boolean text(int displayId, String text) throws Exception {
         if (text == null || text.isEmpty()) {
             return true;
@@ -87,6 +94,14 @@ final class InputBridge {
         MotionEvent event = MotionEvent.obtain(downTime, eventTime, action, x, y, 1f, 1f, 0, 1f, 1f, 0, 0);
         event.setSource(InputDevice.SOURCE_TOUCHSCREEN);
         return event;
+    }
+
+    private boolean chord(int displayId, int modifierKey, int metaState, int keyCode) throws Exception {
+        long now = SystemClock.uptimeMillis();
+        boolean ok = send(displayId, new KeyEvent(now, now, KeyEvent.ACTION_DOWN, modifierKey, 0, metaState));
+        ok = send(displayId, new KeyEvent(now, now + 20, KeyEvent.ACTION_DOWN, keyCode, 0, metaState)) && ok;
+        ok = send(displayId, new KeyEvent(now, now + 40, KeyEvent.ACTION_UP, keyCode, 0, metaState)) && ok;
+        return send(displayId, new KeyEvent(now, now + 60, KeyEvent.ACTION_UP, modifierKey, 0)) && ok;
     }
 
     private boolean send(int displayId, InputEvent event) throws Exception {

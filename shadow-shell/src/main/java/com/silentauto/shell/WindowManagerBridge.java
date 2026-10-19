@@ -1,4 +1,4 @@
-package com.ivarna.fluxlinux.clone;
+package com.silentauto.shell;
 
 import android.annotation.TargetApi;
 import android.os.Build;
@@ -7,10 +7,6 @@ import android.os.IInterface;
 
 import java.lang.reflect.Method;
 
-/**
- * WindowManager display IME policy helper (keeps the soft keyboard on the
- * clone display instead of the real screen). Ported from ShadowAuto.
- */
 final class WindowManagerBridge {
     static final int DISPLAY_IME_POLICY_LOCAL = 0;
     static final int DISPLAY_IME_POLICY_FALLBACK_DISPLAY = 1;

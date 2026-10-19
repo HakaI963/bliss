@@ -719,3 +719,33 @@ versionCode 38, 3.9.7.
 Also noted: the round-29/30 dumps matched the *previous* display's DisplayDeviceInfo (uniqueId `…Bliss,41` / `…Bliss,42`) rather than the live one — hence the misleading `state OFF` read.
 
 versionCode 39, 3.9.8.
+
+---
+
+## 32. Round 32 — ShadowAuto implanted: our display stack deleted (2026-10-19)
+
+**User instruction:** stop patching, remove the old virtual-display system and use ShadowAuto wholesale (reference: https://github.com/vastobb/ShadowAuto-Build, Apache-2.0).
+
+**Root cause found in round 31's log:** the created display reports
+`FLAG_SECURE` — on HyperOS `VIRTUAL_DISPLAY_FLAG_TRUSTED` *is* the secure flag. A secure display is never composited into a non-secure destination surface, so the ImageReader, the encoder surface and screencap all got nothing while the display sat ON with the app's layers present. Every round since the H.264 experiment failed for this single reason.
+
+**What was removed (no more of our own display system):**
+- `DisplaySession.java` (encoder-surface display), our `ScreenCapture.java`, `InputBridge.java`, `WindowManagerBridge.java`, `ShellContext.java`.
+- `ShellVdService` rewritten: no display, no frames, no input injection — only staging, `pm install`, engine start/stop, `am force-stop`, and the crash/crash-buffer reporting.
+- `IShellVd.aidl`: `createDisplay/tap/swipe/key/text/launch/startFrames/stopFrames/releaseDisplay/startKeepAlive` gone. Now `stageWrite`, `pmInstall`, `deleteStage`, `startEngine`, `stopEngine`, `kill`, `attach`, `logs`, `exit`.
+- Client `ShellVd.kt` rewritten (no MediaCodec decoder, no capture loop, no display state).
+- `CloneEngine`: display/input/frames now go through the engine.
+
+**What was added — ShadowAuto's engine, vendored and running for real:**
+- New Gradle module `shadow-shell`: ShadowAuto's `android-shell` sources (VirtualDisplaySession, ScreenCapture, InputBridge, WindowManagerBridge, UiBridge, ClipboardBridge, AppCatalog, DisplaySpec, ShellContext, McpSessions, LogHub, JsonRpc, RpcServer, Config, Main) + `shadow-stubs` (their hidden-API stubs). AI/OCR/okhttp dropped; `Engine` replaces `AutomationEngine` (same RPC surface, no AI loop).
+- The engine APK is bundled into the Bliss APK (`app/src/main/assets/shadow-shell.apk`, built in CI) and started exactly as ShadowAuto's README documents:
+  `CLASSPATH=<apk> app_process /system/bin com.silentauto.shell.Main --port=43110`
+  (staged to /data/local/tmp by the shell service, since the app process cannot write there).
+- `ShadowEngine.kt`: JSON-RPC 2.0 client over 127.0.0.1:43110 (openSession/launchApp/screenshot/tap/swipe/pressKey/inputText/logs).
+
+**Two behavioural patches to the vendored code:**
+1. **No `VIRTUAL_DISPLAY_FLAG_TRUSTED`** — it is the secure flag here; keeping it is exactly what made the display invisible to every capture path.
+2. **Capture surface attached at creation** (null-surface displays come up OFF) + a continuous drain thread so the buffer queue never backpressures the compositor.
+3. Cross-user launch: `am start --user N --display D` (clones live in user 10).
+
+versionCode 40, 3.10.0.

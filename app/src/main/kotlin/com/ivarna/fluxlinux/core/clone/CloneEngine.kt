@@ -13,6 +13,7 @@ import android.graphics.drawable.Drawable
 import android.net.Uri
 import android.os.Build
 import android.util.Log
+import com.ivarna.fluxlinux.clone.ShadowEngine
 import com.ivarna.fluxlinux.clone.ShellVd
 import com.ivarna.fluxlinux.BuildConfig
 import com.ivarna.fluxlinux.core.service.CloneSessionService
@@ -28,6 +29,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -153,11 +155,17 @@ object CloneEngine {
             displayW.value = preset.first
             displayH.value = preset.second
         }
-        // Mirror the shell-side frames into the UI state. Nothing is rendered or
-        // injected by the app process, so input can never leak to the real screen.
+        // Pull still frames from the ShadowAuto engine into the UI state.
+        // Nothing is rendered or injected by the app process, so input can
+        // never leak to the real screen.
         scope.launch {
-            ShellVd.frames.collect { bmp ->
-                frame.value = bmp?.let { Frame(it, ShellVd.framesSeq.value) }
+            while (isActive) {
+                val bitmap = withContext(Dispatchers.IO) { ShadowEngine.screenshot() }
+                if (bitmap != null) {
+                    frameSeq += 1L
+                    frame.value = Frame(bitmap, frameSeq)
+                }
+                delay(400)
             }
         }
         log("Clone space ready (fps=${displayFps.value}, res=${displayW.value}x${displayH.value}, backend=${touchBackend.value.label})")
@@ -812,6 +820,11 @@ object CloneEngine {
     val vdProbe = MutableStateFlow<String?>(null)
     private var probeRunning = false
 
+    /** Display id owned by the ShadowAuto engine (0 = none). */
+    private val engineDisplayId = MutableStateFlow(0)
+    private val engineReady = MutableStateFlow(false)
+    @Volatile private var frameSeq = 0L
+
     /** Probes the shell-side hidden display and returns a human verdict. */
     fun probeDisplay() {
         if (probeRunning) return
@@ -826,10 +839,10 @@ object CloneEngine {
     private suspend fun probeDisplayBlocking(): String {
         val shellErr = requireShell()
         if (shellErr != null) return "Virtual display: unavailable — $shellErr"
-        ShellVd.displayId.value.takeIf { it > 0 }?.let { return "Virtual display: available (id=$it)" }
+        engineDisplayId.value.takeIf { it > 0 }?.let { return "Virtual display: available (id=$it)" }
         val ok = ensureDisplay()
         return if (ok) {
-            "Virtual display: available (id=${ShellVd.displayId.value})"
+            "Virtual display: available (id=${engineDisplayId.value})"
         } else {
             val tail = ShellVd.serviceLogTail(4) ?: emptyList()
             val cause = tail.lastOrNull { it.isNotBlank() }?.let { " — " + it.trim() } ?: ""
@@ -851,37 +864,39 @@ object CloneEngine {
         displayW.value = preset.first
         displayH.value = preset.second
         ensureMutex.withLock {
-            // Reuse a live display: the service keeps it across app restarts,
-            // and re-creating on every probe/run leaks display ids. Re-checked
-            // inside the lock — a concurrent ensure may have just made one.
-            val remote = ShellVd.remoteDisplayId()
-            if (remote > 0) {
-                if (ShellVd.displayId.value != remote) ShellVd.adoptDisplayId(remote)
-                return true
+            // The ShadowAuto engine owns the display. Start it if needed, then
+            // open (or reuse) its session.
+            if (!engineReady.value) {
+                val err = withContext(Dispatchers.IO) { ShadowEngine.startEngine(ctx) }
+                if (err != null) {
+                    status.value = err
+                    log("Display failed: $err")
+                    logShellTail(12)
+                    return false
+                }
+                engineReady.value = true
+                log("ShadowAuto engine started (port ${ShadowEngine.PORT})")
             }
-            val err = ShellVd.ensure(
-                ctx,
-                preset.first,
-                preset.second,
-                displayDpi.value.coerceIn(120, 640),
-                displayFps.value.coerceIn(5, 60),
-            )
-            if (err != null) {
-                status.value = err
-                log("Display failed: $err")
-                logShellTail(12)
-                return false
+            if (engineDisplayId.value <= 0) {
+                val id = withContext(Dispatchers.IO) { ShadowEngine.openSession(preset.first, preset.second) }
+                if (id <= 0) {
+                    val err = "openSession failed: ${ShadowEngine.lastError ?: "no answer"}"
+                    status.value = err
+                    log("Display failed: $err")
+                    return false
+                }
+                engineDisplayId.value = id
             }
-            log("Display ready: id=${ShellVd.displayId.value} ${preset.first}x${preset.second} dpi=${displayDpi.value} fps=${displayFps.value}")
+            log("Display ready: id=${engineDisplayId.value} ${preset.first}x${preset.second} dpi=${displayDpi.value} fps=${displayFps.value}")
         }
         return true
     }
 
-    fun currentDisplayId(): Int = ShellVd.displayId.value
+    fun currentDisplayId(): Int = engineDisplayId.value
 
-    private fun closeDisplay() {
-        ShellVd.stopFrames()
-        ShellVd.releaseDisplay()
+    private suspend fun closeDisplay() {
+        withContext(Dispatchers.IO) { ShadowEngine.closeSession() }
+        engineDisplayId.value = 0
         frame.value = null
     }
 
@@ -938,7 +953,7 @@ object CloneEngine {
         val (uid, err) = targetUserBlocking()
         if (err != null) return err
         if (!ensureDisplay()) return "hidden display unavailable"
-        val launchErr = ShellVd.launch(packageName, uid)
+        val launchErr = withContext(Dispatchers.IO) { ShadowEngine.launchApp(packageName, uid) }
         if (!launchErr.isNullOrEmpty()) {
             logShellTail(12)
         }
@@ -949,15 +964,14 @@ object CloneEngine {
         running.value = packageName
         status.value = null
         appContext?.let { CloneSessionService.start(it) }
-        ShellVd.startFrames()
-        log("Launch: $packageName (user $uid, display ${ShellVd.displayId.value})")
+        log("Launch: $packageName (user $uid, display ${engineDisplayId.value})")
         // Watchdog: when nothing ever rendered on the hidden display, dump the
         // service's own log tail (the shell-side truth) into the pane and
         // self-heal a shell service that lost (or never kept) its display.
-        val seqAtLaunch = ShellVd.framesSeq.value
+        val seqAtLaunch = frameSeq
         scope.launch {
             delay(12_000)
-            if (running.value != packageName || ShellVd.framesSeq.value != seqAtLaunch) return@launch
+            if (running.value != packageName || frameSeq != seqAtLaunch) return@launch
             val healed = withContext(Dispatchers.IO) { healLostDisplayNow(packageName) }
             log("No still frame after 12s for $packageName" + (healed?.let { " — $it" } ?: ""))
             logShellTail(15)
@@ -968,16 +982,16 @@ object CloneEngine {
 
     /** Re-creates the display and re-launches once if the shell service lost it. */
     private suspend fun healLostDisplayNow(packageName: String): String? {
-        val remote = ShellVd.remoteDisplayId()
-        if (remote > 0) return null
-        log("Hidden display lost (service restarted) — re-creating…")
+        if (engineDisplayId.value > 0 && ShadowEngine.ping()) return null
+        log("Hidden display lost (engine restarted) — re-creating…")
+        engineReady.value = false
+        engineDisplayId.value = 0
         if (!ensureDisplay()) return "display re-creation failed"
         val (uid, err) = targetUserBlocking()
         if (err != null) return "relaunch failed: $err"
-        val launchErr = ShellVd.launch(packageName, uid)
+        val launchErr = withContext(Dispatchers.IO) { ShadowEngine.launchApp(packageName, uid) }
         if (!launchErr.isNullOrEmpty()) return "relaunch failed: $launchErr"
-        ShellVd.startFrames()
-        return "re-created and re-launched (display ${ShellVd.displayId.value})"
+        return "re-created and re-launched (display ${engineDisplayId.value})"
     }
 
     // ---------------------------------------------------------------- input (shell-side)
@@ -997,27 +1011,48 @@ object CloneEngine {
         val xi = x.roundToInt().coerceAtLeast(0)
         val yi = y.roundToInt().coerceAtLeast(0)
         log("Tap $xi,$yi")
-        scope.launch { ShellVd.tap(xi, yi)?.let { log("Tap failed: $it") } }
+        scope.launch {
+            val ok = withContext(Dispatchers.IO) { ShadowEngine.tap(xi, yi) }
+            if (!ok) log("Tap failed: ${ShadowEngine.lastError ?: "no answer"}")
+        }
     }
 
     fun swipe(x1: Float, y1: Float, x2: Float, y2: Float, durationMs: Int = 300) {
         log("Swipe ${x1.roundToInt()},${y1.roundToInt()} → ${x2.roundToInt()},${y2.roundToInt()}")
         scope.launch {
-            ShellVd.swipe(
-                x1.roundToInt(), y1.roundToInt(), x2.roundToInt(), y2.roundToInt(), durationMs,
-            )?.let { log("Swipe failed: $it") }
+            val ok = withContext(Dispatchers.IO) {
+                ShadowEngine.swipe(
+                    x1.roundToInt(), y1.roundToInt(), x2.roundToInt(), y2.roundToInt(), durationMs,
+                )
+            }
+            if (!ok) log("Swipe failed: ${ShadowEngine.lastError ?: "no answer"}")
         }
     }
 
     fun key(keyCode: String) {
         log("Key $keyCode")
-        scope.launch { ShellVd.key(keyCodeOf(keyCode))?.let { log("Key failed: $it") } }
+        scope.launch {
+            val ok = withContext(Dispatchers.IO) { ShadowEngine.pressKey(keyNameOf(keyCode)) }
+            if (!ok) log("Key failed: ${ShadowEngine.lastError ?: "no answer"}")
+        }
+    }
+
+    /** Maps Bliss' key names to the engine's key names (or raw key codes). */
+    private fun keyNameOf(name: String): String = when (name.uppercase(Locale.ROOT)) {
+        "BACK" -> "back"
+        "ENTER" -> "enter"
+        "SEARCH" -> "search"
+        "TAB" -> "tab"
+        else -> keyCodeOf(name).toString()
     }
 
     fun text(value: String) {
         if (value.isEmpty()) return
         log("Text ${value.length} chars")
-        scope.launch { ShellVd.text(value)?.let { log("Text failed: $it") } }
+        scope.launch {
+            val ok = withContext(Dispatchers.IO) { ShadowEngine.inputText(value) }
+            if (!ok) log("Text failed: ${ShadowEngine.lastError ?: "no answer"}")
+        }
     }
 
     // ---------------------------------------------------------------- screenshot
@@ -1088,34 +1123,37 @@ object CloneEngine {
     /** Synchronous input injection for the agent API (shell-side display only). */
     fun inputSync(args: List<String>): Boolean {
         if (args.isEmpty()) return false
-        val err = when (args[0]) {
-            "tap" -> ShellVd.tap(args[1].toIntOrNull() ?: return false, args[2].toIntOrNull() ?: return false)
-            "swipe" -> ShellVd.swipe(
+        val ok = when (args[0]) {
+            "tap" -> ShadowEngine.tap(
+                args[1].toIntOrNull() ?: return false,
+                args[2].toIntOrNull() ?: return false,
+            )
+            "swipe" -> ShadowEngine.swipe(
                 args[1].toIntOrNull() ?: return false,
                 args[2].toIntOrNull() ?: return false,
                 args[3].toIntOrNull() ?: return false,
                 args[4].toIntOrNull() ?: return false,
                 args.getOrNull(5)?.toIntOrNull() ?: 300,
             )
-            "keyevent" -> ShellVd.key(keyCodeOf(args[1]))
-            "text" -> ShellVd.text(args.drop(1).joinToString(" ").replace("%s", " "))
-            else -> "unsupported input command"
+            "keyevent" -> ShadowEngine.pressKey(keyNameOf(args[1]))
+            "text" -> ShadowEngine.inputText(args.drop(1).joinToString(" ").replace("%s", " "))
+            else -> return false
         }
-        log("Agent input ${args.joinToString(" ")} -> ${err ?: "ok"}")
-        return err == null
+        log("Agent input ${args.joinToString(" ")} -> ${if (ok) "ok" else "failed"}")
+        return ok
     }
 
     /** status payload for the agent bridge (key=value lines). */
     fun statusLines(): String = buildString {
         append("backend=").append(touchBackend.value.name.lowercase(Locale.ROOT))
         append("\nclone_user=").append(if (cloneUserId.value > 0) cloneUserId.value.toString() else "-")
-        append("\ndisplay=").append(ShellVd.displayId.value)
+        append("\ndisplay=").append(engineDisplayId.value)
         append("\nsize=").append(displayW.value).append("x").append(displayH.value)
         append("\ndpi=").append(displayDpi.value)
         append("\nfps=").append(displayFps.value)
         append("\nrunning=").append(running.value ?: "-")
         append("\napps=").append(apps.value.size)
-        append("\nframes=").append(ShellVd.framesSeq.value)
+        append("\nframes=").append(frameSeq)
     }
 
     /** list payload for the agent bridge (pkg|label|version lines). */

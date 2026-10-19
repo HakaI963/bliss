@@ -1,13 +1,16 @@
-package com.ivarna.fluxlinux.clone;
+package com.silentauto.shell;
 
 import android.graphics.Bitmap;
 import android.media.Image;
 
 import java.nio.ByteBuffer;
 
-/** Image -> Bitmap conversion. Ported from ShadowAuto's ScreenCapture. */
 final class ScreenCapture {
     private ScreenCapture() {
+    }
+
+    static Bitmap latestBitmap(VirtualDisplaySession display, int retries, long delayMs) {
+        return display.captureBitmap(retries, delayMs);
     }
 
     static Bitmap bitmapFromImage(Image image) {
