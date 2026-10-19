@@ -890,7 +890,7 @@ object CloneEngine {
     }
 
     /** Blocking launch on the hidden display. Returns null on success. */
-    fun launchNowBlocking(packageName: String): String? {
+    suspend fun launchNowBlocking(packageName: String): String? {
         val shellErr = requireShell()
         if (shellErr != null) return shellErr
         val (uid, err) = targetUserBlocking()
@@ -1035,7 +1035,7 @@ object CloneEngine {
     }
 
     /** Blocking launch for the agent API. Returns null on success. */
-    fun launchNow(packageName: String): String? = launchNowBlocking(packageName)
+    suspend fun launchNow(packageName: String): String? = launchNowBlocking(packageName)
 
     /** Blocking kill for the agent API. Returns null on success. */
     fun killNow(packageName: String): String? = killNowBlocking(packageName)

@@ -515,7 +515,6 @@ private fun LogsSection() {
                 }
                 IconButton(
                     onClick = {
-                        log.value = emptyList()
                         CloneEngine.clearLogs()
                     },
                     modifier = Modifier.size(30.dp),
