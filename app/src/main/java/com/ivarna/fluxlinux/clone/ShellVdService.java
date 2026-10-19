@@ -401,8 +401,9 @@ public final class ShellVdService extends IShellVd.Stub {
             log("keepAlive: no display");
             return;
         }
-        String head = name.split("/", 1)[0];
-        if (!SAFE_PACKAGE.matcher(head).matches() || name.startsWith("/")) {
+        String head = name.split("/", 2)[0];
+        if (!SAFE_PACKAGE.matcher(head).matches() || name.startsWith("/")
+                || !name.contains("/") || name.split("/", 2)[1].trim().isEmpty()) {
             log("keepAlive: invalid component");
             return;
         }

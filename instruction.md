@@ -621,3 +621,9 @@ The historical "verify before restarting" checklist is fully resolved: nav crash
 2. **Encoder config now shadow-exact**: CBR bitrate mode, `KEY_REPEAT_PREVIOUS_FRAME_AFTER=150ms`, priority 0, B-frames 0, max-fps-to-encoder 30, low latency on S+ (keys taken verbatim from the reference `VideoStreamer`).
 3. Alive ticks now show encoder errors (`samples sent=N err=…`).
 4. versionCode 31→32, 3.9.1.
+
+---
+
+## 25. Round 25 — keepAlive validator fix (2026-10-19)
+
+**Round-24 log:** `keepAlive: invalid component` — the stub never pinned. Bug: `String.split("/", 1)` has limit semantics meaning "no split", so the whole `pkg/cls` component was matched against the package-only pattern and rejected. Fixed with limit 2, plus component sanity (package head matches, class part non-empty). Service disconnect at 12:00:06 noted — if it was a crash, the next session's pane shows the persisted `PREVIOUS PROCESS CRASH` block.
