@@ -107,7 +107,6 @@ public final class ShellVdService extends IShellVd.Stub {
 
     private IShellVdCallback frameCallback;
     private HandlerThread frameThread;
-    private FramePump framePump;
     private volatile boolean frameRunning;
     private long framesSent;
 
@@ -144,7 +143,14 @@ public final class ShellVdService extends IShellVd.Stub {
                 int d = clamp(dpi, MIN_DPI, MAX_DPI);
                 log("createDisplay: context ok, creating display with surface");
                 session = DisplaySession.create(displayContext, w, h, d);
-                log("createDisplay: created id=" + session.displayId);
+                log("createDisplay: created id=" + session.displayId + " (H.264 surface)");
+                session.startEncoder(new DisplaySession.VideoSink() {
+                    @Override
+                    public void onVideo(byte[] data, long ptsUs, boolean keyframe, boolean format,
+                                        int width, int height) {
+                        onVideoFromDisplay(data, ptsUs, keyframe, format, width, height);
+                    }
+                });
                 // The display is the expensive, capricious part; input and IME
                 // policy are optional helpers — if they fail here the display
                 // must survive (input retries on demand at first use).
@@ -216,8 +222,8 @@ public final class ShellVdService extends IShellVd.Stub {
     public boolean tap(int x, int y) {
         InputBridge bridge = inputBridge();
         int id = currentDisplayIdSnapshot();
-        log("tap rejected: " + (id <= 0 ? "display gone" : "no input bridge"));
         if (bridge == null || id <= 0) {
+            log("tap rejected: " + (id <= 0 ? "display gone" : "no input bridge"));
             return false;
         }
         try {
@@ -232,8 +238,8 @@ public final class ShellVdService extends IShellVd.Stub {
     public boolean longPress(int x, int y, int ms) {
         InputBridge bridge = inputBridge();
         int id = currentDisplayIdSnapshot();
-        log("longPress rejected: " + (id <= 0 ? "display gone" : "no input bridge"));
         if (bridge == null || id <= 0) {
+            log("longPress rejected: " + (id <= 0 ? "display gone" : "no input bridge"));
             return false;
         }
         try {
@@ -248,8 +254,8 @@ public final class ShellVdService extends IShellVd.Stub {
     public boolean swipe(int x1, int y1, int x2, int y2, int ms) {
         InputBridge bridge = inputBridge();
         int id = currentDisplayIdSnapshot();
-        log("swipe rejected: " + (id <= 0 ? "display gone" : "no input bridge"));
         if (bridge == null || id <= 0) {
+            log("swipe rejected: " + (id <= 0 ? "display gone" : "no input bridge"));
             return false;
         }
         try {
@@ -264,8 +270,8 @@ public final class ShellVdService extends IShellVd.Stub {
     public boolean key(int keyCode) {
         InputBridge bridge = inputBridge();
         int id = currentDisplayIdSnapshot();
-        log("key rejected: " + (id <= 0 ? "display gone" : "no input bridge"));
         if (bridge == null || id <= 0) {
+            log("key rejected: " + (id <= 0 ? "display gone" : "no input bridge"));
             return false;
         }
         try {
@@ -280,8 +286,8 @@ public final class ShellVdService extends IShellVd.Stub {
     public boolean text(String value) {
         InputBridge bridge = inputBridge();
         int id = currentDisplayIdSnapshot();
-        log("text rejected: " + (id <= 0 ? "display gone" : "no input bridge"));
         if (bridge == null || id <= 0 || value == null) {
+            log("text rejected: " + (id <= 0 ? "display gone" : "no input bridge"));
             return false;
         }
         try {
@@ -299,32 +305,67 @@ public final class ShellVdService extends IShellVd.Stub {
         if (cb == null) {
             return;
         }
+        byte[] config;
         List<String> pendingLogs;
+        DisplaySession session;
         synchronized (lock) {
-            stopFramesLocked();
             if (display == null) {
                 log("startFrames: no display");
                 return;
             }
-            int quality = clamp(jpegQuality, 10, 100);
-            int rate = clamp(fps, 1, 30);
-            int cap = maxWidth <= 0 ? 0 : clamp(maxWidth, 120, 4000);
-            long interval = Math.max(MIN_FRAME_INTERVAL_MS, 1000L / rate);
             frameCallback = cb;
-            appendLogLocked("frames started on display " + currentDisplayId + " fps=" + rate + " maxWidth=" + cap + " quality=" + quality);
+            frameRunning = true;
+            session = display;
+            config = session.lastConfig();
+            appendLogLocked("video streaming on display " + currentDisplayId
+                    + " (H.264, encoder samples of a " + displayWidth + "x" + displayHeight + " screen)");
             pendingLogs = new ArrayList<>(logBuffer);
             logBuffer.clear();
-            frameThread = new HandlerThread("ShellVdFrames", Process.THREAD_PRIORITY_DISPLAY);
-            frameThread.start();
-            Handler handler = new Handler(frameThread.getLooper());
-            framePump = new FramePump(display, cb, handler, cap, quality, interval);
-            frameRunning = true;
-            handler.post(framePump);
+        }
+        try {
+            if (config != null) {
+                cb.onVideoSample(config, 0L, false, true, displayWidth, displayHeight);
+            }
+        } catch (Throwable ignored) {
         }
         for (String line : pendingLogs) {
             try {
                 cb.onLog(line);
             } catch (Throwable ignored) {
+            }
+        }
+    }
+
+    /** Encoder sample from the display: cached config + live forwarding to the client. */
+    private void onVideoFromDisplay(byte[] data, long ptsUs, boolean keyframe, boolean format,
+                                    int width, int height) {
+        if (data == null || data.length == 0) {
+            return;
+        }
+        IShellVdCallback cb;
+        synchronized (lock) {
+            if (!frameRunning && !format) {
+                return;
+            }
+            cb = frameCallback;
+        }
+        if (cb == null) {
+            return;
+        }
+        try {
+            cb.onVideoSample(data, ptsUs, keyframe, format, width, height);
+            if (!format) {
+                synchronized (lock) {
+                    framesSent++;
+                }
+            }
+        } catch (Throwable t) {
+            if (isDeadObject(t)) {
+                synchronized (lock) {
+                    frameCallback = null;
+                    frameRunning = false;
+                }
+                log("video callback died, streaming paused");
             }
         }
     }
@@ -626,17 +667,12 @@ public final class ShellVdService extends IShellVd.Stub {
 
     private void stopFramesLocked() {
         frameRunning = false;
+        if (display != null) {
+            display.pauseDelivery();
+        }
         HandlerThread thread = frameThread;
         frameThread = null;
-        FramePump pump = framePump;
-        framePump = null;
         frameCallback = null;
-        if (pump != null) {
-            try {
-                pump.handler.removeCallbacks(pump);
-            } catch (Throwable ignored) {
-            }
-        }
         if (thread != null) {
             try {
                 thread.quitSafely();
@@ -1006,104 +1042,4 @@ public final class ShellVdService extends IShellVd.Stub {
         }
     }
 
-    /**
-     * Reads the newest composed frame at the requested rate, downscales it to
-     * maxWidth (0 = native size), JPEG-encodes it and hands it to the app
-     * through the oneway callback. A dead callback stops the pump; anything
-     * else is treated as a transient error and the pump keeps going.
-     */
-    private final class FramePump implements Runnable {
-        private final DisplaySession session;
-        private final IShellVdCallback callback;
-        private final Handler handler;
-        private final int maxWidth;
-        private final int quality;
-        private final long intervalMs;
-        private int silentLoops;
-
-        FramePump(DisplaySession session, IShellVdCallback callback, Handler handler,
-                  int maxWidth, int quality, long intervalMs) {
-            this.session = session;
-            this.callback = callback;
-            this.handler = handler;
-            this.maxWidth = maxWidth;
-            this.quality = quality;
-            this.intervalMs = intervalMs;
-        }
-
-        @Override
-        public void run() {
-            if (!frameRunning) {
-                return;
-            }
-            long started = SystemClock.uptimeMillis();
-            Bitmap decoded = null;
-            Bitmap output = null;
-            try {
-                decoded = session.captureBitmap(2, 50);
-                if (decoded != null) {
-                    silentLoops = 0;
-                } else {
-                    silentLoops++;
-                    // Heartbeat while the empty streak grows: tells the Logs
-                    // pane whether the display draws nothing (activity not on
-                    // it) versus a broken pipeline.
-                    if (silentLoops % 40 == 0) {
-                        int id;
-                        long sent;
-                        synchronized (lock) {
-                            id = currentDisplayId;
-                            sent = framesSent;
-                        }
-                        log("frames: no image for " + (silentLoops / 4) + "s"
-                                + " (display id=" + id + " sent=" + sent + ")");
-                    }
-                }
-                if (decoded != null) {
-                    output = decoded;
-                    if (maxWidth > 0 && decoded.getWidth() > maxWidth) {
-                        int targetHeight = Math.max(1,
-                                Math.round(decoded.getHeight() * (maxWidth / (float) decoded.getWidth())));
-                        Bitmap scaled = Bitmap.createScaledBitmap(decoded, maxWidth, targetHeight, true);
-                        if (scaled != null && scaled != decoded) {
-                            output = scaled;
-                            decoded.recycle();
-                            decoded = null;
-                        }
-                    }
-                    byte[] jpeg = encodeJpeg(output, quality);
-                    if (jpeg != null && jpeg.length > 0) {
-                        callback.onFrame(jpeg, output.getWidth(), output.getHeight());
-                        synchronized (lock) {
-                            framesSent++;
-                        }
-                    }
-                }
-            } catch (Throwable t) {
-                if (isDeadObject(t)) {
-                    log("frame callback died, stopping pump");
-                    frameRunning = false;
-                    return;
-                }
-                log("frame error: " + describe(t));
-            } finally {
-                if (output != null && output != decoded) {
-                    try {
-                        output.recycle();
-                    } catch (Throwable ignored) {
-                    }
-                }
-                if (decoded != null) {
-                    try {
-                        decoded.recycle();
-                    } catch (Throwable ignored) {
-                    }
-                }
-            }
-            if (frameRunning) {
-                long elapsed = SystemClock.uptimeMillis() - started;
-                handler.postDelayed(this, Math.max(1L, intervalMs - elapsed));
-            }
-        }
-    }
 }

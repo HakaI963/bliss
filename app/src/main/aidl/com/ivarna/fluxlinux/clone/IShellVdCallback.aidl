@@ -1,6 +1,7 @@
 package com.ivarna.fluxlinux.clone;
 
 oneway interface IShellVdCallback {
-    void onFrame(in byte[] jpeg, int width, int height);
+    /** Encoded H.264 access unit from the display's encoder surface. */
+    void onVideoSample(in byte[] data, long ptsUs, boolean keyframe, boolean format, int width, int height);
     void onLog(String line);
 }

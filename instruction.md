@@ -593,3 +593,19 @@ The historical "verify before restarting" checklist is fully resolved: nav crash
 - New `captureBitmap(retries, delayMs)`: swaps the reader in, waits, grabs the latest image, restores null — shadow's exact model. FramePump now calls it per tick (retries=2, delayMs=50; pump self-paces).
 - **Shell-log de-dup:** `CloneEngine.shellLine()` keeps the last 400 shown lines; both the live sink and every tail dump skip repeats — no more ring-replay spam (the previous log had the same lines three times).
 - versionCode 29→30, 3.8.8. Input bridge reject on the live display noted for next round.
+
+---
+
+## 23. Round 23 — H.264 encoder-surface model (the shadow production pipeline), v3.9.0 (2026-10-19)
+
+**User evidence (round-22 log):** with windows verifiably on the display (`placement: window(s) … id=28`, `input=ok`), the swap-in ImageReader still got `sent=0` for minutes. Verdict: **no buffer-queue surface (permanent or swapped) receives composed frames from SurfaceFlinger on this HyperOS build.**
+
+**The remaining shadow-src delta (docs + VirtualDisplaySession + streamer):** ShadowAuto's production pipeline renders the virtual display **directly into a MediaCodec H.264 encoder input surface** (`codec.createInputSurface()` -> `createVirtualDisplay(..., inputSurface, ...)`) and streams the encoder's output samples as real video (exactly what the user said in round 17: "h264,h26 recording"). The whole device's screen-recording stack is validated on HW-encoder surfaces; plain reader surfaces are not.
+
+**Implemented:**
+- `IShellVdCallback.onVideoSample(byte[] data, long ptsUs, boolean keyframe, boolean format, int w, int h)` (oneway) replaces `onFrame(jpeg,…)`.
+- `DisplaySession` v2: creates the encoder (AVC, COLOR_FormatSurface, ~2.4 Mbps at 720p30, I-frame 1s) first, creates the display **with the encoder input surface**, runs the encoder in async mode, caches the config (SPS/PPS) sample.
+- `ShellVdService`: `startFrames(cb)` = enable H.264 delivery (config re-sent first), `onVideoFromDisplay` forwards samples (config always cached even while paused, samples gated by `frameRunning`, dead-object detection), `stopFrames` pauses delivery; JPEG pump/FramePump class deleted.
+- Client `VideoDecoder`: MediaCodec AVC decoder -> ImageReader(YUV_420_888) -> NV21 -> JPEG(q85) -> Bitmap -> existing `frames/framesSeq` state (live window, watchdog, screenshot all unchanged). Config + keyframes always accepted, non-key samples dropped while a conversion is in flight.
+- Input-bridge reject logs moved inside the guard (they printed on every input call — misleading).
+- versionCode 30→31, **3.9.0**.
