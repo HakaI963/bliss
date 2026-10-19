@@ -977,15 +977,15 @@ object CloneEngine {
     /** Re-creates the display and re-launches once if the shell service lost it. */
     private suspend fun healLostDisplayNow(packageName: String): String? {
         if (ShellVd.remoteDisplayId() > 0) return null
-        log("Hidden display lost (engine restarted) — re-creating…")
-        engineReady.value = false
+        log("Hidden display lost (service restarted) — re-creating…")
         engineDisplayId.value = 0
         if (!ensureDisplay()) return "display re-creation failed"
         val (uid, err) = targetUserBlocking()
         if (err != null) return "relaunch failed: $err"
         val launchErr = withContext(Dispatchers.IO) { ShellVd.launch(packageName, uid) }
         if (!launchErr.isNullOrEmpty()) return "relaunch failed: $launchErr"
-        return "re-created and re-launched (display ${engineDisplayId.value})"
+        withContext(Dispatchers.IO) { ShellVd.startFrames() }
+        return "re-created and re-launched (display ${ShellVd.displayId.value})"
     }
 
     // ---------------------------------------------------------------- input (shell-side)
