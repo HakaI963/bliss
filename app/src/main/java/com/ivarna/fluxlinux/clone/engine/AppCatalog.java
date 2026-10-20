@@ -124,19 +124,38 @@ final class AppCatalog {
                 .redirectErrorStream(true)
                 .start();
         StringBuilder output = new StringBuilder();
-        try (BufferedReader reader = new BufferedReader(
-                new InputStreamReader(process.getInputStream()))) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                output.append(line).append('\n');
+        Thread drain = new Thread(() -> {
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(process.getInputStream()))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    synchronized (output) {
+                        output.append(line).append('\n');
+                    }
+                }
+            } catch (Throwable ignored) {
             }
-        }
+        }, "bliss-command-drain");
+        drain.setDaemon(true);
+        drain.start();
+
         boolean finished = process.waitFor(Math.max(1, timeoutSeconds), TimeUnit.SECONDS);
         if (!finished) {
             process.destroyForcibly();
-            return new CommandResult(-1, output.append("[timeout]").toString());
+            try {
+                process.waitFor(2, TimeUnit.SECONDS);
+            } catch (InterruptedException ignored) {
+                Thread.currentThread().interrupt();
+            }
+            drain.join(1000);
+            synchronized (output) {
+                return new CommandResult(-1, output.append("[timeout]").toString().trim());
+            }
         }
-        return new CommandResult(process.exitValue(), output.toString().trim());
+        drain.join(1000);
+        synchronized (output) {
+            return new CommandResult(process.exitValue(), output.toString().trim());
+        }
     }
 
     private static String quote(String value) {

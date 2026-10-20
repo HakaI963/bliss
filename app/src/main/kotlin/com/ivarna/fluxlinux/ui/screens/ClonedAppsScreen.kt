@@ -206,6 +206,14 @@ fun ClonedAppsScreen(onOpenTools: () -> Unit = {}) {
                         }
                     }
                 }
+                if (!connected) {
+                    TextButton(
+                        onClick = {
+                            HeadlessCloneEngine.refreshState()
+                            HeadlessCloneEngine.refreshDeviceApps()
+                        },
+                    ) { Text("Refresh Shizuku status", fontSize = 12.sp) }
+                }
             }
         }
 

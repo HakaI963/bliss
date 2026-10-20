@@ -80,13 +80,13 @@ case "$DISTRO" in
         ;;
     rocky)
         ROOTFS_NAME="${FLUX_ROOTFS_NAME:-rocky_9_aarch64_plain.tar.xz}"
-        ROOTFS_URL="${FLUX_ROOTFS_URL:-https://github.com/HakaI963/folio/releases/download/rootfs/rocky_9_aarch64_plain.tar.xz}"
+        ROOTFS_URL="${FLUX_ROOTFS_URL:-https://github.com/HakaI963/bliss/releases/download/rootfs/rocky_9_aarch64_plain.tar.xz}"
         ROOTFS_SHA256="${FLUX_ROOTFS_SHA256:-7af07eade178c80ad3d322940ec6064c566dd34a8cb7e931fcbf4a5e44c18611}"
         FAMILY_SCRIPT_NAME="setup_rpm_family.sh"
         ;;
     centos_stream)
         ROOTFS_NAME="${FLUX_ROOTFS_NAME:-centos_stream_9_aarch64_plain.tar.xz}"
-        ROOTFS_URL="${FLUX_ROOTFS_URL:-https://github.com/HakaI963/folio/releases/download/rootfs/centos_stream_9_aarch64_plain.tar.xz}"
+        ROOTFS_URL="${FLUX_ROOTFS_URL:-https://github.com/HakaI963/bliss/releases/download/rootfs/centos_stream_9_aarch64_plain.tar.xz}"
         ROOTFS_SHA256="${FLUX_ROOTFS_SHA256:-d9ba19e6647c99d0c4d1424dc4a7717f350943c485116423445a64b1faa65f9a}"
         FAMILY_SCRIPT_NAME="setup_rpm_family.sh"
         ;;

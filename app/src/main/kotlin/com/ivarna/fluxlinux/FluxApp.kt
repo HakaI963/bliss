@@ -41,6 +41,9 @@ class FluxApp : Application() {
     }
 
     private fun isMainProcess(): Boolean {
+        // UID is the reliable discriminator: Shizuku's user service runs as
+        // shell/root, while the real app process runs as the package UID.
+        if (android.os.Process.myUid() != applicationInfo.uid) return false
         val process = runCatching {
             if (android.os.Build.VERSION.SDK_INT >= 28) {
                 Application.getProcessName()

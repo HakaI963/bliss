@@ -337,7 +337,7 @@ class DistroInstallProfileTest {
         assertEquals(DistroInstallProfile.ROCKY_ROOTFS_SHA256, rocky.rootfsSha256)
         assertTrue(rocky.rootfsMinBytes >= 40L * 1024L * 1024L)
         assertEquals(
-            "https://github.com/HakaI963/folio/releases/download/rootfs/rocky_9_aarch64_plain.tar.xz",
+            "https://github.com/HakaI963/bliss/releases/download/rootfs/rocky_9_aarch64_plain.tar.xz",
             rocky.rootfsUrl
         )
         assertEquals("rpm/common/setup/setup_rpm_family.sh", rocky.familyScript)
@@ -352,7 +352,7 @@ class DistroInstallProfileTest {
         assertEquals(DistroInstallProfile.CENTOS_STREAM_ROOTFS_SHA256, centos.rootfsSha256)
         assertTrue(centos.rootfsMinBytes >= 30L * 1024L * 1024L)
         assertEquals(
-            "https://github.com/HakaI963/folio/releases/download/rootfs/centos_stream_9_aarch64_plain.tar.xz",
+            "https://github.com/HakaI963/bliss/releases/download/rootfs/centos_stream_9_aarch64_plain.tar.xz",
             centos.rootfsUrl
         )
         assertEquals("rpm/common/setup/setup_rpm_family.sh", centos.familyScript)

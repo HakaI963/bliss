@@ -147,10 +147,10 @@ data class DistroInstallProfile(
         const val ARCH_ROOTFS_URL = "$ROOTFS_RELEASE_BASE/$ARCH_ROOTFS_NAME"
 
         // Rocky Linux 9 / CentOS Stream 9: official aarch64 container bases
-        // converted to plain rootfs and hosted on the HakaI963/folio `rootfs`
+        // converted to plain rootfs and hosted on the HakaI963/bliss `rootfs`
         // release tag (sizes + sha256 verified against the hosted files).
         const val RPM_ROOTFS_RELEASE_BASE =
-            "https://github.com/HakaI963/folio/releases/download/rootfs"
+            "https://github.com/HakaI963/bliss/releases/download/rootfs"
 
         const val ROCKY_ROOTFS_NAME = "rocky_9_aarch64_plain.tar.xz"
         const val ROCKY_ROOTFS_SHA256 =
