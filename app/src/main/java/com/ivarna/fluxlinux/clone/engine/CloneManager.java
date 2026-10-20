@@ -230,7 +230,21 @@ final class CloneManager {
                 }
             }
             if (pid.isEmpty() || !pid.matches("\\d+")) {
-                lines.put("Clone is not running. Tap View to start it.");
+                // The process may have crashed on launch. Keep the last
+                // package-tagged lines so the user can see the failure
+                // instead of only "not running".
+                AppCatalog.CommandResult recent = AppCatalog.run(
+                        "logcat -d -v time -t 1200 | grep -F " + quote(pkg), 30);
+                if (recent.ok()) {
+                    for (String line : recent.output.split("\n")) {
+                        if (!line.trim().isEmpty()) lines.put(line);
+                    }
+                }
+                if (lines.length() == 0) {
+                    lines.put("Clone is not running. Tap View to start it.");
+                } else {
+                    lines.put("— clone is not running; showing last package log lines —");
+                }
                 return lines.toString();
             }
             int count = Math.max(20, Math.min(600, maxLines));

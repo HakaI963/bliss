@@ -48,7 +48,7 @@ import com.ivarna.fluxlinux.ui.components.QSecondaryButton
 import com.ivarna.fluxlinux.ui.components.QSectionHeader
 import com.ivarna.fluxlinux.ui.components.QStatusRow
 import com.ivarna.fluxlinux.ui.components.Quartz
-import com.ivarna.fluxlinux.ui.components.fluxMutedText
+import com.ivarna.fluxlinux.ui.theme.fluxMutedText
 import kotlinx.coroutines.delay
 
 private const val MCP_CONFIG = """{
