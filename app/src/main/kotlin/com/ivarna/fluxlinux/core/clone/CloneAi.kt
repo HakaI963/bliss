@@ -212,7 +212,7 @@ object CloneAi {
         var errors = 0
         var relaunches = 0
 
-        if (CloneEngine.running.value != packageName) {
+        if (CloneEngine.running.value != packageName || !CloneEngine.displayAlive()) {
             status.value = "Launching the app…"
             val err = CloneEngine.launchNowBlocking(packageName)
             if (err != null) {
@@ -249,6 +249,19 @@ object CloneAi {
                 errors++
                 status.value = "Step ${step.value}/${cfg.maxSteps} · no picture"
                 log("No frame from the clone display (attempt $errors)")
+                // A dead/expired shell display is the usual cause: rebuild it
+                // and relaunch once before giving up.
+                if (errors >= 2 && relaunches < 2) {
+                    relaunches++
+                    log("Rebuilding the clone display…")
+                    val healErr = CloneEngine.launchNowBlocking(packageName)
+                    if (healErr == null) {
+                        errors = 0
+                        delay(1_800)
+                        continue
+                    }
+                    log("Display rebuild failed: $healErr")
+                }
                 delay(1_200)
                 if (errors >= 4) {
                     status.value = "No picture from the clone display — open Display and press Run app"

@@ -886,6 +886,9 @@ object CloneEngine {
 
     fun currentDisplayId(): Int = ShellVd.displayId.value
 
+    /** True when the shell service still owns a live clone display. */
+    fun displayAlive(): Boolean = ShellVd.remoteDisplayId() > 0
+
     private suspend fun closeDisplay() {
         withContext(Dispatchers.IO) { ShellVd.stopFrames() }
         withContext(Dispatchers.IO) { ShellVd.releaseDisplay() }
