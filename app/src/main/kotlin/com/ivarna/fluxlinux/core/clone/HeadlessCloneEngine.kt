@@ -24,6 +24,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -613,6 +614,273 @@ object HeadlessCloneEngine {
         preview.value = null
         previewError.value = null
     }
+
+    // ---------------------------------------------------------------- control API
+
+    /**
+     * Machine-facing operations used by the local control server, the guest
+     * `bliss` CLI and MCP. These suspend functions return raw JSON objects so
+     * callers never have to scrape UI state.
+     */
+
+    suspend fun apiStatus(): JSONObject = withContext(Dispatchers.IO) {
+        val c = ensureClient()
+        val base = JSONObject()
+            .put("connected", c?.isServiceConnected() == true)
+            .put("shizuku_installed", c?.isManagerInstalled() == true)
+            .put("shizuku_running", c?.isBinderAlive() == true)
+            .put("permission", c?.hasPermission() == true)
+            .put("display_ready", displayReady.value)
+            .put("display_id", displayId.value)
+            .put("display_width", displayWidth.value)
+            .put("display_height", displayHeight.value)
+            .put("display_dpi", displayDpi.value)
+            .put("display_fps", displayFps.value)
+            .put("active_clone", activeClonePackage.value ?: JSONObject.NULL)
+        if (c?.isServiceConnected() == true) {
+            runCatching {
+                val raw = JSONObject(c.status())
+                raw.keys().forEach { key -> base.put(key, raw.get(key)) }
+            }
+        }
+        base
+    }
+
+    suspend fun apiClones(): JSONObject = withContext(Dispatchers.IO) {
+        val c = ensureClient()
+        if (c == null || !c.isServiceConnected()) {
+            return@withContext JSONObject().put("ok", false).put("error", "Shell engine is not connected")
+        }
+        val raw = try {
+            c.cloneList()
+        } catch (t: Throwable) {
+            return@withContext JSONObject().put("ok", false)
+                .put("error", t.message ?: "Clone list failed")
+        }
+        try {
+            JSONObject(raw)
+        } catch (_: Throwable) {
+            JSONObject().put("ok", false).put("error", "Clone list was not valid JSON")
+        }
+    }
+
+    suspend fun apiInstall(path: String?, url: String?, label: String?): JSONObject =
+        withContext(Dispatchers.IO) {
+            val c = ensureClient()
+            if (c == null || !c.isServiceConnected()) {
+                return@withContext JSONObject().put("ok", false).put("error", "Shell engine is not connected")
+            }
+            val ctx = appContext
+                ?: return@withContext JSONObject().put("ok", false).put("error", "App context is not ready")
+            var downloaded: File? = null
+            try {
+                val file = when {
+                    !url.isNullOrBlank() -> {
+                        val dir = File(ctx.cacheDir, "clone-inbox").apply { mkdirs() }
+                        val f = File(dir, "api-" + System.currentTimeMillis() + ".apk")
+                        downloadTo(url, f)
+                        downloaded = f
+                        f
+                    }
+                    !path.isNullOrBlank() -> {
+                        val clean = path.removePrefix("file://")
+                        File(clean)
+                    }
+                    else -> return@withContext JSONObject()
+                        .put("ok", false)
+                        .put("error", "Provide path or url")
+                }
+                if (!file.isFile || !file.canRead() || file.length() < 8L) {
+                    return@withContext JSONObject()
+                        .put("ok", false)
+                        .put("error", "APK path is not readable: ${file.absolutePath}")
+                }
+                val raw = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY).use {
+                    c.cloneFromApk(it, label?.trim()?.takeIf { name -> name.isNotEmpty() })
+                }
+                val result = runCatching { JSONObject(raw) }.getOrElse {
+                    JSONObject().put("ok", false).put("error", "Engine returned invalid JSON")
+                }
+                if (result.optBoolean("ok", false)) {
+                    refreshClonesInternal(c)
+                }
+                result
+            } catch (t: Throwable) {
+                JSONObject().put("ok", false).put("error", t.message ?: t.javaClass.simpleName)
+            } finally {
+                runCatching { downloaded?.delete() }
+            }
+        }
+
+    suspend fun apiUninstall(packageName: String): JSONObject = withContext(Dispatchers.IO) {
+        val c = ensureClient()
+        if (c == null || !c.isServiceConnected()) {
+            return@withContext JSONObject().put("ok", false).put("error", "Shell engine is not connected")
+        }
+        try {
+            val error = resultError(c.cloneDelete(packageName))
+            if (error == null) {
+                if (activeClonePackage.value == packageName) {
+                    activeClonePackage.value = null
+                    displayReady.value = false
+                    preview.value = null
+                }
+                refreshClonesInternal(c)
+                JSONObject().put("ok", true).put("detail", "Removed $packageName")
+            } else {
+                JSONObject().put("ok", false).put("error", error)
+            }
+        } catch (t: Throwable) {
+            JSONObject().put("ok", false).put("error", t.message ?: "Uninstall failed")
+        }
+    }
+
+    suspend fun apiLaunch(packageName: String, width: Int = 0, height: Int = 0, fps: Int = 0): JSONObject =
+        withContext(Dispatchers.IO) {
+            val c = ensureClient()
+            if (c == null || !c.isServiceConnected()) {
+                return@withContext JSONObject().put("ok", false).put("error", "Shell engine is not connected")
+            }
+            val saved = perAppDisplay(packageName)
+            val w = (width.takeIf { it > 0 } ?: saved.width.takeIf { it > 0 }
+                ?: displayWidth.value).coerceIn(320, 2160)
+            val h = (height.takeIf { it > 0 } ?: saved.height.takeIf { it > 0 }
+                ?: displayHeight.value).coerceIn(480, 3840)
+            val f = (fps.takeIf { it > 0 } ?: saved.fps.takeIf { it > 0 }
+                ?: displayFps.value).coerceIn(10, 240)
+            try {
+                runCatching { c.releaseDisplay() }
+                preview.value = null
+                displayReady.value = false
+                activeClonePackage.value = null
+                val createError = resultError(c.createDisplay(w, h, displayDpi.value, f))
+                if (createError != null) {
+                    return@withContext JSONObject().put("ok", false)
+                        .put("error", "Display failed: $createError")
+                }
+                parseStatus(c.status())
+                val launchError = resultError(c.cloneLaunch(packageName))
+                if (launchError != null) {
+                    runCatching { c.releaseDisplay() }
+                    return@withContext JSONObject().put("ok", false).put("error", launchError)
+                }
+                activeClonePackage.value = packageName
+                parseStatus(c.status())
+                refreshClonesInternal(c)
+                JSONObject()
+                    .put("ok", true)
+                    .put("package", packageName)
+                    .put("width", w)
+                    .put("height", h)
+                    .put("fps", f)
+                    .put("display_id", displayId.value)
+            } catch (t: Throwable) {
+                JSONObject().put("ok", false).put("error", t.message ?: "Launch failed")
+            }
+        }
+
+    suspend fun apiStop(packageName: String): JSONObject = withContext(Dispatchers.IO) {
+        val c = ensureClient()
+        if (c == null || !c.isServiceConnected()) {
+            return@withContext JSONObject().put("ok", false).put("error", "Shell engine is not connected")
+        }
+        try {
+            val error = resultError(c.cloneKill(packageName))
+            if (activeClonePackage.value == packageName) {
+                runCatching { c.releaseDisplay() }
+                activeClonePackage.value = null
+                displayReady.value = false
+                preview.value = null
+            }
+            if (error != null) {
+                JSONObject().put("ok", false).put("error", error)
+            } else {
+                refreshClonesInternal(c)
+                JSONObject().put("ok", true).put("detail", "Stopped $packageName")
+            }
+        } catch (t: Throwable) {
+            JSONObject().put("ok", false).put("error", t.message ?: "Stop failed")
+        }
+    }
+
+    suspend fun apiCapture(maxWidth: Int = 900, jpeg: Int = 90): ByteArray? =
+        withContext(Dispatchers.IO) {
+            val c = ensureClient() ?: return@withContext null
+            if (!c.isServiceConnected()) return@withContext null
+            val frame = runCatching { c.capture(5000, jpeg.coerceIn(30, 100)) }.getOrNull()
+            if (frame != null && frame.ok()) frame.jpeg else null
+        }
+
+    suspend fun apiLogs(packageName: String, maxLines: Int = 300): JSONObject =
+        withContext(Dispatchers.IO) {
+            val c = ensureClient()
+            if (c == null || !c.isServiceConnected()) {
+                return@withContext JSONObject().put("ok", false).put("error", "Shell engine is not connected")
+            }
+            val raw = try {
+                c.cloneLogs(packageName, maxLines.coerceIn(20, 2000))
+            } catch (t: Throwable) {
+                return@withContext JSONObject().put("ok", false)
+                    .put("error", t.message ?: "Log read failed")
+            }
+            try {
+                val array = JSONArray(raw)
+                JSONObject().put("ok", true).put("package", packageName).put("lines", array)
+            } catch (_: Throwable) {
+                JSONObject().put("ok", false).put("error", "Engine returned invalid log JSON")
+            }
+        }
+
+    suspend fun apiTap(x: Int, y: Int): JSONObject = withContext(Dispatchers.IO) {
+        val c = ensureClient()
+        if (c == null || !c.isServiceConnected()) {
+            return@withContext JSONObject().put("ok", false).put("error", "Shell engine is not connected")
+        }
+        runCatching { JSONObject(c.tap(x, y)) }
+            .getOrElse { JSONObject().put("ok", false).put("error", it.message ?: "Tap failed") }
+    }
+
+    suspend fun apiSwipe(x1: Int, y1: Int, x2: Int, y2: Int, durationMs: Int): JSONObject =
+        withContext(Dispatchers.IO) {
+            val c = ensureClient()
+            if (c == null || !c.isServiceConnected()) {
+                return@withContext JSONObject().put("ok", false).put("error", "Shell engine is not connected")
+            }
+            runCatching { JSONObject(c.swipe(x1, y1, x2, y2, durationMs.coerceIn(30, 3000))) }
+                .getOrElse { JSONObject().put("ok", false).put("error", it.message ?: "Swipe failed") }
+        }
+
+    suspend fun apiText(value: String): JSONObject = withContext(Dispatchers.IO) {
+        val c = ensureClient()
+        if (c == null || !c.isServiceConnected()) {
+            return@withContext JSONObject().put("ok", false).put("error", "Shell engine is not connected")
+        }
+        runCatching { JSONObject(c.text(value)) }
+            .getOrElse { JSONObject().put("ok", false).put("error", it.message ?: "Text failed") }
+    }
+
+    suspend fun apiKey(keyCode: Int): JSONObject = withContext(Dispatchers.IO) {
+        val c = ensureClient()
+        if (c == null || !c.isServiceConnected()) {
+            return@withContext JSONObject().put("ok", false).put("error", "Shell engine is not connected")
+        }
+        runCatching { JSONObject(c.key(keyCode)) }
+            .getOrElse { JSONObject().put("ok", false).put("error", it.message ?: "Key failed") }
+    }
+
+    suspend fun apiReleaseDisplay(): JSONObject = withContext(Dispatchers.IO) {
+        val c = ensureClient()
+        if (c == null || !c.isServiceConnected()) {
+            return@withContext JSONObject().put("ok", false).put("error", "Shell engine is not connected")
+        }
+        val error = resultError(c.releaseDisplay())
+        activeClonePackage.value = null
+        displayReady.value = false
+        preview.value = null
+        if (error == null) JSONObject().put("ok", true) else JSONObject().put("ok", false).put("error", error)
+    }
+
+    fun activeDisplayPackage(): String? = activeClonePackage.value
 
     // ---------------------------------------------------------------- internals
 

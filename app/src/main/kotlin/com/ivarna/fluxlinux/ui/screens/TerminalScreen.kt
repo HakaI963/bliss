@@ -92,9 +92,8 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.ivarna.fluxlinux.R
 import com.ivarna.fluxlinux.core.terminal.FluxTerminalSessionManager
+import com.ivarna.fluxlinux.core.terminal.FluxTerminalSessionManager.SessionOpenResult
 import com.ivarna.fluxlinux.core.terminal.TerminalPalette
-import com.ivarna.fluxlinux.core.terminal.FluxTerminalSessionManager
-import com.ivarna.fluxlinux.core.terminal.TerminalPalette.SessionOpenResult
 import com.ivarna.fluxlinux.core.utils.TerminalPreferences
 import com.ivarna.fluxlinux.ui.terminal.AnimeSplashArt
 import com.ivarna.fluxlinux.ui.terminal.ShortcutBarActions

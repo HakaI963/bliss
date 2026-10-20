@@ -27,6 +27,13 @@ class FluxApp : Application() {
         // Remove leftovers from the retired in-app virtual-app engine. The
         // Shizuku clone engine is initialised lazily when the Apps/Tools UI opens.
         HeadlessCloneEngine.onAppCreate(this)
+        HeadlessCloneEngine.attach(this)
+        // Localhost CLI/MCP control plane. The foreground service keeps the
+        // process reachable while a guest distro or an AI agent drives clones.
+        runCatching { com.ivarna.fluxlinux.core.control.CloneControlService.start(this) }
+            .onFailure { Log.w("FluxApp", "control service start failed", it) }
+        runCatching { com.ivarna.fluxlinux.core.control.ControlServer.start(this) }
+            .onFailure { Log.w("FluxApp", "control server start failed", it) }
         // Vendored ble.sh: bash syntax coloring + inline history suggestions
         // (host shell + every installed guest distro). Version-stamped and
         // idempotent, so this is a stat-only pass after the first run; keep it
@@ -34,6 +41,8 @@ class FluxApp : Application() {
         Thread {
             runCatching { ShellIntegration.ensureInstalled(this) }
                 .onFailure { Log.w("FluxApp", "shell integration install failed", it) }
+            runCatching { com.ivarna.fluxlinux.core.control.BlissCliInstaller.installAll(this) }
+                .onFailure { Log.w("FluxApp", "bliss CLI install failed", it) }
         }.apply {
             isDaemon = true
             name = "bliss-shell-integration"

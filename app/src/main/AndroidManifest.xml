@@ -106,6 +106,17 @@
                 android:value="Keeps user-started in-app terminal / distro install sessions alive with a visible notification so shells are not killed when the user switches apps." />
         </service>
 
+        <!-- Local clone control API + MCP over loopback. -->
+        <service
+            android:name=".core.control.CloneControlService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Keeps the localhost clone control API and MCP server reachable while the user works in another app or a Linux distro." />
+        </service>
+
         <!-- Desktop / XFCE keep-alive while graphical session is running -->
         <service
             android:name=".core.service.DesktopSessionService"

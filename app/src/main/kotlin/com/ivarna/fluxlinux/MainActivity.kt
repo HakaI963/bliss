@@ -866,6 +866,8 @@ class MainActivity : ComponentActivity() {
                     hazeState: HazeState,
                     onOpenDisplay: () -> Unit,
                     displayLive: Boolean,
+                    cloneRunning: Boolean,
+                    onOpenClone: () -> Unit,
                     onOpenSettings: () -> Unit,
                 ) {
                     Column(
@@ -901,16 +903,19 @@ class MainActivity : ComponentActivity() {
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(50))
                                         .background(
-                                            if (displayLive) MaterialTheme.colorScheme.primaryContainer
+                                            if (displayLive || cloneRunning) MaterialTheme.colorScheme.primaryContainer
                                             else MaterialTheme.colorScheme.surfaceVariant
                                         )
                                         .border(
                                             1.dp,
-                                            if (displayLive) MaterialTheme.colorScheme.primary.copy(alpha = 0.28f)
+                                            if (displayLive || cloneRunning) MaterialTheme.colorScheme.primary.copy(alpha = 0.28f)
                                             else MaterialTheme.colorScheme.outlineVariant,
                                             RoundedCornerShape(50)
                                         )
-                                        .clickable(enabled = displayLive, onClick = onOpenDisplay)
+                                        .clickable(
+                                            enabled = displayLive || cloneRunning,
+                                            onClick = { if (cloneRunning) onOpenClone() else onOpenDisplay() }
+                                        )
                                         .padding(horizontal = 10.dp, vertical = 5.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
@@ -919,16 +924,20 @@ class MainActivity : ComponentActivity() {
                                             .size(5.dp)
                                             .clip(CircleShape)
                                             .background(
-                                                if (displayLive) MaterialTheme.colorScheme.primary
+                                                if (displayLive || cloneRunning) MaterialTheme.colorScheme.primary
                                                 else MaterialTheme.colorScheme.outline
                                             )
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
-                                        text = if (displayLive) "LIVE" else "READY",
+                                        text = when {
+                                            cloneRunning -> "CLONE"
+                                            displayLive -> "LIVE"
+                                            else -> "READY"
+                                        },
                                         style = MaterialTheme.typography.labelSmall,
                                         fontWeight = FontWeight.SemiBold,
-                                        color = if (displayLive) MaterialTheme.colorScheme.onPrimaryContainer
+                                        color = if (displayLive || cloneRunning) MaterialTheme.colorScheme.onPrimaryContainer
                                         else MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
@@ -987,6 +996,8 @@ class MainActivity : ComponentActivity() {
                             val session = remember(desktopUi, stateRefresh) {
                                 com.ivarna.fluxlinux.core.desktop.DesktopSessionQuery.current(this@MainActivity, desktopUi)
                             }
+                            val activeClone by com.ivarna.fluxlinux.core.clone.HeadlessCloneEngine
+                                .activeClonePackage.collectAsState()
 
                             // Upstream behaviour: the terminal owns the whole window.
                             // Both chrome pieces get out of its way — the top bar
@@ -1021,6 +1032,8 @@ class MainActivity : ComponentActivity() {
                                                     com.ivarna.fluxlinux.core.desktop.DesktopLauncher.reopenDisplay(this@MainActivity)
                                                 },
                                                 displayLive = session != null,
+                                                cloneRunning = activeClone != null,
+                                                onOpenClone = { currentTab = BottomTab.APPS },
                                                 onOpenSettings = { currentScreen = Screen.SETTINGS }
                                             )
                                             // Live install strip (all tabs while chrome is

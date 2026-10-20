@@ -266,6 +266,8 @@ dependencies {
     
     // Networking
     implementation(libs.okhttp)
+    // On-device OCR for virtual-display automation (bundled Latin recogniser).
+    implementation("com.google.mlkit:text-recognition:16.0.1")
     // Shizuku shell user-service for the virtual display + clone engine.
     implementation(libs.shizuku.api)
     implementation(libs.shizuku.provider)
