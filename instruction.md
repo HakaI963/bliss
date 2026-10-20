@@ -1,8 +1,19 @@
 # Bliss — Project Instructions, Status & Next Steps
 
-Updated: 2026-10-17 · Repo: `HakaI963/folio` (branch `main`) · Local working copy: `/emulated/folio` (no git) · Git clone: `/tmp/opencode/folio-clone` · Upstream reference clone: `/tmp/opencode/fluxlinux-src`
+Updated: 2026-10-20 · Repo: `HakaI963/bliss` (branch `main`) · Local working copy: `/tmp/opencode/folio` · Upstream reference clone: `/tmp/opencode/fluxlinux-src`
 
-## 0. TL;DR
+## 0. Current clone engine (v3.13.0)
+
+The repo was renamed **folio → bliss**. The retired BlackBox/virtual-app engine, its
+`Bcore`/`black-reflection`/`compiler` modules, relay receiver, proxy manifest and
+license file are gone. Apps/Tools now use the Shizuku shell engine imported from
+**`HakaI963/headless-android`**: a real virtual display owned by the shell
+user-service, shell-targeted input injection, and a repackaging clone pipeline
+(manifest patch + re-sign + hidden user-0 install). APK cloning, installed-app
+cloning, live preview, tap/keys/text, stop and uninstall are supported. Apps that
+verify their own signature/package identity remain unsupported by this model.
+
+## 0.1 TL;DR (historical)
 
 Bliss is a rebranded, standalone Android build of the FluxLinux app (app id `com.nopiece.bliss`, source package `com.ivarna.fluxlinux`, brand **"Bliss"**). It boots Linux distros on-device via a bundled Termux-derived host bootstrap, proot containers, chroot distros, and termux-x11 GUI sessions.
 
