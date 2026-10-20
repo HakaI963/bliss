@@ -21,6 +21,7 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -39,6 +40,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ivarna.fluxlinux.core.control.BlissCliInstaller
+import com.ivarna.fluxlinux.core.control.CloneControlService
 import com.ivarna.fluxlinux.core.control.ControlServer
 import com.ivarna.fluxlinux.ui.components.QCard
 import com.ivarna.fluxlinux.ui.components.QDivider
@@ -144,6 +146,20 @@ fun ToolsScreen() {
                         maxLines = 2
                     )
                 }
+            }
+            if (!running) {
+                QPrimaryButton(
+                    "Start control server",
+                    icon = Icons.Default.PlayArrow,
+                    onClick = {
+                        runCatching { CloneControlService.start(context) }
+                            .onFailure { error = it.message ?: "Could not start service" }
+                        runCatching { ControlServer.start(context) }
+                            .onFailure { error = it.message ?: "Could not start server" }
+                        running = ControlServer.isRunning()
+                    },
+                    modifier = Modifier.padding(horizontal = Quartz.CardPad, vertical = 4.dp)
+                )
             }
             QDivider()
             QStatusRow("HTTP API", ControlServer.BASE_URL)

@@ -167,7 +167,7 @@ class BlissDesignScreenshotsTest {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     // ToolsScreen owns a SAF picker; Paparazzi has no ActivityResultRegistryOwner.
                     CompositionLocalProvider(LocalActivityResultRegistryOwner provides NoopRegistryOwner) {
-                        ToolsScreen(onOpenApps = {})
+                        ToolsScreen()
                     }
                 }
             }

@@ -49,7 +49,7 @@ fun ActiveDesktopCard(
     onLogs: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val cardShape = RoundedCornerShape(12.dp)
+    val cardShape = RoundedCornerShape(18.dp)
     val isRunning = session.phase == DesktopSession.Phase.Running
     val deName = if (session.type == DesktopSession.Type.KDE) "KDE Plasma" else "XFCE4"
     val titleText = if (isRunning) {

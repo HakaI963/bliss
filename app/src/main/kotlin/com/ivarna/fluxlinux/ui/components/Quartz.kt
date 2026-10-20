@@ -90,6 +90,7 @@ fun QScreenTitle(title: String, subtitle: String? = null, modifier: Modifier = M
             color = MaterialTheme.colorScheme.onBackground,
         )
         if (subtitle != null) {
+            Spacer(Modifier.height(3.dp))
             Text(
                 subtitle,
                 fontSize = 12.5.sp,

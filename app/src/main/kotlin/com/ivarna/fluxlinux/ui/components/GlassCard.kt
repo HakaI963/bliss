@@ -52,7 +52,7 @@ import com.ivarna.fluxlinux.core.data.Distro
 import com.ivarna.fluxlinux.ui.theme.FolioMotion
 import com.ivarna.fluxlinux.ui.theme.TextSecondary
 
-private val CardShape = RoundedCornerShape(12.dp)
+private val CardShape = RoundedCornerShape(16.dp)
 private val MethodProot = Color(0xFF00B8D4)
 private val MethodChroot = Color(0xFFE040FB)
 private val StatusRunning = Color(0xFF4CAF50)

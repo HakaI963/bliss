@@ -44,7 +44,7 @@ import androidx.compose.ui.unit.sp
 
 private val FrostEdgeWidth = 1.dp
 private val FrostPillShape = RoundedCornerShape(20.dp)
-private val FrostRowShape = RoundedCornerShape(8.dp)
+private val FrostRowShape = RoundedCornerShape(10.dp)
 
 fun folioSpring() = spring<Float>(dampingRatio = 0.8f, stiffness = 500f)
 
