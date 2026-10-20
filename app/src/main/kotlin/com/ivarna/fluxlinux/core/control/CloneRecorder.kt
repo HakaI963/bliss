@@ -42,6 +42,7 @@ object CloneRecorder {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var job: Job? = null
+    @Volatile private var stopRequested = false
 
     fun start(context: Context, fps: Int = 6, maxWidth: Int = 720): JSONObject {
         if (job != null) {
@@ -54,6 +55,7 @@ object CloneRecorder {
         val file = File(dir, "clone-$stamp.mp4")
         val rate = fps.coerceIn(2, 15)
         state.value = State(recording = true, path = file.absolutePath, fps = rate)
+        stopRequested = false
         job = scope.launch {
             var codec: MediaCodec? = null
             var muxer: MediaMuxer? = null
@@ -83,7 +85,7 @@ object CloneRecorder {
                 muxer = mux
                 val info = MediaCodec.BufferInfo()
                 var bitmap: Bitmap? = first
-                while (isActive) {
+                while (isActive && !stopRequested) {
                     val frame = bitmap ?: capture(maxWidth)
                     if (frame == null) {
                         delay(1000L / rate)
@@ -192,7 +194,9 @@ object CloneRecorder {
             return JSONObject().put("ok", false).put("error", "No recording active")
                 .put("path", current.path ?: JSONObject.NULL)
         }
-        job?.cancel()
+        // Let the encoder drain and finalize the MP4 instead of cancelling the
+        // coroutine mid-frame (which can leave a non-playable file).
+        stopRequested = true
         state.value = state.value.copy(recording = false)
         return JSONObject().put("ok", true).put("path", current.path ?: JSONObject.NULL)
     }

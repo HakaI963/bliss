@@ -2,7 +2,7 @@
 
 Updated: 2026-10-20 · Repo: `HakaI963/bliss` (branch `main`) · Local working copy: `/tmp/opencode/folio` · Upstream reference clone: `/tmp/opencode/fluxlinux-src`
 
-## 0. Current clone engine (v3.15.0)
+## 0. Current clone engine (v3.16.0)
 
 The repo was renamed **folio → bliss**. The retired BlackBox/virtual-app engine, its
 `Bcore`/`black-reflection`/`compiler` modules, relay receiver, proxy manifest and
@@ -13,10 +13,20 @@ user-service, shell-targeted input injection, and a repackaging clone pipeline
 cloning, live preview, tap/keys/text, stop and uninstall are supported. Apps that
 verify their own signature/package identity remain unsupported by this model.
 
-**v3.15.0 UI:** the Apps viewer is an in-tab page, not a dialog — a small,
-aspect-correct clone display stays centered on top with live logs underneath.
-The app chrome is a flat AOSP-style light theme (dark option in Settings →
-Appearance), with compact 38 dp controls and no Apps↔Tools transition.
+**v3.16.0 UI (Midnight):** the app defaults to the near-black teal/mint look
+from the reference recording — static grid + signal bloom, layered 16–18 dp
+cards, a floating dock, one fade/scale motion for every dock destination, and
+a dark terminal regardless of the app theme. The in-tab clone viewer now has
+**Leave running**, **Live preview** and **Stop** controls; Back leaves the clone
+alive instead of releasing or fullscreening it. Visible branding is **Bliss**.
+
+**v3.16.0 automation:** a loopback-only control server at `127.0.0.1:47831`
+serves the `bliss` CLI (host + every proot/chroot distro), a JSON HTTP API and
+an MCP JSON-RPC endpoint. It can install/uninstall/lists clones, launch/stop,
+read logs, capture JPEG screenshots, OCR the display with ML Kit, tap/swipe/
+type/key, and record the virtual display to MP4. Clone installs now preserve
+split names and copy legacy OBB assets (Alight Motion compatibility pass).
+See `docs/CLI_MCP.md`.
 
 ## 0.1 TL;DR (historical)
 

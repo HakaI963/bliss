@@ -863,7 +863,9 @@ private fun CloneViewPage(
     }
 
     Column(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(bottom = 92.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         BoxWithConstraints(
