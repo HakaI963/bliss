@@ -948,7 +948,7 @@ object CloneEngine {
         if (shellErr != null) return shellErr
         val (uid, err) = targetUserBlocking()
         if (err != null) return err
-        if (!ensureDisplay()) return "hidden display unavailable"
+        if (!ensureDisplay()) return status.value ?: "hidden display unavailable"
         val launchErr = withContext(Dispatchers.IO) { ShellVd.launch(packageName, uid) }
         if (!launchErr.isNullOrEmpty()) {
             logShellTail(12)

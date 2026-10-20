@@ -140,15 +140,25 @@ final class ShadowDisplay {
                 int baseFlags = DisplayManager.VIRTUAL_DISPLAY_FLAG_PUBLIC
                         | DisplayManager.VIRTUAL_DISPLAY_FLAG_PRESENTATION
                         | DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY;
+                int publicOnly = DisplayManager.VIRTUAL_DISPLAY_FLAG_PUBLIC;
+                int ownContent = DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY;
                 int touchFlag = hiddenFlag("VIRTUAL_DISPLAY_FLAG_SUPPORTS_TOUCH");
                 int focusFlag = hiddenFlag("VIRTUAL_DISPLAY_FLAG_OWN_FOCUS");
-                // NOTE: VIRTUAL_DISPLAY_FLAG_TRUSTED is intentionally NOT set —
-                // on HyperOS it is the secure flag and a secure display never
-                // composites into our capture surface.
+                int trustedFlag = hiddenFlag("VIRTUAL_DISPLAY_FLAG_TRUSTED");
+                // TRUSTED is only the very last resort: some ROMs (HyperOS)
+                // treat it as secure, which stops frames from reaching the
+                // capture surface. Simpler flag sets are tried first because
+                // some ROMs reject PRESENTATION/OWN_CONTENT_ONLY outright.
                 int[] flagsToTry = new int[]{
                         baseFlags | touchFlag | focusFlag,
                         baseFlags | touchFlag,
-                        baseFlags
+                        baseFlags,
+                        publicOnly | ownContent | touchFlag | focusFlag,
+                        publicOnly | ownContent | touchFlag,
+                        publicOnly | ownContent,
+                        publicOnly,
+                        baseFlags | touchFlag | focusFlag | trustedFlag,
+                        baseFlags | trustedFlag
                 };
                 // Pass 0 attaches the capture reader at creation (this is what
                 // works on HyperOS). Pass 1 mirrors ShadowAuto's own sequence:
@@ -169,6 +179,7 @@ final class ShadowDisplay {
                                     creationSurface, flags);
                             if (display == null) {
                                 lastError = new IllegalStateException("createVirtualDisplay returned null");
+                                attempts.append("0x").append(Integer.toHexString(flags)).append(":null; ");
                                 continue;
                             }
                             android.view.Display screen = null;
@@ -184,6 +195,7 @@ final class ShadowDisplay {
                             }
                             if (screen == null) {
                                 lastError = new IllegalStateException("display created but getDisplay() stayed null");
+                                attempts.append("0x").append(Integer.toHexString(flags)).append(":no-display; ");
                                 try {
                                     display.release();
                                 } catch (Throwable ignored) {
@@ -195,6 +207,8 @@ final class ShadowDisplay {
                                     display.setSurface(readerSurface);
                                 } catch (Throwable e) {
                                     lastError = e;
+                                    attempts.append("0x").append(Integer.toHexString(flags))
+                                            .append(":setSurface=").append(brief(e)).append("; ");
                                     try {
                                         display.release();
                                     } catch (Throwable ignored) {
@@ -209,6 +223,8 @@ final class ShadowDisplay {
                             return session;
                         } catch (Throwable e) {
                             lastError = e;
+                            attempts.append("0x").append(Integer.toHexString(flags))
+                                    .append(":").append(brief(e)).append("; ");
                             if (display != null) {
                                 try {
                                     display.release();
@@ -233,7 +249,16 @@ final class ShadowDisplay {
                 }
             }
         }
-        throw new IllegalStateException("createVirtualDisplay failed after " + attempts, lastError);
+        String attemptText = attempts.toString();
+        if (attemptText.length() > 1400) {
+            attemptText = attemptText.substring(attemptText.length() - 1400);
+        }
+        throw new IllegalStateException("createVirtualDisplay failed after " + attemptText, lastError);
+    }
+
+    private static String brief(Throwable t) {
+        String text = describe(t);
+        return text.length() > 180 ? text.substring(0, 180) + "…" : text;
     }
 
     private static void releaseQuietly(SurfaceTexture texture) {
