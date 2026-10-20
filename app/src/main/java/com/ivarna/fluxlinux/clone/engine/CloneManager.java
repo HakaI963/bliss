@@ -758,7 +758,7 @@ final class CloneManager {
                 }
                 byte[] patched = patchDexBytes(original, patches, oldPackage);
                 if (patched != null && patched.length > 0) {
-                    apk.remove(name);
+                    apk.removeInputSource(name);
                     apk.add(new ByteInputSource(patched, name));
                     Log.i(TAG, "patched provider references in " + name);
                 }
