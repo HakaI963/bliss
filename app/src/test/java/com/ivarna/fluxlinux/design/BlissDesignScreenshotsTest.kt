@@ -102,7 +102,9 @@ class BlissDesignScreenshotsTest {
         paparazzi.snapshot {
             FluxLinuxTheme(themeMode = ThemeMode.DARK) {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    ClonedAppsScreen()
+                    CompositionLocalProvider(LocalActivityResultRegistryOwner provides NoopRegistryOwner) {
+                        ClonedAppsScreen()
+                    }
                 }
             }
         }

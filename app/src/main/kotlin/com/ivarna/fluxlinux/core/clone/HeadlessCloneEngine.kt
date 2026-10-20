@@ -1,8 +1,11 @@
 package com.ivarna.fluxlinux.core.clone
 
 import android.app.NotificationManager
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
+import android.content.pm.ActivityInfo
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
@@ -55,12 +58,33 @@ object HeadlessCloneEngine {
     data class CloneApp(
         val packageName: String,
         val originalPackage: String,
+        val originalLabel: String,
         val label: String,
         val activity: String,
         val source: String,
         val status: String,
+        val orientation: Int,
         val icon: Bitmap?,
     )
+
+    enum class Quality(val key: String, val label: String, val jpeg: Int) {
+        LOW("low", "Low", 55),
+        MEDIUM("medium", "Medium", 78),
+        HIGH("high", "High", 94);
+
+        companion object {
+            fun from(value: String?): Quality =
+                entries.firstOrNull { it.key == value } ?: MEDIUM
+        }
+    }
+
+    data class PerAppDisplay(
+        val width: Int,
+        val height: Int,
+        val fps: Int,
+    ) {
+        val customSize: Boolean get() = width > 0 && height > 0
+    }
 
     // Shizuku / shell service
     val shizukuInstalled = MutableStateFlow(false)
@@ -78,8 +102,14 @@ object HeadlessCloneEngine {
     val displayState = MutableStateFlow("")
     val displayFrames = MutableStateFlow(0L)
     val inputReady = MutableStateFlow(false)
+    val displayRotation = MutableStateFlow(-1)
     val preview = MutableStateFlow<Bitmap?>(null)
     val previewError = MutableStateFlow<String?>(null)
+
+    // User defaults
+    val displayFps = MutableStateFlow(60)
+    val quality = MutableStateFlow(Quality.MEDIUM)
+    val touchEnabled = MutableStateFlow(true)
 
     // Lists
     val clones = MutableStateFlow<List<CloneApp>>(emptyList())
@@ -91,6 +121,7 @@ object HeadlessCloneEngine {
     val notice = MutableStateFlow<String?>(null)
     val lastError = MutableStateFlow<String?>(null)
     val logs = MutableStateFlow<List<String>>(emptyList())
+    val cloneLogs = MutableStateFlow<List<String>>(emptyList())
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val previewInFlight = AtomicBoolean(false)
@@ -100,6 +131,7 @@ object HeadlessCloneEngine {
     private val operationInFlight = AtomicBoolean(false)
     private val localLogs = ArrayList<String>()
     private var appContext: Context? = null
+    private var prefs: SharedPreferences? = null
     private var client: EngineClient? = null
     private var listenerAdded = false
     private var bootstrapAttempted = false
@@ -127,8 +159,58 @@ object HeadlessCloneEngine {
         if (!isAndroidRuntime) return
         if (appContext != null) return
         appContext = context.applicationContext
+        prefs = appContext?.getSharedPreferences("bliss_clone_settings", Context.MODE_PRIVATE)
+        loadSettings()
         ensureClient()
         refreshState()
+    }
+
+    private fun loadSettings() {
+        val store = prefs ?: return
+        displayFps.value = store.getInt("fps", 60).coerceIn(10, 240)
+        quality.value = Quality.from(store.getString("quality", null))
+        touchEnabled.value = store.getBoolean("touch", true)
+    }
+
+    fun setDisplayFps(value: Int) {
+        val fps = value.coerceIn(10, 240)
+        displayFps.value = fps
+        prefs?.edit()?.putInt("fps", fps)?.apply()
+    }
+
+    fun setQuality(value: Quality) {
+        quality.value = value
+        prefs?.edit()?.putString("quality", value.key)?.apply()
+    }
+
+    fun setTouchEnabled(enabled: Boolean) {
+        touchEnabled.value = enabled
+        prefs?.edit()?.putBoolean("touch", enabled)?.apply()
+    }
+
+    fun perAppDisplay(packageName: String): PerAppDisplay {
+        val store = prefs ?: return PerAppDisplay(0, 0, 0)
+        return PerAppDisplay(
+            width = store.getInt("app.$packageName.width", 0),
+            height = store.getInt("app.$packageName.height", 0),
+            fps = store.getInt("app.$packageName.fps", 0),
+        )
+    }
+
+    fun savePerAppDisplay(packageName: String, width: Int, height: Int, fps: Int) {
+        prefs?.edit()
+            ?.putInt("app.$packageName.width", width.coerceAtLeast(0))
+            ?.putInt("app.$packageName.height", height.coerceAtLeast(0))
+            ?.putInt("app.$packageName.fps", fps.coerceAtLeast(0))
+            ?.apply()
+    }
+
+    fun clearPerAppDisplay(packageName: String) {
+        prefs?.edit()
+            ?.remove("app.$packageName.width")
+            ?.remove("app.$packageName.height")
+            ?.remove("app.$packageName.fps")
+            ?.apply()
     }
 
     fun bootstrap() {
@@ -227,18 +309,20 @@ object HeadlessCloneEngine {
         width: Int = displayWidth.value,
         height: Int = displayHeight.value,
         dpi: Int = displayDpi.value,
+        fps: Int = displayFps.value,
     ) {
         val c = requireConnected() ?: return
         val w = width.coerceIn(320, 2160)
         val h = height.coerceIn(480, 3840)
         val d = dpi.coerceIn(120, 640)
+        val f = fps.coerceIn(10, 240)
         displayWidth.value = w
         displayHeight.value = h
         displayDpi.value = d
         operation.value = "Creating virtual display…"
         scope.launch {
             try {
-                val raw = c.createDisplay(w, h, d)
+                val raw = c.createDisplay(w, h, d, f)
                 val error = resultError(raw)
                 if (error == null) {
                     setNotice("Virtual display ready")
@@ -273,7 +357,7 @@ object HeadlessCloneEngine {
         if (!previewInFlight.compareAndSet(false, true)) return
         scope.launch {
             try {
-                val frame = c.capture(700, 72)
+                val frame = c.capture(700, quality.value.jpeg)
                 if (frame.ok()) {
                     val bitmap = BitmapFactory.decodeByteArray(frame.jpeg, 0, frame.jpeg.size)
                     if (bitmap != null) {
@@ -336,16 +420,46 @@ object HeadlessCloneEngine {
         }
     }
 
-    fun launchClone(packageName: String) {
-        launchWithDisplay("Opening clone…") { c ->
+    fun launchClone(packageName: String, width: Int = 0, height: Int = 0, fps: Int = 0) {
+        val saved = perAppDisplay(packageName)
+        val w = width.takeIf { it > 0 } ?: saved.width
+        val h = height.takeIf { it > 0 } ?: saved.height
+        val f = fps.takeIf { it > 0 } ?: saved.fps.takeIf { it > 0 } ?: displayFps.value
+        launchWithDisplay("Opening clone…", w, h, f) { c ->
             c.cloneLaunch(packageName)
         }
     }
 
     fun launchInstalledApp(packageName: String) {
-        launchWithDisplay("Opening app on the display…") { c ->
+        launchWithDisplay("Opening app on the display…", 0, 0, displayFps.value) { c ->
             c.launchApp(packageName, true)
         }
+    }
+
+    fun fetchCloneLogs(packageName: String, maxLines: Int = 240) {
+        val c = requireConnected() ?: return
+        scope.launch {
+            try {
+                val raw = c.cloneLogs(packageName, maxLines)
+                val array = runCatching { JSONArray(raw) }.getOrNull()
+                if (array == null) {
+                    cloneLogs.value = listOf("Log reply was not valid JSON")
+                    return@launch
+                }
+                val lines = ArrayList<String>(array.length())
+                for (i in 0 until array.length()) {
+                    val line = array.optString(i)
+                    if (line.isNotBlank()) lines.add(line)
+                }
+                cloneLogs.value = lines
+            } catch (t: Throwable) {
+                cloneLogs.value = listOf("Log read failed: ${t.message ?: t.javaClass.simpleName}")
+            }
+        }
+    }
+
+    fun clearCloneLogs() {
+        cloneLogs.value = emptyList()
     }
 
     fun killClone(packageName: String) {
@@ -366,6 +480,8 @@ object HeadlessCloneEngine {
         runOperation("Removing clone…") {
             c.cloneDelete(packageName)
         }
+        clearPerAppDisplay(packageName)
+        clearCloneLogs()
     }
 
     // ---------------------------------------------------------------- input
@@ -478,25 +594,35 @@ object HeadlessCloneEngine {
         return c
     }
 
-    private fun launchWithDisplay(label: String, command: (EngineClient) -> String) {
+    private fun launchWithDisplay(
+        label: String,
+        requestedWidth: Int,
+        requestedHeight: Int,
+        requestedFps: Int,
+        command: (EngineClient) -> String,
+    ) {
         val c = requireConnected() ?: return
         if (operationInFlight.get()) return
         operation.value = label
         scope.launch {
             try {
-                if (!displayReady.value) {
-                    val created = c.createDisplay(
-                        displayWidth.value,
-                        displayHeight.value,
-                        displayDpi.value,
-                    )
-                    val createError = resultError(created)
-                    if (createError != null) {
-                        fail("Display failed: $createError")
-                        return@launch
-                    }
-                    parseStatus(c.status())
+                val w = (requestedWidth.takeIf { it > 0 } ?: displayWidth.value).coerceIn(320, 2160)
+                val h = (requestedHeight.takeIf { it > 0 } ?: displayHeight.value).coerceIn(480, 3840)
+                val f = requestedFps.coerceIn(10, 240)
+                // A display cannot be resized together with its capture surface.
+                // Recreate it so per-app resolution/FPS always take effect.
+                if (displayReady.value) {
+                    c.releaseDisplay()
+                    preview.value = null
+                    displayReady.value = false
                 }
+                val created = c.createDisplay(w, h, displayDpi.value, f)
+                val createError = resultError(created)
+                if (createError != null) {
+                    fail("Display failed: $createError")
+                    return@launch
+                }
+                parseStatus(c.status())
                 val error = resultError(command(c))
                 if (error != null) {
                     fail(error)
@@ -563,19 +689,37 @@ object HeadlessCloneEngine {
                     val pkg = item.optString("package")
                     if (pkg.isBlank()) continue
                     val original = item.optString("original")
+                    val activity = item.optString("activity")
+                    val label = item.optString("label").ifBlank { pkg }
+                    val originalLabel = runCatching {
+                        val manager = appContext?.packageManager ?: return@runCatching ""
+                        val info = manager.getApplicationInfo(original, 0)
+                        manager.getApplicationLabel(info).toString()
+                    }.getOrNull().orEmpty()
+                    val orientation = runCatching {
+                        val manager = appContext?.packageManager ?: return@runCatching ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+                        manager.getActivityInfo(ComponentName(pkg, activity), 0).screenOrientation
+                    }.getOrDefault(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED)
                     list.add(
                         CloneApp(
                             packageName = pkg,
                             originalPackage = original,
-                            label = item.optString("label").ifBlank { pkg },
-                            activity = item.optString("activity"),
+                            originalLabel = originalLabel.ifBlank {
+                                label.removeSuffix(" (clone)")
+                            },
+                            label = label,
+                            activity = activity,
                             source = item.optString("source"),
                             status = item.optString("status", "installed"),
+                            orientation = orientation,
                             icon = iconFor(original.ifBlank { pkg }),
                         )
                     )
                 }
-                clones.value = list.sortedBy { it.label.lowercase(Locale.ROOT) }
+                clones.value = list.sortedWith(
+                    compareBy<CloneApp> { it.originalLabel.lowercase(Locale.ROOT) }
+                        .thenBy { it.label.lowercase(Locale.ROOT) }
+                )
             } catch (t: Throwable) {
                 Log.w(TAG, "clone list failed", t)
             } finally {
@@ -597,6 +741,7 @@ object HeadlessCloneEngine {
         if (obj.optInt("display_dpi", 0) > 0) displayDpi.value = obj.optInt("display_dpi")
         displayState.value = obj.optString("display_state")
         displayFrames.value = obj.optLong("display_frames", 0L)
+        displayRotation.value = obj.optInt("display_rotation", -1)
         inputReady.value = obj.optBoolean("input_ready", false)
         if (!displayReady.value) preview.value = null
     }

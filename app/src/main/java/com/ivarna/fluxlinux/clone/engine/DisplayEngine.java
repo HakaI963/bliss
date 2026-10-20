@@ -77,6 +77,8 @@ final class DisplayEngine {
                 object.put("display_flags", session == null ? "" : session.flagsLabel());
                 object.put("display_frames", session == null ? 0 : session.frameCount());
                 object.put("display_last_frame_ms", session == null ? 0 : session.lastFrameAt());
+                object.put("display_rotation", session == null ? -1 : session.rotation());
+                object.put("display_refresh_rate", session == null ? 0 : session.refreshRate());
                 object.put("ime_local", session != null && session.localIme());
                 object.put("input_ready", input != null && input.available());
                 object.put("input_error", input == null
@@ -112,25 +114,28 @@ final class DisplayEngine {
 
     // --------------------------------------------------------------- display
 
-    String createDisplay(int width, int height, int dpi) {
+    String createDisplay(int width, int height, int dpi, int fps) {
         synchronized (lock) {
             releaseLocked();
             int safeWidth = clamp(width, 320, 2160, 720);
             int safeHeight = clamp(height, 480, 3840, 1280);
             int safeDpi = clamp(dpi, 120, 640, 320);
+            int safeFps = clamp(fps, 10, 240, 60);
             try {
-                display = VirtualDisplaySession.create(context, safeWidth, safeHeight, safeDpi);
+                display = VirtualDisplaySession.create(context, safeWidth, safeHeight, safeDpi, safeFps);
                 boolean on = display.ensureOn();
                 ensureInput();
                 acquireWakeLock();
                 lastError = "";
                 log("display created id=" + display.displayId
                         + " " + safeWidth + "x" + safeHeight + " @" + safeDpi
+                        + " " + safeFps + "fps"
                         + " state=" + display.stateName()
                         + (on ? "" : " (still not ON after surface toggle)")
                         + " flags=" + display.flagsLabel());
                 return Jsons.ok("display " + display.displayId + " "
                         + safeWidth + "x" + safeHeight + " @" + safeDpi
+                        + " " + safeFps + "fps"
                         + " state=" + display.stateName());
             } catch (Throwable e) {
                 lastError = message(e);
@@ -391,6 +396,10 @@ final class DisplayEngine {
 
     String cloneDelete(String clonePackage) {
         return clones.delete(clonePackage);
+    }
+
+    String cloneLogs(String clonePackage, int maxLines) {
+        return clones.logsJson(clonePackage, maxLines);
     }
 
     // ----------------------------------------------------------------- utils

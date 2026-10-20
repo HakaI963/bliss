@@ -11,7 +11,7 @@ final class Protocol {
     private Protocol() {
     }
 
-    static final int VERSION = 2;
+    static final int VERSION = 3;
 
     static final int CMD_STATUS = 1;
     static final int CMD_CREATE = 2;
@@ -33,10 +33,11 @@ final class Protocol {
     static final int CMD_CLONE_LAUNCH = 23;
     static final int CMD_CLONE_KILL = 24;
     static final int CMD_CLONE_DELETE = 25;
+    static final int CMD_CLONE_LOGS = 26;
     static final int CMD_AUTH = 27;
 
     /** Class instantiated by Shizuku inside the shell process. Must stay public. */
     static final String SERVICE_CLASS = "com.ivarna.fluxlinux.clone.engine.DisplayService";
     static final String SERVICE_TAG = "bliss-engine";
-    static final int SERVICE_VERSION = 2;
+    static final int SERVICE_VERSION = 3;
 }

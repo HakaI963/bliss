@@ -10,13 +10,21 @@ import android.util.Log;
 
 import com.android.apksig.ApkSigner;
 import com.reandroid.apk.ApkModule;
+import com.reandroid.archive.ByteInputSource;
+import com.reandroid.archive.InputSource;
 import com.reandroid.arsc.chunk.xml.AndroidManifestBlock;
 import com.reandroid.arsc.chunk.xml.ResXmlAttribute;
 import com.reandroid.arsc.chunk.xml.ResXmlElement;
+import com.reandroid.arsc.item.StringItem;
+import com.reandroid.arsc.pool.StringPool;
+import com.reandroid.dex.id.StringId;
+import com.reandroid.dex.model.DexFile;
+import com.reandroid.dex.sections.SectionType;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -28,9 +36,13 @@ import java.security.SecureRandom;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -195,6 +207,54 @@ final class CloneManager {
             return Jsons.error(e);
         }
         return out.toString();
+    }
+
+    String logsJson(String clonePackage, int maxLines) {
+        JSONArray lines = new JSONArray();
+        try {
+            if (clonePackage == null || clonePackage.trim().isEmpty()) {
+                lines.put("No clone selected");
+                return lines.toString();
+            }
+            String pkg = clonePackage.trim();
+            if (!packageInstalled(pkg)) {
+                lines.put("Clone is not installed: " + pkg);
+                return lines.toString();
+            }
+            String pid = "";
+            AppCatalog.CommandResult pidResult = AppCatalog.run("pidof " + quote(pkg), 15);
+            if (pidResult.ok()) {
+                String[] parts = pidResult.output.trim().split("\\s+");
+                if (parts.length > 0) {
+                    pid = parts[0].trim();
+                }
+            }
+            if (pid.isEmpty() || !pid.matches("\\d+")) {
+                lines.put("Clone is not running. Tap View to start it.");
+                return lines.toString();
+            }
+            int count = Math.max(20, Math.min(600, maxLines));
+            AppCatalog.CommandResult result = AppCatalog.run(
+                    "logcat -d -v time -t " + count + " --pid " + pid, 30);
+            if (!result.ok() && result.output.trim().isEmpty()) {
+                lines.put("logcat unavailable");
+                return lines.toString();
+            }
+            for (String line : result.output.split("\n")) {
+                if (!line.trim().isEmpty()) {
+                    lines.put(line);
+                }
+            }
+            if (lines.length() == 0) {
+                lines.put("No log lines yet.");
+            }
+        } catch (Throwable e) {
+            String detail = e.getMessage();
+            lines.put("Log read failed: "
+                    + (detail == null || detail.trim().isEmpty()
+                    ? e.getClass().getSimpleName() : detail));
+        }
+        return lines.toString();
     }
 
     // ---------------------------------------------------------------- create
@@ -464,6 +524,8 @@ final class CloneManager {
                 throw new IllegalStateException("apps with sharedUserId are not supported");
             }
             fixRelativeNames(manifest, originalPackage);
+            Map<String, String> authorityPatches =
+                    rewriteProviderAuthorities(root, originalPackage, newPackage);
             patchPackageStrings(manifest, root, originalPackage, newPackage);
             manifest.setPackageName(newPackage);
             if (base) {
@@ -471,6 +533,10 @@ final class CloneManager {
                     manifest.setApplicationLabel(label);
                 }
                 hideLauncher(manifest, root);
+            }
+            if (!authorityPatches.isEmpty()) {
+                patchTableStrings(apk, authorityPatches, originalPackage);
+                patchDexStrings(apk, authorityPatches, originalPackage);
             }
             apk.keepManifestChanges();
             apk.writeApk(output);
@@ -577,6 +643,189 @@ final class CloneManager {
                 }
             }
         }
+    }
+
+    /**
+     * Provider authorities are global per Android user. Reusing the original
+     * authority makes {@code pm install} fail with
+     * {@code INSTALL_FAILED_CONFLICTING_PROVIDER}, so every provider gets a
+     * clone-prefixed authority. Known references in the manifest, resources and
+     * dex strings are rewritten with the same map.
+     */
+    private static Map<String, String> rewriteProviderAuthorities(
+            ResXmlElement root, String oldPackage, String newPackage) {
+        Map<String, String> patches = new LinkedHashMap<>();
+        ResXmlElement app = root.getElement("application");
+        if (app == null) {
+            return patches;
+        }
+        Set<String> used = new HashSet<>();
+        int fallbackIndex = 0;
+        for (ResXmlElement provider : app.listElements("provider")) {
+            String authorities = attr(provider, "authorities");
+            if (authorities == null || authorities.trim().isEmpty()) {
+                continue;
+            }
+            String[] parts = authorities.split(";");
+            StringBuilder rebuilt = new StringBuilder();
+            for (String part : parts) {
+                String original = part.trim();
+                if (original.isEmpty()) {
+                    continue;
+                }
+                String suffix;
+                if (original.equals(oldPackage)) {
+                    suffix = "";
+                } else if (original.startsWith(oldPackage + ".")) {
+                    suffix = original.substring(oldPackage.length());
+                } else if (original.startsWith("@") || original.startsWith("?")) {
+                    suffix = ".provider" + (fallbackIndex == 0 ? "" : "." + fallbackIndex);
+                    fallbackIndex++;
+                } else {
+                    int dot = original.lastIndexOf('.');
+                    String tail = dot < 0 ? original : original.substring(dot + 1);
+                    tail = tail.replaceAll("[^A-Za-z0-9_]", "_");
+                    suffix = "." + (tail.isEmpty() ? "provider" : tail);
+                }
+                String replacement = newPackage + suffix;
+                if (used.contains(replacement)) {
+                    int index = 2;
+                    while (used.contains(replacement + "." + index)) {
+                        index++;
+                    }
+                    replacement = replacement + "." + index;
+                }
+                used.add(replacement);
+                patches.put(original, replacement);
+                if (rebuilt.length() > 0) {
+                    rebuilt.append(';');
+                }
+                rebuilt.append(replacement);
+            }
+            if (rebuilt.length() > 0) {
+                setAttr(provider, "authorities", rebuilt.toString());
+            }
+        }
+        return patches;
+    }
+
+    private static void patchTableStrings(ApkModule apk, Map<String, String> patches,
+                                          String oldPackage) {
+        try {
+            com.reandroid.arsc.chunk.TableBlock table = apk.getTableBlock();
+            if (table == null) {
+                return;
+            }
+            StringPool pool = table.getStringPool();
+            if (pool == null) {
+                return;
+            }
+            for (Map.Entry<String, String> entry : patches.entrySet()) {
+                if (entry.getKey().equals(oldPackage)) {
+                    // Do not rewrite a bare package name: it appears in class
+                    // names and component references throughout the app.
+                    continue;
+                }
+                List<StringItem> found = new ArrayList<>();
+                Iterator<StringItem> items = pool.getAll(entry.getKey());
+                while (items != null && items.hasNext()) {
+                    StringItem item = items.next();
+                    if (item != null) {
+                        found.add(item);
+                    }
+                }
+                for (StringItem item : found) {
+                    item.set(entry.getValue());
+                }
+            }
+            apk.keepTableBlockChanges();
+        } catch (Throwable e) {
+            Log.w(TAG, "resource authority patch failed", e);
+        }
+    }
+
+    private static void patchDexStrings(ApkModule apk, Map<String, String> patches,
+                                        String oldPackage) {
+        try {
+            for (InputSource source : new ArrayList<>(apk.listInputSources())) {
+                String name = source.getName();
+                if (name == null || !name.matches("classes[0-9]*\\.dex")) {
+                    continue;
+                }
+                byte[] original;
+                try (InputStream in = source.openStream()) {
+                    original = readAllBytes(in);
+                }
+                byte[] patched = patchDexBytes(original, patches, oldPackage);
+                if (patched != null && patched.length > 0) {
+                    apk.remove(name);
+                    apk.add(new ByteInputSource(patched, name));
+                    Log.i(TAG, "patched provider references in " + name);
+                }
+            }
+        } catch (Throwable e) {
+            Log.w(TAG, "dex authority patch failed", e);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static byte[] patchDexBytes(byte[] input, Map<String, String> patches,
+                                        String oldPackage) throws Exception {
+        DexFile dex = DexFile.read(input);
+        try {
+            boolean changed = false;
+            Iterator<StringId> items = (Iterator<StringId>)
+                    (Iterator<?>) dex.getRootRepository().getItems(SectionType.STRING_ID);
+            while (items != null && items.hasNext()) {
+                StringId id = items.next();
+                if (id == null) {
+                    continue;
+                }
+                String value = id.getString();
+                if (value == null || value.isEmpty()) {
+                    continue;
+                }
+                String replaced = replaceAuthorities(value, patches, oldPackage);
+                if (!replaced.equals(value)) {
+                    id.setString(replaced);
+                    changed = true;
+                }
+            }
+            if (!changed) {
+                return null;
+            }
+            dex.refreshFull();
+            return dex.getBytes();
+        } finally {
+            try {
+                dex.close();
+            } catch (Throwable ignored) {
+            }
+        }
+    }
+
+    private static String replaceAuthorities(String value, Map<String, String> patches,
+                                             String oldPackage) {
+        String result = value;
+        for (Map.Entry<String, String> entry : patches.entrySet()) {
+            if (entry.getKey().equals(oldPackage)) {
+                continue;
+            }
+            if (result.contains(entry.getKey())) {
+                result = result.replace(entry.getKey(), entry.getValue());
+            }
+        }
+        return result;
+    }
+
+    private static byte[] readAllBytes(InputStream input) throws Exception {
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        byte[] buffer = new byte[64 * 1024];
+        int read;
+        while ((read = input.read(buffer)) > 0) {
+            output.write(buffer, 0, read);
+        }
+        return output.toByteArray();
     }
 
     private static String attr(ResXmlElement element, String name) {

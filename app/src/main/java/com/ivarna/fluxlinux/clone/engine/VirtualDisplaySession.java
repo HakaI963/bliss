@@ -15,6 +15,7 @@ import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 
 /**
  * Owns one virtual display and its {@link ImageReader} capture surface.
@@ -38,6 +39,7 @@ final class VirtualDisplaySession {
     final int width;
     final int height;
     final int dpi;
+    final int requestedFps;
 
     private final ImageReader reader;
     private final Surface surface;
@@ -47,22 +49,25 @@ final class VirtualDisplaySession {
     private final int previousImePolicy;
     private final boolean localIme;
     private final String flagsLabel;
+    private final boolean refreshRateApplied;
 
     private Bitmap lastBitmap;
     private long lastFrameAt;
     private long frameCount;
 
-    private VirtualDisplaySession(int width, int height, int dpi, ImageReader reader,
+    private VirtualDisplaySession(int width, int height, int dpi, int fps, ImageReader reader,
                                   Surface surface, VirtualDisplay virtualDisplay, Display display,
                                   int flags) {
         this.width = width;
         this.height = height;
         this.dpi = dpi;
+        this.requestedFps = Math.max(10, fps);
         this.reader = reader;
         this.surface = surface;
         this.virtualDisplay = virtualDisplay;
         this.displayId = display.getDisplayId();
         this.flagsLabel = describeFlags(flags);
+        this.refreshRateApplied = applyRefreshRate(this.requestedFps);
 
         WindowManagerBridge manager = null;
         int previous = -1;
@@ -79,7 +84,7 @@ final class VirtualDisplaySession {
         this.localIme = local;
     }
 
-    static VirtualDisplaySession create(Context context, int width, int height, int dpi) {
+    static VirtualDisplaySession create(Context context, int width, int height, int dpi, int fps) {
         DisplayManager manager = displayManager(context);
         ImageReader reader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 3);
         Surface surface = reader.getSurface();
@@ -105,7 +110,7 @@ final class VirtualDisplaySession {
                         "Bliss", width, height, dpi, surface, flags);
                 Display target = display == null ? null : display.getDisplay();
                 if (target != null) {
-                    return new VirtualDisplaySession(width, height, dpi,
+                    return new VirtualDisplaySession(width, height, dpi, fps,
                             reader, surface, display, target, flags);
                 }
             } catch (Throwable e) {
@@ -143,6 +148,22 @@ final class VirtualDisplaySession {
 
     String flagsLabel() {
         return flagsLabel;
+    }
+
+    int rotation() {
+        try {
+            return virtualDisplay.getDisplay().getRotation();
+        } catch (Throwable ignored) {
+            return -1;
+        }
+    }
+
+    int refreshRate() {
+        try {
+            return Math.round(virtualDisplay.getDisplay().getRefreshRate());
+        } catch (Throwable ignored) {
+            return refreshRateApplied ? requestedFps : 0;
+        }
     }
 
     boolean localIme() {
@@ -265,6 +286,8 @@ final class VirtualDisplaySession {
             object.put("frames", frameCount);
             object.put("last_frame_ms", lastFrameAt);
             object.put("ime_local", localIme);
+            object.put("rotation", rotation());
+            object.put("refresh_rate", refreshRate());
         } catch (Throwable ignored) {
         }
         return object.toString();
@@ -294,6 +317,21 @@ final class VirtualDisplaySession {
         try {
             reader.close();
         } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * Best-effort refresh-rate cap. {@code VirtualDisplay.setRefreshRate} is
+     * present on newer Android builds; older ROMs simply keep their default
+     * rate while the UI still throttles preview capture.
+     */
+    private boolean applyRefreshRate(int fps) {
+        try {
+            Method method = VirtualDisplay.class.getMethod("setRefreshRate", float.class);
+            method.invoke(virtualDisplay, (float) fps);
+            return true;
+        } catch (Throwable ignored) {
+            return false;
         }
     }
 

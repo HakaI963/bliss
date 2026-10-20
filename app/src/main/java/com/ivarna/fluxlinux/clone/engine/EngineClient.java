@@ -313,11 +313,12 @@ public final class EngineClient {
         return callJson(Protocol.CMD_LOG_TAIL, parcel -> parcel.writeInt(maxLines));
     }
 
-    public String createDisplay(int width, int height, int dpi) {
+    public String createDisplay(int width, int height, int dpi, int fps) {
         return callJson(Protocol.CMD_CREATE, parcel -> {
             parcel.writeInt(width);
             parcel.writeInt(height);
             parcel.writeInt(dpi);
+            parcel.writeInt(fps);
         });
     }
 
@@ -394,6 +395,13 @@ public final class EngineClient {
     public String cloneDelete(String clonePackage) {
         return callJson(Protocol.CMD_CLONE_DELETE,
                 parcel -> parcel.writeString(clonePackage));
+    }
+
+    public String cloneLogs(String clonePackage, int maxLines) {
+        return callJson(Protocol.CMD_CLONE_LOGS, parcel -> {
+            parcel.writeString(clonePackage);
+            parcel.writeInt(maxLines);
+        });
     }
 
     public String auth(String token) {

@@ -114,7 +114,8 @@ public class DisplayService extends Binder {
                 int width = data.readInt();
                 int height = data.readInt();
                 int dpi = data.readInt();
-                reply.writeString(local.createDisplay(width, height, dpi));
+                int fps = data.readInt();
+                reply.writeString(local.createDisplay(width, height, dpi, fps));
                 return;
             }
             case Protocol.CMD_RELEASE: {
@@ -192,6 +193,12 @@ public class DisplayService extends Binder {
             case Protocol.CMD_CLONE_DELETE: {
                 String clonePackage = data.readString();
                 reply.writeString(local.cloneDelete(clonePackage));
+                return;
+            }
+            case Protocol.CMD_CLONE_LOGS: {
+                String clonePackage = data.readString();
+                int maxLines = data.readInt();
+                reply.writeString(local.cloneLogs(clonePackage, maxLines));
                 return;
             }
             case Protocol.CMD_AUTH: {
