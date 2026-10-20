@@ -28,7 +28,7 @@ final class ShadowInput {
     }
 
     ShadowInput(android.content.Context base) throws Exception {
-        android.content.Context context = ShadowShellContext.from(base);
+        ShadowShellContext context = ShadowShellContext.from(base);
         inputManager = context.getSystemService(Context.INPUT_SERVICE);
         if (inputManager == null) {
             throw new IllegalStateException("input service unavailable (" + context.describeSource() + ")");
