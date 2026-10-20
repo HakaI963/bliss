@@ -475,19 +475,28 @@ object CloneAi {
     }
 
     /** Blocking connectivity check; call from IO. Returns a human-readable result. */
-    suspend fun testConnection(): String = withContext(Dispatchers.IO) {
-        val cfg = config()
-        if (!cfg.usable) return@withContext "Set an endpoint, model and API key first (or use an http:// local endpoint)"
-        try {
-            val messages = JSONArray()
-                .put(JSONObject().put("role", "system").put("content", "Reply with exactly: OK"))
-                .put(JSONObject().put("role", "user").put("content", "Connectivity test"))
-            val reply = chat(cfg, messages, maxTokens = 16)
-            "Connected · ${cfg.model} · ${reply.trim().take(40)}"
-        } catch (t: Throwable) {
-            "Failed · ${describe(t)}"
+    suspend fun testConnection(baseUrl: String, apiKey: String, model: String): String =
+        withContext(Dispatchers.IO) {
+            val cfg = Config(
+                baseUrl = baseUrl.trim(),
+                apiKey = apiKey.trim(),
+                model = model.trim(),
+                vision = false,
+                maxSteps = 30,
+            )
+            if (!cfg.usable) {
+                return@withContext "Set an endpoint, model and API key first (or use an http:// local endpoint)"
+            }
+            try {
+                val messages = JSONArray()
+                    .put(JSONObject().put("role", "system").put("content", "Reply with exactly: OK"))
+                    .put(JSONObject().put("role", "user").put("content", "Connectivity test"))
+                val reply = chat(cfg, messages, maxTokens = 16)
+                "Connected · ${cfg.model} · ${reply.trim().take(40)}"
+            } catch (t: Throwable) {
+                "Failed · ${describe(t)}"
+            }
         }
-    }
 
     // ------------------------------------------------------------------ action
 

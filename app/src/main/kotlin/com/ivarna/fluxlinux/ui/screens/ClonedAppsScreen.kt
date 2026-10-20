@@ -529,7 +529,7 @@ private fun AiSection(app: CloneEngine.CloneApp, onNotice: (String) -> Unit) {
                             testing = true
                             testResult = null
                             scope.launch {
-                                testResult = CloneAi.testConnection()
+                                testResult = CloneAi.testConnection(baseUrl, apiKey, model)
                                 testing = false
                             }
                         },
@@ -619,7 +619,7 @@ private fun AiSection(app: CloneEngine.CloneApp, onNotice: (String) -> Unit) {
                     )
                 }
             }
-            QLogPane(events, maxHeight = 240.dp, newestFirst = false)
+            QLogPane(events, maxHeight = 240.dp, newestFirst = true)
         }
     }
 }
