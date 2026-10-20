@@ -273,7 +273,40 @@ object CloneEngine {
         val out = (r.stdout + " " + r.stderr).lowercase(Locale.ROOT)
         val ok = !out.contains("error") || out.contains("already")
         if (!ok) log("start-user $uid: ${r.combined.take(160)}")
+        // A started secondary user can still be locked. Activities from a
+        // locked user never get a window, so the clone display stays black.
+        val unlock = ShellRunner.exec("am", "unlock-user", uid.toString())
+        val unlockOut = (unlock.stdout + " " + unlock.stderr).trim()
+        if (unlockOut.isNotEmpty() && !unlockOut.lowercase(Locale.ROOT).contains("not locked")) {
+            log("unlock-user $uid: ${unlockOut.take(160)}")
+        }
+        waitUnlocked(uid)
         return ok
+    }
+
+    private fun waitUnlocked(uid: Int) {
+        repeat(8) { attempt ->
+            val dump = try {
+                ShellRunner.exec("dumpsys", "user").stdout
+            } catch (ignored: Throwable) {
+                ""
+            }
+            val marker = "UserInfo{$uid:"
+            val at = dump.indexOf(marker)
+            val text = if (at >= 0) {
+                dump.substring(at, minOf(dump.length, at + 300))
+                    .replace('\n', ' ').replace(Regex("\\s+"), " ").trim()
+            } else {
+                ""
+            }
+            if (text.contains("UNLOCKED")) {
+                if (attempt > 0) log("user $uid unlocked")
+                log("user $uid: ${text.take(220)}")
+                return
+            }
+            if (attempt > 0) Thread.sleep(200)
+        }
+        log("user $uid: still locked after unlock request")
     }
 
     /**

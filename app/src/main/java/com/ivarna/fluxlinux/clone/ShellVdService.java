@@ -129,7 +129,20 @@ public class ShellVdService extends IShellVd.Stub {
                 log("createDisplay: created id=" + session.displayId
                         + " flags=0x" + Integer.toHexString(session.flagsUsed)
                         + " context=" + session.contextSource
+                        + " state=" + session.state()
+                        + " surface=" + session.hasSurface()
                         + " (non-secure, capture surface attached)");
+                final ShadowDisplay probe = session;
+                new Thread(() -> {
+                    android.os.SystemClock.sleep(1500);
+                    log("display probe: id=" + probe.displayId
+                            + " state=" + probe.state()
+                            + " surface=" + probe.hasSurface()
+                            + " images=" + probe.imagesAcquired()
+                            + " frames=" + probe.framesProduced()
+                            + (probe.lastCaptureError() == null
+                                ? "" : " captureError=" + probe.lastCaptureError()));
+                }, "bliss-display-probe").start();
                 ShadowInput bridge = null;
                 try {
                     bridge = new ShadowInput(context);
@@ -442,6 +455,30 @@ public class ShellVdService extends IShellVd.Stub {
             log("am start" + userArg + " --display " + id + " exit=" + result.exitCode + " " + output);
             if (result.exitCode != 0) {
                 return output.isEmpty() ? ("am start failed: exit " + result.exitCode) : output;
+            }
+            try {
+                synchronized (lock) {
+                    if (display != null) {
+                        log("after launch: display " + display.displayId
+                                + " state=" + display.state()
+                                + " frames=" + display.framesProduced());
+                    }
+                }
+                ShellResult dump = runShell("dumpsys activity activities | grep -E 'mDisplayId=|"
+                        + packageName + "' | head -8");
+                String text = dump.output == null ? "" : dump.output.replace('\n', ' ').trim();
+                if (text.length() > 420) {
+                    text = text.substring(0, 420);
+                }
+                log("activity: " + text);
+                ShellResult logcat = runShell("logcat -d -t 160 -v brief | grep -iE '"
+                        + packageName + "|AndroidRuntime|FATAL EXCEPTION' | tail -10");
+                String logText = logcat.output == null ? "" : logcat.output.replace('\n', ' ').trim();
+                if (logText.length() > 420) {
+                    logText = logText.substring(0, 420);
+                }
+                log("logcat: " + logText);
+            } catch (Throwable ignored) {
             }
             return null;
         } catch (Throwable t) {

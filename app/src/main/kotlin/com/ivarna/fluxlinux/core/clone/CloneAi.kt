@@ -659,7 +659,7 @@ object CloneAi {
 internal object AiProtocol {
 
     val SYSTEM_PROMPT: String = """
-You are the control loop of an Android automation agent (ShadowAuto style).
+You are the control loop of an Android automation agent.
 You operate ONE app running on a hidden virtual display. Each step you receive
 OCR text with display-pixel bounds and your recent action history. Reply with
 exactly ONE JSON object and nothing else.

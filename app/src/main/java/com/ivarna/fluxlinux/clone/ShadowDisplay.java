@@ -54,6 +54,8 @@ final class ShadowDisplay {
     private Bitmap latestFrame;
     private long latestFrameAt;
     private long framesProduced;
+    private long imagesAcquired;
+    private volatile String lastCaptureError;
     private volatile boolean draining = true;
     private final Thread drainThread;
 
@@ -97,6 +99,23 @@ final class ShadowDisplay {
 
     boolean localImeEnabled() {
         return localImeEnabled;
+    }
+
+    /** Current Display.STATE_* of the virtual display; -1 if it cannot be read. */
+    int state() {
+        try {
+            return display.getDisplay().getState();
+        } catch (Throwable t) {
+            return -1;
+        }
+    }
+
+    boolean hasSurface() {
+        try {
+            return display.getSurface() != null;
+        } catch (Throwable t) {
+            return false;
+        }
     }
 
     static ShadowDisplay create(int width, int height, int dpi) {
@@ -214,6 +233,18 @@ final class ShadowDisplay {
                                     } catch (Throwable ignored) {
                                     }
                                     continue;
+                                }
+                            }
+                            // Some ROMs create the display with the surface attached but leave
+                            // the display OFF (no composition, so the reader never sees a frame).
+                            // A detach/attach toggle is the documented way to turn it back ON.
+                            if (screen.getState() != android.view.Display.STATE_ON) {
+                                try {
+                                    display.setSurface(null);
+                                    SystemClock.sleep(30);
+                                    display.setSurface(readerSurface);
+                                } catch (Throwable e) {
+                                    lastError = e;
                                 }
                             }
                             ShadowDisplay session = new ShadowDisplay(width, height, dpi,
@@ -338,6 +369,16 @@ final class ShadowDisplay {
         }
     }
 
+    long imagesAcquired() {
+        synchronized (frameLock) {
+            return imagesAcquired;
+        }
+    }
+
+    String lastCaptureError() {
+        return lastCaptureError;
+    }
+
     private void drainLoop() {
         long lastConvertAt = 0;
         while (draining) {
@@ -347,6 +388,9 @@ final class ShadowDisplay {
                 if (image == null) {
                     SystemClock.sleep(30);
                     continue;
+                }
+                synchronized (frameLock) {
+                    imagesAcquired++;
                 }
                 // Convert at most ~5 frames/second: the display renders at
                 // 60 fps and every conversion allocates a full-res bitmap.
@@ -370,7 +414,10 @@ final class ShadowDisplay {
                         }
                     }
                 }
-            } catch (Throwable ignored) {
+            } catch (Throwable t) {
+                if (lastCaptureError == null) {
+                    lastCaptureError = describe(t);
+                }
             } finally {
                 if (image != null) {
                     try {

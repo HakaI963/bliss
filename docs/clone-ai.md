@@ -2,7 +2,7 @@
 
 Bliss runs cloned Android apps on a hidden virtual display owned by a Shizuku
 (`uid 2000`) service. The AI tab in each clone app drives that display with the
-same loop ShadowAuto uses:
+same observe → decide → act loop:
 
 ```
 screenshot -> on-device OCR -> model picks ONE JSON action -> shell injects it

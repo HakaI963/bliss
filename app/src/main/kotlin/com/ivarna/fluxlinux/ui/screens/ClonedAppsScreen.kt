@@ -465,7 +465,7 @@ private fun AiSection(app: CloneEngine.CloneApp, onNotice: (String) -> Unit) {
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
-                "ShadowAuto-style loop: screenshot → OCR → one model action → tap/swipe/type on the clone display. The phone screen is never touched.",
+                "Agent loop: screenshot → OCR → one model action → tap/swipe/type on the clone display. The phone screen is never touched.",
                 fontSize = 11.sp,
                 color = fluxMutedText(),
             )
