@@ -163,10 +163,10 @@ object CloneEngine {
             }
         }
         log("Clone space ready (fps=${displayFps.value}, res=${displayW.value}x${displayH.value}, backend=${touchBackend.value.label})")
-        // Agent surface: CLI + MCP server in host prefix and every proot distro,
-        // plus the file-bridge watcher those tools talk to.
-        CloneAgentDeployer.ensureInstalled(app)
-        CloneBridge.start(app)
+        // In-app AI agent: observe the live display (OCR / optional vision),
+        // ask the configured model for one action, inject it into the clone
+        // display. No MCP server, no external bridge.
+        CloneAi.init(app)
         refresh()
         refreshShell()
     }
@@ -183,7 +183,7 @@ object CloneEngine {
 
     // ---------------------------------------------------------------- logs
 
-    /** Newest-first ring buffer shown in Apps > Logs (and fed by the agent bridge). */
+    /** Newest-first ring buffer shown in Apps > Logs. */
     fun log(msg: String) {
         val stamp = SimpleDateFormat("HH:mm:ss", Locale.US).format(Date())
         logs.value = (listOf("$stamp  $msg") + logs.value).take(300)
@@ -996,6 +996,7 @@ object CloneEngine {
         "HOME" -> 3
         "ENTER" -> 66
         "TAB" -> 61
+        "SEARCH" -> 84
         "DEL", "DELETE" -> 67
         "APP_SWITCH", "RECENTS" -> 187
         else -> name.toIntOrNull() ?: 4
@@ -1065,7 +1066,7 @@ object CloneEngine {
     /** Latest raw frame (agent API + UI). */
     fun latestFrameBitmap(): Bitmap? = frame.value?.bitmap
 
-    // ---------------------------------------------------------------- agent API (CLI / MCP bridge)
+    // ------------------------------------------------------- install from agent
 
     /** Blocking install from a path (absolute, or relative to the clone dir). */
     fun installApkNow(path: String): String? {
@@ -1114,42 +1115,23 @@ object CloneEngine {
     /** Blocking uninstall for the agent API. Returns null on success. */
     fun uninstallNow(packageName: String): String? = uninstallNowBlocking(packageName)
 
-    /** Synchronous input injection for the agent API (shell-side display only). */
-    fun inputSync(args: List<String>): Boolean {
-        if (args.isEmpty()) return false
-        val err = when (args[0]) {
-            "tap" -> ShellVd.tap(args[1].toIntOrNull() ?: return false, args[2].toIntOrNull() ?: return false)
-            "swipe" -> ShellVd.swipe(
-                args[1].toIntOrNull() ?: return false,
-                args[2].toIntOrNull() ?: return false,
-                args[3].toIntOrNull() ?: return false,
-                args[4].toIntOrNull() ?: return false,
-                args.getOrNull(5)?.toIntOrNull() ?: 300,
-            )
-            "keyevent" -> ShellVd.key(keyCodeOf(args[1]))
-            "text" -> ShellVd.text(args.drop(1).joinToString(" ").replace("%s", " "))
-            else -> "unsupported input command"
-        }
-        log("Agent input ${args.joinToString(" ")} -> ${err ?: "ok"}")
-        return err == null
-    }
+    // ------------------------------------------------------------- AI actions
 
-    /** status payload for the agent bridge (key=value lines). */
-    fun statusLines(): String = buildString {
-        append("backend=").append(touchBackend.value.name.lowercase(Locale.ROOT))
-        append("\nclone_user=").append(if (cloneUserId.value > 0) cloneUserId.value.toString() else "-")
-        append("\ndisplay=").append(ShellVd.displayId.value)
-        append("\nsize=").append(displayW.value).append("x").append(displayH.value)
-        append("\ndpi=").append(displayDpi.value)
-        append("\nfps=").append(displayFps.value)
-        append("\nrunning=").append(running.value ?: "-")
-        append("\napps=").append(apps.value.size)
-        append("\nframes=").append(ShellVd.framesSeq.value)
-    }
+    /** Synchronous tap on the clone display (AI agent). */
+    fun tapSync(x: Int, y: Int): Boolean = ShellVd.tap(x, y) == null
 
-    /** list payload for the agent bridge (pkg|label|version lines). */
-    fun listLines(): String =
-        apps.value.joinToString("\n") { "${it.packageName}|${it.label}|${it.version.ifEmpty { "-" }}" }
+    fun longPressSync(x: Int, y: Int, ms: Int): Boolean = ShellVd.longPress(x, y, ms) == null
+
+    fun swipeSync(x1: Int, y1: Int, x2: Int, y2: Int, ms: Int = 320): Boolean =
+        ShellVd.swipe(x1, y1, x2, y2, ms) == null
+
+    fun keySync(name: String): Boolean = ShellVd.key(keyCodeOf(name)) == null
+
+    fun textSync(value: String): Boolean = ShellVd.text(value) == null
+
+    /** Fresh full-resolution JPEG of the clone display (AI observations). */
+    fun screenshotJpeg(maxWidth: Int = displayW.value, quality: Int = 85): ByteArray? =
+        ShellVd.screenshot(maxWidth, quality)
 
     // ---------------------------------------------------------------- meta store
 

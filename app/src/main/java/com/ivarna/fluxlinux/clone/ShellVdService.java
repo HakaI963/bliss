@@ -150,6 +150,48 @@ public class ShellVdService extends IShellVd.Stub {
         displayDpi = 0;
     }
 
+    /**
+     * Fresh frame for the AI observer. The display's drain thread keeps the
+     * newest composed frame; captureBitmap() hands out an owned copy so the
+     * encoder can never race the drain thread's recycle.
+     */
+    @Override
+    public byte[] screenshot(int maxWidth, int quality) {
+        synchronized (lock) {
+            if (display == null || currentDisplayId <= 0) {
+                log("screenshot: no display");
+                return null;
+            }
+            Bitmap bitmap = null;
+            Bitmap scaled = null;
+            try {
+                bitmap = display.captureBitmap(6, 120);
+                if (bitmap == null) {
+                    log("screenshot: no frame produced");
+                    return null;
+                }
+                scaled = scaleDown(bitmap, clamp(maxWidth, 240, 1920));
+                return encodeJpeg(scaled, clamp(quality, 40, 95));
+            } catch (Throwable t) {
+                log("screenshot failed: " + describe(t));
+                return null;
+            } finally {
+                if (scaled != null && scaled != bitmap) {
+                    try {
+                        scaled.recycle();
+                    } catch (Throwable ignored) {
+                    }
+                }
+                if (bitmap != null) {
+                    try {
+                        bitmap.recycle();
+                    } catch (Throwable ignored) {
+                    }
+                }
+            }
+        }
+    }
+
     // ----------------------------------------------------------------- frames
 
     @Override
@@ -210,10 +252,12 @@ public class ShellVdService extends IShellVd.Stub {
                 cb = frameCallback;
             }
             if (session != null && cb != null) {
+                Bitmap bitmap = null;
+                Bitmap scaled = null;
                 try {
-                    Bitmap bitmap = session.captureBitmap(2, 120);
+                    bitmap = session.captureBitmap(2, 120);
                     if (bitmap != null) {
-                        Bitmap scaled = scaleDown(bitmap, frameMaxWidth);
+                        scaled = scaleDown(bitmap, frameMaxWidth);
                         byte[] jpeg = encodeJpeg(scaled, frameQuality);
                         if (jpeg != null) {
                             try {
@@ -229,6 +273,19 @@ public class ShellVdService extends IShellVd.Stub {
                     }
                 } catch (Throwable t) {
                     log("frame pump error: " + describe(t));
+                } finally {
+                    if (scaled != null && scaled != bitmap) {
+                        try {
+                            scaled.recycle();
+                        } catch (Throwable ignored) {
+                        }
+                    }
+                    if (bitmap != null) {
+                        try {
+                            bitmap.recycle();
+                        } catch (Throwable ignored) {
+                        }
+                    }
                 }
             }
             try {

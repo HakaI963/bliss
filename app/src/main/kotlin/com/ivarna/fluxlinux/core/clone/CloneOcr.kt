@@ -11,8 +11,8 @@ import java.util.concurrent.TimeUnit
 
 /**
  * On-device OCR over the clone display frames (ML Kit, bundled model).
- * Used by the agent bridge (`clone ocr` / MCP bliss_clone_ocr) so text-only
- * models can still "see" a cloned app without any network round-trip.
+ * Used by the in-app AI agent ([CloneAi]) so the model can "see" a cloned app
+ * without a network round-trip.
  */
 object CloneOcr {
 

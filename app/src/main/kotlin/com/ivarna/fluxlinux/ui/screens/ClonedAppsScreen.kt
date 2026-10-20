@@ -59,6 +59,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.Image
+import com.ivarna.fluxlinux.core.clone.CloneAi
 import com.ivarna.fluxlinux.core.clone.CloneEngine
 import com.ivarna.fluxlinux.ui.components.QCard
 import com.ivarna.fluxlinux.ui.components.QEmptyState
@@ -78,7 +79,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private enum class AppTab { DISPLAY, CONFIGURE, LOGS }
+private enum class AppTab { DISPLAY, AI, CONFIGURE, LOGS }
 
 /**
  * Apps tab — only apps cloned into the Bliss space (add them in Tools -> Clone).
@@ -246,12 +247,14 @@ private fun AppDetail(
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             QPill("Display", tab == AppTab.DISPLAY) { tab = AppTab.DISPLAY }
+            QPill("AI", tab == AppTab.AI) { tab = AppTab.AI }
             QPill("Configure", tab == AppTab.CONFIGURE) { tab = AppTab.CONFIGURE }
             QPill("Logs", tab == AppTab.LOGS) { tab = AppTab.LOGS }
         }
 
         when (tab) {
             AppTab.DISPLAY -> DisplaySection(app, onKilled, onNotice)
+            AppTab.AI -> AiSection(app, onNotice)
             AppTab.CONFIGURE -> ConfigureSection(app, onNotice)
             AppTab.LOGS -> LogsSection()
         }
@@ -418,6 +421,205 @@ private fun Screen(dw: Int, dh: Int, bitmap: android.graphics.Bitmap?) {
                     CircularProgressIndicator(modifier = Modifier.size(22.dp))
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun AiSection(app: CloneEngine.CloneApp, onNotice: (String) -> Unit) {
+    val scope = rememberCoroutineScope()
+    val running by CloneAi.running.collectAsState()
+    val step by CloneAi.step.collectAsState()
+    val maxSteps by CloneAi.maxSteps.collectAsState()
+    val status by CloneAi.status.collectAsState()
+    val events by CloneAi.events.collectAsState()
+    val configured by CloneAi.configured.collectAsState()
+    val lastAction by CloneAi.lastAction.collectAsState()
+    val ocrLines by CloneAi.ocrLineCount.collectAsState()
+    val epoch by CloneAi.configEpoch.collectAsState()
+
+    val initial = remember(epoch) { CloneAi.config() }
+    var showSettings by remember(epoch) { mutableStateOf(!initial.usable) }
+    var baseUrl by remember(epoch) { mutableStateOf(initial.baseUrl) }
+    var apiKey by remember(epoch) { mutableStateOf(initial.apiKey) }
+    var model by remember(epoch) { mutableStateOf(initial.model) }
+    var vision by remember(epoch) { mutableStateOf(initial.vision) }
+    var steps by remember(epoch) { mutableStateOf(initial.maxSteps) }
+    var testResult by remember { mutableStateOf<String?>(null) }
+    var testing by remember { mutableStateOf(false) }
+    var goal by remember(app.packageName) { mutableStateOf("") }
+
+    QCard {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(Quartz.CardPad),
+            verticalArrangement = Arrangement.spacedBy(9.dp),
+        ) {
+            Text(
+                "AI control",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                "ShadowAuto-style loop: screenshot → OCR → one model action → tap/swipe/type on the clone display. The phone screen is never touched.",
+                fontSize = 11.sp,
+                color = fluxMutedText(),
+            )
+
+            if (!showSettings) {
+                val cfg = CloneAi.config()
+                QStatusRow("Model", cfg.model.ifBlank { "not set" })
+                QStatusRow("Endpoint", cfg.baseUrl.ifBlank { "not set" })
+                QStatusRow("Vision", if (cfg.vision) "on (screenshot sent)" else "off (OCR only)")
+                TextButton(onClick = { showSettings = true }) {
+                    Text("Change AI settings", fontSize = 12.sp)
+                }
+            } else {
+                QTextField(
+                    value = baseUrl,
+                    onValueChange = { baseUrl = it },
+                    placeholder = "https://api.openai.com/v1",
+                    label = "API base URL",
+                )
+                QTextField(
+                    value = apiKey,
+                    onValueChange = { apiKey = it },
+                    placeholder = "sk-… (leave empty for local endpoints)",
+                    label = "API key",
+                    secret = true,
+                )
+                QTextField(
+                    value = model,
+                    onValueChange = { model = it },
+                    placeholder = "gpt-4o-mini",
+                    label = "Model",
+                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    QPill(if (vision) "Vision: on" else "Vision: off", vision) { vision = !vision }
+                    Text(
+                        "vision sends the screenshot too",
+                        fontSize = 10.5.sp,
+                        color = fluxMutedText(),
+                    )
+                }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text("Max steps", fontSize = 11.sp, color = fluxMutedText())
+                    listOf(15, 30, 45).forEach { value ->
+                        QPill(value.toString(), steps == value) { steps = value }
+                    }
+                }
+                QPrimaryButton("Save AI settings") {
+                    CloneAi.saveConfig(baseUrl, apiKey, model, vision, steps)
+                    showSettings = false
+                    testResult = null
+                    onNotice("AI settings saved")
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(
+                        enabled = !testing,
+                        onClick = {
+                            testing = true
+                            testResult = null
+                            scope.launch {
+                                testResult = CloneAi.testConnection()
+                                testing = false
+                            }
+                        },
+                    ) { Text(if (testing) "Testing…" else "Test connection", fontSize = 12.sp) }
+                    if (testing) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(14.dp),
+                            strokeWidth = 1.5.dp,
+                        )
+                    }
+                }
+                testResult?.let {
+                    Text(it, fontSize = 11.sp, color = fluxMutedText())
+                }
+            }
+        }
+    }
+
+    QCard {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(Quartz.CardPad),
+            verticalArrangement = Arrangement.spacedBy(9.dp),
+        ) {
+            QTextField(
+                value = goal,
+                onValueChange = { goal = it },
+                placeholder = "e.g. Open Settings, turn on Wi-Fi, then open the browser and search for cats",
+                label = "Goal for the AI",
+                singleLine = false,
+                minLines = 3,
+            )
+            if (running) {
+                QPrimaryButton("Stop AI") { CloneAi.stop() }
+            } else {
+                QPrimaryButton(
+                    "Run AI on ${app.label}",
+                    enabled = configured && goal.isNotBlank(),
+                ) { CloneAi.start(app.packageName, goal) }
+            }
+            if (!configured) {
+                Text(
+                    "Set the API endpoint and model above before running.",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+            status?.let {
+                Text(it, fontSize = 11.5.sp, color = MaterialTheme.colorScheme.primary)
+            }
+            QStatusRow("Step", "$step / $maxSteps")
+            QStatusRow("OCR lines", ocrLines.toString())
+            if (lastAction.isNotBlank()) {
+                QStatusRow("Last action", lastAction)
+            }
+        }
+    }
+
+    QCard {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = Quartz.CardPad + 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "AI activity",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f),
+                )
+                IconButton(
+                    onClick = { CloneAi.clearEvents() },
+                    modifier = Modifier.size(30.dp),
+                ) {
+                    Icon(
+                        Icons.Outlined.Delete,
+                        contentDescription = "Clear AI log",
+                        tint = fluxMutedText(),
+                        modifier = Modifier.size(17.dp),
+                    )
+                }
+            }
+            QLogPane(events, maxHeight = 240.dp, newestFirst = false)
         }
     }
 }

@@ -779,3 +779,33 @@ AI/agent/MCP link, and remake rather than patch.
   creation (a null-surface display comes up OFF) with a continuous drain thread.
 
 versionCode 41, 3.10.1.
+
+---
+
+## 34. Round 34 — in-app AI control; dead MCP bridge deleted (2026-10-20)
+
+**User instruction:** the clone apps must run in the virtual display, and an AI must control them
+the way ShadowAuto does. The old MCP attempt did not work; delete the garbage and add a real one.
+
+**What was deleted**
+- `CloneBridge.kt` (the `<filesDir>/clone/bridge` request poller).
+- `CloneAgentDeployer.kt` and `assets/agent/clone` + `assets/agent/bliss-clone-mcp`.
+- The `/bliss` bind in `ProotCommandBuilder` (it only existed to feed that bridge).
+
+**What was added**
+- `core/clone/CloneAi.kt` — ShadowAuto-style loop running inside Bliss:
+  fresh display screenshot (`ShellVd.screenshot`) → ML Kit OCR with bounds → one JSON action
+  from any OpenAI-compatible chat-completions endpoint → shell-side tap / long-press / swipe /
+  text / key / launch. Optional vision toggle sends the screenshot to multimodal models.
+  Step limit, stop button, live action log, per-step status.
+- `CloneAi.ScreenLine` / `AiProtocol` — numbered OCR lines, text matching (`tap_text`), OCR-index
+  tapping, direction-aware swipes, model-answer parsing (plain JSON, fenced JSON, tool-call-style
+  wrappers) with unit tests.
+- `ShellVdService.screenshot()` + `IShellVd.screenshot()` — owned-frame JPEG capture for the
+  observer. `ShadowDisplay.captureBitmap()` now returns a copy, so the drain thread can recycle
+  the newest frame without racing an encoder.
+- AI tab on every clone app: endpoint / API key / model / vision / max steps, goal box, run+stop,
+  step counter, OCR line count, last action and a colour-free activity log.
+- `QTextField` gained `singleLine`, `minLines`, `secret` so the goal and API key fields work.
+
+versionCode 42, 3.10.2.

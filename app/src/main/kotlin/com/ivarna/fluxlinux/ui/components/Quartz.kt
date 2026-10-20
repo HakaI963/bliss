@@ -325,12 +325,21 @@ fun QTextField(
     placeholder: String,
     modifier: Modifier = Modifier,
     label: String? = null,
+    singleLine: Boolean = true,
+    secret: Boolean = false,
+    minLines: Int = 1,
 ) {
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
         modifier = modifier.fillMaxWidth(),
-        singleLine = true,
+        singleLine = singleLine,
+        minLines = minLines,
+        visualTransformation = if (secret) {
+            androidx.compose.ui.text.input.PasswordVisualTransformation()
+        } else {
+            androidx.compose.ui.text.input.VisualTransformation.None
+        },
         textStyle = TextStyle(fontSize = 13.sp),
         label = label?.let { { Text(it, fontSize = 11.5.sp) } },
         placeholder = { Text(placeholder, fontSize = 12.5.sp, color = fluxMutedText()) },

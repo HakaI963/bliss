@@ -12,6 +12,12 @@ interface IShellVd {
     void stopFrames();
     void releaseDisplay();
 
+    /**
+     * Fresh full-resolution JPEG of the clone display (AI observations).
+     * Returns null when no display exists or no frame was produced in time.
+     */
+    byte[] screenshot(int maxWidth, int quality);
+
     boolean tap(int x, int y);
     boolean longPress(int x, int y, int ms);
     boolean swipe(int x1, int y1, int x2, int y2, int ms);

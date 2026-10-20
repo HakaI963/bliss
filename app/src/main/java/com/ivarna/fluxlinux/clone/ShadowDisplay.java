@@ -133,31 +133,32 @@ final class ShadowDisplay {
     }
 
     /**
-     * Latest composed frame. Waits up to (retries+1)*delayMs for a frame
-     * newer than the one handed out last time, so callers get a fresh picture.
+     * Latest composed frame, as an owned copy.
+     *
+     * <p>Waits up to {@code retries * delayMs} for a frame, and returns a copy
+     * so callers never race the drain thread's recycle of the newest frame.
+     * The caller owns (and should recycle) the returned bitmap.
      */
     Bitmap captureBitmap(int retries, long delayMs) {
-        long deadline = SystemClock.uptimeMillis() + Math.max(0, retries) * Math.max(1, delayMs);
-        Bitmap previous = null;
+        long deadline = SystemClock.uptimeMillis() + Math.max(1, retries) * Math.max(1, delayMs);
         while (true) {
-            Bitmap frame = null;
-            long age;
             synchronized (frameLock) {
-                if (latestFrame != null && !latestFrame.isRecycled()) {
-                    frame = latestFrame;
-                    age = SystemClock.uptimeMillis() - latestFrameAt;
-                } else {
-                    age = Long.MAX_VALUE;
+                Bitmap frame = latestFrame;
+                // SurfaceFlinger only produces a new reader frame when the
+                // display content changes, so the newest frame is the current
+                // screen even when it is minutes old.
+                if (frame != null && !frame.isRecycled()) {
+                    try {
+                        return frame.copy(Bitmap.Config.ARGB_8888, false);
+                    } catch (Throwable ignored) {
+                        // fall through and wait for/retry the next frame
+                    }
+                }
+                if (SystemClock.uptimeMillis() >= deadline) {
+                    return null;
                 }
             }
-            if (frame != null && (frame != previous || age > 400 || SystemClock.uptimeMillis() >= deadline)) {
-                return frame;
-            }
-            if (SystemClock.uptimeMillis() >= deadline) {
-                return frame;
-            }
-            previous = frame;
-            SystemClock.sleep(40);
+            SystemClock.sleep(30);
         }
     }
 

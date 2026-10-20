@@ -226,6 +226,20 @@ object ShellVd {
         }
     }
 
+    /**
+     * Fresh JPEG of the clone display for AI observations. Blocking; call off
+     * the main thread. Null when there is no display or no frame yet.
+     */
+    fun screenshot(maxWidth: Int, quality: Int): ByteArray? {
+        val remote = service ?: return null
+        return try {
+            remote.screenshot(maxWidth, quality)
+        } catch (t: Throwable) {
+            remoteFailure("screenshot", t)
+            null
+        }
+    }
+
     // ----------------------------------------------------------------- input
 
     fun tap(x: Int, y: Int): String? = send("tap") { it.tap(x, y) }
