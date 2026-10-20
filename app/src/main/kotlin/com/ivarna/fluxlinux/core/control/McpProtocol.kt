@@ -111,14 +111,14 @@ object McpProtocol {
             tool(
                 "bliss_screenshot",
                 "Capture the current virtual display as a JPEG image.",
-                schema("width" to "integer: max width, default 900")
+                schema("width" to "integer: optional max width, default 900")
             )
         )
         put(
             tool(
                 "bliss_record_start",
                 "Record the virtual display to an MP4 file.",
-                schema("fps" to "integer: 2-15, default 6", "width" to "integer: max width, default 720")
+                schema("fps" to "integer: optional 2-15, default 6", "width" to "integer: optional max width, default 720")
             )
         )
         put(
@@ -139,7 +139,7 @@ object McpProtocol {
             tool(
                 "bliss_logs",
                 "Read recent logcat lines for a clone.",
-                schema("package" to "string: clone package", "lines" to "integer: default 300")
+                schema("package" to "string: clone package", "lines" to "integer: optional, default 300")
             )
         )
         put(
@@ -155,7 +155,7 @@ object McpProtocol {
                 "Swipe on the virtual display.",
                 schema(
                     "x1" to "integer", "y1" to "integer", "x2" to "integer",
-                    "y2" to "integer", "ms" to "integer: default 260"
+                    "y2" to "integer", "ms" to "integer: optional, default 260"
                 )
             )
         )
@@ -177,7 +177,7 @@ object McpProtocol {
             tool(
                 "bliss_ocr",
                 "Capture the display and run on-device OCR. Returns text and bounding boxes.",
-                schema("width" to "integer: max width, default 1000")
+                schema("width" to "integer: optional max width, default 1000")
             )
         )
     }

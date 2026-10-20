@@ -442,27 +442,26 @@ fun ClonedAppsScreen(startOnPreference: Boolean = false) {
 
 @Composable
 private fun SectionSwitch(selected: AppsSection, onSelect: (AppsSection) -> Unit) {
-    Column(Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(42.dp),
-        ) {
-            SectionTab(
-                label = "Preference",
-                selected = selected == AppsSection.PREFERENCE,
-                modifier = Modifier.weight(1f),
-            ) { onSelect(AppsSection.PREFERENCE) }
-            SectionTab(
-                label = "Installed",
-                selected = selected == AppsSection.INSTALLED,
-                modifier = Modifier.weight(1f),
-            ) { onSelect(AppsSection.INSTALLED) }
-        }
-        HorizontalDivider(
-            thickness = 0.75.dp,
-            color = MaterialTheme.colorScheme.outlineVariant,
-        )
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(40.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f))
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp))
+            .padding(3.dp),
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
+    ) {
+        SectionTab(
+            label = "Installed",
+            selected = selected == AppsSection.INSTALLED,
+            modifier = Modifier.weight(1f),
+        ) { onSelect(AppsSection.INSTALLED) }
+        SectionTab(
+            label = "Preference",
+            selected = selected == AppsSection.PREFERENCE,
+            modifier = Modifier.weight(1f),
+        ) { onSelect(AppsSection.PREFERENCE) }
     }
 }
 
@@ -473,30 +472,30 @@ private fun SectionTab(
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
-    Column(
+    Box(
         modifier = modifier
             .fillMaxHeight()
-            .clickable(onClick = onClick),
-    ) {
-        Box(
-            modifier = Modifier.weight(1f).fillMaxWidth(),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                label,
-                fontSize = 13.sp,
-                fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
-                color = if (selected) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.onSurfaceVariant,
+            .clip(RoundedCornerShape(9.dp))
+            .background(
+                if (selected) MaterialTheme.colorScheme.surface
+                else Color.Transparent
             )
-        }
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(3.dp)
-                .background(
-                    if (selected) MaterialTheme.colorScheme.primary else Color.Transparent
-                ),
+            .then(
+                if (selected) Modifier.border(
+                    1.dp,
+                    MaterialTheme.colorScheme.outlineVariant,
+                    RoundedCornerShape(9.dp)
+                ) else Modifier
+            )
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            label,
+            fontSize = 12.5.sp,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+            color = if (selected) MaterialTheme.colorScheme.primary
+            else MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }

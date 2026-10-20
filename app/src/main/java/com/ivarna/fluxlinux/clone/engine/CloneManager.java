@@ -384,7 +384,7 @@ final class CloneManager {
             for (int i = 0; i < sources.size(); i++) {
                 File sourceFile = sources.get(i);
                 boolean base = i == 0;
-                String name = base ? "base.apk" : "split-" + i + ".apk";
+                String name = base ? "base.apk" : splitFileName(sourceFile, i);
                 File staged = new File(stage, name);
                 copyFile(sourceFile, staged);
                 File unsigned = new File(stage, "unsigned-" + name);
@@ -402,6 +402,7 @@ final class CloneManager {
                 AppCatalog.run("pm uninstall " + quote(clonePackage), 60);
                 return Jsons.error("install failed: " + installLog);
             }
+            copyObb(originalPackage, clonePackage);
             saveRecord(clonePackage, originalPackage, label, activity, source, origin);
             engine.log("clone ready: " + label + " (" + clonePackage + ")");
             return Jsons.ok("clone created: " + label + " · " + clonePackage);
@@ -892,6 +893,57 @@ final class CloneManager {
     }
 
     // ---------------------------------------------------------------- install
+
+    /** Preserve the split name declared by the APK; install sessions use it. */
+    private String splitFileName(File apk, int index) {
+        ApkModule module = null;
+        try {
+            module = ApkModule.loadApkFile(apk);
+            AndroidManifestBlock manifest = module.getAndroidManifest();
+            String split = manifest == null ? null : manifest.getSplit();
+            if (split != null && !split.trim().isEmpty()) {
+                String safe = split.trim().replaceAll("[^A-Za-z0-9_.-]", "_");
+                if (!safe.isEmpty()) {
+                    return safe + ".apk";
+                }
+            }
+        } catch (Throwable e) {
+            Log.w(TAG, "split name read failed for " + apk.getName(), e);
+        } finally {
+            if (module != null) {
+                try {
+                    module.close();
+                } catch (Throwable ignored) {
+                }
+            }
+        }
+        return "split-" + index + ".apk";
+    }
+
+    /**
+     * Copy legacy OBB assets to the clone's package path. Some media-heavy
+     * apps (for example Alight Motion asset packs) open an OBB during startup;
+     * without this the clone can install cleanly and then crash on launch.
+     */
+    private void copyObb(String originalPackage, String clonePackage) {
+        try {
+            File source = new File("/sdcard/Android/obb/" + originalPackage);
+            if (!source.isDirectory()) {
+                return;
+            }
+            File destination = new File("/sdcard/Android/obb/" + clonePackage);
+            if (!destination.exists() && !destination.mkdirs()) {
+                return;
+            }
+            AppCatalog.CommandResult result = AppCatalog.run(
+                    "cp -R " + quote(source.getAbsolutePath() + "/.") + " "
+                            + quote(destination.getAbsolutePath() + "/"), 180);
+            engine.log("OBB copy " + originalPackage + " -> " + clonePackage
+                    + " exit=" + result.exit);
+        } catch (Throwable e) {
+            Log.w(TAG, "OBB copy failed", e);
+        }
+    }
 
     private String installApkSet(String clonePackage, List<File> apks) throws Exception {
         if (apks.size() == 1) {

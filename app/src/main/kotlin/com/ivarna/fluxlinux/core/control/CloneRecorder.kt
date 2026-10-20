@@ -75,10 +75,12 @@ object CloneRecorder {
                     setInteger(MediaFormat.KEY_FRAME_RATE, rate)
                     setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 2)
                 }
-                codec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
-                codec.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
-                codec.start()
-                muxer = MediaMuxer(file.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+                val encoder = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
+                codec = encoder
+                encoder.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+                encoder.start()
+                val mux = MediaMuxer(file.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+                muxer = mux
                 val info = MediaCodec.BufferInfo()
                 var bitmap: Bitmap? = first
                 while (isActive) {
@@ -92,37 +94,37 @@ object CloneRecorder {
                     } else {
                         bitmap = frame
                     }
-                    val inputIndex = codec.dequeueInputBuffer(10_000)
+                    val inputIndex = encoder.dequeueInputBuffer(10_000)
                     if (inputIndex >= 0) {
-                        val image = codec.getInputImage(inputIndex)
+                        val image = encoder.getInputImage(inputIndex)
                         if (image != null) {
                             fillYuv(image, bitmap!!)
                             val pts = frameIndex * 1_000_000L / rate
-                            codec.queueInputBuffer(inputIndex, 0, 0, pts, 0)
+                            encoder.queueInputBuffer(inputIndex, 0, 0, pts, 0)
                             frameIndex++
                         } else {
-                            codec.queueInputBuffer(inputIndex, 0, 0, 0, 0)
+                            encoder.queueInputBuffer(inputIndex, 0, 0, 0, 0)
                         }
                     }
                     var drained = false
                     while (true) {
-                        val outIndex = codec.dequeueOutputBuffer(info, 0)
+                        val outIndex = encoder.dequeueOutputBuffer(info, 0)
                         if (outIndex == MediaCodec.INFO_TRY_AGAIN_LATER) {
                             break
                         } else if (outIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
                             if (!muxerStarted) {
-                                trackIndex = muxer.addTrack(codec.outputFormat)
-                                muxer.start()
+                                trackIndex = mux.addTrack(encoder.outputFormat)
+                                mux.start()
                                 muxerStarted = true
                             }
                         } else if (outIndex >= 0) {
-                            val buffer = codec.getOutputBuffer(outIndex)
+                            val buffer = encoder.getOutputBuffer(outIndex)
                             if (buffer != null && info.size > 0 && muxerStarted) {
                                 buffer.position(info.offset)
                                 buffer.limit(info.offset + info.size)
-                                muxer.writeSampleData(trackIndex, buffer, info)
+                                mux.writeSampleData(trackIndex, buffer, info)
                             }
-                            codec.releaseOutputBuffer(outIndex, false)
+                            encoder.releaseOutputBuffer(outIndex, false)
                             drained = true
                             if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) break
                         }
@@ -134,30 +136,30 @@ object CloneRecorder {
                     }
                 }
                 // End of stream
-                val eosIndex = codec.dequeueInputBuffer(20_000)
+                val eosIndex = encoder.dequeueInputBuffer(20_000)
                 if (eosIndex >= 0) {
-                    codec.queueInputBuffer(
+                    encoder.queueInputBuffer(
                         eosIndex, 0, 0, frameIndex * 1_000_000L / rate,
                         MediaCodec.BUFFER_FLAG_END_OF_STREAM
                     )
                 }
                 var attempts = 0
                 while (attempts < 100) {
-                    val outIndex = codec.dequeueOutputBuffer(info, 10_000)
+                    val outIndex = encoder.dequeueOutputBuffer(info, 10_000)
                     if (outIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
                         if (!muxerStarted) {
-                            trackIndex = muxer.addTrack(codec.outputFormat)
-                            muxer.start()
+                            trackIndex = mux.addTrack(encoder.outputFormat)
+                            mux.start()
                             muxerStarted = true
                         }
                     } else if (outIndex >= 0) {
-                        val buffer = codec.getOutputBuffer(outIndex)
+                        val buffer = encoder.getOutputBuffer(outIndex)
                         if (buffer != null && info.size > 0 && muxerStarted) {
                             buffer.position(info.offset)
                             buffer.limit(info.offset + info.size)
-                            muxer.writeSampleData(trackIndex, buffer, info)
+                            mux.writeSampleData(trackIndex, buffer, info)
                         }
-                        codec.releaseOutputBuffer(outIndex, false)
+                        encoder.releaseOutputBuffer(outIndex, false)
                         if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) break
                     }
                     attempts++
