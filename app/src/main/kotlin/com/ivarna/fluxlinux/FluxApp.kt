@@ -16,6 +16,11 @@ class FluxApp : Application() {
         // trace (Settings -> Crash logs). Delegates to the previous handler, so the
         // system crash dialog is unchanged.
         CrashLog.install(this)
+        if (!isMainProcess()) {
+            // Shizuku re-creates this Application inside its :shell user-service
+            // process. Host bootstrap/terminal setup must never run there.
+            return
+        }
         // nativeLibraryDir moves on every app update; fix host env before ANY host script runs.
         runCatching { TermuxHostPaths.refreshHostEnvIfStale(filesDir, this) }
             .onFailure { Log.w("FluxApp", "host env refresh failed", it) }
@@ -33,5 +38,17 @@ class FluxApp : Application() {
             isDaemon = true
             name = "bliss-shell-integration"
         }.start()
+    }
+
+    private fun isMainProcess(): Boolean {
+        val process = runCatching {
+            if (android.os.Build.VERSION.SDK_INT >= 28) {
+                Application.getProcessName()
+            } else {
+                java.io.File("/proc/self/cmdline").readText()
+                    .trim('\u0000', ' ', '\n')
+            }
+        }.getOrDefault("")
+        return process.isEmpty() || process == packageName
     }
 }

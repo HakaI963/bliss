@@ -184,8 +184,8 @@ fun ClonedAppsScreen(onOpenTools: () -> Unit = {}) {
                     color = fluxMutedText(),
                 )
                 when {
-                    !shizukuInstalled -> QPrimaryButton("Open Shizuku installer") {
-                        HeadlessCloneEngine.openShizukuManager()
+                    !shizukuInstalled -> QPrimaryButton("Get Shizuku") {
+                        HeadlessCloneEngine.openShizukuDownload()
                     }
                     !shizukuRunning -> QPrimaryButton("Open Shizuku") {
                         HeadlessCloneEngine.openShizukuManager()
@@ -269,23 +269,17 @@ fun ClonedAppsScreen(onOpenTools: () -> Unit = {}) {
                         HeadlessCloneEngine.key(187)
                     }
                 }
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                QTextField(
+                    value = textToSend,
+                    onValueChange = { textToSend = it },
+                    placeholder = "Type on the clone display",
+                )
+                QPrimaryButton(
+                    "Send text",
+                    enabled = displayReady && textToSend.isNotBlank(),
                 ) {
-                    QTextField(
-                        value = textToSend,
-                        onValueChange = { textToSend = it },
-                        placeholder = "Type on the clone display",
-                        modifier = Modifier.weight(1f),
-                    )
-                    TextButton(
-                        enabled = displayReady && textToSend.isNotBlank(),
-                        onClick = {
-                            HeadlessCloneEngine.text(textToSend)
-                            textToSend = ""
-                        },
-                    ) { Text("Send", fontSize = 12.sp) }
+                    HeadlessCloneEngine.text(textToSend)
+                    textToSend = ""
                 }
             }
         }
@@ -331,7 +325,7 @@ fun ClonedAppsScreen(onOpenTools: () -> Unit = {}) {
                             horizontalArrangement = Arrangement.spacedBy(2.dp),
                         ) {
                             TextButton(
-                                enabled = displayReady && !busy,
+                                enabled = connected && !busy,
                                 onClick = { HeadlessCloneEngine.launchClone(clone.packageName) },
                             ) { Text("Open", fontSize = 12.sp) }
                             TextButton(

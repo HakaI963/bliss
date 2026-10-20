@@ -110,10 +110,15 @@ object HeadlessCloneEngine {
     fun onAppCreate(context: Context) {
         if (!isAndroidRuntime) return
         val app = context.applicationContext
-        runCatching { deleteRetiredEngineFiles(app) }
-            .onFailure { Log.w(TAG, "legacy cleanup failed", it) }
-        runCatching { deleteLegacyNotificationChannels(app) }
-            .onFailure { Log.w(TAG, "legacy channel cleanup failed", it) }
+        Thread {
+            runCatching { deleteRetiredEngineFiles(app) }
+                .onFailure { Log.w(TAG, "legacy cleanup failed", it) }
+            runCatching { deleteLegacyNotificationChannels(app) }
+                .onFailure { Log.w(TAG, "legacy channel cleanup failed", it) }
+        }.apply {
+            isDaemon = true
+            name = "bliss-legacy-cleanup"
+        }.start()
         localLog("Bliss headless clone engine ready")
     }
 
@@ -176,6 +181,15 @@ object HeadlessCloneEngine {
         if (!c.openShizukuManager()) {
             setNotice("Shizuku app not found — install Shizuku first")
         }
+    }
+
+    fun openShizukuDownload() {
+        if (appContext == null) ensureClient()
+        val ctx = appContext ?: return
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://shizuku.rikka.app/download/"))
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        runCatching { ctx.startActivity(intent) }
+            .onFailure { setNotice("No browser available to open the Shizuku download page") }
     }
 
     fun refreshState() {
