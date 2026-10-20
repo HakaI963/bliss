@@ -502,7 +502,7 @@ private fun AiSection(app: CloneEngine.CloneApp, onNotice: (String) -> Unit) {
                 ) {
                     QPill(if (vision) "Vision: on" else "Vision: off", vision) { vision = !vision }
                     Text(
-                        "vision sends the screenshot too",
+                        "only multimodal models",
                         fontSize = 10.5.sp,
                         color = fluxMutedText(),
                     )
@@ -567,7 +567,7 @@ private fun AiSection(app: CloneEngine.CloneApp, onNotice: (String) -> Unit) {
                 QPrimaryButton("Stop AI") { CloneAi.stop() }
             } else {
                 QPrimaryButton(
-                    "Run AI on ${app.label}",
+                    "Run AI",
                     enabled = configured && goal.isNotBlank(),
                 ) { CloneAi.start(app.packageName, goal) }
             }

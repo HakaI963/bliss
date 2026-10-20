@@ -57,7 +57,11 @@ object CloneAi {
         val vision: Boolean,
         val maxSteps: Int,
     ) {
-        val usable: Boolean get() = baseUrl.isNotBlank() && model.isNotBlank()
+        // Cloud endpoints need a key; plain-HTTP endpoints are usually local
+        // servers (llama.cpp, vLLM, Ollama proxies) that accept no key.
+        val usable: Boolean
+            get() = baseUrl.isNotBlank() && model.isNotBlank() &&
+                (apiKey.isNotBlank() || baseUrl.trim().startsWith("http://"))
     }
 
     /** One OCR line in screenshot pixels. */
@@ -90,6 +94,7 @@ object CloneAi {
     private var prefs: SharedPreferences? = null
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var job: Job? = null
+    @Volatile private var activeCall: okhttp3.Call? = null
 
     private val http: OkHttpClient by lazy {
         OkHttpClient.Builder()
@@ -186,6 +191,10 @@ object CloneAi {
     fun stop() {
         if (!running.value) return
         running.value = false
+        try {
+            activeCall?.cancel()
+        } catch (ignored: Throwable) {
+        }
         job?.cancel()
         job = null
         status.value = "Stopped"
@@ -235,6 +244,7 @@ object CloneAi {
             step.value += 1
             status.value = "Step ${step.value}/${cfg.maxSteps} · observing"
             val observation = observe()
+            if (!running.value) return
             if (observation == null) {
                 errors++
                 status.value = "Step ${step.value}/${cfg.maxSteps} · no picture"
@@ -255,6 +265,7 @@ object CloneAi {
             } catch (t: CancellationException) {
                 throw t
             } catch (t: Throwable) {
+                if (!running.value) return
                 errors++
                 status.value = "Step ${step.value}/${cfg.maxSteps} · AI error"
                 log("AI request failed: ${describe(t)}")
@@ -265,6 +276,7 @@ object CloneAi {
                 }
                 continue
             }
+            if (!running.value) return
 
             val action = AiProtocol.parseAction(answer)
             if (action == null) {
@@ -420,37 +432,43 @@ object CloneAi {
         if (cfg.apiKey.isNotBlank()) {
             builder.header("Authorization", "Bearer ${cfg.apiKey}")
         }
-        http.newCall(builder.build()).execute().use { response ->
-            val text = response.body?.string().orEmpty()
-            if (!response.isSuccessful) {
-                throw IllegalStateException("HTTP ${response.code}: ${text.take(400)}")
+        val call = http.newCall(builder.build())
+        activeCall = call
+        try {
+            call.execute().use { response ->
+                val text = response.body?.string().orEmpty()
+                if (!response.isSuccessful) {
+                    throw IllegalStateException("HTTP ${response.code}: ${text.take(400)}")
+                }
+                if (text.isBlank()) {
+                    throw IllegalStateException("empty response from the AI endpoint")
+                }
+                val root = try {
+                    JSONObject(text)
+                } catch (t: Throwable) {
+                    throw IllegalStateException("invalid JSON from the AI endpoint: ${text.take(200)}")
+                }
+                val choices = root.optJSONArray("choices")
+                val choice = choices?.optJSONObject(0)
+                val message = choice?.optJSONObject("message")
+                var content = message?.optString("content").orEmpty()
+                if (content.isBlank()) {
+                    content = choice?.optString("text").orEmpty()
+                }
+                if (content.isBlank()) {
+                    throw IllegalStateException("the model returned no text: ${text.take(300)}")
+                }
+                return content
             }
-            if (text.isBlank()) {
-                throw IllegalStateException("empty response from the AI endpoint")
-            }
-            val root = try {
-                JSONObject(text)
-            } catch (t: Throwable) {
-                throw IllegalStateException("invalid JSON from the AI endpoint: ${text.take(200)}")
-            }
-            val choices = root.optJSONArray("choices")
-            val choice = choices?.optJSONObject(0)
-            val message = choice?.optJSONObject("message")
-            var content = message?.optString("content").orEmpty()
-            if (content.isBlank()) {
-                content = choice?.optString("text").orEmpty()
-            }
-            if (content.isBlank()) {
-                throw IllegalStateException("the model returned no text: ${text.take(300)}")
-            }
-            return content
+        } finally {
+            if (activeCall === call) activeCall = null
         }
     }
 
     /** Blocking connectivity check; call from IO. Returns a human-readable result. */
     suspend fun testConnection(): String = withContext(Dispatchers.IO) {
         val cfg = config()
-        if (!cfg.usable) return@withContext "Set an endpoint and a model first"
+        if (!cfg.usable) return@withContext "Set an endpoint, model and API key first (or use an http:// local endpoint)"
         try {
             val messages = JSONArray()
                 .put(JSONObject().put("role", "system").put("content", "Reply with exactly: OK"))
