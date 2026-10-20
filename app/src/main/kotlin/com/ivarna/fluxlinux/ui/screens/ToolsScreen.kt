@@ -63,7 +63,10 @@ fun ToolsScreen(onOpenApps: () -> Unit) {
     var page by rememberSaveable { mutableStateOf(ToolsPage.HUB) }
     BackHandler(enabled = page == ToolsPage.CLONE) { page = ToolsPage.HUB }
     when (page) {
-        ToolsPage.HUB -> ToolsHub(onOpenClone = { page = ToolsPage.CLONE })
+        ToolsPage.HUB -> ToolsHub(
+            onOpenClone = { page = ToolsPage.CLONE },
+            onOpenApps = onOpenApps,
+        )
         ToolsPage.CLONE -> CloneScreen(onOpenApps = onOpenApps, onBack = { page = ToolsPage.HUB })
     }
 }
@@ -71,7 +74,7 @@ fun ToolsScreen(onOpenApps: () -> Unit) {
 // ------------------------------------------------------------------ hub
 
 @Composable
-private fun ToolsHub(onOpenClone: () -> Unit) {
+private fun ToolsHub(onOpenClone: () -> Unit, onOpenApps: () -> Unit) {
     val entrance = rememberStaggerEntrance()
     Column(
         modifier = Modifier
@@ -87,6 +90,13 @@ private fun ToolsHub(onOpenClone: () -> Unit) {
                 title = "Clone apps",
                 subtitle = "Add an APK, a link, or clone what is already on this phone.",
                 onClick = onOpenClone,
+                trailing = { QChevron() },
+                divider = true,
+            )
+            QRow(
+                title = "AI control",
+                subtitle = "Open a cloned app in Apps, then use its AI tab to run a goal.",
+                onClick = onOpenApps,
                 trailing = { QChevron() },
             )
         }

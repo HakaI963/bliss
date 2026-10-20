@@ -98,6 +98,8 @@ via the separate shell APK / JSON-RPC daemon:
    the app/display disappears. Every action and its result is logged in the AI
    tab.
 
+Setup and model/endpoint examples: [`docs/clone-ai.md`](clone-ai.md).
+
 The old file-bridge (`clone` CLI + `bliss-clone-mcp`) was removed: it depended
 on a `/bliss` bind and a request poller that could not work reliably, and it had
 no AI loop of its own.
