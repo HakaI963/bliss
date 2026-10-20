@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -420,17 +419,28 @@ private fun DisplayPreview(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .aspectRatio(safeWidth.toFloat() / safeHeight.toFloat())
+            .height(300.dp)
             .clip(RoundedCornerShape(12.dp))
             .background(Color.Black)
             .onSizeChanged { boxSize = it }
             .pointerInput(ready, boxSize, safeWidth, safeHeight) {
                 if (!ready || boxSize.width <= 0 || boxSize.height <= 0) return@pointerInput
                 detectTapGestures { offset ->
-                    val x = (offset.x / boxSize.width * safeWidth).toInt()
-                        .coerceIn(0, safeWidth - 1)
-                    val y = (offset.y / boxSize.height * safeHeight).toInt()
-                        .coerceIn(0, safeHeight - 1)
+                    val scale = minOf(
+                        boxSize.width.toFloat() / safeWidth,
+                        boxSize.height.toFloat() / safeHeight,
+                    )
+                    val drawnWidth = safeWidth * scale
+                    val drawnHeight = safeHeight * scale
+                    val left = (boxSize.width - drawnWidth) / 2f
+                    val top = (boxSize.height - drawnHeight) / 2f
+                    if (offset.x < left || offset.x > left + drawnWidth ||
+                        offset.y < top || offset.y > top + drawnHeight
+                    ) {
+                        return@detectTapGestures
+                    }
+                    val x = ((offset.x - left) / scale).toInt().coerceIn(0, safeWidth - 1)
+                    val y = ((offset.y - top) / scale).toInt().coerceIn(0, safeHeight - 1)
                     HeadlessCloneEngine.tap(x, y)
                 }
             },
