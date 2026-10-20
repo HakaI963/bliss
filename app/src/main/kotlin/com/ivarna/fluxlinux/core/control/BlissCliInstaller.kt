@@ -16,7 +16,7 @@ import java.io.File
  */
 object BlissCliInstaller {
     private const val TAG = "BlissCli"
-    private const val MARKER = ".bliss-cli-v2"
+    private const val MARKER = ".bliss-cli-v3"
     private const val ASSET = "scripts/bliss-cli.sh"
 
     fun ensureHost(ctx: Context) {
@@ -42,12 +42,9 @@ object BlissCliInstaller {
         for (distro in DistroRepository.supportedDistros) {
             val profile = DistroInstallProfile.forId(distro.id) ?: continue
             runCatching {
-                if (profile.method == "chroot") {
-                    val rootPath = profile.chrootPath
-                    if (rootPath != null && File(rootPath).isDirectory) ensureChroot(ctx, profile)
-                } else {
-                    ensureProot(ctx, profile)
-                }
+                // Do not probe su during app startup. Chroot CLI installation
+                // happens when the user actually opens that guest terminal.
+                if (profile.method != "chroot") ensureProot(ctx, profile)
             }.onFailure { Log.w(TAG, "CLI sync failed: ${distro.id}", it) }
         }
     }
@@ -93,7 +90,7 @@ object BlissCliInstaller {
         target.parentFile?.mkdirs()
         target.writeText(script)
         runCatching { target.setExecutable(true, false) }
-        if (marker != null) runCatching { marker.writeText("2") }
+        if (marker != null) runCatching { marker.writeText("3") }
     }
 
     private fun readAsset(ctx: Context): String? = runCatching {
