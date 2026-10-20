@@ -634,6 +634,7 @@ Rules:
 - After an action that opens a screen or keyboard, wait or observe once.
 - Never repeat an action that failed; choose another target.
 - Stay inside the screen bounds. Do not invent text that is not on screen.
+- input_text can type Latin text; prefer on-screen choices for other scripts.
 - finish only when the goal is visibly achieved, or explain why it is impossible.
 """.trim()
 
