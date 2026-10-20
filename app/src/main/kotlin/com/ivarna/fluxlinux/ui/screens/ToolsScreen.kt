@@ -1,6 +1,5 @@
 package com.ivarna.fluxlinux.ui.screens
 
-import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -29,12 +28,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ivarna.fluxlinux.core.clone.CloneEngine
-import com.ivarna.fluxlinux.core.clone.ShellRunner
-import com.ivarna.fluxlinux.core.system.PhantomProcessFixer
 import com.ivarna.fluxlinux.ui.components.QCard
 import com.ivarna.fluxlinux.ui.components.QChevron
 import com.ivarna.fluxlinux.ui.components.QDivider
@@ -44,7 +40,6 @@ import com.ivarna.fluxlinux.ui.components.QPrimaryButton
 import com.ivarna.fluxlinux.ui.components.QRow
 import com.ivarna.fluxlinux.ui.components.QScreenTitle
 import com.ivarna.fluxlinux.ui.components.QSectionHeader
-import com.ivarna.fluxlinux.ui.components.QStatusRow
 import com.ivarna.fluxlinux.ui.components.QTextField
 import com.ivarna.fluxlinux.ui.components.Quartz
 import com.ivarna.fluxlinux.ui.theme.fluxMutedText
@@ -95,7 +90,7 @@ private fun ToolsHub(onOpenClone: () -> Unit, onOpenApps: () -> Unit) {
             )
             QRow(
                 title = "Cloned apps",
-                subtitle = "Open, stop or remove apps in the isolated clone user.",
+                subtitle = "Open, stop or remove apps running inside Bliss.",
                 onClick = onOpenApps,
                 trailing = { QChevron() },
             )
@@ -108,10 +103,8 @@ private fun ToolsHub(onOpenClone: () -> Unit, onOpenApps: () -> Unit) {
 
 @Composable
 private fun CloneScreen(onOpenApps: () -> Unit, onBack: () -> Unit) {
-    val context = LocalContext.current
     val busy by CloneEngine.busy.collectAsState()
     val status by CloneEngine.status.collectAsState()
-    val backend by CloneEngine.touchBackend.collectAsState()
     val clones by CloneEngine.apps.collectAsState()
     val deviceApps by CloneEngine.deviceApps.collectAsState()
     var url by rememberSaveable { mutableStateOf("") }
@@ -133,25 +126,7 @@ private fun CloneScreen(onOpenApps: () -> Unit, onBack: () -> Unit) {
             .padding(horizontal = Quartz.ScreenPad, vertical = Quartz.Gap),
         verticalArrangement = Arrangement.spacedBy(Quartz.Gap),
     ) {
-        QScreenTitle("Clone", "Every way to add apps to the clone space.", modifier = Modifier.staggerIn(0, entrance))
-
-        if (backend == ShellRunner.Backend.NONE) {
-            QCard(modifier = Modifier.staggerIn(0, entrance)) {
-                    Text(
-                        "Needs Shizuku (or root) — enable it, then retry.",
-                        fontSize = 11.sp,
-                        color = fluxMutedText(),
-                    )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End,
-                    ) {
-                        TextButton(onClick = { requestShell(context) { CloneEngine.refreshShell() } }) {
-                            Text("Enable Shizuku", fontSize = 12.sp)
-                        }
-                    }
-            }
-        }
+        QScreenTitle("Clone", "Add apps to the in-app engine. They run inside Bliss.", modifier = Modifier.staggerIn(0, entrance))
 
         // 1) Add: APK file
         QSectionHeader("APK file", modifier = Modifier.staggerIn(1, entrance))
@@ -246,22 +221,8 @@ private fun CloneScreen(onOpenApps: () -> Unit, onBack: () -> Unit) {
                 }
         }
 
-        if (backend != ShellRunner.Backend.NONE) {
-            QStatusRow("Shell", backend.label)
-        }
-
         Spacer(Modifier.height(96.dp))
     }
 }
 
-private fun requestShell(context: android.content.Context, onDone: () -> Unit) {
-    when {
-        PhantomProcessFixer.shizukuRunning() -> PhantomProcessFixer.requestShizuku { onDone() }
-        PhantomProcessFixer.rootAvailable() -> onDone()
-        else -> Toast.makeText(
-            context,
-            "Start the Shizuku app first (wireless debugging), then try again.",
-            Toast.LENGTH_LONG,
-        ).show()
-    }
-}
+

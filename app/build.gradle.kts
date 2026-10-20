@@ -27,8 +27,8 @@ android {
         // app targets 28 like Termux. bash/proot/loader/pulse stay pinned to
         // nativeLibraryDir (jniLibs) as belt-and-braces for future targetSdk bumps.
         targetSdk = 28
-        versionCode = 47
-        versionName = "3.11.1"
+        versionCode = 48
+        versionName = "3.12.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -269,6 +269,8 @@ dependencies {
     // On-device OCR for the clone space (in-app AI agent observations).
     implementation(libs.shizuku.api)
     implementation(libs.shizuku.provider)
+    // In-app virtual app engine (BlackBox); cloned apps run inside Bliss, no Android user/profile.
+    implementation(project(":Bcore"))
 
     // Embedded terminal (termux-app GPLv3 — app stays open source; see LICENSE/README)
     // Only com.termux.terminal + com.termux.view are used. terminal-emulator is built

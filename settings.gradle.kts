@@ -25,5 +25,6 @@ include(":app")
 include(":termux-x11")
 include(":terminal-emulator")
 include(":stub")
-// Bcore / black-reflection / compiler: vendored BlackBox sources kept in-tree
-// as reference only (the clone space is shell-based since round 13) — not built.
+include(":Bcore")
+include(":black-reflection")
+include(":compiler")

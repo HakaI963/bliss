@@ -33,6 +33,16 @@
         android:usesCleartextTraffic="true"
         tools:targetApi="31">
 
+        <!-- Receives clone-app launches from the in-app engine daemon and starts
+             the proxy from this visible process (Android 10+ background-start rule). -->
+        <receiver
+            android:name=".clone.LaunchRelayReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.nopiece.bliss.CLONE_LAUNCH_RELAY" />
+            </intent-filter>
+        </receiver>
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.provider"

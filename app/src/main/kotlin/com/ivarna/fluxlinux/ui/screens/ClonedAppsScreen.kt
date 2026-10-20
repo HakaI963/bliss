@@ -35,7 +35,6 @@ import com.ivarna.fluxlinux.ui.components.QLogPane
 import com.ivarna.fluxlinux.ui.components.QPrimaryButton
 import com.ivarna.fluxlinux.ui.components.QRow
 import com.ivarna.fluxlinux.ui.components.QScreenTitle
-import com.ivarna.fluxlinux.ui.components.QStatusRow
 import com.ivarna.fluxlinux.ui.components.Quartz
 import com.ivarna.fluxlinux.ui.theme.fluxMutedText
 import com.ivarna.fluxlinux.ui.theme.rememberStaggerEntrance
@@ -43,22 +42,19 @@ import com.ivarna.fluxlinux.ui.theme.staggerIn
 import kotlinx.coroutines.delay
 
 /**
- * Apps tab — the app cloner. Cloned apps are installed in an isolated Android
- * user ("Bliss"); this screen lists them and lets the user open, stop or
- * remove them. There is no virtual display and no in-app automation.
+ * Apps tab — clones run inside Bliss through the in-app virtual app engine.
+ * No Android user, no profile, no virtual display.
  */
 @Composable
 fun ClonedAppsScreen() {
     val apps by CloneEngine.apps.collectAsState()
     val status by CloneEngine.status.collectAsState()
-    val cloneUser by CloneEngine.cloneUserId.collectAsState()
-    val backend by CloneEngine.touchBackend.collectAsState()
 
     var selected by remember { mutableStateOf<CloneEngine.CloneApp?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) { CloneEngine.refresh() }
-    LaunchedEffect(notice, status) {
+    LaunchedEffect(notice) {
         if (notice != null) {
             delay(4000)
             notice = null
@@ -78,7 +74,7 @@ fun ClonedAppsScreen() {
             val entrance = rememberStaggerEntrance()
             QScreenTitle(
                 "Apps",
-                "Apps cloned into the isolated Bliss user.",
+                "Cloned apps run inside Bliss — no extra user or profile.",
                 modifier = Modifier.staggerIn(0, entrance),
             )
 
@@ -90,7 +86,7 @@ fun ClonedAppsScreen() {
                 if (apps.isEmpty()) {
                     QEmptyState(
                         "No cloned apps yet",
-                        "Add one in Tools → Clone apps (clone an installed app, pick an APK, or paste a link).",
+                        "Add one in Tools → Clone apps (pick an APK, paste a link, or clone from this phone).",
                     )
                 } else {
                     apps.forEach { app ->
@@ -118,19 +114,16 @@ fun ClonedAppsScreen() {
                     modifier = Modifier.padding(vertical = 6.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    QStatusRow(
-                        "Clone user",
-                        if (cloneUser > 0) "user $cloneUser (isolated)" else "not created yet",
-                    )
-                    QStatusRow("Shell", backend.label)
-                    QPrimaryButton(
-                        "Switch to clone user",
-                        enabled = cloneUser > 0,
-                        onClick = { CloneEngine.switchToCloneUser() },
+                    Text(
+                        "In-app engine",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(horizontal = 4.dp),
                     )
                     Text(
-                        "Cloned apps run in their own Android user. Switch to that user to see them; " +
-                            "your main user and this app stay untouched.",
+                        "Cloned apps are installed inside Bliss with their own data. " +
+                            "Opening one shows it in this app; your phone's launcher and users are untouched.",
                         fontSize = 11.sp,
                         color = fluxMutedText(),
                         modifier = Modifier.padding(horizontal = 4.dp),
@@ -142,8 +135,6 @@ fun ClonedAppsScreen() {
     } else {
         AppDetail(
             app = sel,
-            cloneUser = cloneUser,
-            backendLabel = backend.label,
             onBack = { selected = null },
             onNotice = { notice = it },
         )
@@ -153,8 +144,6 @@ fun ClonedAppsScreen() {
 @Composable
 private fun AppDetail(
     app: CloneEngine.CloneApp,
-    cloneUser: Int,
-    backendLabel: String,
     onBack: () -> Unit,
     onNotice: (String) -> Unit,
 ) {
@@ -188,18 +177,12 @@ private fun AppDetail(
                 modifier = Modifier.padding(vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                QStatusRow("Clone user", if (cloneUser > 0) "user $cloneUser" else "not created")
-                QStatusRow("Shell", backendLabel)
-                QPrimaryButton("Open in clone user", enabled = cloneUser > 0) {
+                QPrimaryButton("Open inside Bliss") {
                     CloneEngine.launch(app.packageName)
-                    onNotice("Starting ${app.label} in the clone user…")
-                }
-                QPrimaryButton("Switch to clone user", enabled = cloneUser > 0) {
-                    CloneEngine.switchToCloneUser()
+                    onNotice("Starting ${app.label}…")
                 }
                 Text(
-                    "Opening starts the app in the isolated user. Use “Switch to clone user” " +
-                        "to bring that user to the screen.",
+                    "Runs in the in-app engine, on this screen. No separate Android user or profile.",
                     fontSize = 11.sp,
                     color = fluxMutedText(),
                     modifier = Modifier.padding(horizontal = 4.dp),
@@ -229,7 +212,7 @@ private fun AppDetail(
                 }
                 if (confirmUninstall) {
                     Text(
-                        "This removes the cloned copy and its data from user $cloneUser. " +
+                        "This removes the cloned copy and its data from the in-app engine. " +
                             "The app on your phone is not affected.",
                         fontSize = 11.sp,
                         color = fluxMutedText(),

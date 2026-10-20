@@ -6,8 +6,6 @@ android {
     compileSdk 36
 
 
-    aidlPackagedList "android/app/IServiceConnection.aidl"
-    aidlPackagedList "android/accounts/IAccountManagerResponse.aidl"
     buildFeatures {
         aidl true
     }
@@ -35,8 +33,8 @@ android {
         ndkBuild {
             path 'src/main/cpp/Android.mk'
         }
-        ndkVersion = "29.0.14206865"
     }
+    ndkVersion = "29.0.14206865"
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
