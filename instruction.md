@@ -13,6 +13,11 @@ user-service, shell-targeted input injection, and a repackaging clone pipeline
 cloning, live preview, tap/keys/text, stop and uninstall are supported. Apps that
 verify their own signature/package identity remain unsupported by this model.
 
+**v3.15.0 UI:** the Apps viewer is an in-tab page, not a dialog — a small,
+aspect-correct clone display stays centered on top with live logs underneath.
+The app chrome is a flat AOSP-style light theme (dark option in Settings →
+Appearance), with compact 38 dp controls and no Apps↔Tools transition.
+
 ## 0.1 TL;DR (historical)
 
 Bliss is a rebranded, standalone Android build of the FluxLinux app (app id `com.nopiece.bliss`, source package `com.ivarna.fluxlinux`, brand **"Bliss"**). It boots Linux distros on-device via a bundled Termux-derived host bootstrap, proot containers, chroot distros, and termux-x11 GUI sessions.
@@ -26,9 +31,9 @@ Quick facts:
 | App id / brand | `com.nopiece.bliss` / **"Bliss"** (renamed from "Foila Linux" in round 5; functional ids keep `folio`/`flux` internals) |
 | Source package | `com.ivarna.fluxlinux` |
 | Branch | `main` |
-| Latest green CI | run `39436949163` (commit `983d411`, v3.13.0 Shizuku clone engine) |
-| Released APK | [`bliss-debug-983d411`](https://github.com/HakaI963/bliss/releases/tag/bliss-debug-983d411) `app-bliss-debug.apk` (177,455,366 B) |
-| APK sha256 | `a13a699715789920158da656523f75c73754b08c30d0b3c3dc0e3a8fb774036c` |
+| Latest green CI | run `39468150447` (commit `08b8db4`, v3.15.0 AOSP UI + in-tab clone display) |
+| Released APK | [`bliss-debug-08b8db4`](https://github.com/HakaI963/bliss/releases/tag/bliss-debug-08b8db4) `app-bliss-debug.apk` (177,496,846 B) |
+| APK sha256 | `c6d8db6b367a5bf3696e8b8386d1f81cb2f1a0136138cbb82ff262f3f14b8898` |
 | Verify APK proof | package `com.nopiece.bliss`, `targetSdkVersion 28`, `assets/bootstrap.tar` packaged, libbash/libproot/libloader*.so packaged, `assets/clone.keystore` packaged |
 | Signing | stable debug keystore (updates over 3.12.0 install in place) |
 | CI gate | `.github/workflows/build.yml` compiles **main sources only** (`assembleBlissDebug` + bootstrap assembly + Verify APK). Unit tests are not part of the gate. |
