@@ -33,6 +33,20 @@ enum class ThemePalette(val label: String) {
 class ThemePreferences(context: Context) {
     private val prefs: SharedPreferences = context.getSharedPreferences("theme_prefs", Context.MODE_PRIVATE)
 
+    /**
+     * v3.16.0 is a visual reset (Midnight). Older installs may have persisted
+     * the old Light default; migrate once so the new UI is actually visible.
+     * Choosing Day in Settings afterwards is preserved.
+     */
+    fun migrateToMidnight() {
+        if (prefs.getInt("theme_rev", 0) < 1) {
+            prefs.edit()
+                .putString("theme_mode", ThemeMode.DARK.name)
+                .putInt("theme_rev", 1)
+                .apply()
+        }
+    }
+
     fun getThemeMode(): ThemeMode {
         val modeName = prefs.getString("theme_mode", ThemeMode.DARK.name)
         return try {
@@ -43,6 +57,9 @@ class ThemePreferences(context: Context) {
     }
 
     fun setThemeMode(mode: ThemeMode) {
-        prefs.edit().putString("theme_mode", mode.name).apply()
+        prefs.edit()
+            .putString("theme_mode", mode.name)
+            .putInt("theme_rev", 1)
+            .apply()
     }
 }

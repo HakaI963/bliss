@@ -578,6 +578,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             // Midnight is the default. Day and System are explicit user choices.
             val themePreferences = remember { ThemePreferences(this@MainActivity) }
+            remember { themePreferences.migrateToMidnight(); true }
             var currentThemeMode by remember {
                 mutableStateOf(
                     when (val stored = themePreferences.getThemeMode()) {

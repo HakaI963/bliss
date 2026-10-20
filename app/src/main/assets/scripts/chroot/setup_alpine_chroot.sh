@@ -11,7 +11,7 @@ PKG="${TERMUX_APP__PACKAGE_NAME:-com.ivarna.fluxlinux}"
 APP_HOME="${TERMUX__HOME:-/data/data/${PKG}/files/home}"
 APP_PREFIX="${TERMUX__PREFIX:-/data/data/${PKG}/files/usr}"
 ROOTFS_NAME="alpine_3.24_rootfs.tar.gz"
-ROOTFS_URL="${FLUX_ROOTFS_URL:-https://github.com/abhay-byte/fluxlinux/releases/download/rootfs/alpine_3.24_rootfs.tar.gz}"
+ROOTFS_URL="${FLUX_ROOTFS_URL:-https://github.com/HakaI963/bliss/releases/download/rootfs/alpine_3.24_rootfs.tar.gz}"
 ROOTFS_SHA256="${FLUX_ROOTFS_SHA256:-f55a90f69052c5bd6f92cb09a8f47065970830b194c917a006fb94028e721259}"
 
 progress() { printf "\033[1;36m[+] %s\033[0m\n" "$1"; }

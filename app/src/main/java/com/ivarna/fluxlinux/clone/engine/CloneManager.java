@@ -389,11 +389,15 @@ final class CloneManager {
         String id = randomId();
         String clonePackage = newClonePackage();
         File stage = new File(DIR, "stage-" + id);
+        File signedDir = new File(stage, "signed");
         List<File> signed = new ArrayList<>();
         Map<String, String> authorityPatches = new LinkedHashMap<>();
         try {
             if (!stage.mkdirs() && !stage.isDirectory()) {
                 return Jsons.error("cannot create staging directory");
+            }
+            if (!signedDir.mkdirs() && !signedDir.isDirectory()) {
+                return Jsons.error("cannot create signed staging directory");
             }
             for (int i = 0; i < sources.size(); i++) {
                 File sourceFile = sources.get(i);
@@ -402,7 +406,7 @@ final class CloneManager {
                 File staged = new File(stage, name);
                 copyFile(sourceFile, staged);
                 File unsigned = new File(stage, "unsigned-" + name);
-                File signedFile = new File(stage, "signed-" + name);
+                File signedFile = new File(signedDir, name);
                 patchApk(staged, unsigned, clonePackage, label, base, originalPackage,
                         authorityPatches);
                 signApk(unsigned, signedFile);

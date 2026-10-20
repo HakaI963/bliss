@@ -533,8 +533,8 @@ exit 1
 # bliss colors (bash): green user@host, blue dir; red marker on failure.
 if [ -n "${'$'}BASH_VERSION" ] && [ -n "${'$'}PS1" ]; then
   alias ls='ls --color=auto' 2>/dev/null
-  BLISS_PS1_OK='\[\e[32m\]\u@\h\[\e[0m\]:\[\e[34m\]\w\[\e[0m\]\$ '
-  BLISS_PS1_FAIL='\[\e[31m\]\u@\h\[\e[0m\]:\[\e[34m\]\w\[\e[0m\]\[\e[31m\]\$\[\e[0m\] '
+  BLISS_PS1_OK='\[\e[32m\]bliss@\h\[\e[0m\]:\[\e[34m\]\w\[\e[0m\]\$ '
+  BLISS_PS1_FAIL='\[\e[31m\]bliss@\h\[\e[0m\]:\[\e[34m\]\w\[\e[0m\]\[\e[31m\]\$\[\e[0m\] '
   PROMPT_COMMAND='[ "${'$'}?" = 0 ] && PS1="${'$'}BLISS_PS1_OK" || PS1="${'$'}BLISS_PS1_FAIL"'
   PS1="${'$'}BLISS_PS1_OK"
 fi

@@ -28,7 +28,7 @@ handle_error() {
     echo ""
     echo "Please copy the log and send it to the developer:"
     echo "  Email: abhay02delhi@gmail.com"
-    echo "  GitHub: https://github.com/abhay-byte/fluxlinux/issues"
+    echo "  GitHub: https://github.com/HakaI963/bliss/issues"
     echo "─────────────────────────────────────────────────────────────"
     _flux_pause "Press Enter to acknowledge error and exit..."
 

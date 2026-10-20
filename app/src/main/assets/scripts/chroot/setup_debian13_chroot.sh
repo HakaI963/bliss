@@ -29,7 +29,7 @@ PKG="${TERMUX_APP__PACKAGE_NAME:-com.ivarna.fluxlinux}"
 APP_HOME="${TERMUX__HOME:-/data/data/${PKG}/files/home}"
 APP_PREFIX="${TERMUX__PREFIX:-/data/data/${PKG}/files/usr}"
 ROOTFS_NAME="debian_13_rootfs.tar.xz"
-ROOTFS_URL="${FLUX_ROOTFS_URL:-https://github.com/abhay-byte/fluxlinux/releases/download/rootfs/debian_13_rootfs.tar.xz}"
+ROOTFS_URL="${FLUX_ROOTFS_URL:-https://github.com/HakaI963/bliss/releases/download/rootfs/debian_13_rootfs.tar.xz}"
 ROOTFS_SHA256="${FLUX_ROOTFS_SHA256:-13e29f6099c3b805e84694507ede460c03886ffb364c03317272691cf84e6803}"
 
 # Function to show progress message

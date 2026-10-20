@@ -464,7 +464,7 @@ EOF
         
         # Download RootFS (Debian 13 Trixie)
         # URL provided by update request
-        download_file "$DEBIANPATH" "rootfs.tar.xz" "https://github.com/abhay-byte/fluxlinux/releases/download/rootfs/debian_13_rootfs.tar.xz"
+        download_file "$DEBIANPATH" "rootfs.tar.xz" "https://github.com/HakaI963/bliss/releases/download/rootfs/debian_13_rootfs.tar.xz"
         
         # Extract
         extract_file "$DEBIANPATH"
