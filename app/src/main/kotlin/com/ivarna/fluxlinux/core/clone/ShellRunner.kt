@@ -11,9 +11,9 @@ import java.io.InputStream
  *
  * Backend order: Shizuku (shell uid, user-granted) -> root (su) -> none.
  * Everything the clone feature needs at shell level (creating the isolated
- * clone user, installing APKs for it, launching apps on the hidden display,
- * touch injection) goes through here, so the same code works on a stock
- * non-rooted phone with Shizuku, or on a rooted one.
+ * clone user, installing APKs for it and starting apps in that user) goes
+ * through here, so the same code works on a stock non-rooted phone with
+ * Shizuku, or on a rooted one.
  */
 object ShellRunner {
 

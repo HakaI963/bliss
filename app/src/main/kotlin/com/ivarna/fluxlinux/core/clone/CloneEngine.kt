@@ -13,9 +13,7 @@ import android.graphics.drawable.Drawable
 import android.net.Uri
 import android.os.Build
 import android.util.Log
-import com.ivarna.fluxlinux.clone.ShellVd
-import com.ivarna.fluxlinux.BuildConfig
-import com.ivarna.fluxlinux.core.service.CloneSessionService
+import com.ivarna.fluxlinux.core.clone.ShellRunner
 import java.io.File
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
@@ -27,80 +25,23 @@ import java.util.zip.ZipInputStream
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
-import kotlin.math.roundToInt
 
 /**
- * Bliss clone space — shell-side (ShadowAuto model), nothing runs in the app.
+ * Bliss app cloner — installs apps into an isolated Android user ("Bliss")
+ * so they get their own data and never appear in the phone's launcher.
  *
- * The hidden virtual display is created and owned by the **shell process**
- * (Shizuku UserService, uid 2000). The shell also injects input into that
- * display and starts apps on it. The app only streams frames in and sends
- * commands out, so an activity can never appear on the phone screen and input
- * can never land there either.
- *
- * Cloned apps are installed for an isolated Android user ("Bliss") so they
- * never show up in the phone's launcher and keep their own data.
+ * No virtual display and no in-app automation: this is only clone management
+ * (install / list / remove / stop) plus starting the cloned app in its user.
  */
 object CloneEngine {
 
-    /** Serializes display ensure across probe/launch/heal callers. */
-    private val ensureMutex = Mutex()
-
     private const val TAG = "BlissClone"
-
-    init {
-        // The shell service streams its own log lines here live (placements,
-        // pump heartbeat, reject reasons) so the pane shows its side directly.
-        ShellVd.logSink = { line -> shellLine(line)?.let { log("  shell: $it") } }
-    }
-
-    /** Recent shell lines already shown, so ring re-dumps do not duplicate. */
-    private val shownShellLines = java.util.LinkedHashSet<String>()
-
-    private fun shellLine(line: String): String? {
-        synchronized(shownShellLines) {
-            if (!shownShellLines.add(line)) {
-                return null
-            }
-            while (shownShellLines.size > 400) {
-                val it = shownShellLines.iterator()
-                if (it.hasNext()) {
-                    it.next()
-                    it.remove()
-                }
-            }
-        }
-        return line
-    }
-
-    /** Dumps unseen service log lines into the pane, previous dumps excluded. */
-    fun logShellTail(limit: Int) {
-        for (line in ShellVd.serviceLogTail(limit) ?: emptyList()) {
-            shellLine(line)?.let { log("  shell: $it") }
-        }
-    }
     private const val PREFS = "bliss_clone_cfg"
     private const val CLONE_USER_NAME = "Bliss"
-
-    /** Resolution presets offered in Configure (portrait). */
-    val RES_PRESETS: List<Pair<Int, Int>> = listOf(
-        540 to 1170,
-        720 to 1560,
-        900 to 1950,
-    )
-
-    /** DPI choices in Configure; higher = smaller UI inside the clone display. */
-    val DPI_PRESETS = listOf(280, 320, 360, 420, 480)
-
-    data class Frame(val bitmap: Bitmap, val seq: Long)
 
     /** An app cloned into the Bliss space (the only thing the Apps tab shows). */
     data class CloneApp(
@@ -116,20 +57,12 @@ object CloneEngine {
 
     val apps = MutableStateFlow<List<CloneApp>>(emptyList())
     val deviceApps = MutableStateFlow<List<DeviceApp>>(emptyList())
-    val frame = MutableStateFlow<Frame?>(null)
     val running = MutableStateFlow<String?>(null)
     val status = MutableStateFlow<String?>(null)
     val busy = MutableStateFlow(false)
     val touchBackend = MutableStateFlow(ShellRunner.Backend.NONE)
     val cloneUserId = MutableStateFlow(0)
-    val displayW = MutableStateFlow(720)
-    val displayH = MutableStateFlow(1560)
     val logs = MutableStateFlow<List<String>>(emptyList())
-
-    // Configure tab (persisted in SharedPreferences).
-    val displayFps = MutableStateFlow(10)
-    val displayResPreset = MutableStateFlow(1)
-    val displayDpi = MutableStateFlow(360)
 
     private var appContext: Context? = null
     private var prefs: SharedPreferences? = null
@@ -146,27 +79,9 @@ object CloneEngine {
         surfacePreviousCrash(app)
         if (!isMainProcess(app)) return
         prefs = app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).also { p ->
-            displayFps.value = p.getInt("fps", 10).coerceIn(5, 30)
-            displayResPreset.value = p.getInt("res", 1).coerceIn(0, RES_PRESETS.size - 1)
-            displayDpi.value = p.getInt("dpi", 360)
             cloneUserId.value = p.getInt("clone_user", 0)
-            val preset = RES_PRESETS[displayResPreset.value]
-            displayW.value = preset.first
-            displayH.value = preset.second
         }
-        // Mirror the shell-side frames into the UI state. Nothing is rendered
-        // or injected by the app process, so input can never leak to the real
-        // screen.
-        scope.launch {
-            ShellVd.frames.collect { bmp ->
-                frame.value = bmp?.let { Frame(it, ShellVd.framesSeq.value) }
-            }
-        }
-        log("Clone space ready (fps=${displayFps.value}, res=${displayW.value}x${displayH.value}, backend=${touchBackend.value.label})")
-        // In-app AI agent: observe the live display (OCR / optional vision),
-        // ask the configured model for one action, inject it into the clone
-        // display. No MCP server, no external bridge.
-        CloneAi.init(app)
+        log("App cloner ready (backend=${touchBackend.value.label})")
         refresh()
         refreshShell()
     }
@@ -540,19 +455,7 @@ object CloneEngine {
 
     private fun installSingleBlocking(file: File, uid: Int): String? {
         if (!file.isFile) return "file not found: ${file.absolutePath}"
-        val ctx = appContext
-        // 1) Binder-staged install via the shell user service (no stdin piping).
-        if (ctx != null) {
-            val via = installViaUserService(ctx, listOf(file), uid)
-            if (via == "#fallback") {
-                // Service bind failed → legacy stdin path below.
-            } else if (via == null) {
-                return registerFromArchive(file) // installed
-            } else {
-                return via // pm gave an error
-            }
-        }
-        // 2) Legacy path: stream over Shizuku stdin (kept for old Shizuku versions).
+        // Stream/install through the shell (Shizuku or root). No user service.
         val backend = ShellRunner.backend()
         val size = file.length()
         val res = when (backend) {
@@ -575,36 +478,6 @@ object CloneEngine {
         val failure = installFailure(res)
         if (failure != null) return failure
         return registerFromArchive(file)
-    }
-
-    /**
-     * Uploads the APKs to /data/local/tmp over binder and runs one
-     * `pm install --user N -r <paths...>` from the shell. Returns:
-     * null = success, an install error string, or "#fallback" when the user
-     * service is unavailable (caller retries the legacy stdin path).
-     */
-    private fun installViaUserService(ctx: Context, files: List<File>, uid: Int): String? {
-        val bindErr = ShellVd.ensureService(ctx)
-        if (bindErr != null) {
-            log("Stage transport unavailable: $bindErr")
-            return "#fallback"
-        }
-        val remotes = ArrayList<String>(files.size)
-        try {
-            for ((i, f) in files.withIndex()) {
-                val name = "clone-" + System.currentTimeMillis() + "-" + i + "-" + f.name
-                val err = ShellVd.upload(f, name)
-                if (err != null) {
-                    log("Stage upload failed: $err")
-                    return "#fallback"
-                }
-                remotes.add(ShellVd.stagePath(name))
-            }
-            log("Staged ${files.size} apk(s) over binder, installing…")
-            return ShellVd.pmInstall(remotes, uid)
-        } finally {
-            if (remotes.isNotEmpty()) ShellVd.deleteStage(remotes)
-        }
     }
 
     /** .apks / .xapk / .apkm = zip with base.apk + split APKs. */
@@ -630,13 +503,6 @@ object CloneEngine {
         if (apks.isEmpty()) return "split set contains no APKs"
         val base = apks.firstOrNull { it.name.equals("base.apk", true) } ?: apks.first()
 
-        if (ctx != null) {
-            // Binder-staged multi-path install (base order first).
-            val ordered = apks.sortedBy { if (it == base) 0 else 1 }
-            val r = installViaUserService(ctx, ordered, uid)
-            if (r == null) return registerFromArchive(base)
-            if (r != "#fallback") return r
-        }
         val create = ShellRunner.exec("pm", "install-create", "--user", uid.toString(), "-r")
         val session = Regex("""\[(\d+)]""").find(create.combined)?.groupValues?.get(1)
             ?: return "could not create install session: ${create.combined.take(160)}"
@@ -809,24 +675,6 @@ object CloneEngine {
         }
     }
 
-    fun killNowBlocking(packageName: String): String? {
-        val shellErr = requireShell()
-        if (shellErr != null) return shellErr
-        val uid = if (cloneUserId.value > 0) cloneUserId.value else 0
-        val err = ShellVd.kill(packageName, uid)
-        log("Kill $packageName (user $uid): ${err ?: "ok"}")
-        if (running.value == packageName) {
-            running.value = null
-            appContext?.let { CloneSessionService.stop(it) }
-            // Don't keep the whole isolated user alive for nothing: it costs
-            // battery and heat on a phone just sitting in a pocket.
-            if (uid > 0) {
-                scope.launch { runCatching { ShellRunner.exec("am", "stop-user", "-f", uid.toString()) } }
-            }
-        }
-        return err
-    }
-
     fun uninstallNowBlocking(packageName: String): String? {
         val shellErr = requireShell()
         if (shellErr != null) return shellErr
@@ -836,137 +684,33 @@ object CloneEngine {
         if (out.contains("Failure", ignoreCase = true)) return out.take(200)
         if (!r.ok && !out.contains("Success", ignoreCase = true)) return out.ifBlank { "uninstall failed" }
         removeMeta(packageName)
-        if (running.value == packageName) {
-            running.value = null
-            appContext?.let { CloneSessionService.stop(it) }
-        }
+        if (running.value == packageName) running.value = null
         return null
     }
 
-    /** Virtual display availability line for the Display tab. */
-    val vdProbe = MutableStateFlow<String?>(null)
-    private var probeRunning = false
+    // ---------------------------------------------------------------- launch / stop
 
-    /** Display id owned by the shell service (0 = none). */
-    private val engineDisplayId = MutableStateFlow(0)
-
-    /** Probes the shell-side hidden display and returns a human verdict. */
-    fun probeDisplay() {
-        if (probeRunning) return
-        probeRunning = true
-        vdProbe.value = "Virtual display: checking…"
-        scope.launch {
-            vdProbe.value = withContext(Dispatchers.IO) { probeDisplayBlocking() }
-            probeRunning = false
-        }
-    }
-
-    private suspend fun probeDisplayBlocking(): String {
+    /** Starts a cloned app in the isolated user. Returns null on success. */
+    suspend fun launchNowBlocking(packageName: String): String? {
         val shellErr = requireShell()
-        if (shellErr != null) return "Virtual display: unavailable — $shellErr"
-        engineDisplayId.value.takeIf { it > 0 }?.let { return "Virtual display: available (id=$it)" }
-        val ok = ensureDisplay()
-        return if (ok) {
-            "Virtual display: available (id=${engineDisplayId.value})"
-        } else {
-            val tail = ShellVd.serviceLogTail(4) ?: emptyList()
-            val cause = tail.lastOrNull { it.isNotBlank() }?.let { " — " + it.trim() } ?: ""
-            "Virtual display: NOT available$cause"
+        if (shellErr != null) return shellErr
+        val (uid, err) = targetUserBlocking()
+        if (err != null) return err
+        val component = resolveComponentBlocking(packageName, uid)
+            ?: return "no launcher activity for $packageName in user $uid"
+        val r = ShellRunner.exec(
+            "am", "start", "--user", uid.toString(), "-n", component,
+        )
+        val out = r.combined.trim()
+        if (!r.ok || out.contains("Error", ignoreCase = true)) {
+            log("Launch $packageName failed: ${out.take(200)}")
+            return out.ifBlank { "am start failed" }.take(240)
         }
+        running.value = packageName
+        status.value = "Started $packageName in the clone user ($uid). Switch user to see it."
+        log("Launch: $packageName (user $uid, component $component)")
+        return null
     }
-
-    // ---------------------------------------------------------------- display (shell-side)
-
-    /**
-     * Creates the hidden display inside the Shizuku (shell) process. Blocking —
-     * always called from the engine's IO scope, never from the UI thread.
-     * Serialized: concurrent probe/launch/heal callers must not create
-     * displays in parallel (the device saw ids 19..22 appear in one second).
-     */
-    suspend fun ensureDisplay(): Boolean {
-        val ctx = appContext ?: return false
-        val preset = RES_PRESETS[displayResPreset.value.coerceIn(0, RES_PRESETS.size - 1)]
-        displayW.value = preset.first
-        displayH.value = preset.second
-        ensureMutex.withLock {
-            // Reuse a live display; re-creating on every probe/run leaks
-            // display ids. Re-checked inside the lock.
-            val remote = ShellVd.remoteDisplayId()
-            if (remote > 0) {
-                if (engineDisplayId.value != remote) engineDisplayId.value = remote
-                return true
-            }
-            val err = withContext(Dispatchers.IO) {
-                ShellVd.ensure(
-                    ctx,
-                    preset.first,
-                    preset.second,
-                    displayDpi.value.coerceIn(120, 640),
-                    displayFps.value.coerceIn(5, 30),
-                )
-            }
-            if (err != null) {
-                status.value = err
-                log("Display failed: $err")
-                logShellTail(12)
-                return false
-            }
-            engineDisplayId.value = ShellVd.displayId.value
-            log("Display ready: id=${engineDisplayId.value} ${preset.first}x${preset.second} dpi=${displayDpi.value} fps=${displayFps.value}")
-        }
-        return true
-    }
-
-    fun currentDisplayId(): Int = ShellVd.displayId.value
-
-    /** True when the shell service still owns a live clone display. */
-    fun displayAlive(): Boolean = ShellVd.remoteDisplayId() > 0
-
-    private suspend fun closeDisplay() {
-        withContext(Dispatchers.IO) { ShellVd.stopFrames() }
-        withContext(Dispatchers.IO) { ShellVd.releaseDisplay() }
-        engineDisplayId.value = 0
-        frame.value = null
-    }
-
-    fun releaseAll() {
-        val pkg = running.value
-        running.value = null
-        appContext?.let { CloneSessionService.stop(it) }
-        scope.launch {
-            if (pkg != null) {
-                runCatching { killNowBlocking(pkg) }
-            }
-            runCatching { closeDisplay() }
-        }
-    }
-
-    // ---------------------------------------------------------------- configure
-
-    /** Persists the Configure values and restarts the display (relaunches the running app). */
-    fun applyDisplayConfig() {
-        prefs?.edit()
-            ?.putInt("fps", displayFps.value.coerceIn(5, 60))
-            ?.putInt("res", displayResPreset.value.coerceIn(0, RES_PRESETS.size - 1))
-            ?.putInt("dpi", displayDpi.value.coerceIn(120, 640))
-            ?.apply()
-        scope.launch {
-            val pkg = running.value
-            log("Applying display config (fps=${displayFps.value}, res=${RES_PRESETS[displayResPreset.value.coerceIn(0, RES_PRESETS.size - 1)]}, dpi=${displayDpi.value})")
-            if (pkg != null) {
-                runCatching { killNowBlocking(pkg) }
-                running.value = null
-            }
-            runCatching { closeDisplay() }
-            delay(700)
-            if (pkg != null) {
-                val err = launchNowBlocking(pkg)
-                log(if (err == null) "Relaunched $pkg after display restart" else "Relaunch failed: $err")
-            }
-        }
-    }
-
-    // ---------------------------------------------------------------- launch
 
     fun launch(packageName: String) {
         scope.launch {
@@ -975,171 +719,58 @@ object CloneEngine {
         }
     }
 
-    /** Blocking launch on the hidden display. Returns null on success. */
-    suspend fun launchNowBlocking(packageName: String): String? {
+    /** Switches the phone to the clone user so its apps are visible. */
+    fun switchToCloneUser() {
+        scope.launch {
+            val uid = cloneUserId.value
+            if (uid <= 0) {
+                status.value = "Clone user is not created yet"
+                return@launch
+            }
+            val r = withContext(Dispatchers.IO) {
+                ShellRunner.exec("am", "switch-user", uid.toString())
+            }
+            val out = r.combined.trim()
+            if (!r.ok || out.contains("Error", ignoreCase = true)) {
+                status.value = out.ifBlank { "switch-user failed" }.take(200)
+                log("switch-user $uid failed: ${out.take(160)}")
+            } else {
+                log("Switched to clone user $uid")
+            }
+        }
+    }
+
+    /** Resolves pkg/activity for a user (cmd package resolve-activity). */
+    private fun resolveComponentBlocking(packageName: String, uid: Int): String? {
+        val r = ShellRunner.exec(
+            "cmd", "package", "query-activities", "--brief", "--user", uid.toString(), packageName,
+        )
+        val text = r.stdout.ifBlank { r.stderr }
+        for (line in text.lineSequence()) {
+            val value = line.trim()
+            val slash = value.indexOf('/')
+            if (slash > 0 && value.substring(0, slash).contains('.') && !value.contains(' ')) {
+                return value
+            }
+        }
+        // Fallback: the component cached at install time.
+        return apps.value.firstOrNull { it.packageName == packageName }?.component
+    }
+
+    fun killNowBlocking(packageName: String): String? {
         val shellErr = requireShell()
         if (shellErr != null) return shellErr
-        val (uid, err) = targetUserBlocking()
-        if (err != null) return err
-        if (!ensureDisplay()) return status.value ?: "hidden display unavailable"
-        val launchErr = withContext(Dispatchers.IO) { ShellVd.launch(packageName, uid) }
-        if (!launchErr.isNullOrEmpty()) {
-            logShellTail(12)
-        }
-        if (launchErr != null) {
-            log("Launch failed: ${launchErr.take(240)}")
-            return launchErr.take(240)
-        }
-        running.value = packageName
-        status.value = null
-        appContext?.let { CloneSessionService.start(it) }
-        withContext(Dispatchers.IO) { ShellVd.startFrames() }
-        log("Launch: $packageName (user $uid, display ${ShellVd.displayId.value})")
-        // Watchdog: when nothing ever rendered on the hidden display, dump the
-        // service's own log tail (the shell-side truth) into the pane and
-        // self-heal a shell service that lost (or never kept) its display.
-        val seqAtLaunch = ShellVd.framesSeq.value
-        scope.launch {
-            delay(12_000)
-            if (running.value != packageName || ShellVd.framesSeq.value != seqAtLaunch) return@launch
-            val healed = withContext(Dispatchers.IO) { healLostDisplayNow(packageName) }
-            log("No still frame after 12s for $packageName" + (healed?.let { " — $it" } ?: ""))
-            logShellTail(15)
-            status.value = "No picture yet — see Logs"
-        }
-        return null
-    }
-
-    /** Re-creates the display and re-launches once if the shell service lost it. */
-    private suspend fun healLostDisplayNow(packageName: String): String? {
-        if (ShellVd.remoteDisplayId() > 0) return null
-        log("Hidden display lost (service restarted) — re-creating…")
-        engineDisplayId.value = 0
-        if (!ensureDisplay()) return "display re-creation failed"
-        val (uid, err) = targetUserBlocking()
-        if (err != null) return "relaunch failed: $err"
-        val launchErr = withContext(Dispatchers.IO) { ShellVd.launch(packageName, uid) }
-        if (!launchErr.isNullOrEmpty()) return "relaunch failed: $launchErr"
-        withContext(Dispatchers.IO) { ShellVd.startFrames() }
-        return "re-created and re-launched (display ${ShellVd.displayId.value})"
-    }
-
-    // ---------------------------------------------------------------- input (shell-side)
-
-    /** Android key codes for the on-screen buttons (input never leaves the shell display). */
-    private fun keyCodeOf(name: String): Int = when (name.uppercase(Locale.ROOT)) {
-        "BACK" -> 4
-        "HOME" -> 3
-        "ENTER" -> 66
-        "TAB" -> 61
-        "SEARCH" -> 84
-        "DEL", "DELETE" -> 67
-        "APP_SWITCH", "RECENTS" -> 187
-        else -> name.toIntOrNull() ?: 4
-    }
-
-    fun tap(x: Float, y: Float) {
-        val xi = x.roundToInt().coerceAtLeast(0)
-        val yi = y.roundToInt().coerceAtLeast(0)
-        log("Tap $xi,$yi")
-        scope.launch {
-            val err = withContext(Dispatchers.IO) { ShellVd.tap(xi, yi) }
-            if (err != null) log("Tap failed: $err")
-        }
-    }
-
-    fun swipe(x1: Float, y1: Float, x2: Float, y2: Float, durationMs: Int = 300) {
-        log("Swipe ${x1.roundToInt()},${y1.roundToInt()} → ${x2.roundToInt()},${y2.roundToInt()}")
-        scope.launch {
-            val err = withContext(Dispatchers.IO) {
-                ShellVd.swipe(
-                    x1.roundToInt(), y1.roundToInt(), x2.roundToInt(), y2.roundToInt(), durationMs,
-                )
-            }
-            if (err != null) log("Swipe failed: $err")
-        }
-    }
-
-    fun key(keyCode: String) {
-        log("Key $keyCode")
-        scope.launch {
-            val err = withContext(Dispatchers.IO) { ShellVd.key(keyCodeOf(keyCode)) }
-            if (err != null) log("Key failed: $err")
-        }
-    }
-
-    /** Maps Bliss' key names to the engine's key names (or raw key codes). */
-    private fun keyNameOf(name: String): String = when (name.uppercase(Locale.ROOT)) {
-        "BACK" -> "back"
-        "ENTER" -> "enter"
-        "SEARCH" -> "search"
-        "TAB" -> "tab"
-        else -> keyCodeOf(name).toString()
-    }
-
-    fun text(value: String) {
-        if (value.isEmpty()) return
-        log("Text ${value.length} chars")
-        scope.launch {
-            val err = withContext(Dispatchers.IO) { ShellVd.text(value) }
-            if (err != null) log("Text failed: $err")
-        }
-    }
-
-    // ---------------------------------------------------------------- screenshot
-
-    fun screenshotPng(): ByteArray? {
-        val bmp = frame.value?.bitmap ?: return null
-        return try {
-            val out = java.io.ByteArrayOutputStream()
-            bmp.compress(Bitmap.CompressFormat.PNG, 100, out)
-            out.toByteArray()
-        } catch (t: Throwable) {
+        val uid = if (cloneUserId.value > 0) cloneUserId.value else 0
+        val r = ShellRunner.exec("am", "force-stop", "--user", uid.toString(), packageName)
+        val out = r.combined.trim()
+        val err = if (!r.ok || out.contains("Error", ignoreCase = true)) {
+            out.ifBlank { "force-stop failed" }.take(200)
+        } else {
             null
         }
-    }
-
-    /** Latest raw frame (agent API + UI). */
-    fun latestFrameBitmap(): Bitmap? = frame.value?.bitmap
-
-    // ------------------------------------------------------- install from agent
-
-    /** Blocking install from a path (absolute, or relative to the clone dir). */
-    fun installApkNow(path: String): String? {
-        val f = File(path)
-        val real = if (f.isAbsolute) f else File(cloneDir(), path)
-        if (!real.isFile) return "file not found: $path"
-        log("Agent install: ${real.name} (${real.length()} bytes)")
-        return installStagedBlocking(real)
-    }
-
-    /** Blocking download + install (agent API). */
-    fun installUrlNow(url: String): String? {
-        val ctx = appContext ?: return "no context"
-        val clean = url.trim().substringBefore('?')
-        val ext = if (clean.endsWith(".apks") || clean.endsWith(".xapk") || clean.endsWith(".apkm")) {
-            clean.substringAfterLast('.')
-        } else {
-            "apk"
-        }
-        val dest = File(ctx.cacheDir, "clone-inbox/agent-" + System.currentTimeMillis() + "." + ext)
-        return try {
-            dest.parentFile?.mkdirs()
-            downloadTo(url.trim(), dest)
-            log("Agent download ok: ${dest.length()} bytes")
-            installApkNow(dest.absolutePath)
-        } catch (t: Throwable) {
-            log("Agent download failed: ${t.message}")
-            t.message ?: "download failed"
-        } finally {
-            runCatching { dest.delete() }
-        }
-    }
-
-    /** Blocking clone-from-device for the agent API. */
-    fun cloneDeviceNow(pkg: String): String? {
-        log("Agent clone from device: $pkg")
-        return cloneFromDeviceBlocking(pkg)
+        log("Kill $packageName (user $uid): ${err ?: "ok"}")
+        if (running.value == packageName) running.value = null
+        return err
     }
 
     /** Blocking launch for the agent API. Returns null on success. */
@@ -1150,24 +781,6 @@ object CloneEngine {
 
     /** Blocking uninstall for the agent API. Returns null on success. */
     fun uninstallNow(packageName: String): String? = uninstallNowBlocking(packageName)
-
-    // ------------------------------------------------------------- AI actions
-
-    /** Synchronous tap on the clone display (AI agent). */
-    fun tapSync(x: Int, y: Int): Boolean = ShellVd.tap(x, y) == null
-
-    fun longPressSync(x: Int, y: Int, ms: Int): Boolean = ShellVd.longPress(x, y, ms) == null
-
-    fun swipeSync(x1: Int, y1: Int, x2: Int, y2: Int, ms: Int = 320): Boolean =
-        ShellVd.swipe(x1, y1, x2, y2, ms) == null
-
-    fun keySync(name: String): Boolean = ShellVd.key(keyCodeOf(name)) == null
-
-    fun textSync(value: String): Boolean = ShellVd.text(value) == null
-
-    /** Fresh full-resolution JPEG of the clone display (AI observations). */
-    fun screenshotJpeg(maxWidth: Int = displayW.value, quality: Int = 85): ByteArray? =
-        ShellVd.screenshot(maxWidth, quality)
 
     // ---------------------------------------------------------------- meta store
 

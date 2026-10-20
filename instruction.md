@@ -844,3 +844,30 @@ before `createVirtualDisplay()` is reached, so the service answers `-1` in milli
 - `ShadowShellContext.Workarounds.systemContext()` falls back to
   `ActivityThread.currentActivityThread()`.
 - versionCode 44, 3.10.4 (the version bump also forces Shizuku to restart the user service).
+
+---
+
+## 36. Round 36 — ShadowAuto/virtual-display/AI removed; app cloner kept (2026-10-20)
+
+**User decision:** the virtual display never produced a frame for the cloned app, and the
+ShadowAuto-derived layer is unwanted. Removed it completely.
+
+**Deleted**
+- `app/src/main/java/com/ivarna/fluxlinux/clone/` — `ShadowDisplay`, `ShadowInput`,
+  `ShadowScreenCapture`, `ShadowShellContext`, `ShadowWindowManager`, `ShellVdService`.
+- `app/src/main/kotlin/com/ivarna/fluxlinux/clone/ShellVd.kt`.
+- `core/clone/CloneAi.kt`, `core/clone/CloneOcr.kt`, `core/service/CloneSessionService.kt`.
+- The `IShellVd` / `IShellVdCallback` AIDL, the AI protocol test, `docs/clone-ai.md`, and the
+  vendored `vendor/shadowauto/` source + `docs/shadowauto-parity.md`.
+- The AI unit-test CI step and the CloneSessionService manifest entry.
+
+**Kept / restored**
+- The app cloner: create the isolated “Bliss” Android user, install from APK / URL / split bundle /
+  clone an installed app, list, stop, uninstall.
+- Opening a cloned app starts it in the clone user (`am start --user N -n pkg/activity`), with a
+  “Switch to clone user” action. No display creation, no input injection, no AI.
+- Desktop and terminal are untouched.
+- The Apps screen is now a simple clone manager (no Display/AI/Configure tabs); the Tools hub entry
+  is “Cloned apps”.
+
+versionCode 46, 3.11.0.

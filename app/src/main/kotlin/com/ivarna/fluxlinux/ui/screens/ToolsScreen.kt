@@ -94,8 +94,8 @@ private fun ToolsHub(onOpenClone: () -> Unit, onOpenApps: () -> Unit) {
                 divider = true,
             )
             QRow(
-                title = "AI control",
-                subtitle = "Open a cloned app in Apps, then use its AI tab to run a goal.",
+                title = "Cloned apps",
+                subtitle = "Open, stop or remove apps in the isolated clone user.",
                 onClick = onOpenApps,
                 trailing = { QChevron() },
             )
