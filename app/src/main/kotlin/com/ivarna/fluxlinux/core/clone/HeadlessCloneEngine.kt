@@ -128,6 +128,7 @@ object HeadlessCloneEngine {
     private val statusInFlight = AtomicBoolean(false)
     private val clonesInFlight = AtomicBoolean(false)
     private val deviceAppsInFlight = AtomicBoolean(false)
+    private val logsInFlight = AtomicBoolean(false)
     private val operationInFlight = AtomicBoolean(false)
     private val localLogs = ArrayList<String>()
     private var appContext: Context? = null
@@ -438,6 +439,7 @@ object HeadlessCloneEngine {
 
     fun fetchCloneLogs(packageName: String, maxLines: Int = 240) {
         val c = requireConnected() ?: return
+        if (!logsInFlight.compareAndSet(false, true)) return
         scope.launch {
             try {
                 val raw = c.cloneLogs(packageName, maxLines)
@@ -454,6 +456,8 @@ object HeadlessCloneEngine {
                 cloneLogs.value = lines
             } catch (t: Throwable) {
                 cloneLogs.value = listOf("Log read failed: ${t.message ?: t.javaClass.simpleName}")
+            } finally {
+                logsInFlight.set(false)
             }
         }
     }

@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import app.cash.paparazzi.DeviceConfig
 import app.cash.paparazzi.Paparazzi
+import com.ivarna.fluxlinux.core.clone.HeadlessCloneEngine
 import com.ivarna.fluxlinux.core.utils.ThemeMode
 import com.ivarna.fluxlinux.ui.components.QCard
 import com.ivarna.fluxlinux.ui.components.QLogPane
@@ -109,6 +110,42 @@ class BlissDesignScreenshotsTest {
             }
         }
     }
+
+    @Test
+    fun apps_installed_folders() {
+        HeadlessCloneEngine.connected.value = true
+        HeadlessCloneEngine.clones.value = listOf(
+            fakeClone("test1", "com.nopiece.hclone.h11111111"),
+            fakeClone("test2", "com.nopiece.hclone.h22222222"),
+            fakeClone("test3", "com.nopiece.hclone.h33333333"),
+        )
+        try {
+            paparazzi.snapshot {
+                FluxLinuxTheme(themeMode = ThemeMode.DARK) {
+                    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                        CompositionLocalProvider(LocalActivityResultRegistryOwner provides NoopRegistryOwner) {
+                            ClonedAppsScreen()
+                        }
+                    }
+                }
+            }
+        } finally {
+            HeadlessCloneEngine.clones.value = emptyList()
+            HeadlessCloneEngine.connected.value = false
+        }
+    }
+
+    private fun fakeClone(label: String, packageName: String) = HeadlessCloneEngine.CloneApp(
+        packageName = packageName,
+        originalPackage = "com.test.sample",
+        originalLabel = "Sample app",
+        label = label,
+        activity = "com.test.sample.MainActivity",
+        source = "installed",
+        status = "installed",
+        orientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT,
+        icon = null,
+    )
 
     @Test
     fun apps_preference() {
