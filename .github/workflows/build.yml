@@ -60,6 +60,11 @@ jobs:
         env:
           ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_HOME }}
 
+      - name: AI protocol unit tests
+        run: ./gradlew testBlissDebugUnitTest --tests 'com.ivarna.fluxlinux.core.clone.CloneAiProtocolTest' --stacktrace
+        env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_HOME }}
+
       - name: Verify APK (targetSdk 28, bootstrap + jniLibs packaged)
         run: |
           APK=$(ls app/build/outputs/apk/bliss/debug/*.apk | head -n 1)
