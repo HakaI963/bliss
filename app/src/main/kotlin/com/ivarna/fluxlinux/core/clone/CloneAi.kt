@@ -333,8 +333,9 @@ object CloneAi {
 
     private suspend fun observe(): Observation? = withContext(Dispatchers.IO) {
         val displayW = CloneEngine.displayW.value.coerceIn(320, 1920)
+        val displayH = CloneEngine.displayH.value.coerceIn(320, 1920)
         // Keep the JPEG comfortably below the 1 MB binder limit; OCR
-        // coordinates are scaled back to display pixels when acting.
+        // coordinates are rescaled to display pixels before the model sees them.
         val shotWidth = displayW.coerceAtMost(720)
         val jpeg = CloneEngine.screenshotJpeg(shotWidth, 80) ?: fallbackJpeg()
             ?: return@withContext null
@@ -344,17 +345,25 @@ object CloneAi {
             null
         } ?: return@withContext null
         return@withContext try {
+            val scaleX = displayW.toFloat() / bitmap.width.coerceAtLeast(1)
+            val scaleY = displayH.toFloat() / bitmap.height.coerceAtLeast(1)
             val lines = CloneOcr.recognize(bitmap)
                 ?.mapNotNull { line ->
                     val text = line.text.replace(Regex("\\s+"), " ").trim()
                     if (text.isEmpty()) null
-                    else ScreenLine(text, line.x, line.y, line.w, line.h)
+                    else ScreenLine(
+                        text,
+                        (line.x * scaleX).roundToInt(),
+                        (line.y * scaleY).roundToInt(),
+                        (line.w * scaleX).roundToInt(),
+                        (line.h * scaleY).roundToInt(),
+                    )
                 }
                 ?.filter { it.w > 0 && it.h > 0 }
                 ?.sortedWith(compareBy({ it.y }, { it.x }))
                 ?.take(160)
                 ?: emptyList()
-            Observation(jpeg, bitmap.width, bitmap.height, lines)
+            Observation(jpeg, displayW, displayH, lines)
         } finally {
             try {
                 bitmap.recycle()
