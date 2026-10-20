@@ -86,7 +86,7 @@ object BlissCliInstaller {
     private fun writeAsset(ctx: Context, target: File, marker: File?) {
         val script = readAsset(ctx) ?: return
         if (marker != null && marker.isFile && target.isFile &&
-            target.length() == script.size.toLong()
+            target.length() == script.length.toLong()
         ) {
             return
         }
