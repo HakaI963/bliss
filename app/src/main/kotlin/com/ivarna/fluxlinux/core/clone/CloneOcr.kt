@@ -18,10 +18,14 @@ object CloneOcr {
 
     data class Line(val text: String, val x: Int, val y: Int, val w: Int, val h: Int)
 
+    /** One recognizer per process: each client loads the bundled model. */
+    private val recognizer by lazy {
+        TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+    }
+
     /** Blocking recognition (runs on IO). Returns null when recognition failed. */
     suspend fun recognize(bitmap: Bitmap): List<Line>? = withContext(Dispatchers.IO) {
         runCatching {
-            val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
             val image = InputImage.fromBitmap(bitmap, 0)
             val result = Tasks.await(recognizer.process(image), 25, TimeUnit.SECONDS)
             val out = ArrayList<Line>()

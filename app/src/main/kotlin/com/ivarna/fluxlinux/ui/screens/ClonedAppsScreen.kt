@@ -61,6 +61,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.Image
 import com.ivarna.fluxlinux.core.clone.CloneAi
 import com.ivarna.fluxlinux.core.clone.CloneEngine
+import com.ivarna.fluxlinux.core.clone.ShellRunner
 import com.ivarna.fluxlinux.ui.components.QCard
 import com.ivarna.fluxlinux.ui.components.QEmptyState
 import com.ivarna.fluxlinux.ui.components.QLogPane
@@ -437,6 +438,7 @@ private fun AiSection(app: CloneEngine.CloneApp, onNotice: (String) -> Unit) {
     val lastAction by CloneAi.lastAction.collectAsState()
     val ocrLines by CloneAi.ocrLineCount.collectAsState()
     val epoch by CloneAi.configEpoch.collectAsState()
+    val backend by CloneEngine.touchBackend.collectAsState()
 
     val initial = remember(epoch) { CloneAi.config() }
     var showSettings by remember(epoch) { mutableStateOf(!initial.usable) }
@@ -568,8 +570,15 @@ private fun AiSection(app: CloneEngine.CloneApp, onNotice: (String) -> Unit) {
             } else {
                 QPrimaryButton(
                     "Run AI",
-                    enabled = configured && goal.isNotBlank(),
+                    enabled = configured && goal.isNotBlank() && backend != ShellRunner.Backend.NONE,
                 ) { CloneAi.start(app.packageName, goal) }
+            }
+            if (backend == ShellRunner.Backend.NONE) {
+                Text(
+                    "Shizuku (or root) is needed — enable it in Tools → Clone.",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.error,
+                )
             }
             if (!configured) {
                 Text(
@@ -582,6 +591,7 @@ private fun AiSection(app: CloneEngine.CloneApp, onNotice: (String) -> Unit) {
                 Text(it, fontSize = 11.5.sp, color = MaterialTheme.colorScheme.primary)
             }
             QStatusRow("Step", "$step / $maxSteps")
+            QStatusRow("Shell", backend.label)
             QStatusRow("OCR lines", ocrLines.toString())
             if (lastAction.isNotBlank()) {
                 QStatusRow("Last action", lastAction)
