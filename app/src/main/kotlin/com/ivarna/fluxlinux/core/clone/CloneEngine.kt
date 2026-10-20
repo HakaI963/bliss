@@ -150,6 +150,12 @@ object CloneEngine {
     // ---------------------------------------------------------------- registry
 
     fun refresh() {
+        // Unit/screenshot renders have no Application context; never start the
+        // engine there.
+        if (appContext == null) {
+            apps.value = emptyList()
+            return
+        }
         val meta = loadMeta()
         val byPkg = LinkedHashMap<String, CloneApp>()
         val keys = meta.keys()

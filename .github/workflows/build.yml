@@ -76,3 +76,15 @@ jobs:
           name: bliss-debug-apk
           path: app/build/outputs/apk/bliss/debug/*.apk
           if-no-files-found: warn
+
+      - name: Publish GitHub release
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          APK=app/build/outputs/apk/bliss/debug/app-bliss-debug.apk
+          TAG="bliss-debug-${GITHUB_SHA::7}"
+          SHA=$(sha256sum "$APK" | awk '{print $1}')
+          gh release create "$TAG" --title "Bliss 3.12.0 — in-app app cloner (BlackBox engine)" \
+            --notes "Cloned apps run inside Bliss. No Android user or profile. APK SHA-256: $SHA" || true
+          gh release upload "$TAG" "$APK" --clobber
