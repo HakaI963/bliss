@@ -1,21 +1,21 @@
 package com.ivarna.fluxlinux.ui.components
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 import dev.chrisbanes.haze.HazeState
 
 /**
- * Flat AOSP shell. Kept under the old name so every existing caller compiles.
- * No blur, no drifting background, no floating card chrome.
+ * Bliss shell. Kept under the old name so existing callers compile.
+ * Midnight grid backdrop, transparent scaffold, floating dock.
  */
 @Composable
 fun GlassScaffold(
@@ -25,13 +25,10 @@ fun GlassScaffold(
     bottomBar: @Composable () -> Unit = {},
     content: @Composable () -> Unit
 ) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-    ) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        FolioAnimatedBackground()
         Scaffold(
-            containerColor = MaterialTheme.colorScheme.background,
+            containerColor = Color.Transparent,
             topBar = topBar,
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
             content = { paddingValues ->
@@ -49,6 +46,7 @@ fun GlassScaffold(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
+                .padding(horizontal = 14.dp, vertical = 6.dp)
         ) {
             bottomBar()
         }

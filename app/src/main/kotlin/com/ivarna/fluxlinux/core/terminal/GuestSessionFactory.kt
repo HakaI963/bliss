@@ -53,6 +53,7 @@ object GuestSessionFactory {
         distroId: String? = null
     ): (() -> Boolean)? {
         if (!SessionRegistry.hasFreeTab()) return null
+        TerminalPalette.apply()
         // Patch guest .zshrc if it still hard-sources missing oh-my-zsh / pokemon,
         // or create a missing Bliss profile (Alpine installs that never wrote one).
         GuestZshrcRepair.repairIfNeeded(ctx, method, distroId)
@@ -111,6 +112,7 @@ object GuestSessionFactory {
      */
     fun openHostShell(ctx: Context, title: String = "Host Shell"): Boolean {
         if (!SessionRegistry.hasFreeTab()) return false
+        TerminalPalette.apply()
         val shell = TermuxHostPaths.libBash(ctx).absolutePath
         // (Re)write the host rc for THIS package before every open; content-compared.
         val rc = TermuxHostPaths.ensureHostShellRc(ctx)

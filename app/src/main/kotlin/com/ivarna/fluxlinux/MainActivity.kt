@@ -20,6 +20,8 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
@@ -38,6 +40,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
@@ -573,13 +576,13 @@ class MainActivity : ComponentActivity() {
         }
         requestNotificationPermissionIfNeeded()
         setContent {
-            // Light is the default. Dark and System are explicit user choices.
+            // Midnight is the default. Day and System are explicit user choices.
             val themePreferences = remember { ThemePreferences(this@MainActivity) }
             var currentThemeMode by remember {
                 mutableStateOf(
                     when (val stored = themePreferences.getThemeMode()) {
                         ThemeMode.LIGHT, ThemeMode.DARK, ThemeMode.SYSTEM -> stored
-                        else -> ThemeMode.LIGHT
+                        else -> ThemeMode.DARK
                     }
                 )
             }
@@ -857,7 +860,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                // Helper for Top Bar — Bliss: wordmark + frost status pill only.
+                // Helper for Top Bar — Bliss wordmark + live signal chip.
                 @Composable
                 fun TopBar(
                     hazeState: HazeState,
@@ -868,51 +871,65 @@ class MainActivity : ComponentActivity() {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(MaterialTheme.colorScheme.surface)
+                            .background(MaterialTheme.colorScheme.background.copy(alpha = 0.94f))
                     ) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .windowInsetsPadding(WindowInsets.statusBars)
-                                .height(56.dp)
-                                .padding(start = 16.dp, end = 6.dp),
+                                .height(54.dp)
+                                .padding(start = 18.dp, end = 6.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                text = "Bliss",
-                                style = com.ivarna.fluxlinux.ui.theme.FolioWordmarkStyle,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                if (displayLive) {
-                                    Row(
+                                Box(
+                                    modifier = Modifier
+                                        .size(7.dp)
+                                        .clip(CircleShape)
+                                        .background(MaterialTheme.colorScheme.primary)
+                                )
+                                Spacer(modifier = Modifier.width(9.dp))
+                                Text(
+                                    text = "BLISS",
+                                    style = com.ivarna.fluxlinux.ui.theme.FolioWordmarkStyle,
+                                    color = MaterialTheme.colorScheme.onBackground
+                                )
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Row(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(50))
+                                        .background(
+                                            if (displayLive) MaterialTheme.colorScheme.primaryContainer
+                                            else MaterialTheme.colorScheme.surfaceVariant
+                                        )
+                                        .border(
+                                            1.dp,
+                                            if (displayLive) MaterialTheme.colorScheme.primary.copy(alpha = 0.28f)
+                                            else MaterialTheme.colorScheme.outlineVariant,
+                                            RoundedCornerShape(50)
+                                        )
+                                        .clickable(enabled = displayLive, onClick = onOpenDisplay)
+                                        .padding(horizontal = 10.dp, vertical = 5.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
                                         modifier = Modifier
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .background(MaterialTheme.colorScheme.primaryContainer)
-                                            .clickable(onClick = onOpenDisplay)
-                                            .padding(horizontal = 10.dp, vertical = 5.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(6.dp)
-                                                .clip(CircleShape)
-                                                .background(MaterialTheme.colorScheme.primary)
-                                        )
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text(
-                                            text = "X11",
-                                            style = MaterialTheme.typography.labelMedium,
-                                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                                        )
-                                    }
-                                } else {
+                                            .size(5.dp)
+                                            .clip(CircleShape)
+                                            .background(
+                                                if (displayLive) MaterialTheme.colorScheme.primary
+                                                else MaterialTheme.colorScheme.outline
+                                            )
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
                                     Text(
-                                        text = "Embedded",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.padding(end = 8.dp)
+                                        text = if (displayLive) "LIVE" else "READY",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = if (displayLive) MaterialTheme.colorScheme.onPrimaryContainer
+                                        else MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
                                 Spacer(modifier = Modifier.width(2.dp))
@@ -927,7 +944,7 @@ class MainActivity : ComponentActivity() {
                         }
                         HorizontalDivider(
                             thickness = 0.75.dp,
-                            color = MaterialTheme.colorScheme.outlineVariant
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
                         )
                     }
                 }
@@ -1395,20 +1412,13 @@ private fun AnimatedContentTransitionScope<Screen>.folioRouteTransition(): Conte
 }
 
 private fun AnimatedContentTransitionScope<BottomTab>.folioTabTransition(): ContentTransform {
-    // Apps ↔ Tools is intentionally instant. These two adjacent destinations
-    // are utility surfaces; sliding them made the dock feel twitchy.
-    val appsTools = (initialState == BottomTab.APPS && targetState == BottomTab.TOOLS) ||
-        (initialState == BottomTab.TOOLS && targetState == BottomTab.APPS)
-    if (appsTools) {
-        return EnterTransition.None togetherWith ExitTransition.None
-    }
-    if (initialState == BottomTab.TERMINAL || targetState == BottomTab.TERMINAL) {
-        // Terminal tab hosts the AndroidView emulator — fade only.
-        return fadeIn(tween(180)) togetherWith fadeOut(tween(140))
-    }
-    val rise = tween<IntOffset>(FolioTabMs, easing = FastOutSlowInEasing)
-    val drift = tween<IntOffset>(160, easing = FastOutSlowInEasing)
+    // One motion language for every dock destination. The old Apps↔Tools
+    // exception made two adjacent tabs feel broken; this is one short
+    // fade + scale for all four.
     val fadeInSpec = tween<Float>(180, easing = FastOutSlowInEasing)
-    return (fadeIn(fadeInSpec) + slideInVertically(rise) { h -> h / 100 }) togetherWith
-        (fadeOut(tween(140)) + slideOutVertically(drift) { h -> -(h / 140) })
+    val fadeOutSpec = tween<Float>(130, easing = FastOutSlowInEasing)
+    val scaleSpec = tween<Float>(190, easing = FastOutSlowInEasing)
+    return (fadeIn(fadeInSpec) + scaleIn(scaleSpec, initialScale = 0.985f)) togetherWith
+        (fadeOut(fadeOutSpec) + scaleOut(scaleSpec, targetScale = 1.004f)) using
+        SizeTransform(clip = false)
 }

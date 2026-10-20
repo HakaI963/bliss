@@ -19,25 +19,26 @@ enum class ThemeMode {
 }
 
 /**
- * Accent skins. Surfaces stay AOSP neutral in both light and dark; [label] is
- * the user-facing name in Settings.
+ * Accent skins. Surfaces stay Midnight/Day in every mode; [label] is the
+ * user-facing name in Settings. The enum keys are persisted, so they are not
+ * renamed even when the visible label changes.
  */
 enum class ThemePalette(val label: String) {
-    CARBON("Blue"),
-    SLATE("Slate"),
-    PLUM("Plum"),
-    SAND("Sand")
+    CARBON("Mint"),
+    SLATE("Glacier"),
+    PLUM("Violet"),
+    SAND("Amber")
 }
 
 class ThemePreferences(context: Context) {
     private val prefs: SharedPreferences = context.getSharedPreferences("theme_prefs", Context.MODE_PRIVATE)
 
     fun getThemeMode(): ThemeMode {
-        val modeName = prefs.getString("theme_mode", ThemeMode.LIGHT.name)
+        val modeName = prefs.getString("theme_mode", ThemeMode.DARK.name)
         return try {
-            ThemeMode.valueOf(modeName ?: ThemeMode.LIGHT.name)
+            ThemeMode.valueOf(modeName ?: ThemeMode.DARK.name)
         } catch (e: IllegalArgumentException) {
-            ThemeMode.LIGHT
+            ThemeMode.DARK
         }
     }
 

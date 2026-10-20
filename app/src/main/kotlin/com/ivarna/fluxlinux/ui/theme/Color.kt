@@ -10,65 +10,64 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import com.ivarna.fluxlinux.core.utils.ThemePalette
 
-// ── Bliss AOSP palette ──────────────────────────────────────────────────────
-// These tokens are kept as observable top-level values so the older Frost /
-// Quartz call sites inherit the active light or dark scheme automatically.
-// New code should prefer MaterialTheme.colorScheme directly.
+// ── Bliss Midnight palette ──────────────────────────────────────────────────
+// Observable top-level tokens keep legacy Frost/Quartz call sites in sync with
+// the active theme. New code should use MaterialTheme.colorScheme directly.
 
-var FolioBackground by mutableStateOf(Color(0xFFF7F8FA))
+var FolioBackground by mutableStateOf(Color(0xFF05080B))
     internal set
-var FolioSurface by mutableStateOf(Color(0xFFFFFFFF))
+var FolioSurface by mutableStateOf(Color(0xFF0A1014))
     internal set
-var FolioCard by mutableStateOf(Color(0xFFF0F2F5))
+var FolioCard by mutableStateOf(Color(0xFF101A1F))
     internal set
-var FrostSurface by mutableStateOf(Color(0xFFFFFFFF))
+var FrostSurface by mutableStateOf(Color(0xFF0A1014))
     internal set
-var FrostSurfaceElevated by mutableStateOf(Color(0xFFF0F2F5))
+var FrostSurfaceElevated by mutableStateOf(Color(0xFF101A1F))
     internal set
-var FrostHairline by mutableStateOf(Color(0xFFDADCE0))
+var FrostHairline by mutableStateOf(Color(0xFF172825))
     internal set
 var FrostTopSheen by mutableStateOf(Color.Transparent)
     internal set
 
-var TextPrimary by mutableStateOf(Color(0xFF1F1F1F))
+var TextPrimary by mutableStateOf(Color(0xFFE7F3EF))
     internal set
-var TextSecondary by mutableStateOf(Color(0xFF5F6368))
+var TextSecondary by mutableStateOf(Color(0xFF8CA8A1))
     internal set
-var TextMuted by mutableStateOf(Color(0xFF747775))
+var TextMuted by mutableStateOf(Color(0xFF607A73))
     internal set
-var PrimaryAction by mutableStateOf(Color(0xFF0B57D0))
+var PrimaryAction by mutableStateOf(Color(0xFF79F2C4))
     internal set
-var OnPrimaryAction by mutableStateOf(Color.White)
+var OnPrimaryAction by mutableStateOf(Color(0xFF032019))
     internal set
-var StatusDot by mutableStateOf(Color(0xFF1E8E3E))
+var StatusDot by mutableStateOf(Color(0xFF79F2C4))
     internal set
-var FolioDanger by mutableStateOf(Color(0xFFB3261E))
+var FolioDanger by mutableStateOf(Color(0xFFFF8A80))
     internal set
-var FolioDangerContainer by mutableStateOf(Color(0xFFF9DEDC))
+var FolioDangerContainer by mutableStateOf(Color(0xFF4A1512))
     internal set
 
 // Frost switch tokens, kept for the existing switch call sites.
-var FolioSwitchCheckedTrack by mutableStateOf(Color(0xFF0B57D0))
+var FolioSwitchCheckedTrack by mutableStateOf(Color(0xFF79F2C4))
     internal set
-var FolioSwitchCheckedThumb by mutableStateOf(Color.White)
+var FolioSwitchCheckedThumb by mutableStateOf(Color(0xFF032019))
     internal set
-var FolioSwitchUncheckedTrack by mutableStateOf(Color(0xFFE8EAED))
+var FolioSwitchUncheckedTrack by mutableStateOf(Color(0xFF101A1F))
     internal set
-var FolioSwitchUncheckedThumb by mutableStateOf(Color(0xFF747775))
+var FolioSwitchUncheckedThumb by mutableStateOf(Color(0xFF243B37))
     internal set
-var FolioSwitchUncheckedBorder by mutableStateOf(Color(0xFF8E918F))
+var FolioSwitchUncheckedBorder by mutableStateOf(Color(0xFF243B37))
     internal set
 
-/** Hairline used by the legacy glass containers; now a flat AOSP divider. */
+/** Hairline used by the legacy glass containers; now a flat hairline. */
 val FolioFrostBorder: Brush
     get() = SolidColor(FrostHairline)
 
 // ── Accent palette ──────────────────────────────────────────────────────────
-// Surfaces stay AOSP neutral. These accents only colour primary controls.
-val SlatePrimary = Color(0xFF3D5A80)
-val PlumPrimary = Color(0xFF6A4C93)
-val SandPrimary = Color(0xFF7A5B3A)
-val CarbonPrimary = Color(0xFF0B57D0)
+// Surfaces stay Midnight/Day. These accents only colour primary controls.
+val SlatePrimary = Color(0xFF0E6F8A)
+val PlumPrimary = Color(0xFF6B52A8)
+val SandPrimary = Color(0xFF8A5D20)
+val CarbonPrimary = Color(0xFF79F2C4)
 
 /** Swatch dot for the accent picker. */
 fun ThemePalette.accentColor(): Color = when (this) {

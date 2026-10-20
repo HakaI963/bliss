@@ -105,6 +105,8 @@ object HeadlessCloneEngine {
     val displayRotation = MutableStateFlow(-1)
     val preview = MutableStateFlow<Bitmap?>(null)
     val previewError = MutableStateFlow<String?>(null)
+    /** Clone package currently owning the virtual display, if any. */
+    val activeClonePackage = MutableStateFlow<String?>(null)
 
     // User defaults
     val displayFps = MutableStateFlow(60)
@@ -341,6 +343,7 @@ object HeadlessCloneEngine {
         val c = requireConnected() ?: return
         preview.value = null
         displayReady.value = false
+        activeClonePackage.value = null
         scope.launch {
             try {
                 c.releaseDisplay()
@@ -426,13 +429,13 @@ object HeadlessCloneEngine {
         val w = width.takeIf { it > 0 } ?: saved.width
         val h = height.takeIf { it > 0 } ?: saved.height
         val f = fps.takeIf { it > 0 } ?: saved.fps.takeIf { it > 0 } ?: displayFps.value
-        launchWithDisplay("Opening clone…", w, h, f) { c ->
+        launchWithDisplay("Opening clone…", w, h, f, packageName) { c ->
             c.cloneLaunch(packageName)
         }
     }
 
     fun launchInstalledApp(packageName: String) {
-        launchWithDisplay("Opening app on the display…", 0, 0, displayFps.value) { c ->
+        launchWithDisplay("Opening app on the display…", 0, 0, displayFps.value, null) { c ->
             c.launchApp(packageName, true)
         }
     }
@@ -472,6 +475,7 @@ object HeadlessCloneEngine {
             try {
                 val error = resultError(c.cloneKill(packageName))
                 if (error != null) fail(error) else setNotice("App stopped")
+                if (activeClonePackage.value == packageName) activeClonePackage.value = null
                 refreshClonesInternal(c)
             } catch (t: Throwable) {
                 fail(t.message ?: "Stop failed")
@@ -479,10 +483,47 @@ object HeadlessCloneEngine {
         }
     }
 
+    /** Stop the clone and release the virtual display (viewer Stop button). */
+    fun stopClone(packageName: String) {
+        val c = requireConnected() ?: return
+        scope.launch {
+            try {
+                val error = resultError(c.cloneKill(packageName))
+                if (error != null) {
+                    fail(error)
+                } else {
+                    setNotice("App stopped")
+                }
+                if (activeClonePackage.value == packageName) activeClonePackage.value = null
+                runCatching { c.releaseDisplay() }
+                preview.value = null
+                previewError.value = null
+                displayReady.value = false
+                refreshClonesInternal(c)
+                parseStatus(c.status())
+            } catch (t: Throwable) {
+                fail(t.message ?: "Stop failed")
+            }
+        }
+    }
+
+    /**
+     * Reset the viewer after the clone was left running in the background.
+     * The display and clone process are intentionally kept alive.
+     */
+    fun leaveViewerRunning() {
+        previewError.value = null
+    }
+
     fun deleteClone(packageName: String) {
         val c = requireConnected() ?: return
         runOperation("Removing clone…") {
             c.cloneDelete(packageName)
+        }
+        if (activeClonePackage.value == packageName) {
+            activeClonePackage.value = null
+            displayReady.value = false
+            preview.value = null
         }
         clearPerAppDisplay(packageName)
         clearCloneLogs()
@@ -603,6 +644,7 @@ object HeadlessCloneEngine {
         requestedWidth: Int,
         requestedHeight: Int,
         requestedFps: Int,
+        activePackage: String?,
         command: (EngineClient) -> String,
     ) {
         val c = requireConnected() ?: return
@@ -620,6 +662,7 @@ object HeadlessCloneEngine {
                     preview.value = null
                     displayReady.value = false
                 }
+                activeClonePackage.value = null
                 val created = c.createDisplay(w, h, displayDpi.value, f)
                 val createError = resultError(created)
                 if (createError != null) {
@@ -631,6 +674,7 @@ object HeadlessCloneEngine {
                 if (error != null) {
                     fail(error)
                 } else {
+                    activeClonePackage.value = activePackage
                     setNotice("Launch requested")
                 }
                 refreshClonesInternal(c)

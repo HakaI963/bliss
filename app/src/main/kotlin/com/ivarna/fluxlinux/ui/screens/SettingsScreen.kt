@@ -94,7 +94,7 @@ fun SettingsScreen(
     onNavigateToLegacyTermuxSettings: (() -> Unit)? = null,
     onNavigateToCrashLogs: (() -> Unit)? = null,
     onThemeChanged: ((ThemeMode) -> Unit)? = null,
-    currentTheme: ThemeMode = ThemeMode.LIGHT
+    currentTheme: ThemeMode = ThemeMode.DARK
 ) {
     // Keep unused params so call sites stay stable (permission / theme hooks).
     @Suppress("UNUSED_PARAMETER")
@@ -317,7 +317,7 @@ fun SettingsScreen(
             QRow(
                 title = "Documentation",
                 subtitle = "Setup guides and tutorials",
-                onClick = { openUrl(context, "https://github.com/abhay-byte/fluxlinux#readme") },
+                onClick = { openUrl(context, "https://github.com/HakaI963/bliss#readme") },
             )
         }
 
@@ -373,14 +373,14 @@ private fun ThemeModeRow(
             color = MaterialTheme.colorScheme.onSurface,
         )
         Text(
-            text = "Light is the default. Dark keeps the same layout and spacing.",
+            text = "Midnight is the default. Day is the same layout on paper surfaces.",
             fontSize = Quartz.RowSubSize,
             color = fluxMutedText(),
         )
         Spacer(Modifier.height(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            QPill("Light", normalized == ThemeMode.LIGHT) { onSelect(ThemeMode.LIGHT) }
-            QPill("Dark", normalized == ThemeMode.DARK) { onSelect(ThemeMode.DARK) }
+            QPill("Midnight", normalized == ThemeMode.DARK) { onSelect(ThemeMode.DARK) }
+            QPill("Day", normalized == ThemeMode.LIGHT) { onSelect(ThemeMode.LIGHT) }
             QPill("System", normalized == ThemeMode.SYSTEM) { onSelect(ThemeMode.SYSTEM) }
         }
     }

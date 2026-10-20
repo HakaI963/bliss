@@ -20,53 +20,85 @@ import com.ivarna.fluxlinux.core.utils.StateManager
 import com.ivarna.fluxlinux.core.utils.ThemeMode
 import com.ivarna.fluxlinux.core.utils.ThemePalette
 
-private val AospBlue = Color(0xFF0B57D0)
-private val AospBlueDark = Color(0xFFA8C7FA)
+// Bliss Midnight — the reference look: near-black glass, mint/teal signal,
+// icy text and hairline borders. Day is the same layout with paper surfaces.
+private val Mint = Color(0xFF79F2C4)
+private val MintContainer = Color(0xFF0D2A23)
+private val Ice = Color(0xFF7DDFF3)
+private val IceContainer = Color(0xFF0A2730)
+private val Violet = Color(0xFFC7B8FF)
+private val VioletContainer = Color(0xFF211B3A)
+private val Amber = Color(0xFFFFD08A)
+private val AmberContainer = Color(0xFF332412)
+
+private val NightBg = Color(0xFF05080B)
+private val NightSurface = Color(0xFF0A1014)
+private val NightSurfaceVariant = Color(0xFF101A1F)
+private val NightText = Color(0xFFE7F3EF)
+private val NightMuted = Color(0xFF8CA8A1)
+private val NightOutline = Color(0xFF243B37)
+private val NightOutlineSoft = Color(0xFF172825)
+
+private val DayBg = Color(0xFFF2F6F5)
+private val DaySurface = Color(0xFFFFFFFF)
+private val DaySurfaceVariant = Color(0xFFEAF0EE)
+private val DayText = Color(0xFF14201D)
+private val DayMuted = Color(0xFF5D726C)
+private val DayOutline = Color(0xFFC8D6D1)
+private val DayOutlineSoft = Color(0xFFDDE7E3)
+private val DayPrimary = Color(0xFF0F766E)
 
 private fun accentFor(palette: ThemePalette, dark: Boolean): Color = when (palette) {
-    ThemePalette.CARBON -> if (dark) AospBlueDark else AospBlue
-    ThemePalette.SLATE -> if (dark) Color(0xFFB8CFEA) else SlatePrimary
-    ThemePalette.PLUM -> if (dark) Color(0xFFD5C4F0) else PlumPrimary
-    ThemePalette.SAND -> if (dark) Color(0xFFE6D3B8) else SandPrimary
+    ThemePalette.CARBON -> if (dark) Mint else DayPrimary
+    ThemePalette.SLATE -> if (dark) Ice else Color(0xFF0E6F8A)
+    ThemePalette.PLUM -> if (dark) Violet else Color(0xFF6B52A8)
+    ThemePalette.SAND -> if (dark) Amber else Color(0xFF8A5D20)
 }
 
 private fun accentContainerFor(palette: ThemePalette, dark: Boolean): Color = when (palette) {
-    ThemePalette.CARBON -> if (dark) Color(0xFF0842A0) else Color(0xFFD3E3FD)
-    ThemePalette.SLATE -> if (dark) Color(0xFF25384D) else Color(0xFFD7E4F2)
-    ThemePalette.PLUM -> if (dark) Color(0xFF3F2F57) else Color(0xFFEADDFF)
-    ThemePalette.SAND -> if (dark) Color(0xFF4A3928) else Color(0xFFF1E2CC)
+    ThemePalette.CARBON -> if (dark) MintContainer else Color(0xFFD4F3EA)
+    ThemePalette.SLATE -> if (dark) IceContainer else Color(0xFFD6EFF5)
+    ThemePalette.PLUM -> if (dark) VioletContainer else Color(0xFFE9E2FF)
+    ThemePalette.SAND -> if (dark) AmberContainer else Color(0xFFF7E8CC)
 }
 
 private fun onAccentContainerFor(palette: ThemePalette, dark: Boolean): Color = when (palette) {
-    ThemePalette.CARBON -> if (dark) Color(0xFFD3E3FD) else Color(0xFF041E49)
-    ThemePalette.SLATE -> if (dark) Color(0xFFD7E4F2) else Color(0xFF102A43)
-    ThemePalette.PLUM -> if (dark) Color(0xFFEADDFF) else Color(0xFF2B1B40)
-    ThemePalette.SAND -> if (dark) Color(0xFFF1E2CC) else Color(0xFF3A2A18)
+    ThemePalette.CARBON -> if (dark) Color(0xFFB9FFE4) else Color(0xFF053D37)
+    ThemePalette.SLATE -> if (dark) Color(0xFFC6F2FF) else Color(0xFF003743)
+    ThemePalette.PLUM -> if (dark) Color(0xFFEDE5FF) else Color(0xFF2B1B56)
+    ThemePalette.SAND -> if (dark) Color(0xFFFFE7BD) else Color(0xFF422B09)
+}
+
+private fun onAccentFor(palette: ThemePalette, dark: Boolean): Color = when (palette) {
+    ThemePalette.CARBON -> if (dark) Color(0xFF032019) else Color.White
+    ThemePalette.SLATE -> if (dark) Color(0xFF001F28) else Color.White
+    ThemePalette.PLUM -> if (dark) Color(0xFF160E2D) else Color.White
+    ThemePalette.SAND -> if (dark) Color(0xFF261706) else Color.White
 }
 
 private fun lightSchemeFor(palette: ThemePalette): ColorScheme {
     val accent = accentFor(palette, dark = false)
     return lightColorScheme(
         primary = accent,
-        onPrimary = Color.White,
-        primaryContainer = accentContainerFor(palette, dark = false),
-        onPrimaryContainer = onAccentContainerFor(palette, dark = false),
-        secondary = accent,
+        onPrimary = onAccentFor(palette, false),
+        primaryContainer = accentContainerFor(palette, false),
+        onPrimaryContainer = onAccentContainerFor(palette, false),
+        secondary = Color(0xFF1E6B63),
         onSecondary = Color.White,
-        secondaryContainer = accentContainerFor(palette, dark = false),
-        onSecondaryContainer = onAccentContainerFor(palette, dark = false),
-        tertiary = Color(0xFF00639B),
+        secondaryContainer = Color(0xFFD4F3EA),
+        onSecondaryContainer = Color(0xFF053D37),
+        tertiary = Color(0xFF3C6478),
         onTertiary = Color.White,
-        background = Color(0xFFF7F8FA),
-        onBackground = Color(0xFF1F1F1F),
-        surface = Color(0xFFFFFFFF),
-        onSurface = Color(0xFF1F1F1F),
-        surfaceVariant = Color(0xFFF0F2F5),
-        onSurfaceVariant = Color(0xFF5F6368),
-        outline = Color(0xFF747775),
-        outlineVariant = Color(0xFFDADCE0),
-        inverseSurface = Color(0xFF303134),
-        inverseOnSurface = Color(0xFFF1F3F4),
+        background = DayBg,
+        onBackground = DayText,
+        surface = DaySurface,
+        onSurface = DayText,
+        surfaceVariant = DaySurfaceVariant,
+        onSurfaceVariant = DayMuted,
+        outline = DayOutline,
+        outlineVariant = DayOutlineSoft,
+        inverseSurface = Color(0xFF1B2925),
+        inverseOnSurface = Color(0xFFEAF3F0),
         error = Color(0xFFB3261E),
         onError = Color.White,
         errorContainer = Color(0xFFF9DEDC),
@@ -79,29 +111,29 @@ private fun darkSchemeFor(palette: ThemePalette): ColorScheme {
     val accent = accentFor(palette, dark = true)
     return darkColorScheme(
         primary = accent,
-        onPrimary = Color(0xFF062E6F),
-        primaryContainer = accentContainerFor(palette, dark = true),
-        onPrimaryContainer = onAccentContainerFor(palette, dark = true),
-        secondary = accent,
-        onSecondary = Color(0xFF062E6F),
-        secondaryContainer = accentContainerFor(palette, dark = true),
-        onSecondaryContainer = onAccentContainerFor(palette, dark = true),
-        tertiary = Color(0xFF7FCFFF),
-        onTertiary = Color(0xFF003354),
-        background = Color(0xFF111318),
-        onBackground = Color(0xFFE3E3E3),
-        surface = Color(0xFF1A1C1E),
-        onSurface = Color(0xFFE3E3E3),
-        surfaceVariant = Color(0xFF2B2F33),
-        onSurfaceVariant = Color(0xFFC4C7C5),
-        outline = Color(0xFF8E918F),
-        outlineVariant = Color(0xFF44474A),
-        inverseSurface = Color(0xFFE3E3E3),
-        inverseOnSurface = Color(0xFF303134),
-        error = Color(0xFFF2B8B5),
-        onError = Color(0xFF601410),
-        errorContainer = Color(0xFF8C1D18),
-        onErrorContainer = Color(0xFFF9DEDC),
+        onPrimary = onAccentFor(palette, true),
+        primaryContainer = accentContainerFor(palette, true),
+        onPrimaryContainer = onAccentContainerFor(palette, true),
+        secondary = Ice,
+        onSecondary = Color(0xFF00252E),
+        secondaryContainer = IceContainer,
+        onSecondaryContainer = Color(0xFFC6F2FF),
+        tertiary = Color(0xFFA8C7FF),
+        onTertiary = Color(0xFF002E6A),
+        background = NightBg,
+        onBackground = NightText,
+        surface = NightSurface,
+        onSurface = NightText,
+        surfaceVariant = NightSurfaceVariant,
+        onSurfaceVariant = NightMuted,
+        outline = NightOutline,
+        outlineVariant = NightOutlineSoft,
+        inverseSurface = NightText,
+        inverseOnSurface = NightBg,
+        error = Color(0xFFFF8A80),
+        onError = Color(0xFF3A0907),
+        errorContainer = Color(0xFF4A1512),
+        onErrorContainer = Color(0xFFFFD9D6),
         scrim = Color(0xFF000000),
     )
 }
@@ -109,7 +141,7 @@ private fun darkSchemeFor(palette: ThemePalette): ColorScheme {
 /**
  * Mirror the active scheme into the legacy Frost/Quartz tokens. Keeping these
  * observable means older screens (and the few custom-painted surfaces) follow
- * Light/Dark and the accent picker without a screen-by-screen rewrite.
+ * Midnight/Day and the accent picker without a screen-by-screen rewrite.
  */
 private fun applyLegacyTokens(scheme: ColorScheme, dark: Boolean) {
     FolioBackground = scheme.background
@@ -128,15 +160,15 @@ private fun applyLegacyTokens(scheme: ColorScheme, dark: Boolean) {
     FolioDangerContainer = scheme.errorContainer
     FolioSwitchCheckedTrack = scheme.primary
     FolioSwitchCheckedThumb = scheme.onPrimary
-    FolioSwitchUncheckedTrack = if (dark) scheme.surfaceVariant else Color(0xFFE8EAED)
+    FolioSwitchUncheckedTrack = scheme.surfaceVariant
     FolioSwitchUncheckedThumb = scheme.outline
     FolioSwitchUncheckedBorder = scheme.outline
-    StatusDot = if (dark) Color(0xFF81C995) else Color(0xFF1E8E3E)
+    StatusDot = scheme.primary
 }
 
 @Composable
 fun FolioTheme(
-    themeMode: ThemeMode = ThemeMode.LIGHT,
+    themeMode: ThemeMode = ThemeMode.DARK,
     dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
@@ -173,7 +205,7 @@ fun FolioTheme(
 /** Legacy entry point — preserved so existing call sites keep compiling. */
 @Composable
 fun FluxLinuxTheme(
-    themeMode: ThemeMode = ThemeMode.LIGHT,
+    themeMode: ThemeMode = ThemeMode.DARK,
     dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {

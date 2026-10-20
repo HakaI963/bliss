@@ -51,7 +51,7 @@ class BlissDesignScreenshotsTest {
     @Test
     fun quartz_components() {
         paparazzi.snapshot {
-            FluxLinuxTheme(themeMode = ThemeMode.LIGHT) {
+            FluxLinuxTheme(themeMode = ThemeMode.DARK) {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     Column(
                         modifier = Modifier
@@ -101,7 +101,7 @@ class BlissDesignScreenshotsTest {
     @Test
     fun apps_tab() {
         paparazzi.snapshot {
-            FluxLinuxTheme(themeMode = ThemeMode.LIGHT) {
+            FluxLinuxTheme(themeMode = ThemeMode.DARK) {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     CompositionLocalProvider(LocalActivityResultRegistryOwner provides NoopRegistryOwner) {
                         ClonedAppsScreen()
@@ -121,7 +121,7 @@ class BlissDesignScreenshotsTest {
         )
         try {
             paparazzi.snapshot {
-                FluxLinuxTheme(themeMode = ThemeMode.LIGHT) {
+                FluxLinuxTheme(themeMode = ThemeMode.DARK) {
                     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                         CompositionLocalProvider(LocalActivityResultRegistryOwner provides NoopRegistryOwner) {
                             ClonedAppsScreen()
@@ -150,7 +150,7 @@ class BlissDesignScreenshotsTest {
     @Test
     fun apps_preference() {
         paparazzi.snapshot {
-            FluxLinuxTheme(themeMode = ThemeMode.LIGHT) {
+            FluxLinuxTheme(themeMode = ThemeMode.DARK) {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     CompositionLocalProvider(LocalActivityResultRegistryOwner provides NoopRegistryOwner) {
                         ClonedAppsScreen(startOnPreference = true)
@@ -163,7 +163,7 @@ class BlissDesignScreenshotsTest {
     @Test
     fun tools_hub() {
         paparazzi.snapshot {
-            FluxLinuxTheme(themeMode = ThemeMode.LIGHT) {
+            FluxLinuxTheme(themeMode = ThemeMode.DARK) {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     // ToolsScreen owns a SAF picker; Paparazzi has no ActivityResultRegistryOwner.
                     CompositionLocalProvider(LocalActivityResultRegistryOwner provides NoopRegistryOwner) {

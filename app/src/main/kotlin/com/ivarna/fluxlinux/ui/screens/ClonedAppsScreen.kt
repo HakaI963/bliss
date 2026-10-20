@@ -40,8 +40,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.filled.Android
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -94,6 +98,7 @@ import com.ivarna.fluxlinux.ui.components.QSectionHeader
 import com.ivarna.fluxlinux.ui.components.QSecondaryButton
 import com.ivarna.fluxlinux.ui.components.QTextField
 import com.ivarna.fluxlinux.ui.components.QToggleRow
+import com.ivarna.fluxlinux.ui.components.QToolButton
 import com.ivarna.fluxlinux.ui.components.Quartz
 import com.ivarna.fluxlinux.ui.theme.fluxMutedText
 import kotlinx.coroutines.delay
@@ -138,6 +143,8 @@ fun ClonedAppsScreen(startOnPreference: Boolean = false) {
     val notice by HeadlessCloneEngine.notice.collectAsState()
     val lastError by HeadlessCloneEngine.lastError.collectAsState()
     val displayFps by HeadlessCloneEngine.displayFps.collectAsState()
+    val displayReady by HeadlessCloneEngine.displayReady.collectAsState()
+    val activeClonePackage by HeadlessCloneEngine.activeClonePackage.collectAsState()
     val quality by HeadlessCloneEngine.quality.collectAsState()
     val touchEnabled by HeadlessCloneEngine.touchEnabled.collectAsState()
     val maxFps = remember(context) { maxRefreshRate(context) }
@@ -186,11 +193,18 @@ fun ClonedAppsScreen(startOnPreference: Boolean = false) {
         if (groupKey != null && selectedGroup == null) groupKey = null
     }
 
+    /** Hide the viewer, keep the clone process and virtual display alive. */
     fun closeViewer() {
         if (viewing == null) return
         viewing = null
-        HeadlessCloneEngine.clearPreview()
-        HeadlessCloneEngine.clearCloneLogs()
+        HeadlessCloneEngine.leaveViewerRunning()
+    }
+
+    /** Stop the clone process and release the display. */
+    fun stopViewer() {
+        val pkg = viewing?.clone?.packageName ?: activeClonePackage
+        if (pkg != null) HeadlessCloneEngine.stopClone(pkg)
+        viewing = null
     }
 
     fun openViewer(clone: CloneApp) {
@@ -209,9 +223,12 @@ fun ClonedAppsScreen(startOnPreference: Boolean = false) {
         val height = if (perApp.customSize) perApp.height else defaultSize.second
         val fps = (perApp.fps.takeIf { it > 0 } ?: fpsValue)
             .coerceIn(10, maxFps.coerceAtLeast(10))
-        HeadlessCloneEngine.clearPreview()
-        HeadlessCloneEngine.clearCloneLogs()
-        HeadlessCloneEngine.launchClone(clone.packageName, width, height, fps)
+        val resumeLive = activeClonePackage == clone.packageName && displayReady
+        if (!resumeLive) {
+            HeadlessCloneEngine.clearPreview()
+            HeadlessCloneEngine.clearCloneLogs()
+            HeadlessCloneEngine.launchClone(clone.packageName, width, height, fps)
+        }
         viewing = ViewerSession(
             clone = clone,
             width = width,
@@ -273,10 +290,66 @@ fun ClonedAppsScreen(startOnPreference: Boolean = false) {
         }
         Spacer(Modifier.height(8.dp))
 
+        val runningClone = clones.firstOrNull { it.packageName == activeClonePackage }
+        if (viewing == null && activeClonePackage != null) {
+            QCard(modifier = Modifier.padding(bottom = 2.dp)) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = Quartz.CardPad, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(7.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primary)
+                    )
+                    Spacer(Modifier.width(9.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            runningClone?.label ?: "Clone running",
+                            fontSize = 13.5.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            "Still running in the background",
+                            fontSize = 11.5.sp,
+                            color = fluxMutedText(),
+                        )
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        QToolButton(
+                            "Resume",
+                            Icons.Default.PlayArrow,
+                            active = true,
+                        ) {
+                            val clone = runningClone
+                            if (clone != null) openViewer(clone)
+                        }
+                        QToolButton(
+                            "Stop",
+                            Icons.Default.Stop,
+                            destructive = true,
+                        ) {
+                            val pkg = activeClonePackage
+                            if (pkg != null) HeadlessCloneEngine.stopClone(pkg)
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+        }
+
         when {
             viewing != null -> CloneViewPage(
                 modifier = Modifier.weight(1f),
                 session = viewing!!,
+                onLeave = ::closeViewer,
+                onStop = ::stopViewer,
             )
 
             section == AppsSection.PREFERENCE -> PreferenceSection(
@@ -762,6 +835,8 @@ private fun folderSubtitle(group: CloneGroup): String {
 private fun CloneViewPage(
     modifier: Modifier,
     session: ViewerSession,
+    onLeave: () -> Unit,
+    onStop: () -> Unit,
 ) {
     val connected by HeadlessCloneEngine.connected.collectAsState()
     val displayReady by HeadlessCloneEngine.displayReady.collectAsState()
@@ -769,9 +844,10 @@ private fun CloneViewPage(
     val previewError by HeadlessCloneEngine.previewError.collectAsState()
     val lastError by HeadlessCloneEngine.lastError.collectAsState()
     val lines by HeadlessCloneEngine.cloneLogs.collectAsState()
+    var live by rememberSaveable { mutableStateOf(true) }
 
-    LaunchedEffect(connected, displayReady, session.fps) {
-        if (!connected) return@LaunchedEffect
+    LaunchedEffect(connected, displayReady, session.fps, live) {
+        if (!connected || !live) return@LaunchedEffect
         val frameDelay = (1000 / session.fps.coerceAtLeast(10)).coerceAtLeast(16).toLong()
         while (isActive) {
             if (displayReady) HeadlessCloneEngine.capturePreview()
@@ -787,17 +863,9 @@ private fun CloneViewPage(
         }
     }
 
-    DisposableEffect(session.clone.packageName) {
-        onDispose {
-            HeadlessCloneEngine.clearPreview()
-            HeadlessCloneEngine.clearCloneLogs()
-            HeadlessCloneEngine.releaseDisplay()
-        }
-    }
-
     Column(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         BoxWithConstraints(
             modifier = Modifier
@@ -829,9 +897,28 @@ private fun CloneViewPage(
                 if (bitmap != null) {
                     ViewerFrame(
                         bitmap = bitmap,
-                        touchEnabled = session.touch,
+                        touchEnabled = session.touch && live,
                         modifier = Modifier.fillMaxSize(),
                     )
+                    if (!live) {
+                        Text(
+                            "Preview paused",
+                            fontSize = 10.5.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(8.dp)
+                                .clip(RoundedCornerShape(50))
+                                .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.92f))
+                                .border(
+                                    1.dp,
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.25f),
+                                    RoundedCornerShape(50)
+                                )
+                                .padding(horizontal = 9.dp, vertical = 4.dp),
+                        )
+                    }
                 } else {
                     Column(
                         modifier = Modifier.fillMaxSize().padding(16.dp),
@@ -857,6 +944,28 @@ private fun CloneViewPage(
                     }
                 }
             }
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            QToolButton(
+                "Leave",
+                Icons.Default.Home,
+            ) { onLeave() }
+            QToolButton(
+                if (live) "Live" else "Paused",
+                if (live) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                active = live,
+            ) { live = !live }
+            Spacer(Modifier.weight(1f))
+            QToolButton(
+                "Stop",
+                Icons.Default.Stop,
+                destructive = true,
+            ) { onStop() }
         }
 
         Column(

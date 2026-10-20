@@ -40,6 +40,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -47,6 +48,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -54,24 +56,24 @@ import androidx.compose.ui.unit.sp
 import com.ivarna.fluxlinux.ui.theme.fluxMutedText
 
 /**
- * Quartz — the compact AOSP-style design system used by the main screens.
+ * Quartz — Bliss compact component layer.
  *
- * Rules: 16 dp screen padding, flat white groups with a single hairline,
- * 56 dp list rows, 38 dp controls, sentence-case section labels, blue accent.
+ * Rules: 18 dp screen padding, layered midnight surfaces, one hairline,
+ * 58 dp list rows, 40 dp controls, mint section labels, rounded 16–18 dp cards.
  */
 object Quartz {
-    val ScreenPad = 16.dp
+    val ScreenPad = 18.dp
     val Gap = 12.dp
     val RowGap = 8.dp
     val CardPad = 16.dp
-    val CardShape = RoundedCornerShape(12.dp)
-    val ButtonShape = RoundedCornerShape(20.dp)
-    val PillShape = RoundedCornerShape(8.dp)
-    val TileShape = RoundedCornerShape(8.dp)
+    val CardShape = RoundedCornerShape(18.dp)
+    val ButtonShape = RoundedCornerShape(12.dp)
+    val PillShape = RoundedCornerShape(50)
+    val TileShape = RoundedCornerShape(12.dp)
 
-    val TitleSize = 24.sp
-    val SectionSize = 13.sp
-    val RowTitleSize = 14.sp
+    val TitleSize = 27.sp
+    val SectionSize = 10.5.sp
+    val RowTitleSize = 14.5.sp
     val RowSubSize = 12.sp
     val BodySize = 13.sp
     val MonoSize = 10.sp
@@ -83,7 +85,8 @@ fun QScreenTitle(title: String, subtitle: String? = null, modifier: Modifier = M
         Text(
             title,
             fontSize = Quartz.TitleSize,
-            fontWeight = FontWeight.Medium,
+            fontWeight = FontWeight.SemiBold,
+            letterSpacing = (-0.4).sp,
             color = MaterialTheme.colorScheme.onBackground,
         )
         if (subtitle != null) {
@@ -100,22 +103,31 @@ fun QScreenTitle(title: String, subtitle: String? = null, modifier: Modifier = M
 @Composable
 fun QSectionHeader(text: String, modifier: Modifier = Modifier) {
     Text(
-        text,
-        modifier = modifier.padding(start = 4.dp, top = 10.dp, bottom = 2.dp),
+        text.uppercase(),
+        modifier = modifier.padding(start = 4.dp, top = 12.dp, bottom = 2.dp),
         fontSize = Quartz.SectionSize,
         fontWeight = FontWeight.SemiBold,
+        letterSpacing = 1.25.sp,
         color = MaterialTheme.colorScheme.primary,
     )
 }
 
 @Composable
 fun QCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+    val shape = Quartz.CardShape
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clip(Quartz.CardShape)
-            .background(MaterialTheme.colorScheme.surface)
-            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, Quartz.CardShape)
+            .clip(shape)
+            .background(
+                Brush.verticalGradient(
+                    listOf(
+                        MaterialTheme.colorScheme.surface,
+                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f),
+                    )
+                )
+            )
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, shape)
             .padding(vertical = 2.dp),
         content = content,
     )
@@ -127,7 +139,7 @@ fun QDivider(modifier: Modifier = Modifier) {
         modifier = modifier
             .fillMaxWidth()
             .height(0.75.dp)
-            .background(MaterialTheme.colorScheme.outlineVariant),
+            .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.75f)),
     )
 }
 
@@ -145,9 +157,9 @@ fun QRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 56.dp)
+                .heightIn(min = 58.dp)
                 .let { if (onClick != null) it.clickable(onClick = onClick) else it }
-                .padding(horizontal = Quartz.CardPad, vertical = 8.dp),
+                .padding(horizontal = Quartz.CardPad, vertical = 9.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             if (leading != null) {
@@ -158,7 +170,7 @@ fun QRow(
                 Text(
                     title,
                     fontSize = Quartz.RowTitleSize,
-                    fontWeight = FontWeight.Normal,
+                    fontWeight = FontWeight.Medium,
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -181,7 +193,9 @@ fun QRow(
                 QChevron()
             }
         }
-        if (divider) QDivider(Modifier.padding(start = if (leading != null) 62.dp else Quartz.CardPad))
+        if (divider) {
+            QDivider(Modifier.padding(start = if (leading != null) 64.dp else Quartz.CardPad))
+        }
     }
 }
 
@@ -200,7 +214,8 @@ fun QPill(text: String, selected: Boolean, modifier: Modifier = Modifier, onClic
     val bg = if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
     val fg = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
     else MaterialTheme.colorScheme.onSurfaceVariant
-    val edge = if (selected) Color.Transparent else MaterialTheme.colorScheme.outlineVariant
+    val edge = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
+    else MaterialTheme.colorScheme.outlineVariant
     Text(
         text,
         fontSize = 12.5.sp,
@@ -212,7 +227,7 @@ fun QPill(text: String, selected: Boolean, modifier: Modifier = Modifier, onClic
             .background(bg)
             .border(1.dp, edge, Quartz.PillShape)
             .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 6.dp),
+            .padding(horizontal = 13.dp, vertical = 7.dp),
     )
 }
 
@@ -248,7 +263,7 @@ fun QPrimaryButton(
     Button(
         onClick = onClick,
         modifier = modifier
-            .height(38.dp)
+            .height(40.dp)
             .defaultMinSize(minWidth = 88.dp),
         enabled = enabled,
         shape = Quartz.ButtonShape,
@@ -257,14 +272,14 @@ fun QPrimaryButton(
             containerColor = MaterialTheme.colorScheme.primary,
             contentColor = MaterialTheme.colorScheme.onPrimary,
             disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-            disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
         ),
     ) {
         if (icon != null) {
             Icon(icon, contentDescription = null, modifier = Modifier.size(16.dp))
             Spacer(Modifier.width(6.dp))
         }
-        Text(text, fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1)
+        Text(text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
     }
 }
 
@@ -279,12 +294,12 @@ fun QSecondaryButton(
     OutlinedButton(
         onClick = onClick,
         modifier = modifier
-            .height(38.dp)
+            .height(40.dp)
             .defaultMinSize(minWidth = 88.dp),
         enabled = enabled,
         shape = Quartz.ButtonShape,
         contentPadding = PaddingValues(horizontal = 16.dp),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
         colors = ButtonDefaults.outlinedButtonColors(
             contentColor = MaterialTheme.colorScheme.primary,
             disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
@@ -298,12 +313,68 @@ fun QSecondaryButton(
     }
 }
 
+/**
+ * Compact 36 dp control used by the clone viewer and other tool rows.
+ * It keeps a visible label so the action is never ambiguous.
+ */
+@Composable
+fun QToolButton(
+    text: String,
+    icon: ImageVector,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    active: Boolean = false,
+    destructive: Boolean = false,
+    onClick: () -> Unit,
+) {
+    val container = when {
+        destructive -> MaterialTheme.colorScheme.errorContainer
+        active -> MaterialTheme.colorScheme.primaryContainer
+        else -> MaterialTheme.colorScheme.surfaceVariant
+    }
+    val content = when {
+        destructive -> MaterialTheme.colorScheme.onErrorContainer
+        active -> MaterialTheme.colorScheme.onPrimaryContainer
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    Row(
+        modifier = modifier
+            .height(36.dp)
+            .clip(RoundedCornerShape(11.dp))
+            .background(container)
+            .border(
+                1.dp,
+                if (active) MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
+                else MaterialTheme.colorScheme.outlineVariant,
+                RoundedCornerShape(11.dp),
+            )
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 11.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = content.copy(alpha = if (enabled) 1f else 0.45f),
+            modifier = Modifier.size(15.dp),
+        )
+        Text(
+            text,
+            fontSize = 11.5.sp,
+            fontWeight = FontWeight.Medium,
+            color = content.copy(alpha = if (enabled) 1f else 0.45f),
+            maxLines = 1,
+        )
+    }
+}
+
 @Composable
 fun QIconTile(
     bitmap: Bitmap?,
     modifier: Modifier = Modifier,
     fallback: ImageVector = Icons.Default.Android,
-    size: Dp = 36.dp,
+    size: Dp = 38.dp,
 ) {
     Box(
         modifier = modifier
@@ -340,7 +411,7 @@ fun QToggleRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 56.dp)
+            .heightIn(min = 58.dp)
             .padding(horizontal = Quartz.CardPad, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -348,7 +419,7 @@ fun QToggleRow(
             Text(
                 title,
                 fontSize = Quartz.RowTitleSize,
-                fontWeight = FontWeight.Normal,
+                fontWeight = FontWeight.Medium,
                 color = MaterialTheme.colorScheme.onSurface,
             )
             if (subtitle != null) {
@@ -361,6 +432,9 @@ fun QToggleRow(
             colors = SwitchDefaults.colors(
                 checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
                 checkedTrackColor = MaterialTheme.colorScheme.primary,
+                uncheckedThumbColor = MaterialTheme.colorScheme.outline,
+                uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant,
+                uncheckedBorderColor = MaterialTheme.colorScheme.outline,
             ),
         )
     }
@@ -391,7 +465,7 @@ fun QTextField(
         textStyle = TextStyle(fontSize = 14.sp),
         label = label?.let { { Text(it, fontSize = 12.sp) } },
         placeholder = { Text(placeholder, fontSize = 13.sp, color = fluxMutedText()) },
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(12.dp),
     )
 }
 
@@ -406,8 +480,9 @@ fun QLogPane(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(max = maxHeight)
-            .clip(RoundedCornerShape(8.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.background.copy(alpha = 0.7f))
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp))
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 10.dp, vertical = 8.dp),
     ) {
@@ -437,11 +512,23 @@ fun QEmptyState(title: String, subtitle: String, modifier: Modifier = Modifier) 
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = Quartz.CardPad, vertical = 24.dp),
+            .padding(horizontal = Quartz.CardPad, vertical = 26.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+        verticalArrangement = Arrangement.spacedBy(5.dp),
     ) {
-        Text(title, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
-        Text(subtitle, fontSize = 12.sp, lineHeight = 16.sp, color = fluxMutedText())
+        Text(
+            title,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+            textAlign = TextAlign.Center,
+        )
+        Text(
+            subtitle,
+            fontSize = 12.sp,
+            lineHeight = 16.sp,
+            color = fluxMutedText(),
+            textAlign = TextAlign.Center,
+        )
     }
 }

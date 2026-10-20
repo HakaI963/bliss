@@ -63,6 +63,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -91,7 +92,9 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.ivarna.fluxlinux.R
 import com.ivarna.fluxlinux.core.terminal.FluxTerminalSessionManager
-import com.ivarna.fluxlinux.core.terminal.FluxTerminalSessionManager.SessionOpenResult
+import com.ivarna.fluxlinux.core.terminal.TerminalPalette
+import com.ivarna.fluxlinux.core.terminal.FluxTerminalSessionManager
+import com.ivarna.fluxlinux.core.terminal.TerminalPalette.SessionOpenResult
 import com.ivarna.fluxlinux.core.utils.TerminalPreferences
 import com.ivarna.fluxlinux.ui.terminal.AnimeSplashArt
 import com.ivarna.fluxlinux.ui.terminal.ShortcutBarActions
@@ -124,9 +127,40 @@ import com.termux.view.TerminalViewClient
  * interactive `TerminalView` (focus + IME + clipboard) with a compact, fully
  * configurable ExtraKeys toolbar. Plan: docs/plans/terminal-grid-extrakeys-interactive.md.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TerminalScreen(
+    onBack: (() -> Unit)? = null,
+    embeddedInBottomNav: Boolean = false
+) {
+    remember { TerminalPalette.apply(); true }
+    val dark = darkColorScheme(
+        primary = Color(0xFF79F2C4),
+        onPrimary = Color(0xFF032019),
+        primaryContainer = Color(0xFF0D2A23),
+        onPrimaryContainer = Color(0xFFB9FFE4),
+        secondary = Color(0xFF7DDFF3),
+        onSecondary = Color(0xFF00252E),
+        background = Color(0xFF05080B),
+        onBackground = Color(0xFFE7F3EF),
+        surface = Color(0xFF0A1014),
+        onSurface = Color(0xFFE7F3EF),
+        surfaceVariant = Color(0xFF101A1F),
+        onSurfaceVariant = Color(0xFF8CA8A1),
+        outline = Color(0xFF243B37),
+        outlineVariant = Color(0xFF172825),
+        error = Color(0xFFFF8A80),
+        onError = Color(0xFF3A0907),
+        errorContainer = Color(0xFF4A1512),
+        onErrorContainer = Color(0xFFFFD9D6),
+    )
+    MaterialTheme(colorScheme = dark, typography = MaterialTheme.typography) {
+        TerminalScreenContent(onBack = onBack, embeddedInBottomNav = embeddedInBottomNav)
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TerminalScreenContent(
     onBack: (() -> Unit)? = null,
     embeddedInBottomNav: Boolean = false
 ) {
@@ -503,6 +537,7 @@ fun TerminalScreen(
                 AndroidView(
                     factory = { ctx ->
                         TerminalView(ctx, null).apply {
+                            setBackgroundColor(android.graphics.Color.rgb(5, 8, 11))
                             setTextSize(fontSize)
                             try {
                                 val tf = Typeface.createFromAsset(ctx.assets, "fonts/font.ttf")

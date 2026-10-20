@@ -1,6 +1,7 @@
 package com.ivarna.fluxlinux.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -20,7 +21,6 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Terminal
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -28,6 +28,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -46,8 +48,8 @@ enum class BottomTab(val title: String, val icon: ImageVector) {
 private val BottomNavItems = listOf(BottomTab.HOME, BottomTab.DISTROS, BottomTab.APPS, BottomTab.TOOLS)
 
 /**
- * Standard AOSP bottom navigation: full-width surface, one hairline, evenly
- * sized destinations. The selected icon gets a compact tonal pill.
+ * Floating Midnight dock: one rounded surface, hairline edge, selected signal
+ * pill. Four destinations, fixed above the navigation bar.
  */
 @Composable
 @Suppress("UNUSED_PARAMETER")
@@ -55,32 +57,27 @@ fun GlassBottomNavigation(
     selectedTab: BottomTab,
     onTabSelected: (BottomTab) -> Unit,
     hazeState: HazeState,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
-    Column(
+    val shape = RoundedCornerShape(22.dp)
+    Row(
         modifier = modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surface)
+            .shadow(18.dp, shape, clip = false)
+            .clip(shape)
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.97f))
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, shape)
+            .height(66.dp)
+            .padding(horizontal = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        HorizontalDivider(
-            thickness = 0.75.dp,
-            color = MaterialTheme.colorScheme.outlineVariant,
-        )
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(64.dp)
-                .padding(horizontal = 6.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            BottomNavItems.forEach { tab ->
-                NavItem(
-                    tab = tab,
-                    selected = selectedTab == tab,
-                    onClick = { onTabSelected(tab) },
-                    modifier = Modifier.weight(1f)
-                )
-            }
+        BottomNavItems.forEach { tab ->
+            NavItem(
+                tab = tab,
+                selected = selectedTab == tab,
+                onClick = { onTabSelected(tab) },
+                modifier = Modifier.weight(1f)
+            )
         }
     }
 }
@@ -90,7 +87,7 @@ private fun NavItem(
     tab: BottomTab,
     selected: Boolean,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     val iconColor = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
     else MaterialTheme.colorScheme.onSurfaceVariant
@@ -107,11 +104,18 @@ private fun NavItem(
     ) {
         Box(
             modifier = Modifier
-                .size(width = 38.dp, height = 28.dp)
+                .size(width = 40.dp, height = 28.dp)
                 .clip(RoundedCornerShape(14.dp))
                 .background(
                     if (selected) MaterialTheme.colorScheme.primaryContainer
-                    else androidx.compose.ui.graphics.Color.Transparent
+                    else Color.Transparent
+                )
+                .then(
+                    if (selected) Modifier.border(
+                        1.dp,
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.22f),
+                        RoundedCornerShape(14.dp)
+                    ) else Modifier
                 ),
             contentAlignment = Alignment.Center
         ) {
@@ -119,15 +123,16 @@ private fun NavItem(
                 imageVector = tab.icon,
                 contentDescription = tab.title,
                 tint = iconColor,
-                modifier = Modifier.size(19.dp)
+                modifier = Modifier.size(18.dp)
             )
         }
         Spacer(Modifier.height(1.dp))
         Text(
             text = tab.title,
-            fontSize = 11.sp,
-            lineHeight = 13.sp,
-            fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
+            fontSize = 10.sp,
+            lineHeight = 12.sp,
+            letterSpacing = 0.15.sp,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
             color = labelColor,
             maxLines = 1
         )
