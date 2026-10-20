@@ -778,7 +778,8 @@ final class CloneManager {
                                         String oldPackage) throws Exception {
         DexFile dex = DexFile.read(input);
         try {
-            boolean changed = false;
+            List<StringId> targets = new ArrayList<>();
+            List<String> replacements = new ArrayList<>();
             Iterator<StringId> items = (Iterator<StringId>)
                     (Iterator<?>) dex.getRootRepository().getItems(SectionType.STRING_ID);
             while (items != null && items.hasNext()) {
@@ -792,12 +793,15 @@ final class CloneManager {
                 }
                 String replaced = replaceAuthorities(value, patches, oldPackage);
                 if (!replaced.equals(value)) {
-                    id.setString(replaced);
-                    changed = true;
+                    targets.add(id);
+                    replacements.add(replaced);
                 }
             }
-            if (!changed) {
+            if (targets.isEmpty()) {
                 return null;
+            }
+            for (int i = 0; i < targets.size(); i++) {
+                targets.get(i).setString(replacements.get(i));
             }
             dex.refreshFull();
             return dex.getBytes();
