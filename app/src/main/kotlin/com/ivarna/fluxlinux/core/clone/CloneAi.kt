@@ -321,9 +321,11 @@ object CloneAi {
 
     private suspend fun observe(): Observation? = withContext(Dispatchers.IO) {
         val displayW = CloneEngine.displayW.value.coerceIn(320, 1920)
-        val displayH = CloneEngine.displayH.value.coerceIn(320, 1920)
-        val jpeg = CloneEngine.screenshotJpeg(displayW, 85) ?: fallbackJpeg()
-        ?: return@withContext null
+        // Keep the JPEG comfortably below the 1 MB binder limit; OCR
+        // coordinates are scaled back to display pixels when acting.
+        val shotWidth = displayW.coerceAtMost(720)
+        val jpeg = CloneEngine.screenshotJpeg(shotWidth, 80) ?: fallbackJpeg()
+            ?: return@withContext null
         val bitmap = try {
             BitmapFactory.decodeByteArray(jpeg, 0, jpeg.size)
         } catch (t: Throwable) {
@@ -607,7 +609,7 @@ object CloneAi {
  */
 internal object AiProtocol {
 
-    const val SYSTEM_PROMPT: String = """
+    val SYSTEM_PROMPT: String = """
 You are the control loop of an Android automation agent (ShadowAuto style).
 You operate ONE app running on a hidden virtual display. Each step you receive
 OCR text with display-pixel bounds and your recent action history. Reply with
