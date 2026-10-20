@@ -869,5 +869,7 @@ ShadowAuto-derived layer is unwanted. Removed it completely.
 - Desktop and terminal are untouched.
 - The Apps screen is now a simple clone manager (no Display/AI/Configure tabs); the Tools hub entry
   is “Cloned apps”.
+- Installs are staged into `/data/local/tmp/bliss-clone` through a shell process (Shizuku) or a root
+  copy, then installed with `pm install <path>`; no user service and no flaky `pm -S` stdin pipe.
 
-versionCode 46, 3.11.0.
+versionCode 47, 3.11.1.

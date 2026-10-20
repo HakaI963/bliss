@@ -14,6 +14,7 @@ import android.net.Uri
 import android.os.Build
 import android.util.Log
 import com.ivarna.fluxlinux.core.clone.ShellRunner
+import com.ivarna.fluxlinux.core.utils.RootUtils
 import java.io.File
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
@@ -42,6 +43,7 @@ object CloneEngine {
     private const val TAG = "BlissClone"
     private const val PREFS = "bliss_clone_cfg"
     private const val CLONE_USER_NAME = "Bliss"
+    private const val STAGE_DIR = "/data/local/tmp/bliss-clone"
 
     /** An app cloned into the Bliss space (the only thing the Apps tab shows). */
     data class CloneApp(
@@ -455,29 +457,40 @@ object CloneEngine {
 
     private fun installSingleBlocking(file: File, uid: Int): String? {
         if (!file.isFile) return "file not found: ${file.absolutePath}"
-        // Stream/install through the shell (Shizuku or root). No user service.
-        val backend = ShellRunner.backend()
-        val size = file.length()
-        val res = when (backend) {
-            ShellRunner.Backend.SHIZUKU -> ShellRunner.execWithStdin(
-                file, "pm", "install", "--user", uid.toString(), "-r", "-S", size.toString(),
-            )
-            ShellRunner.Backend.ROOT -> {
-                val tmp = "/data/local/tmp/bliss-clone/${file.name}"
-                ShellRunner.exec("mkdir", "-p", "/data/local/tmp/bliss-clone")
-                val cp = ShellRunner.exec("cp", file.absolutePath, tmp)
-                if (!cp.ok) {
-                    cp
-                } else {
-                    ShellRunner.exec("pm", "install", "--user", uid.toString(), "-r", tmp)
-                        .also { ShellRunner.exec("rm", "-f", tmp) }
-                }
-            }
-            ShellRunner.Backend.NONE -> ShellRunner.Result(-1, "", "no shell backend")
+        if (ShellRunner.backend() == ShellRunner.Backend.NONE) {
+            return "Shizuku (or root) is needed to install into the clone user"
         }
-        val failure = installFailure(res)
-        if (failure != null) return failure
-        return registerFromArchive(file)
+        val dir = STAGE_DIR
+        ShellRunner.exec("mkdir", "-p", dir)
+        val remote = dir + "/clone-" + System.currentTimeMillis() + "-" +
+            file.name.replace(Regex("[^A-Za-z0-9._-]"), "_")
+        val up = stageForInstall(file, remote)
+        if (!up.ok) {
+            return "could not stage APK: ${up.combined.ifBlank { "shell error" }.take(200)}"
+        }
+        return try {
+            val res = ShellRunner.exec("pm", "install", "--user", uid.toString(), "-r", remote)
+            val failure = installFailure(res)
+            if (failure != null) failure else registerFromArchive(file)
+        } finally {
+            ShellRunner.exec("rm", "-f", remote)
+        }
+    }
+
+    /**
+     * Stage an APK where the shell can read it. Shizuku streams it through a
+     * shell process; root copies it directly (root can read app-private files).
+     */
+    private fun stageForInstall(file: File, remote: String): ShellRunner.Result {
+        if (ShellRunner.shizukuReady()) {
+            val r = ShellRunner.copyToShell(file, remote)
+            if (r.ok) return r
+            log("Shizuku staging failed: ${r.combined.take(160)}")
+        }
+        if (RootUtils.isRootAvailable()) {
+            return ShellRunner.execRoot("cp", file.absolutePath, remote)
+        }
+        return ShellRunner.Result(-1, "", "no shell backend")
     }
 
     /** .apks / .xapk / .apkm = zip with base.apk + split APKs. */
@@ -506,21 +519,34 @@ object CloneEngine {
         val create = ShellRunner.exec("pm", "install-create", "--user", uid.toString(), "-r")
         val session = Regex("""\[(\d+)]""").find(create.combined)?.groupValues?.get(1)
             ?: return "could not create install session: ${create.combined.take(160)}"
-        for (apk in apks) {
-            val w = if (ShellRunner.shizukuReady()) {
-                ShellRunner.execWithStdin(apk, "pm", "install-write", session, apk.name)
-            } else {
-                ShellRunner.exec("pm", "install-write", session, apk.name, apk.absolutePath)
+        val remotes = ArrayList<String>(apks.size)
+        try {
+            ShellRunner.exec("mkdir", "-p", STAGE_DIR)
+            for ((i, apk) in apks.withIndex()) {
+                val remote = STAGE_DIR + "/split-" + i + "-" + apk.name
+                val up = stageForInstall(apk, remote)
+                if (!up.ok) {
+                    ShellRunner.exec("pm", "install-abandon", session)
+                    return "could not stage split: ${up.combined.take(160)}"
+                }
+                remotes.add(remote)
             }
-            val failure = installFailure(w)
-            if (failure != null) {
-                ShellRunner.exec("pm", "install-abandon", session)
-                return failure
+            for ((i, apk) in apks.withIndex()) {
+                val w = ShellRunner.exec(
+                    "pm", "install-write", session, apk.name, remotes[i],
+                )
+                val failure = installFailure(w)
+                if (failure != null) {
+                    ShellRunner.exec("pm", "install-abandon", session)
+                    return failure
+                }
             }
+            val commit = ShellRunner.exec("pm", "install-commit", session)
+            val failure = installFailure(commit)
+            if (failure != null) return failure
+        } finally {
+            for (remote in remotes) ShellRunner.exec("rm", "-f", remote)
         }
-        val commit = ShellRunner.exec("pm", "install-commit", session)
-        val failure = installFailure(commit)
-        if (failure != null) return failure
         return registerFromArchive(base)
     }
 

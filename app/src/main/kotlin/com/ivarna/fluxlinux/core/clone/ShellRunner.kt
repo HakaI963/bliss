@@ -74,6 +74,33 @@ object ShellRunner {
         return Result(code, out.toString().trim(), err.toString().trim())
     }
 
+    /**
+     * Copy [file] to [remote] through a shell process. Used for clone installs:
+     * the app's private APK is streamed into /data/local/tmp, then `pm install`
+     * reads the staged file (this avoids pm's stdin transport, which is flaky
+     * on some Shizuku builds).
+     */
+    fun copyToShell(file: File, remote: String): Result {
+        val p = shizukuProcess("sh", "-c", "cat > " + quote(remote))
+            ?: return Result(-1, "", "copy needs Shizuku")
+        val out = StringBuilder()
+        val err = StringBuilder()
+        val outThread = pump(p.inputStream, out)
+        val errThread = pump(p.errorStream, err)
+        try {
+            file.inputStream().use { ins ->
+                p.outputStream.use { os -> ins.copyTo(os, 128 * 1024) }
+            }
+        } catch (t: Throwable) {
+            runCatching { p.destroy() }
+            return Result(-1, out.toString(), "copy failed: ${t.message}")
+        }
+        val code = runCatching { p.waitFor() }.getOrDefault(-1)
+        runCatching { outThread.join(2000) }
+        runCatching { errThread.join(2000) }
+        return Result(code, out.toString().trim(), err.toString().trim())
+    }
+
     private fun pump(stream: InputStream, into: StringBuilder): Thread {
         val t = Thread {
             runCatching {
@@ -121,6 +148,9 @@ object ShellRunner {
         val r = RootUtils.runRootCommand(cmd)
         return Result(if (r.isSuccess) 0 else -1, r.output, r.error)
     }
+
+    /** Run a command as root (used for staging files root can read). */
+    fun execRoot(vararg args: String): Result = rootExec(args)
 
     private fun quote(s: String): String =
         if (s.isNotEmpty() && s.all { it.isLetterOrDigit() || it in "_-./:@=+,%^" }) s
