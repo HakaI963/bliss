@@ -1,14 +1,10 @@
 package com.ivarna.fluxlinux.ui.components
 
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,110 +13,68 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.role
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.ivarna.fluxlinux.ui.theme.FolioMotion
-import com.ivarna.fluxlinux.ui.theme.FrostHairline
-import com.ivarna.fluxlinux.ui.theme.FrostSurface
-import com.ivarna.fluxlinux.ui.theme.FrostTopSheen
-import com.ivarna.fluxlinux.ui.theme.FolioFrostBorder
-import com.ivarna.fluxlinux.ui.theme.TextMuted
-import com.ivarna.fluxlinux.ui.theme.TextPrimary
-import com.ivarna.fluxlinux.ui.theme.TextSecondary
 
-// Frost edge system: 0.75dp outer hairlines, 0.5dp inner dividers, full-round pills.
-private val FrostEdgeWidth = 0.75.dp
-private val FrostPillShape = RoundedCornerShape(50)
-private val FrostRowShape = RoundedCornerShape(14.dp)
+private val FrostEdgeWidth = 1.dp
+private val FrostPillShape = RoundedCornerShape(20.dp)
+private val FrostRowShape = RoundedCornerShape(8.dp)
 
-// Press tints for rows/pills — existing frost tokens only (white at low alpha).
-private val PressRowFill = Color.White.copy(alpha = 0.05f)
-private val PressRowEdge = Color.White.copy(alpha = 0.10f)
-private val PressPillFill = Color.White.copy(alpha = 0.09f)
+fun folioSpring() = spring<Float>(dampingRatio = 0.8f, stiffness = 500f)
 
-fun folioSpring() = spring<Float>(dampingRatio = 0.78f, stiffness = 380f)
-
-/** Spring for non-Float animate*AsState targets (colors, dp, …). */
-fun <T> folioSpringAny() = spring<T>(dampingRatio = 0.78f, stiffness = 380f)
+fun <T> folioSpringAny() = spring<T>(dampingRatio = 0.8f, stiffness = 500f)
 
 @Composable
 fun folioPressedScale(): Pair<Modifier, () -> Unit> {
     var pressed by remember { mutableStateOf(false) }
-    val scale = if (pressed) FolioMotion.PressScale else 1f
-    val mod = Modifier
-        .graphicsLayer(scaleX = scale, scaleY = scale)
-        .pointerInput(Unit) {
-            detectTapGestures(
-                onPress = {
-                    pressed = true
-                    tryAwaitRelease()
-                    pressed = false
-                }
-            )
-        }
-    return mod to { pressed = false }
+    return Modifier to { pressed = false }
 }
 
+/** Flat AOSP group used by the older settings pages. */
 @Composable
 fun FrostContainer(
     modifier: Modifier = Modifier,
-    corner: Dp = 18.dp,
+    corner: Dp = 12.dp,
     content: @Composable ColumnScope.() -> Unit
 ) {
     Column(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(corner))
-            .background(FrostSurface)
-            .border(FrostEdgeWidth, FolioFrostBorder, RoundedCornerShape(corner))
-            .drawBehind {
-                // Soft inner sheen: the glass reads as lit from above.
-                drawRect(
-                    brush = Brush.verticalGradient(
-                        0f to FrostTopSheen,
-                        1f to Color.White.copy(alpha = 0f),
-                        endY = 28.dp.toPx()
-                    )
-                )
-            }
-            .padding(vertical = 4.dp),
+            .background(MaterialTheme.colorScheme.surface)
+            .border(FrostEdgeWidth, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(corner))
+            .padding(vertical = 2.dp),
         content = content
     )
 }
 
-/**
- * Settings-style frost row: 38dp icon plate, title + subtitle, chevron.
- * Motion: interactionSource-driven press scale (0.98) with an animated
- * fill/edge, so the row visibly depresses without a ripple.
- */
+/** AOSP list row: 36 dp icon plate, title + subtitle, chevron. */
 @Composable
 fun FrostRow(
     icon: ImageVector,
@@ -129,87 +83,61 @@ fun FrostRow(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     chevron: Boolean = true,
-    titleColor: Color = TextPrimary,
+    titleColor: Color = Color.Unspecified,
 ) {
-    val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (pressed) FolioMotion.PressScale else 1f,
-        animationSpec = folioSpring(),
-        label = "frostRowPress"
-    )
-    val fill by animateColorAsState(
-        targetValue = if (pressed) PressRowFill else Color.Transparent,
-        animationSpec = folioSpringAny(),
-        label = "frostRowFill"
-    )
-    val edge by animateColorAsState(
-        targetValue = if (pressed) PressRowEdge else Color.Transparent,
-        animationSpec = folioSpringAny(),
-        label = "frostRowEdge"
-    )
-
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 6.dp, vertical = 1.dp)
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-            }
             .clip(FrostRowShape)
-            .background(fill)
-            .border(FrostEdgeWidth, edge, FrostRowShape)
-            .clickable(
-                interactionSource = interaction,
-                indication = null,
-                onClick = onClick
-            )
-            .semantics(mergeDescendants = true) { role = Role.Button }
-            .padding(horizontal = 12.dp, vertical = 12.dp),
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Tinted frost icon plate — monochrome, same 6% white fill as cards.
         Box(
             modifier = Modifier
-                .size(38.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(Color.White.copy(alpha = 0.06f))
-                .border(FrostEdgeWidth, FolioFrostBorder, RoundedCornerShape(12.dp)),
+                .size(36.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = TextSecondary,
-                modifier = Modifier.size(19.dp)
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(18.dp)
             )
         }
-        Spacer(Modifier.width(12.dp))
+        Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
-            Text(title, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = titleColor)
-            Text(subtitle, fontSize = 12.sp, color = TextMuted, maxLines = 1)
+            Text(
+                title,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Normal,
+                color = if (titleColor == Color.Unspecified) MaterialTheme.colorScheme.onSurface else titleColor
+            )
+            Text(
+                subtitle,
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1
+            )
         }
         if (chevron) {
             Icon(
                 Icons.AutoMirrored.Rounded.KeyboardArrowRight,
                 contentDescription = null,
-                tint = TextMuted,
+                tint = MaterialTheme.colorScheme.outline,
                 modifier = Modifier.size(20.dp)
             )
         }
     }
 }
 
-/**
- * Soft hairline divider. [startInset] defaults to the legacy 18dp; settings
- * rows align on the title column (18dp + 38dp plate + 12dp gap = 68dp).
- */
 @Composable
-fun FrostDivider(startInset: Dp = 18.dp, endInset: Dp = 18.dp) {
+fun FrostDivider(startInset: Dp = 14.dp, endInset: Dp = 14.dp) {
     HorizontalDivider(
-        color = FrostHairline,
-        thickness = 0.5.dp,
+        color = MaterialTheme.colorScheme.outlineVariant,
+        thickness = 0.75.dp,
         modifier = Modifier.padding(start = startInset, end = endInset)
     )
 }
@@ -220,15 +148,11 @@ fun FrostGroupTitle(text: String, modifier: Modifier = Modifier) {
         text,
         fontSize = 13.sp,
         fontWeight = FontWeight.SemiBold,
-        color = TextSecondary,
-        modifier = modifier.padding(start = 4.dp, bottom = 6.dp, top = 8.dp)
+        color = MaterialTheme.colorScheme.primary,
+        modifier = modifier.padding(start = 4.dp, bottom = 4.dp, top = 10.dp)
     )
 }
 
-/**
- * Frost pill button. Motion: press scale + animated fill (white 9% ghost /
- * dimmed primary), no ripple — consistent with rows and cards.
- */
 @Composable
 fun FrostPill(
     text: String,
@@ -236,45 +160,32 @@ fun FrostPill(
     modifier: Modifier = Modifier,
     primary: Boolean = false,
 ) {
-    val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (pressed) 0.97f else 1f,
-        animationSpec = folioSpring(),
-        label = "frostPillPress"
-    )
-    val bg by animateColorAsState(
-        targetValue = when {
-            primary -> if (pressed) TextPrimary.copy(alpha = 0.85f) else TextPrimary
-            pressed -> PressPillFill
-            else -> FrostSurface
-        },
-        animationSpec = folioSpringAny(),
-        label = "frostPillFill"
-    )
-    val fg = if (primary) Color(0xFF09090B) else TextPrimary
-    Box(
-        modifier = modifier
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-            }
-            .clip(FrostPillShape)
-            .background(bg)
-            .then(
-                if (primary) Modifier
-                else Modifier.border(FrostEdgeWidth, FolioFrostBorder, FrostPillShape)
-            )
-            .clickable(
-                interactionSource = interaction,
-                indication = null,
-                onClick = onClick
-            )
-            .semantics(mergeDescendants = true) { role = Role.Button }
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = fg)
+    if (primary) {
+        Button(
+            onClick = onClick,
+            modifier = modifier.height(38.dp),
+            shape = FrostPillShape,
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+            ),
+        ) {
+            Text(text, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+        }
+    } else {
+        OutlinedButton(
+            onClick = onClick,
+            modifier = modifier.height(38.dp),
+            shape = FrostPillShape,
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            colors = ButtonDefaults.outlinedButtonColors(
+                contentColor = MaterialTheme.colorScheme.primary
+            ),
+        ) {
+            Text(text, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+        }
     }
 }
 
@@ -285,31 +196,22 @@ fun RowScope.FrostTabPill(
     icon: @Composable () -> Unit,
     label: @Composable () -> Unit,
 ) {
-    val bg by animateColorAsState(
-        if (selected) Color.White.copy(alpha = 0.10f) else Color.Transparent,
-        animationSpec = spring(dampingRatio = 0.78f, stiffness = 380f),
-        label = "pill"
-    )
-    val edge by animateColorAsState(
-        if (selected) FrostHairline else Color.Transparent,
-        animationSpec = spring(dampingRatio = 0.78f, stiffness = 380f),
-        label = "pillEdge"
-    )
     Box(
         modifier = Modifier
             .weight(1f)
-            .clip(FrostPillShape)
-            .background(bg)
-            .border(FrostEdgeWidth, edge, FrostPillShape)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick
+            .clip(RoundedCornerShape(8.dp))
+            .background(
+                if (selected) MaterialTheme.colorScheme.primaryContainer
+                else Color.Transparent
             )
+            .clickable(onClick = onClick)
             .padding(vertical = 8.dp),
         contentAlignment = Alignment.Center
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
             icon()
             label()
         }

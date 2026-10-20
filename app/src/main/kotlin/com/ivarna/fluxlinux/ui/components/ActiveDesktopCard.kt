@@ -1,9 +1,20 @@
 package com.ivarna.fluxlinux.ui.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Article
@@ -13,13 +24,13 @@ import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -28,19 +39,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ivarna.fluxlinux.core.data.DistroRepository
 import com.ivarna.fluxlinux.core.desktop.DesktopSession
-import com.ivarna.fluxlinux.ui.theme.FolioDanger
-import com.ivarna.fluxlinux.ui.theme.FolioFrostBorder
-import com.ivarna.fluxlinux.ui.theme.FrostHairline
-import com.ivarna.fluxlinux.ui.theme.FrostSurface
-import com.ivarna.fluxlinux.ui.theme.TextMuted
-import com.ivarna.fluxlinux.ui.theme.TextPrimary
-import com.ivarna.fluxlinux.ui.theme.TextSecondary
 
-/**
- * Bliss active-desktop card: single frost container.
- * Primary white "Open X11" pill + ghost "Copy Log" / "Stop" pills.
- * No neon accents.
- */
+/** Active desktop card: flat AOSP group with compact actions. */
 @Composable
 fun ActiveDesktopCard(
     session: DesktopSession,
@@ -49,7 +49,7 @@ fun ActiveDesktopCard(
     onLogs: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val cardShape = RoundedCornerShape(18.dp)
+    val cardShape = RoundedCornerShape(12.dp)
     val isRunning = session.phase == DesktopSession.Phase.Running
     val deName = if (session.type == DesktopSession.Type.KDE) "KDE Plasma" else "XFCE4"
     val titleText = if (isRunning) {
@@ -67,8 +67,8 @@ fun ActiveDesktopCard(
         modifier = modifier
             .fillMaxWidth()
             .clip(cardShape)
-            .background(FrostSurface)
-            .border(0.75.dp, FolioFrostBorder, cardShape)
+            .background(MaterialTheme.colorScheme.surface)
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, cardShape)
             .semantics(mergeDescendants = true) {
                 contentDescription = a11yDesc
             }
@@ -81,9 +81,8 @@ fun ActiveDesktopCard(
             Box(
                 modifier = Modifier
                     .size(40.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color.White.copy(alpha = 0.06f))
-                    .border(0.75.dp, FrostHairline, RoundedCornerShape(12.dp)),
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
                 contentAlignment = Alignment.Center
             ) {
                 if (iconRes != null) {
@@ -96,7 +95,7 @@ fun ActiveDesktopCard(
                     Icon(
                         imageVector = Icons.Filled.DesktopWindows,
                         contentDescription = null,
-                        tint = TextSecondary,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(22.dp)
                     )
                 }
@@ -107,15 +106,14 @@ fun ActiveDesktopCard(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = titleText,
-                    color = TextPrimary,
-                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.Medium,
                     fontSize = 15.sp,
                     maxLines = 1
                 )
-                Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = subtitleText,
-                    color = TextMuted,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 12.sp,
                     lineHeight = 16.sp,
                     maxLines = 2
@@ -123,33 +121,31 @@ fun ActiveDesktopCard(
             }
         }
 
-        Spacer(modifier = Modifier.height(14.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
-        // Primary: Open X11 (white pill, dark text)
         Button(
             onClick = onOpen,
             colors = ButtonDefaults.buttonColors(
-                containerColor = TextPrimary,
-                contentColor = Color(0xFF09090B)
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary
             ),
-            shape = RoundedCornerShape(50),
+            shape = RoundedCornerShape(20.dp),
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
             modifier = Modifier
                 .fillMaxWidth()
-                .height(46.dp)
+                .height(38.dp)
         ) {
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.OpenInNew,
                 contentDescription = null,
-                modifier = Modifier.size(18.dp)
+                modifier = Modifier.size(17.dp)
             )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("Open X11", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+            Spacer(modifier = Modifier.width(7.dp))
+            Text("Open X11", fontWeight = FontWeight.Medium, fontSize = 13.sp)
         }
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Ghost row: Copy Log + Stop
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -157,35 +153,34 @@ fun ActiveDesktopCard(
             OutlinedButton(
                 onClick = onLogs,
                 colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = TextPrimary
+                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant
                 ),
-                border = androidx.compose.foundation.BorderStroke(0.75.dp, FrostHairline),
-                shape = RoundedCornerShape(50),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                shape = RoundedCornerShape(20.dp),
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
                 modifier = Modifier
                     .weight(1f)
-                    .height(40.dp)
+                    .height(36.dp)
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.Article,
                     contentDescription = null,
-                    tint = TextSecondary,
                     modifier = Modifier.size(16.dp)
                 )
                 Spacer(modifier = Modifier.width(6.dp))
-                Text("Copy Log", fontWeight = FontWeight.SemiBold, fontSize = 13.sp, maxLines = 1)
+                Text("Copy log", fontWeight = FontWeight.Medium, fontSize = 12.5.sp, maxLines = 1)
             }
             OutlinedButton(
                 onClick = onStop,
                 colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = FolioDanger
+                    contentColor = MaterialTheme.colorScheme.error
                 ),
-                border = androidx.compose.foundation.BorderStroke(0.75.dp, FrostHairline),
-                shape = RoundedCornerShape(50),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                shape = RoundedCornerShape(20.dp),
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
                 modifier = Modifier
                     .weight(1f)
-                    .height(40.dp)
+                    .height(36.dp)
             ) {
                 Icon(
                     imageVector = Icons.Filled.Stop,
@@ -193,7 +188,7 @@ fun ActiveDesktopCard(
                     modifier = Modifier.size(16.dp)
                 )
                 Spacer(modifier = Modifier.width(6.dp))
-                Text("Stop", fontWeight = FontWeight.SemiBold, fontSize = 13.sp, maxLines = 1)
+                Text("Stop", fontWeight = FontWeight.Medium, fontSize = 12.5.sp, maxLines = 1)
             }
         }
     }

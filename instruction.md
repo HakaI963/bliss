@@ -2,7 +2,7 @@
 
 Updated: 2026-10-20 · Repo: `HakaI963/bliss` (branch `main`) · Local working copy: `/tmp/opencode/folio` · Upstream reference clone: `/tmp/opencode/fluxlinux-src`
 
-## 0. Current clone engine (v3.13.0)
+## 0. Current clone engine (v3.15.0)
 
 The repo was renamed **folio → bliss**. The retired BlackBox/virtual-app engine, its
 `Bcore`/`black-reflection`/`compiler` modules, relay receiver, proxy manifest and

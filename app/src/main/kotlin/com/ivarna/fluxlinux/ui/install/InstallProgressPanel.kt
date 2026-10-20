@@ -315,14 +315,14 @@ fun InstallProgressPanel(
                 modifier = Modifier
                     .fillMaxSize()
                     .clip(RoundedCornerShape(14.dp))
-                    .background(Color(0xFF0D0D11))
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
                     .border(0.75.dp, FrostHairline, RoundedCornerShape(14.dp))
                     .padding(12.dp)
                     .verticalScroll(logScroll)
             ) {
                 Text(
                     text = logText.ifBlank { "Initializing installation stream…" },
-                    color = if (logText.isBlank()) TextMuted else TextSecondary,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 11.sp,
                     fontFamily = FontFamily.Monospace,
                     lineHeight = 16.sp

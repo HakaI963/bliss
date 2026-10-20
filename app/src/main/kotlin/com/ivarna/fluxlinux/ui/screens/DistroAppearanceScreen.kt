@@ -354,7 +354,7 @@ fun DistroAppearanceScreen(
                                                     .clip(RoundedCornerShape(10.dp))
                                                     .border(
                                                         width = if (selected) 1.5.dp else 0.75.dp,
-                                                        color = if (selected) TextPrimary else Color.White.copy(alpha = 0.10f),
+                                                        color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
                                                         shape = RoundedCornerShape(10.dp)
                                                     )
                                             ) {
@@ -477,7 +477,7 @@ fun DistroAppearanceScreen(
                                             .clip(RoundedCornerShape(10.dp))
                                             .border(
                                                 0.75.dp,
-                                                Color.White.copy(alpha = 0.18f),
+                                                MaterialTheme.colorScheme.outlineVariant,
                                                 RoundedCornerShape(10.dp)
                                             )
                                     ) {
@@ -672,7 +672,7 @@ fun DistroAppearanceScreen(
                                                 .background(swatch)
                                                 .border(
                                                     width = if (selected) 2.dp else 0.75.dp,
-                                                    color = if (selected) TextPrimary else Color.White.copy(alpha = 0.18f),
+                                                    color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
                                                     shape = CircleShape
                                                 )
                                         )
@@ -996,7 +996,7 @@ private fun StylePill(
         Box(
             modifier = Modifier
                 .clip(RoundedCornerShape(50))
-                .border(0.75.dp, Color.White.copy(alpha = 0.06f), RoundedCornerShape(50))
+                .border(0.75.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(50))
                 .padding(horizontal = 16.dp, vertical = 8.dp)
         ) {
             Text(label, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = TextMuted)
@@ -1020,7 +1020,7 @@ private fun SchemeCard(
             .clip(RoundedCornerShape(12.dp))
             .border(
                 width = if (selected) 1.5.dp else 0.75.dp,
-                color = if (selected) TextPrimary else Color.White.copy(alpha = 0.10f),
+                color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
                 shape = RoundedCornerShape(12.dp)
             )
             .clickable(onClick = onClick)
@@ -1085,7 +1085,7 @@ private fun ColorSwatchRow(
                         .background(parseHexColor(hex) ?: TextSecondary)
                         .border(
                             width = if (selected) 2.dp else 0.75.dp,
-                            color = if (selected) TextPrimary else Color.White.copy(alpha = 0.18f),
+                            color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
                             shape = CircleShape
                         )
                         .clickable { onPick(hex) }

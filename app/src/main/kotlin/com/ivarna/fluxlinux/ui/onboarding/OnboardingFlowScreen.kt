@@ -1865,24 +1865,25 @@ private fun FolioPrimaryButton(
     enabled: Boolean = true,
     icon: ImageVector? = null
 ) {
+    val colors = MaterialTheme.colorScheme
     Button(
         onClick = onClick,
         enabled = enabled,
         modifier = modifier
             .fillMaxWidth()
-            .height(54.dp),
+            .height(40.dp),
         colors = ButtonDefaults.buttonColors(
-            containerColor = TextPrimary,
-            contentColor = FolioBackground,
-            disabledContainerColor = TextPrimary.copy(alpha = 0.4f),
-            disabledContentColor = FolioBackground.copy(alpha = 0.4f)
+            containerColor = colors.primary,
+            contentColor = colors.onPrimary,
+            disabledContainerColor = colors.surfaceVariant,
+            disabledContentColor = colors.onSurfaceVariant
         ),
-        shape = CircleShape
+        shape = RoundedCornerShape(20.dp)
     ) {
-        Text(text, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+        Text(text, fontWeight = FontWeight.Medium, fontSize = 14.sp)
         if (icon != null) {
             Spacer(Modifier.width(6.dp))
-            Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp))
+            Icon(icon, contentDescription = null, modifier = Modifier.size(17.dp))
         }
     }
 }
@@ -1893,7 +1894,7 @@ private fun FolioSecondaryButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
-    height: Dp = 54.dp
+    height: Dp = 40.dp
 ) {
     val colors = MaterialTheme.colorScheme
     Button(
@@ -1903,15 +1904,15 @@ private fun FolioSecondaryButton(
             .fillMaxWidth()
             .height(height),
         colors = ButtonDefaults.buttonColors(
-            containerColor = colors.surface.copy(alpha = 0.45f),
-            contentColor = colors.onBackground,
-            disabledContainerColor = colors.surface.copy(alpha = 0.25f),
-            disabledContentColor = colors.onBackground.copy(alpha = 0.4f)
+            containerColor = colors.surface,
+            contentColor = colors.primary,
+            disabledContainerColor = colors.surfaceVariant,
+            disabledContentColor = colors.onSurfaceVariant.copy(alpha = 0.5f)
         ),
-        border = BorderStroke(0.75.dp, FrostHairline),
-        shape = CircleShape
+        border = BorderStroke(1.dp, colors.outlineVariant),
+        shape = RoundedCornerShape(20.dp)
     ) {
-        Text(text, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+        Text(text, fontWeight = FontWeight.Medium, fontSize = 13.sp)
     }
 }
 

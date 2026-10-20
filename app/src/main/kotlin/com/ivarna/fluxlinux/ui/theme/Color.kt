@@ -2,130 +2,136 @@ package com.ivarna.fluxlinux.ui.theme
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.SolidColor
 import com.ivarna.fluxlinux.core.utils.ThemePalette
 
-// Bliss monochrome frost palette — matte deep carbon, no neon, no beige.
-val FolioBackground = Color(0xFF09090B)
-val FolioSurface = Color(0xFF101013)
-val FolioCard = Color(0xFF18181B)
-val FrostSurface = Color(0xFFFFFFFF).copy(alpha = 0.05f)
-val FrostSurfaceElevated = Color(0xFFFFFFFF).copy(alpha = 0.09f)
-val FrostHairline = Color(0xFFFFFFFF).copy(alpha = 0.06f)
-// Soft top sheen for frosted panels: fades from a lit edge to nothing.
-val FrostTopSheen = Color(0xFFFFFFFF).copy(alpha = 0.05f)
-val FolioFrostBorder: Brush = Brush.verticalGradient(
-    listOf(Color.White.copy(alpha = 0.12f), Color.White.copy(alpha = 0.035f))
-)
-val TextPrimary = Color(0xFFF4F4F5)
-val TextSecondary = Color(0xFFA1A1AA)
-val TextMuted = Color(0xFF52525B)
-val PrimaryAction = Color(0xFFF4F4F5)
-val OnPrimaryAction = Color(0xFF09090B)
-val StatusDot = Color(0xFF22C55E)
-val FolioDanger = Color(0xFFE5484D)
-val FolioDangerContainer = Color(0xFF7F1D1D)
+// ── Bliss AOSP palette ──────────────────────────────────────────────────────
+// These tokens are kept as observable top-level values so the older Frost /
+// Quartz call sites inherit the active light or dark scheme automatically.
+// New code should prefer MaterialTheme.colorScheme directly.
 
-// Frost switch tokens
-val FolioSwitchCheckedTrack = TextPrimary
-val FolioSwitchCheckedThumb = FolioBackground
-val FolioSwitchUncheckedTrack = Color(0xFF27272A)
-val FolioSwitchUncheckedThumb = Color(0xFFE4E4E7)
-val FolioSwitchUncheckedBorder = Color(0xFF52525B)
+var FolioBackground by mutableStateOf(Color(0xFFF7F8FA))
+    internal set
+var FolioSurface by mutableStateOf(Color(0xFFFFFFFF))
+    internal set
+var FolioCard by mutableStateOf(Color(0xFFF0F2F5))
+    internal set
+var FrostSurface by mutableStateOf(Color(0xFFFFFFFF))
+    internal set
+var FrostSurfaceElevated by mutableStateOf(Color(0xFFF0F2F5))
+    internal set
+var FrostHairline by mutableStateOf(Color(0xFFDADCE0))
+    internal set
+var FrostTopSheen by mutableStateOf(Color.Transparent)
+    internal set
 
-// ── Theme palette tokens (dark schemes) ───────────────────────────────────
-// Each palette swaps only these slots; text / hairline / danger tokens stay
-// shared so every scheme has the same frost structure. CARBON is the frost
-// set above and the default — its values are unchanged.
-// SLATE — cool blue-gray, muted.
-val SlateBackground = Color(0xFF0B0E12)
-val SlateSurface = Color(0xFF11151B)
-val SlateSurfaceVariant = Color(0xFF1A2028)
-val SlatePrimary = Color(0xFFA8C5E0)
-val SlateOutlineVariant = Color(0xFF232B35)
-// PLUM — muted violet-gray.
-val PlumBackground = Color(0xFF0F0C13)
-val PlumSurface = Color(0xFF16121C)
-val PlumSurfaceVariant = Color(0xFF1F1926)
-val PlumPrimary = Color(0xFFC9B8E8)
-val PlumOutlineVariant = Color(0xFF2A2333)
-// SAND — warm graphite.
-val SandBackground = Color(0xFF13110E)
-val SandSurface = Color(0xFF1A1713)
-val SandSurfaceVariant = Color(0xFF241F19)
-val SandPrimary = Color(0xFFD9C7A8)
-val SandOutlineVariant = Color(0xFF2E2820)
+var TextPrimary by mutableStateOf(Color(0xFF1F1F1F))
+    internal set
+var TextSecondary by mutableStateOf(Color(0xFF5F6368))
+    internal set
+var TextMuted by mutableStateOf(Color(0xFF747775))
+    internal set
+var PrimaryAction by mutableStateOf(Color(0xFF0B57D0))
+    internal set
+var OnPrimaryAction by mutableStateOf(Color.White)
+    internal set
+var StatusDot by mutableStateOf(Color(0xFF1E8E3E))
+    internal set
+var FolioDanger by mutableStateOf(Color(0xFFB3261E))
+    internal set
+var FolioDangerContainer by mutableStateOf(Color(0xFFF9DEDC))
+    internal set
 
-/** Swatch dot for the palette picker: each palette's primary accent. */
+// Frost switch tokens, kept for the existing switch call sites.
+var FolioSwitchCheckedTrack by mutableStateOf(Color(0xFF0B57D0))
+    internal set
+var FolioSwitchCheckedThumb by mutableStateOf(Color.White)
+    internal set
+var FolioSwitchUncheckedTrack by mutableStateOf(Color(0xFFE8EAED))
+    internal set
+var FolioSwitchUncheckedThumb by mutableStateOf(Color(0xFF747775))
+    internal set
+var FolioSwitchUncheckedBorder by mutableStateOf(Color(0xFF8E918F))
+    internal set
+
+/** Hairline used by the legacy glass containers; now a flat AOSP divider. */
+val FolioFrostBorder: Brush
+    get() = SolidColor(FrostHairline)
+
+// ── Accent palette ──────────────────────────────────────────────────────────
+// Surfaces stay AOSP neutral. These accents only colour primary controls.
+val SlatePrimary = Color(0xFF3D5A80)
+val PlumPrimary = Color(0xFF6A4C93)
+val SandPrimary = Color(0xFF7A5B3A)
+val CarbonPrimary = Color(0xFF0B57D0)
+
+/** Swatch dot for the accent picker. */
 fun ThemePalette.accentColor(): Color = when (this) {
-    ThemePalette.CARBON -> PrimaryAction
+    ThemePalette.CARBON -> CarbonPrimary
     ThemePalette.SLATE -> SlatePrimary
     ThemePalette.PLUM -> PlumPrimary
     ThemePalette.SAND -> SandPrimary
 }
 
-// Deprecated Flux aliases — mapped to monochrome so legacy call sites keep compiling.
-// Do not use in new Bliss UI.
-@Deprecated("Use TextPrimary", ReplaceWith("TextPrimary"))
-val FluxCream = TextPrimary
-@Deprecated("Use TextPrimary", ReplaceWith("TextPrimary"))
-val FluxCreamPrimary = TextPrimary
-@Deprecated("Use TextPrimary", ReplaceWith("TextPrimary"))
-val BrandCream = TextPrimary
-@Deprecated("Use FolioBackground", ReplaceWith("FolioBackground"))
-val FluxDarkGrey = FolioBackground
-@Deprecated("Use FolioBackground", ReplaceWith("FolioBackground"))
-val FluxDarkSurface = FolioBackground
-@Deprecated("Use TextSecondary", ReplaceWith("TextSecondary"))
-val FluxAccentCyan = TextSecondary
-@Deprecated("Use TextSecondary", ReplaceWith("TextSecondary"))
-val FluxAccentMagenta = TextSecondary
-@Deprecated("Use FolioBackground", ReplaceWith("FolioBackground"))
-val FluxBackgroundStart = FolioBackground
-@Deprecated("Use FolioBackground", ReplaceWith("FolioBackground"))
-val FluxBackgroundMid = FolioBackground
-@Deprecated("Use FolioBackground", ReplaceWith("FolioBackground"))
-val FluxBackgroundEnd = FolioBackground
-@Deprecated("Use FrostSurface", ReplaceWith("FrostSurface"))
-val GlassWhiteHigh = FrostSurface
-@Deprecated("Use FrostSurface", ReplaceWith("FrostSurface"))
-val GlassWhiteMedium = FrostSurface
-@Deprecated("Use FrostSurface", ReplaceWith("FrostSurface"))
-val GlassWhiteLow = FrostSurface
-@Deprecated("Use FrostHairline", ReplaceWith("FrostHairline"))
-val GlassBorder = FrostHairline
-@Deprecated("Use TextPrimary", ReplaceWith("TextPrimary"))
-val TextWhite = TextPrimary
-@Deprecated("Use TextSecondary", ReplaceWith("TextSecondary"))
-val TextGrey = TextSecondary
-@Deprecated("Use TextSecondary", ReplaceWith("TextSecondary"))
-val Seed = TextSecondary
-@Deprecated("Use TextSecondary", ReplaceWith("TextSecondary"))
-val FluxBodyMuted = TextSecondary
-@Deprecated("Use FrostHairline", ReplaceWith("FrostHairline"))
-val FluxHairline = FrostHairline
-@Deprecated("Use FolioSurface", ReplaceWith("FolioSurface"))
-val FluxCardFill = FolioSurface
-@Deprecated("Use FolioDanger", ReplaceWith("FolioDanger"))
-val FluxDanger = FolioDanger
-@Deprecated("Use FolioSwitchCheckedTrack", ReplaceWith("FolioSwitchCheckedTrack"))
-val FluxSwitchCheckedTrack = FolioSwitchCheckedTrack
-@Deprecated("Use FolioSwitchCheckedThumb", ReplaceWith("FolioSwitchCheckedThumb"))
-val FluxSwitchCheckedThumb = FolioSwitchCheckedThumb
-@Deprecated("Use FolioSwitchUncheckedTrack", ReplaceWith("FolioSwitchUncheckedTrack"))
-val FluxSwitchUncheckedTrack = FolioSwitchUncheckedTrack
-@Deprecated("Use FolioSwitchUncheckedThumb", ReplaceWith("FolioSwitchUncheckedThumb"))
-val FluxSwitchUncheckedThumb = FolioSwitchUncheckedThumb
-@Deprecated("Use FolioSwitchUncheckedBorder", ReplaceWith("FolioSwitchUncheckedBorder"))
-val FluxSwitchUncheckedBorder = FolioSwitchUncheckedBorder
-
 @Composable
-fun fluxMutedText(): Color {
-    return if (MaterialTheme.colorScheme.background.luminance() < 0.5f) {
-        TextSecondary
-    } else {
-        MaterialTheme.colorScheme.onSurfaceVariant
-    }
-}
+fun fluxMutedText(): Color = MaterialTheme.colorScheme.onSurfaceVariant
+
+// Deprecated Flux aliases — mapped to the active neutral so legacy call sites
+// keep compiling without pinning themselves to a dark theme.
+@Deprecated("Use TextPrimary", ReplaceWith("TextPrimary"))
+val FluxCream: Color get() = TextPrimary
+@Deprecated("Use TextPrimary", ReplaceWith("TextPrimary"))
+val FluxCreamPrimary: Color get() = TextPrimary
+@Deprecated("Use TextPrimary", ReplaceWith("TextPrimary"))
+val BrandCream: Color get() = TextPrimary
+@Deprecated("Use FolioBackground", ReplaceWith("FolioBackground"))
+val FluxDarkGrey: Color get() = FolioBackground
+@Deprecated("Use FolioBackground", ReplaceWith("FolioBackground"))
+val FluxDarkSurface: Color get() = FolioBackground
+@Deprecated("Use TextSecondary", ReplaceWith("TextSecondary"))
+val FluxAccentCyan: Color get() = TextSecondary
+@Deprecated("Use TextSecondary", ReplaceWith("TextSecondary"))
+val FluxAccentMagenta: Color get() = TextSecondary
+@Deprecated("Use FolioBackground", ReplaceWith("FolioBackground"))
+val FluxBackgroundStart: Color get() = FolioBackground
+@Deprecated("Use FolioBackground", ReplaceWith("FolioBackground"))
+val FluxBackgroundMid: Color get() = FolioBackground
+@Deprecated("Use FolioBackground", ReplaceWith("FolioBackground"))
+val FluxBackgroundEnd: Color get() = FolioBackground
+@Deprecated("Use FrostSurface", ReplaceWith("FrostSurface"))
+val GlassWhiteHigh: Color get() = FrostSurface
+@Deprecated("Use FrostSurface", ReplaceWith("FrostSurface"))
+val GlassWhiteMedium: Color get() = FrostSurface
+@Deprecated("Use FrostSurface", ReplaceWith("FrostSurface"))
+val GlassWhiteLow: Color get() = FrostSurface
+@Deprecated("Use FrostHairline", ReplaceWith("FrostHairline"))
+val GlassBorder: Color get() = FrostHairline
+@Deprecated("Use TextPrimary", ReplaceWith("TextPrimary"))
+val TextWhite: Color get() = TextPrimary
+@Deprecated("Use TextSecondary", ReplaceWith("TextSecondary"))
+val TextGrey: Color get() = TextSecondary
+@Deprecated("Use TextSecondary", ReplaceWith("TextSecondary"))
+val Seed: Color get() = TextSecondary
+@Deprecated("Use TextSecondary", ReplaceWith("TextSecondary"))
+val FluxBodyMuted: Color get() = TextSecondary
+@Deprecated("Use FrostHairline", ReplaceWith("FrostHairline"))
+val FluxHairline: Color get() = FrostHairline
+@Deprecated("Use FolioSurface", ReplaceWith("FolioSurface"))
+val FluxCardFill: Color get() = FolioSurface
+@Deprecated("Use FolioDanger", ReplaceWith("FolioDanger"))
+val FluxDanger: Color get() = FolioDanger
+@Deprecated("Use FolioSwitchCheckedTrack", ReplaceWith("FolioSwitchCheckedTrack"))
+val FluxSwitchCheckedTrack: Color get() = FolioSwitchCheckedTrack
+@Deprecated("Use FolioSwitchCheckedThumb", ReplaceWith("FolioSwitchCheckedThumb"))
+val FluxSwitchCheckedThumb: Color get() = FolioSwitchCheckedThumb
+@Deprecated("Use FolioSwitchUncheckedTrack", ReplaceWith("FolioSwitchUncheckedTrack"))
+val FluxSwitchUncheckedTrack: Color get() = FolioSwitchUncheckedTrack
+@Deprecated("Use FolioSwitchUncheckedThumb", ReplaceWith("FolioSwitchUncheckedThumb"))
+val FluxSwitchUncheckedThumb: Color get() = FolioSwitchUncheckedThumb
+@Deprecated("Use FolioSwitchUncheckedBorder", ReplaceWith("FolioSwitchUncheckedBorder"))
+val FluxSwitchUncheckedBorder: Color get() = FolioSwitchUncheckedBorder

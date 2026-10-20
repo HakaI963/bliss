@@ -88,6 +88,6 @@ jobs:
           APK=app/build/outputs/apk/bliss/debug/app-bliss-debug.apk
           TAG="bliss-debug-${GITHUB_SHA::7}"
           SHA=$(sha256sum "$APK" | awk '{print $1}')
-          gh release create "$TAG" --title "Bliss 3.14.0 — compact Apps, adaptive viewer, fixed clones" \
-            --notes "Preference/Installed Apps UI, live viewer and logs, per-app display settings, and a provider-authority rewrite that fixes INSTALL_FAILED_CONFLICTING_PROVIDER. APK SHA-256: $SHA" || true
+          gh release create "$TAG" --title "Bliss 3.15.0 — AOSP light UI, in-tab clone display" \
+            --notes "Flat AOSP-style light theme with a dark option, compact controls, an in-tab clone viewer with live logs below it, no Apps↔Tools transition, and a full rebuild of the shared UI. APK SHA-256: $SHA" || true
           gh release upload "$TAG" "$APK" --clobber

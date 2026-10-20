@@ -52,7 +52,7 @@ import com.ivarna.fluxlinux.core.data.Distro
 import com.ivarna.fluxlinux.ui.theme.FolioMotion
 import com.ivarna.fluxlinux.ui.theme.TextSecondary
 
-private val CardShape = RoundedCornerShape(14.dp)
+private val CardShape = RoundedCornerShape(12.dp)
 private val MethodProot = Color(0xFF00B8D4)
 private val MethodChroot = Color(0xFFE040FB)
 private val StatusRunning = Color(0xFF4CAF50)
@@ -93,22 +93,9 @@ fun DistroCard(
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 5.dp)
             .clip(CardShape)
-            .background(colors.surface.copy(alpha = 0.72f))
-            .border(BorderStroke(0.75.dp, colors.outlineVariant.copy(alpha = 0.45f)), CardShape)
+            .background(colors.surface)
+            .border(BorderStroke(1.dp, colors.outlineVariant), CardShape)
     ) {
-        Box(
-            modifier = Modifier
-                .align(Alignment.CenterStart)
-                .matchParentSize()
-        ) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.CenterStart)
-                    .fillMaxHeight()
-                    .width(3.dp)
-                    .background(methodColor)
-            )
-        }
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -318,8 +305,8 @@ fun MethodTabs(
             .padding(horizontal = horizontalPadding)
             .height(40.dp)
             .clip(shape)
-            .background(colors.surface.copy(alpha = 0.72f))
-            .border(BorderStroke(0.75.dp, colors.outlineVariant.copy(alpha = 0.45f)), shape)
+            .background(colors.surface)
+            .border(BorderStroke(1.dp, colors.outlineVariant), shape)
     ) {
         MethodTabSegment(
             label = prootText,
@@ -416,7 +403,7 @@ internal fun CompactAction(
             disabledContainerColor = containerColor.copy(alpha = 0.35f),
             disabledContentColor = contentColor.copy(alpha = 0.5f)
         ),
-        shape = RoundedCornerShape(10.dp),
+        shape = RoundedCornerShape(20.dp),
         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
         modifier = modifier.height(36.dp)
     ) {
@@ -445,41 +432,19 @@ fun GlassSettingCard(
     onClick: (() -> Unit)? = null,
     content: @Composable () -> Unit
 ) {
-    val shape = RoundedCornerShape(24.dp)
-    val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (pressed) FolioMotion.PressScale else 1f,
-        animationSpec = folioSpring(),
-        label = "settingCardPress"
-    )
-    val fill by animateColorAsState(
-        targetValue = if (pressed) MaterialTheme.colorScheme.surface.copy(alpha = 0.80f)
-        else MaterialTheme.colorScheme.surface.copy(alpha = 0.90f),
-        animationSpec = folioSpringAny(),
-        label = "settingCardFill"
-    )
-
+    val shape = RoundedCornerShape(12.dp)
     Box(
         modifier = modifier
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-            }
             .clip(shape)
-            .background(fill)
+            .background(MaterialTheme.colorScheme.surface)
             .then(
                 if (onClick != null) {
-                    Modifier.clickable(
-                        interactionSource = interaction,
-                        indication = null,
-                        onClick = onClick
-                    )
+                    Modifier.clickable(onClick = onClick)
                 } else Modifier
             )
             .border(
                 1.dp,
-                com.ivarna.fluxlinux.ui.theme.FrostHairline,
+                MaterialTheme.colorScheme.outlineVariant,
                 shape
             )
     ) {

@@ -13,6 +13,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -46,6 +48,8 @@ import com.ivarna.fluxlinux.ui.components.GlassScaffold
 import com.ivarna.fluxlinux.ui.components.InstallTaskBar
 import com.ivarna.fluxlinux.ui.theme.FluxLinuxTheme
 import com.ivarna.fluxlinux.core.utils.StateManager
+import com.ivarna.fluxlinux.core.utils.ThemeMode
+import com.ivarna.fluxlinux.core.utils.ThemePreferences
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -569,9 +573,17 @@ class MainActivity : ComponentActivity() {
         }
         requestNotificationPermissionIfNeeded()
         setContent {
-            // Force Permanent Dark Mode
-            val currentThemeMode = com.ivarna.fluxlinux.core.utils.ThemeMode.DARK
-            
+            // Light is the default. Dark and System are explicit user choices.
+            val themePreferences = remember { ThemePreferences(this@MainActivity) }
+            var currentThemeMode by remember {
+                mutableStateOf(
+                    when (val stored = themePreferences.getThemeMode()) {
+                        ThemeMode.LIGHT, ThemeMode.DARK, ThemeMode.SYSTEM -> stored
+                        else -> ThemeMode.LIGHT
+                    }
+                )
+            }
+
             FluxLinuxTheme(themeMode = currentThemeMode) {
                 val onboardingComplete = StateManager.isOnboardingComplete(this@MainActivity)
                 val showPhantomPrompt by com.ivarna.fluxlinux.core.system.PhantomProcessFixer.promptVisible.collectAsState()
@@ -833,7 +845,12 @@ class MainActivity : ComponentActivity() {
                                     onNavigateToAudioSettings = { currentScreen = Screen.SETTINGS_AUDIO },
                                     onNavigateToChrootSettings = { currentScreen = Screen.SETTINGS_CHROOT },
                                     onNavigateToProotSettings = { currentScreen = Screen.SETTINGS_PROOT },
-                                    onNavigateToLegacyTermuxSettings = { currentScreen = Screen.SETTINGS_LEGACY_TERMUX }
+                                    onNavigateToLegacyTermuxSettings = { currentScreen = Screen.SETTINGS_LEGACY_TERMUX },
+                                    currentTheme = currentThemeMode,
+                                    onThemeChanged = { mode ->
+                                        currentThemeMode = mode
+                                        themePreferences.setThemeMode(mode)
+                                    }
                                 )
                             }
                         }
@@ -848,89 +865,70 @@ class MainActivity : ComponentActivity() {
                     displayLive: Boolean,
                     onOpenSettings: () -> Unit,
                 ) {
-                    Box(
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .hazeChild(
-                                state = hazeState,
-                                style = HazeStyle(
-                                    backgroundColor = MaterialTheme.colorScheme.background.copy(alpha = 0.7f),
-                                    blurRadius = 20.dp,
-                                    tint = null
-                                )
-                            )
+                            .background(MaterialTheme.colorScheme.surface)
                     ) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 14.dp, vertical = 8.dp)
-                                .windowInsetsPadding(WindowInsets.statusBars),
+                                .windowInsetsPadding(WindowInsets.statusBars)
+                                .height(56.dp)
+                                .padding(start = 16.dp, end = 6.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
                                 text = "Bliss",
                                 style = com.ivarna.fluxlinux.ui.theme.FolioWordmarkStyle,
-                                color = MaterialTheme.colorScheme.onBackground
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                // One pill shell; the live/embedded content crossfades
-                                // so the status swap animates instead of popping.
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(50))
-                                        .background(com.ivarna.fluxlinux.ui.theme.FrostSurface)
-                                        .border(1.dp, com.ivarna.fluxlinux.ui.theme.FolioFrostBorder, RoundedCornerShape(50))
-                                        .then(
-                                            if (displayLive) {
-                                                Modifier.clickable(onClick = onOpenDisplay)
-                                            } else {
-                                                Modifier
-                                            }
+                                if (displayLive) {
+                                    Row(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(MaterialTheme.colorScheme.primaryContainer)
+                                            .clickable(onClick = onOpenDisplay)
+                                            .padding(horizontal = 10.dp, vertical = 5.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(6.dp)
+                                                .clip(CircleShape)
+                                                .background(MaterialTheme.colorScheme.primary)
                                         )
-                                        .padding(horizontal = 12.dp, vertical = 6.dp)
-                                ) {
-                                    AnimatedContent(
-                                        targetState = displayLive,
-                                        transitionSpec = {
-                                            fadeIn(tween(180)) togetherWith fadeOut(tween(120))
-                                        },
-                                        label = "displayPill"
-                                    ) { live ->
-                                        if (live) {
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Box(
-                                                    modifier = Modifier
-                                                        .size(6.dp)
-                                                        .clip(CircleShape)
-                                                        .background(com.ivarna.fluxlinux.ui.theme.StatusDot)
-                                                )
-                                                Spacer(modifier = Modifier.width(6.dp))
-                                                Text(
-                                                    text = "X11",
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    color = MaterialTheme.colorScheme.onBackground
-                                                )
-                                            }
-                                        } else {
-                                            Text(
-                                                text = "embedded",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = com.ivarna.fluxlinux.ui.theme.TextSecondary
-                                            )
-                                        }
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = "X11",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                                        )
                                     }
+                                } else {
+                                    Text(
+                                        text = "Embedded",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(end = 8.dp)
+                                    )
                                 }
-                                Spacer(modifier = Modifier.width(4.dp))
+                                Spacer(modifier = Modifier.width(2.dp))
                                 IconButton(onClick = onOpenSettings) {
                                     Icon(
                                         Icons.Default.Settings,
                                         contentDescription = "Settings",
-                                        tint = com.ivarna.fluxlinux.ui.theme.TextSecondary
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
                             }
                         }
+                        HorizontalDivider(
+                            thickness = 0.75.dp,
+                            color = MaterialTheme.colorScheme.outlineVariant
+                        )
                     }
                 }
                 
@@ -1108,6 +1106,11 @@ class MainActivity : ComponentActivity() {
                                 },
                                 onNavigateToLegacyTermuxSettings = {
                                     currentScreen = Screen.SETTINGS_LEGACY_TERMUX
+                                },
+                                currentTheme = currentThemeMode,
+                                onThemeChanged = { mode ->
+                                    currentThemeMode = mode
+                                    themePreferences.setThemeMode(mode)
                                 }
                             )
                         }
@@ -1392,6 +1395,13 @@ private fun AnimatedContentTransitionScope<Screen>.folioRouteTransition(): Conte
 }
 
 private fun AnimatedContentTransitionScope<BottomTab>.folioTabTransition(): ContentTransform {
+    // Apps ↔ Tools is intentionally instant. These two adjacent destinations
+    // are utility surfaces; sliding them made the dock feel twitchy.
+    val appsTools = (initialState == BottomTab.APPS && targetState == BottomTab.TOOLS) ||
+        (initialState == BottomTab.TOOLS && targetState == BottomTab.APPS)
+    if (appsTools) {
+        return EnterTransition.None togetherWith ExitTransition.None
+    }
     if (initialState == BottomTab.TERMINAL || targetState == BottomTab.TERMINAL) {
         // Terminal tab hosts the AndroidView emulator — fade only.
         return fadeIn(tween(180)) togetherWith fadeOut(tween(140))

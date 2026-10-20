@@ -57,6 +57,8 @@ import com.ivarna.fluxlinux.core.utils.StateManager
 import com.ivarna.fluxlinux.core.utils.ThemeMode
 import com.ivarna.fluxlinux.core.utils.ThemePalette
 import com.ivarna.fluxlinux.ui.components.QCard
+import com.ivarna.fluxlinux.ui.components.QDivider
+import com.ivarna.fluxlinux.ui.components.QPill
 import com.ivarna.fluxlinux.ui.components.QRow
 import com.ivarna.fluxlinux.ui.components.QScreenTitle
 import com.ivarna.fluxlinux.ui.components.QSectionHeader
@@ -92,7 +94,7 @@ fun SettingsScreen(
     onNavigateToLegacyTermuxSettings: (() -> Unit)? = null,
     onNavigateToCrashLogs: (() -> Unit)? = null,
     onThemeChanged: ((ThemeMode) -> Unit)? = null,
-    currentTheme: ThemeMode = ThemeMode.SYSTEM
+    currentTheme: ThemeMode = ThemeMode.LIGHT
 ) {
     // Keep unused params so call sites stay stable (permission / theme hooks).
     @Suppress("UNUSED_PARAMETER")
@@ -101,10 +103,6 @@ fun SettingsScreen(
     val _onStartService = onStartService
     @Suppress("UNUSED_PARAMETER")
     val _onStartActivity = onStartActivity
-    @Suppress("UNUSED_PARAMETER")
-    val _onThemeChanged = onThemeChanged
-    @Suppress("UNUSED_PARAMETER")
-    val _currentTheme = currentTheme
 
     val context = LocalContext.current
 
@@ -192,9 +190,14 @@ fun SettingsScreen(
             )
         }
 
-        // Theme — compact palette pills (Carbon / Slate / Plum / Sand).
-        QSectionHeader("Theme", modifier = Modifier.staggerIn(2, entrance))
+        // Appearance — light/dark mode and accent. Surfaces stay neutral.
+        QSectionHeader("Appearance", modifier = Modifier.staggerIn(2, entrance))
         QCard(modifier = Modifier.staggerIn(2, entrance)) {
+            ThemeModeRow(
+                current = currentTheme,
+                onSelect = { onThemeChanged?.invoke(it) },
+            )
+            QDivider(Modifier.padding(start = Quartz.CardPad))
             ThemePaletteRow(
                 current = themePalette,
                 onSelect = { StateManager.setThemePalette(context, it) },
@@ -344,10 +347,47 @@ private fun QDot(active: Boolean) {
 }
 
 /**
- * Theme palette row: title + 4 compact pills (label + tiny palette-color dot).
- * Mirrors QPill styling (the dot needs a leading slot QPill doesn't have).
- * Selection writes through StateManager; FluxLinuxTheme observes the same
- * flow, so the whole UI re-skins without leaving Settings.
+ * Theme mode row: Light / Dark / System. Light is the shipped default; the
+ * choice is persisted by MainActivity through ThemePreferences.
+ */
+@Composable
+private fun ThemeModeRow(
+    current: ThemeMode,
+    onSelect: (ThemeMode) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val normalized = when (current) {
+        ThemeMode.DARK -> ThemeMode.DARK
+        ThemeMode.SYSTEM -> ThemeMode.SYSTEM
+        else -> ThemeMode.LIGHT
+    }
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = Quartz.CardPad, vertical = 10.dp)
+    ) {
+        Text(
+            text = "Theme",
+            fontSize = Quartz.RowTitleSize,
+            fontWeight = FontWeight.Normal,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            text = "Light is the default. Dark keeps the same layout and spacing.",
+            fontSize = Quartz.RowSubSize,
+            color = fluxMutedText(),
+        )
+        Spacer(Modifier.height(8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            QPill("Light", normalized == ThemeMode.LIGHT) { onSelect(ThemeMode.LIGHT) }
+            QPill("Dark", normalized == ThemeMode.DARK) { onSelect(ThemeMode.DARK) }
+            QPill("System", normalized == ThemeMode.SYSTEM) { onSelect(ThemeMode.SYSTEM) }
+        }
+    }
+}
+
+/**
+ * Accent row: four compact choices. Surfaces remain AOSP neutral.
  */
 @Composable
 private fun ThemePaletteRow(
@@ -361,13 +401,13 @@ private fun ThemePaletteRow(
             .padding(horizontal = Quartz.CardPad + 2.dp, vertical = 8.dp)
     ) {
         Text(
-            text = "Palette",
+            text = "Accent color",
             fontSize = Quartz.RowTitleSize,
-            fontWeight = FontWeight.Medium,
+            fontWeight = FontWeight.Normal,
             color = MaterialTheme.colorScheme.onSurface,
         )
         Text(
-            text = "Dark interface accent and surfaces",
+            text = "Used for buttons, selected tabs and highlights.",
             fontSize = Quartz.RowSubSize,
             color = fluxMutedText(),
             maxLines = 1,

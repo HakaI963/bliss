@@ -1,8 +1,6 @@
 package com.ivarna.fluxlinux.ui.screens
 
-import android.app.Activity
 import android.content.Context
-import android.content.ContextWrapper
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import android.graphics.Bitmap
@@ -13,6 +11,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -20,6 +19,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -27,30 +27,33 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.filled.Android
-import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Slider
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -70,22 +73,17 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
-import androidx.compose.ui.window.DialogWindowProvider
-import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.WindowInsetsControllerCompat
 import com.ivarna.fluxlinux.core.clone.HeadlessCloneEngine
 import com.ivarna.fluxlinux.core.clone.HeadlessCloneEngine.CloneApp
 import com.ivarna.fluxlinux.core.clone.HeadlessCloneEngine.Quality
 import com.ivarna.fluxlinux.ui.components.QCard
+import com.ivarna.fluxlinux.ui.components.QDivider
 import com.ivarna.fluxlinux.ui.components.QEmptyState
 import com.ivarna.fluxlinux.ui.components.QIconTile
 import com.ivarna.fluxlinux.ui.components.QPill
@@ -93,6 +91,7 @@ import com.ivarna.fluxlinux.ui.components.QPrimaryButton
 import com.ivarna.fluxlinux.ui.components.QRow
 import com.ivarna.fluxlinux.ui.components.QScreenTitle
 import com.ivarna.fluxlinux.ui.components.QSectionHeader
+import com.ivarna.fluxlinux.ui.components.QSecondaryButton
 import com.ivarna.fluxlinux.ui.components.QTextField
 import com.ivarna.fluxlinux.ui.components.QToggleRow
 import com.ivarna.fluxlinux.ui.components.Quartz
@@ -100,6 +99,7 @@ import com.ivarna.fluxlinux.ui.theme.fluxMutedText
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.roundToInt
 
 private enum class AppsSection { PREFERENCE, INSTALLED }
@@ -119,8 +119,9 @@ private data class ViewerSession(
 )
 
 /**
- * Apps tab: a compact Shizuku preference page and folders for hidden clones.
- * The live viewer is intentionally chrome-free; system back closes it.
+ * Apps tab. Two compact sections: Preference (Shizuku + clone/display options)
+ * and Installed (source-app folders). Opening View stays inside this tab:
+ * the small live display sits on top, live logs fill the space below it.
  */
 @Composable
 fun ClonedAppsScreen(startOnPreference: Boolean = false) {
@@ -146,8 +147,7 @@ fun ClonedAppsScreen(startOnPreference: Boolean = false) {
         mutableStateOf(if (startOnPreference) AppsSection.PREFERENCE else AppsSection.INSTALLED)
     }
     var groupKey by rememberSaveable { mutableStateOf<String?>(null) }
-    var viewer by remember { mutableStateOf<ViewerSession?>(null) }
-    var logsClone by remember { mutableStateOf<CloneApp?>(null) }
+    var viewing by remember { mutableStateOf<ViewerSession?>(null) }
     var customiseClone by remember { mutableStateOf<CloneApp?>(null) }
     var showInstalledPicker by remember { mutableStateOf(false) }
 
@@ -186,7 +186,13 @@ fun ClonedAppsScreen(startOnPreference: Boolean = false) {
         if (groupKey != null && selectedGroup == null) groupKey = null
     }
 
-    BackHandler(enabled = groupKey != null) { groupKey = null }
+    fun closeViewer() {
+        if (viewing == null) return
+        viewing = null
+        HeadlessCloneEngine.clearPreview()
+        HeadlessCloneEngine.clearCloneLogs()
+        HeadlessCloneEngine.releaseDisplay()
+    }
 
     fun openViewer(clone: CloneApp) {
         if (!connected) {
@@ -205,8 +211,9 @@ fun ClonedAppsScreen(startOnPreference: Boolean = false) {
         val fps = (perApp.fps.takeIf { it > 0 } ?: fpsValue)
             .coerceIn(10, maxFps.coerceAtLeast(10))
         HeadlessCloneEngine.clearPreview()
+        HeadlessCloneEngine.clearCloneLogs()
         HeadlessCloneEngine.launchClone(clone.packageName, width, height, fps)
-        viewer = ViewerSession(
+        viewing = ViewerSession(
             clone = clone,
             width = width,
             height = height,
@@ -215,21 +222,26 @@ fun ClonedAppsScreen(startOnPreference: Boolean = false) {
         )
     }
 
+    BackHandler(enabled = viewing != null || groupKey != null) {
+        if (viewing != null) closeViewer() else groupKey = null
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = Quartz.ScreenPad)
-            .padding(top = 8.dp),
+            .padding(top = 10.dp),
     ) {
         QScreenTitle(
             "Apps",
-            if (connected) "Shizuku engine connected · v$version"
-            else "Clone and run apps on a private virtual display.",
+            if (connected) "Private clone display · shell connected"
+            else "Run cloned apps on a private virtual display.",
         )
         Spacer(Modifier.height(8.dp))
         SectionSwitch(
             selected = section,
             onSelect = {
+                if (viewing != null) closeViewer()
                 section = it
                 if (it == AppsSection.INSTALLED) {
                     HeadlessCloneEngine.refreshClones()
@@ -243,13 +255,18 @@ fun ClonedAppsScreen(startOnPreference: Boolean = false) {
             LinearProgressIndicator(Modifier.fillMaxWidth().height(2.dp))
         }
         operation?.let {
-            Text(it, fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
+            Text(
+                it,
+                fontSize = 11.5.sp,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(top = 5.dp),
+            )
         }
         val message = lastError ?: notice
         if (!message.isNullOrBlank()) {
             Text(
                 message,
-                fontSize = 11.sp,
+                fontSize = 11.5.sp,
                 color = if (lastError != null) MaterialTheme.colorScheme.error else fluxMutedText(),
                 maxLines = 2,
                 modifier = Modifier.padding(top = 5.dp),
@@ -258,6 +275,11 @@ fun ClonedAppsScreen(startOnPreference: Boolean = false) {
         Spacer(Modifier.height(8.dp))
 
         when {
+            viewing != null -> CloneViewPage(
+                modifier = Modifier.weight(1f),
+                session = viewing!!,
+            )
+
             section == AppsSection.PREFERENCE -> PreferenceSection(
                 modifier = Modifier.weight(1f),
                 shizukuInstalled = shizukuInstalled,
@@ -310,32 +332,13 @@ fun ClonedAppsScreen(startOnPreference: Boolean = false) {
                 connected = connected,
                 onBack = { groupKey = null },
                 onView = ::openViewer,
-                onLogs = {
-                    HeadlessCloneEngine.clearCloneLogs()
-                    logsClone = it
-                },
                 onCustomise = { customiseClone = it },
             )
         }
     }
 
-    viewer?.let { session ->
-        LiveViewer(
-            session = session,
-            onClose = { viewer = null },
-        )
-    }
-
-    logsClone?.let { clone ->
-        CloneLogsDialog(
-            clone = clone,
-            connected = connected,
-            onClose = { logsClone = null },
-        )
-    }
-
     customiseClone?.let { clone ->
-        CustomiseDialog(
+        CustomiseSheet(
             clone = clone,
             maxFps = maxFps,
             defaultFps = fpsValue,
@@ -367,47 +370,61 @@ fun ClonedAppsScreen(startOnPreference: Boolean = false) {
 
 @Composable
 private fun SectionSwitch(selected: AppsSection, onSelect: (AppsSection) -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f))
-            .padding(3.dp),
-        horizontalArrangement = Arrangement.spacedBy(3.dp),
-    ) {
-        SectionSwitchItem(
-            "Preference",
-            selected == AppsSection.PREFERENCE,
-            Modifier.weight(1f),
-        ) { onSelect(AppsSection.PREFERENCE) }
-        SectionSwitchItem(
-            "Installed",
-            selected == AppsSection.INSTALLED,
-            Modifier.weight(1f),
-        ) { onSelect(AppsSection.INSTALLED) }
+    Column(Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(42.dp),
+        ) {
+            SectionTab(
+                label = "Preference",
+                selected = selected == AppsSection.PREFERENCE,
+                modifier = Modifier.weight(1f),
+            ) { onSelect(AppsSection.PREFERENCE) }
+            SectionTab(
+                label = "Installed",
+                selected = selected == AppsSection.INSTALLED,
+                modifier = Modifier.weight(1f),
+            ) { onSelect(AppsSection.INSTALLED) }
+        }
+        HorizontalDivider(
+            thickness = 0.75.dp,
+            color = MaterialTheme.colorScheme.outlineVariant,
+        )
     }
 }
 
 @Composable
-private fun SectionSwitchItem(
+private fun SectionTab(
     label: String,
     selected: Boolean,
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
-    Box(
+    Column(
         modifier = modifier
-            .clip(RoundedCornerShape(9.dp))
-            .background(if (selected) MaterialTheme.colorScheme.surface else Color.Transparent)
-            .clickable(onClick = onClick)
-            .padding(vertical = 7.dp),
-        contentAlignment = Alignment.Center,
+            .fillMaxHeight()
+            .clickable(onClick = onClick),
     ) {
-        Text(
-            label,
-            fontSize = 12.5.sp,
-            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
-            color = if (selected) MaterialTheme.colorScheme.onSurface else fluxMutedText(),
+        Box(
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                label,
+                fontSize = 13.sp,
+                fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
+                color = if (selected) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(3.dp)
+                .background(
+                    if (selected) MaterialTheme.colorScheme.primary else Color.Transparent
+                ),
         )
     }
 }
@@ -439,29 +456,28 @@ private fun PreferenceSection(
     Column(
         modifier = modifier
             .verticalScroll(rememberScrollState())
-            .padding(bottom = 104.dp),
-        verticalArrangement = Arrangement.spacedBy(9.dp),
+            .padding(bottom = 108.dp),
     ) {
         QSectionHeader("Shizuku")
         QCard {
             Column(
-                modifier = Modifier.padding(horizontal = Quartz.CardPad + 2.dp, vertical = 7.dp),
+                modifier = Modifier.padding(horizontal = Quartz.CardPad, vertical = 10.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         Modifier
                             .size(8.dp)
-                            .clip(RoundedCornerShape(50))
+                            .clip(CircleShape)
                             .background(
                                 when {
-                                    connected -> Color(0xFF5BD69A)
-                                    shizukuRunning && permission -> MaterialTheme.colorScheme.primary
+                                    connected -> MaterialTheme.colorScheme.primary
+                                    shizukuRunning && permission -> MaterialTheme.colorScheme.tertiary
                                     else -> MaterialTheme.colorScheme.error
                                 }
                             )
                     )
-                    Spacer(Modifier.width(8.dp))
+                    Spacer(Modifier.width(9.dp))
                     Text(
                         when {
                             !shizukuInstalled -> "Shizuku is not installed"
@@ -470,23 +486,27 @@ private fun PreferenceSection(
                             !connected -> "Shell engine is not connected"
                             else -> "Shell engine connected · v$version"
                         },
-                        fontSize = 12.5.sp,
+                        fontSize = 13.5.sp,
                         fontWeight = FontWeight.Medium,
                         modifier = Modifier.weight(1f),
                     )
-                    TextButton(onClick = onRefresh) {
-                        Text("Refresh", fontSize = 11.sp)
+                    TextButton(
+                        onClick = onRefresh,
+                        contentPadding = PaddingValues(horizontal = 8.dp),
+                    ) {
+                        Text("Refresh", fontSize = 12.sp)
                     }
                 }
                 Text(
-                    "The clone display and package commands run as the shell user through Shizuku.",
-                    fontSize = 11.sp,
+                    "Clone installs, display capture and input run through the Shizuku shell.",
+                    fontSize = 12.sp,
+                    lineHeight = 16.sp,
                     color = fluxMutedText(),
                 )
                 when {
                     !shizukuInstalled -> QPrimaryButton("Get Shizuku") { onGetShizuku() }
                     !shizukuRunning -> QPrimaryButton("Open Shizuku") { onOpenShizuku() }
-                    !permission -> QPrimaryButton("Grant Shizuku permission") { onGrant() }
+                    !permission -> QPrimaryButton("Grant permission") { onGrant() }
                     !connected -> QPrimaryButton("Start shell engine") { onStart() }
                 }
             }
@@ -496,23 +516,23 @@ private fun PreferenceSection(
         QCard {
             QRow(
                 title = "From APK file",
-                subtitle = "Choose a single .apk stored on this phone.",
-                leading = { QIconTile(bitmap = null, fallback = Icons.Default.Android, size = 32.dp) },
+                subtitle = "Pick a single .apk stored on this phone",
+                leading = { QIconTile(bitmap = null, fallback = Icons.Default.Android, size = 34.dp) },
                 onClick = { if (connected && !busy) onApk() },
                 divider = true,
             )
             QRow(
                 title = "From installed app",
-                subtitle = "Copy an app already installed on this phone.",
-                leading = { QIconTile(bitmap = null, fallback = Icons.Default.Android, size = 32.dp) },
+                subtitle = "Copy an app already on this phone",
+                leading = { QIconTile(bitmap = null, fallback = Icons.Default.Android, size = 34.dp) },
                 onClick = { if (connected && !busy) onInstalled() },
             )
             if (!connected) {
                 Text(
                     "Start the shell engine before creating a clone.",
-                    fontSize = 10.5.sp,
+                    fontSize = 11.5.sp,
                     color = fluxMutedText(),
-                    modifier = Modifier.padding(horizontal = Quartz.CardPad + 2.dp, vertical = 4.dp),
+                    modifier = Modifier.padding(horizontal = Quartz.CardPad, vertical = 8.dp),
                 )
             }
         }
@@ -520,18 +540,18 @@ private fun PreferenceSection(
         QSectionHeader("Display")
         QCard {
             Column(
-                modifier = Modifier.padding(horizontal = Quartz.CardPad + 2.dp, vertical = 7.dp),
-                verticalArrangement = Arrangement.spacedBy(3.dp),
+                modifier = Modifier.padding(horizontal = Quartz.CardPad, vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         "Frame rate",
-                        fontSize = 12.5.sp,
+                        fontSize = 13.5.sp,
                         fontWeight = FontWeight.Medium,
                         modifier = Modifier.weight(1f),
                     )
-                    Text("$fps fps", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
-                    Text("  max $maxFps", fontSize = 10.5.sp, color = fluxMutedText())
+                    Text("$fps fps", fontSize = 12.5.sp, color = MaterialTheme.colorScheme.primary)
+                    Text(" · max $maxFps", fontSize = 11.sp, color = fluxMutedText())
                 }
                 Slider(
                     value = fps.toFloat(),
@@ -540,27 +560,27 @@ private fun PreferenceSection(
                     modifier = Modifier.fillMaxWidth().height(32.dp),
                 )
                 Text(
-                    "10 fps uses less CPU. The top of the range follows this display.",
-                    fontSize = 10.5.sp,
+                    "10 fps saves battery. The upper end follows this display.",
+                    fontSize = 11.5.sp,
                     color = fluxMutedText(),
                 )
-                Spacer(Modifier.height(3.dp))
-                Text("Quality", fontSize = 12.5.sp, fontWeight = FontWeight.Medium)
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Spacer(Modifier.height(4.dp))
+                Text("Quality", fontSize = 13.5.sp, fontWeight = FontWeight.Medium)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Quality.entries.forEach { entry ->
                         QPill(entry.label, quality == entry) { onQuality(entry) }
                     }
                 }
                 Text(
-                    "Quality scales the virtual resolution and stream sharpness.",
-                    fontSize = 10.5.sp,
+                    "Scales the virtual resolution and stream sharpness.",
+                    fontSize = 11.5.sp,
                     color = fluxMutedText(),
                 )
-                Spacer(Modifier.height(2.dp))
             }
+            QDivider()
             QToggleRow(
                 title = "Touch input",
-                subtitle = "Allow taps and swipes on the clone display.",
+                subtitle = "Allow taps and swipes on the clone display",
                 checked = touchEnabled,
                 onCheckedChange = onTouch,
             )
@@ -579,20 +599,21 @@ private fun InstalledFolders(
     LazyColumn(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 104.dp),
+        contentPadding = PaddingValues(bottom = 108.dp),
     ) {
         if (groups.isEmpty()) {
             item {
                 QCard {
                     QEmptyState(
                         "No clones yet",
-                        if (connected) "Open Preference to clone an APK or installed app."
+                        if (connected) "Open Preference to clone an APK or an installed app."
                         else "Connect Shizuku in Preference to get started.",
                     )
                     QPrimaryButton(
                         "Open Preference",
-                        Modifier.padding(horizontal = Quartz.CardPad + 2.dp),
+                        Modifier.padding(horizontal = Quartz.CardPad, vertical = 4.dp),
                     ) { onOpenPreference() }
+                    Spacer(Modifier.height(8.dp))
                 }
             }
         } else {
@@ -605,7 +626,7 @@ private fun InstalledFolders(
                             QIconTile(
                                 bitmap = group.clones.firstOrNull()?.icon,
                                 fallback = Icons.Default.Android,
-                                size = 36.dp,
+                                size = 38.dp,
                             )
                         },
                         trailing = {
@@ -616,11 +637,10 @@ private fun InstalledFolders(
                                     tint = fluxMutedText(),
                                     modifier = Modifier.size(17.dp),
                                 )
-                                    Spacer(Modifier.width(5.dp))
+                                Spacer(Modifier.width(6.dp))
                                 Text(
                                     group.clones.size.toString(),
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 12.sp,
                                     color = fluxMutedText(),
                                 )
                             }
@@ -640,90 +660,85 @@ private fun CloneFolder(
     connected: Boolean,
     onBack: () -> Unit,
     onView: (CloneApp) -> Unit,
-    onLogs: (CloneApp) -> Unit,
     onCustomise: (CloneApp) -> Unit,
 ) {
     LazyColumn(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 104.dp),
+        contentPadding = PaddingValues(bottom = 108.dp),
     ) {
         item {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 2.dp),
             ) {
-                Text(
-                    "Installed",
-                    fontSize = 11.5.sp,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(6.dp))
-                        .clickable(onClick = onBack)
-                        .padding(horizontal = 4.dp, vertical = 4.dp),
-                )
-                Text("  /  ", fontSize = 11.5.sp, color = fluxMutedText())
-                Text(
-                    group.label,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                )
+                IconButton(onClick = onBack, modifier = Modifier.size(36.dp)) {
+                    Icon(
+                        Icons.AutoMirrored.Rounded.ArrowBack,
+                        contentDescription = "Back to Installed",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
+                Spacer(Modifier.width(4.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        group.label,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        folderSubtitle(group),
+                        fontSize = 11.5.sp,
+                        color = fluxMutedText(),
+                    )
+                }
             }
         }
         items(group.clones, key = { it.packageName }) { clone ->
             QCard {
                 QRow(
                     title = clone.label,
-                    subtitle = "${clone.status} · ${clone.packageName.takeLast(8)}",
+                    subtitle = "${clone.status} · ${clone.packageName.takeLast(10)}",
                     leading = {
                         QIconTile(
                             bitmap = clone.icon,
                             fallback = Icons.Default.Android,
-                            size = 34.dp,
+                            size = 38.dp,
                         )
                     },
                     trailing = {
                         if (clone.status == "running") {
                             Box(
                                 Modifier
-                                    .size(7.dp)
-                                    .clip(RoundedCornerShape(50))
-                                    .background(Color(0xFF5BD69A))
+                                    .size(8.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.primary)
                             )
                         }
                     },
                 )
                 Row(
-                    modifier = Modifier.padding(start = 46.dp, end = 6.dp, bottom = 2.dp),
-                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                    modifier = Modifier.padding(
+                        start = Quartz.CardPad,
+                        end = Quartz.CardPad,
+                        bottom = 8.dp,
+                    ),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    TextButton(
+                    QPrimaryButton(
+                        "View",
                         enabled = connected,
-                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 7.dp),
-                        onClick = { onView(clone) },
-                    ) {
-                        Icon(Icons.Default.PlayArrow, null, Modifier.size(15.dp))
-                        Spacer(Modifier.width(2.dp))
-                        Text("View", fontSize = 12.sp)
-                    }
-                    TextButton(
-                        enabled = connected,
-                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 7.dp),
-                        onClick = { onLogs(clone) },
-                    ) {
-                        Icon(Icons.Default.Description, null, Modifier.size(15.dp))
-                        Spacer(Modifier.width(2.dp))
-                        Text("Logs", fontSize = 12.sp)
-                    }
-                    TextButton(
-                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 7.dp),
-                        onClick = { onCustomise(clone) },
-                    ) {
-                        Icon(Icons.Default.Tune, null, Modifier.size(15.dp))
-                        Spacer(Modifier.width(2.dp))
-                        Text("Customise", fontSize = 12.sp)
-                    }
+                        icon = Icons.Default.PlayArrow,
+                    ) { onView(clone) }
+                    QSecondaryButton(
+                        "Customise",
+                        icon = Icons.Default.Tune,
+                    ) { onCustomise(clone) }
                 }
             }
         }
@@ -741,42 +756,16 @@ private fun folderSubtitle(group: CloneGroup): String {
 // ---------------------------------------------------------------- viewer
 
 @Composable
-private fun LiveViewer(session: ViewerSession, onClose: () -> Unit) {
-    val context = LocalContext.current
-    val activity = remember(context) { context.findActivity() }
+private fun CloneViewPage(
+    modifier: Modifier,
+    session: ViewerSession,
+) {
     val connected by HeadlessCloneEngine.connected.collectAsState()
     val displayReady by HeadlessCloneEngine.displayReady.collectAsState()
     val preview by HeadlessCloneEngine.preview.collectAsState()
     val previewError by HeadlessCloneEngine.previewError.collectAsState()
     val lastError by HeadlessCloneEngine.lastError.collectAsState()
-    val view = LocalView.current
-
-    DisposableEffect(activity, session.width, session.height) {
-        val previous = activity?.requestedOrientation
-        activity?.requestedOrientation = when {
-            session.width > session.height -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-            session.height > session.width -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
-            else -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-        }
-        val dialogWindow = (view.parent as? DialogWindowProvider)?.window
-        if (dialogWindow != null) {
-            WindowCompat.setDecorFitsSystemWindows(dialogWindow, false)
-            dialogWindow.statusBarColor = android.graphics.Color.TRANSPARENT
-            dialogWindow.navigationBarColor = android.graphics.Color.BLACK
-            WindowInsetsControllerCompat(dialogWindow, view).apply {
-                hide(WindowInsetsCompat.Type.systemBars())
-                systemBarsBehavior =
-                    WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-            }
-        }
-        onDispose {
-            if (dialogWindow != null) {
-                WindowInsetsControllerCompat(dialogWindow, view).show(WindowInsetsCompat.Type.systemBars())
-            }
-            if (previous != null) activity?.requestedOrientation = previous
-            HeadlessCloneEngine.clearPreview()
-        }
-    }
+    val lines by HeadlessCloneEngine.cloneLogs.collectAsState()
 
     LaunchedEffect(connected, displayReady, session.fps) {
         if (!connected) return@LaunchedEffect
@@ -787,16 +776,50 @@ private fun LiveViewer(session: ViewerSession, onClose: () -> Unit) {
         }
     }
 
-    Dialog(
-        onDismissRequest = onClose,
-        properties = DialogProperties(
-            dismissOnBackPress = true,
-            dismissOnClickOutside = false,
-            usePlatformDefaultWidth = false,
-        ),
+    LaunchedEffect(session.clone.packageName, connected) {
+        if (!connected) return@LaunchedEffect
+        while (isActive) {
+            HeadlessCloneEngine.fetchCloneLogs(session.clone.packageName, 300)
+            delay(900)
+        }
+    }
+
+    DisposableEffect(session.clone.packageName) {
+        onDispose {
+            HeadlessCloneEngine.clearPreview()
+            HeadlessCloneEngine.clearCloneLogs()
+            HeadlessCloneEngine.releaseDisplay()
+        }
+    }
+
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Surface(modifier = Modifier.fillMaxSize(), color = Color.Black) {
-            BoxWithConstraints(Modifier.fillMaxSize()) {
+        BoxWithConstraints(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+            contentAlignment = Alignment.Center,
+        ) {
+            val aspect = if (session.width > 0 && session.height > 0) {
+                session.width.toFloat() / session.height.toFloat()
+            } else {
+                9f / 16f
+            }
+            val maxWindowHeight = min(maxHeight.value, 330f)
+            val windowWidth = min(maxWidth.value, maxWindowHeight * aspect)
+            val windowHeight = windowWidth / aspect
+            val shape = RoundedCornerShape(8.dp)
+
+            Box(
+                modifier = Modifier
+                    .width(windowWidth.dp)
+                    .height(windowHeight.dp)
+                    .clip(shape)
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, shape),
+            ) {
                 val bitmap = preview
                 if (bitmap != null) {
                     ViewerFrame(
@@ -806,22 +829,86 @@ private fun LiveViewer(session: ViewerSession, onClose: () -> Unit) {
                     )
                 } else {
                     Column(
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier.fillMaxSize().padding(16.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center,
                     ) {
                         CircularProgressIndicator(
                             Modifier.size(24.dp),
                             strokeWidth = 2.dp,
-                            color = Color.White.copy(alpha = 0.8f),
+                            color = MaterialTheme.colorScheme.primary,
                         )
                         Spacer(Modifier.height(10.dp))
                         Text(
-                            if (!connected) "Starting the shell engine…"
-                            else previewError ?: lastError ?: "Starting ${session.clone.label}…",
+                            when {
+                                !connected -> "Starting the shell engine…"
+                                else -> previewError ?: lastError ?: "Starting ${session.clone.label}…"
+                            },
                             fontSize = 11.5.sp,
-                            color = Color.White.copy(alpha = 0.72f),
-                            modifier = Modifier.padding(horizontal = 32.dp),
+                            lineHeight = 15.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 2,
+                        )
+                    }
+                }
+            }
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(0.82f)
+                .clip(Quartz.CardShape)
+                .background(MaterialTheme.colorScheme.surface)
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, Quartz.CardShape),
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 14.dp, end = 14.dp, top = 9.dp, bottom = 7.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "Live logs",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Spacer(Modifier.weight(1f))
+                Text(
+                    if (lines.isEmpty()) "waiting" else "${lines.size} lines",
+                    fontSize = 11.sp,
+                    color = fluxMutedText(),
+                )
+            }
+            HorizontalDivider(
+                thickness = 0.75.dp,
+                color = MaterialTheme.colorScheme.outlineVariant,
+            )
+            if (lines.isEmpty()) {
+                Box(
+                    Modifier.weight(1f).fillMaxWidth().padding(14.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        if (connected) "Waiting for app output…" else "Shell engine disconnected.",
+                        fontSize = 12.sp,
+                        color = fluxMutedText(),
+                    )
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                ) {
+                    items(lines.asReversed()) { line ->
+                        Text(
+                            line,
+                            fontSize = 9.5.sp,
+                            lineHeight = 13.sp,
+                            fontFamily = FontFamily.Monospace,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(bottom = 2.dp),
                         )
                     }
                 }
@@ -842,7 +929,7 @@ private fun ViewerFrame(
 
     fun toDisplay(position: Offset): Offset {
         if (boxSize.width <= 0 || boxSize.height <= 0) return Offset.Zero
-        val scale = max(
+        val scale = min(
             boxSize.width.toFloat() / imageWidth,
             boxSize.height.toFloat() / imageHeight,
         )
@@ -894,85 +981,16 @@ private fun ViewerFrame(
             bitmap = bitmap.asImageBitmap(),
             contentDescription = "Live clone display",
             modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Crop,
+            contentScale = ContentScale.Fit,
         )
-    }
-}
-
-// ---------------------------------------------------------------- logs
-
-@Composable
-private fun CloneLogsDialog(clone: CloneApp, connected: Boolean, onClose: () -> Unit) {
-    val lines by HeadlessCloneEngine.cloneLogs.collectAsState()
-    LaunchedEffect(clone.packageName, connected) {
-        if (!connected) {
-            HeadlessCloneEngine.clearCloneLogs()
-            return@LaunchedEffect
-        }
-        while (isActive) {
-            HeadlessCloneEngine.fetchCloneLogs(clone.packageName, 300)
-            delay(1000)
-        }
-    }
-    DisposableEffect(Unit) { onDispose { HeadlessCloneEngine.clearCloneLogs() } }
-
-    Dialog(
-        onDismissRequest = onClose,
-        properties = DialogProperties(usePlatformDefaultWidth = false),
-    ) {
-        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-            Column(
-                Modifier
-                    .fillMaxSize()
-                    .statusBarsPadding()
-                    .navigationBarsPadding()
-                    .padding(horizontal = Quartz.ScreenPad, vertical = 12.dp),
-            ) {
-                Text("Live logs", fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                Text(
-                    clone.label + " · " + clone.packageName,
-                    fontSize = 11.sp,
-                    color = fluxMutedText(),
-                )
-                Spacer(Modifier.height(8.dp))
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Color.Black)
-                        .padding(10.dp),
-                ) {
-                    if (!connected) {
-                        Text(
-                            "Connect the shell engine to read live app logs.",
-                            fontSize = 11.5.sp,
-                            color = Color.White.copy(alpha = 0.7f),
-                        )
-                    } else {
-                        LazyColumn(Modifier.fillMaxSize()) {
-                            items(lines.asReversed()) { line ->
-                                Text(
-                                    line,
-                                    fontSize = 9.5.sp,
-                                    lineHeight = 12.sp,
-                                    fontFamily = FontFamily.Monospace,
-                                    color = Color.White.copy(alpha = 0.82f),
-                                    modifier = Modifier.padding(bottom = 2.dp),
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
     }
 }
 
 // ---------------------------------------------------------------- customise
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun CustomiseDialog(
+private fun CustomiseSheet(
     clone: CloneApp,
     maxFps: Int,
     defaultFps: Int,
@@ -995,6 +1013,7 @@ private fun CustomiseDialog(
     fun applyPreset(width: Int, height: Int) {
         widthText = width.toString()
         heightText = height.toString()
+        error = null
     }
 
     fun save() {
@@ -1006,7 +1025,9 @@ private fun CustomiseDialog(
             error = "Enter both width and height."
             return
         }
-        if (width > 2160 || height > 3840 || (width > 0 && width < 320) || (height > 0 && height < 480)) {
+        if (width > 2160 || height > 3840 ||
+            (width > 0 && width < 320) || (height > 0 && height < 480)
+        ) {
             error = "Use a resolution between 320×480 and 2160×3840."
             return
         }
@@ -1017,147 +1038,148 @@ private fun CustomiseDialog(
         )
     }
 
-    Dialog(
+    ModalBottomSheet(
         onDismissRequest = onClose,
-        properties = DialogProperties(usePlatformDefaultWidth = false),
+        containerColor = MaterialTheme.colorScheme.surface,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
     ) {
-        Box(
+        Column(
             Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.55f))
-                .padding(18.dp),
-            contentAlignment = Alignment.Center,
+                .fillMaxWidth()
+                .heightIn(max = 620.dp)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 28.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 620.dp)
-                    .clip(RoundedCornerShape(18.dp)),
-                color = MaterialTheme.colorScheme.surface,
+            Text("Customise clone", fontSize = 18.sp, fontWeight = FontWeight.Medium)
+            Text(
+                clone.label,
+                fontSize = 12.sp,
+                color = fluxMutedText(),
+            )
+            Text(
+                "Only this clone changes. Leave resolution on Auto to follow the app.",
+                fontSize = 11.5.sp,
+                lineHeight = 15.sp,
+                color = fluxMutedText(),
+            )
+
+            Text("Resolution", fontSize = 13.5.sp, fontWeight = FontWeight.Medium)
+            Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                QPill("Auto", widthText.isBlank() && heightText.isBlank()) {
+                    widthText = ""
+                    heightText = ""
+                    error = null
+                }
+                QPill("720×1280", widthText == "720" && heightText == "1280") {
+                    applyPreset(720, 1280)
+                }
+                QPill("1080×1920", widthText == "1080" && heightText == "1920") {
+                    applyPreset(1080, 1920)
+                }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                QPill("1280×720", widthText == "1280" && heightText == "720") {
+                    applyPreset(1280, 720)
+                }
+                QPill("1920×1080", widthText == "1920" && heightText == "1080") {
+                    applyPreset(1920, 1080)
+                }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                QTextField(
+                    value = widthText,
+                    onValueChange = { widthText = it.filter(Char::isDigit); error = null },
+                    placeholder = "Width",
+                    modifier = Modifier.weight(1f),
+                )
+                QTextField(
+                    value = heightText,
+                    onValueChange = { heightText = it.filter(Char::isDigit); error = null },
+                    placeholder = "Height",
+                    modifier = Modifier.weight(1f),
+                )
+            }
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Frame rate", fontSize = 13.5.sp, fontWeight = FontWeight.Medium)
+                Spacer(Modifier.weight(1f))
+                Text(
+                    if (useDefaultFps) "Default · $defaultFps fps" else "$fps fps",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+            Slider(
+                value = fps.toFloat(),
+                onValueChange = { fps = it.roundToInt(); useDefaultFps = false },
+                valueRange = 10f..maxFps.toFloat(),
+                enabled = !useDefaultFps,
+                modifier = Modifier.fillMaxWidth().height(30.dp),
+            )
+            TextButton(
+                onClick = { useDefaultFps = true },
+                contentPadding = PaddingValues(horizontal = 0.dp),
             ) {
+                Text(
+                    if (useDefaultFps) "Using the display default" else "Use the display default",
+                    fontSize = 12.sp,
+                )
+            }
+
+            error?.let {
+                Text(it, fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
+            }
+
+            HorizontalDivider(
+                Modifier.padding(vertical = 4.dp),
+                thickness = 0.75.dp,
+                color = MaterialTheme.colorScheme.outlineVariant,
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TextButton(
+                    onClick = { confirmingDelete = true },
+                    contentPadding = PaddingValues(horizontal = 4.dp),
+                ) {
+                    Text("Uninstall", fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
+                }
+                Spacer(Modifier.weight(1f))
+                TextButton(onClick = onClose) { Text("Cancel", fontSize = 12.5.sp) }
+                QPrimaryButton("Save") { save() }
+            }
+
+            if (confirmingDelete) {
                 Column(
                     Modifier
-                        .verticalScroll(rememberScrollState())
-                        .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.errorContainer)
+                        .padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    Text(clone.label, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                     Text(
-                        "Only this clone changes. Leave resolution empty to follow the app.",
-                        fontSize = 10.5.sp,
-                        color = fluxMutedText(),
+                        "Remove this clone and its data?",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
                     )
-
-                    Text("Resolution", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                    Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                        QPill("Auto", widthText.isBlank() && heightText.isBlank()) {
-                            widthText = ""
-                            heightText = ""
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        TextButton(onClick = { confirmingDelete = false }) {
+                            Text("Keep", fontSize = 12.sp)
                         }
-                        QPill("720×1280", widthText == "720" && heightText == "1280") {
-                            applyPreset(720, 1280)
-                        }
-                        QPill("1080×1920", widthText == "1080" && heightText == "1920") {
-                            applyPreset(1080, 1920)
-                        }
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                        QPill("1280×720", widthText == "1280" && heightText == "720") {
-                            applyPreset(1280, 720)
-                        }
-                        QPill("1920×1080", widthText == "1920" && heightText == "1080") {
-                            applyPreset(1920, 1080)
-                        }
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        QTextField(
-                            value = widthText,
-                            onValueChange = { widthText = it.filter(Char::isDigit); error = null },
-                            placeholder = "Width",
-                            modifier = Modifier.weight(1f),
-                        )
-                        QTextField(
-                            value = heightText,
-                            onValueChange = { heightText = it.filter(Char::isDigit); error = null },
-                            placeholder = "Height",
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
-
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Frame rate", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                        Spacer(Modifier.weight(1f))
-                        Text(
-                            if (useDefaultFps) "default $defaultFps" else "$fps fps",
-                            fontSize = 11.5.sp,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                    }
-                    Slider(
-                        value = fps.toFloat(),
-                        onValueChange = { fps = it.roundToInt(); useDefaultFps = false },
-                        valueRange = 10f..maxFps.toFloat(),
-                        enabled = !useDefaultFps,
-                        modifier = Modifier.fillMaxWidth().height(30.dp),
-                    )
-                    TextButton(
-                        onClick = { useDefaultFps = true },
-                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 0.dp),
-                    ) {
-                        Text(
-                            if (useDefaultFps) "Using global frame rate" else "Use global frame rate",
-                            fontSize = 11.sp,
-                        )
-                    }
-
-                    error?.let {
-                        Text(it, fontSize = 11.sp, color = MaterialTheme.colorScheme.error)
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        TextButton(
-                            onClick = { confirmingDelete = true },
-                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp),
-                        ) {
-                            Text("Uninstall", fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
-                        }
-                        Spacer(Modifier.weight(1f))
-                        TextButton(onClick = onClose) { Text("Cancel", fontSize = 12.sp) }
-                        Box(Modifier.width(96.dp)) {
-                            QPrimaryButton("Save") { save() }
-                        }
-                    }
-
-                    if (confirmingDelete) {
-                        Column(
-                            Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.35f))
-                                .padding(10.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp),
-                        ) {
+                        TextButton(onClick = onUninstall) {
                             Text(
-                                "Remove this clone and its data?",
+                                "Uninstall",
                                 fontSize = 12.sp,
-                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.error,
                             )
-                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                TextButton(onClick = { confirmingDelete = false }) {
-                                    Text("Keep", fontSize = 12.sp)
-                                }
-                                TextButton(onClick = onUninstall) {
-                                    Text(
-                                        "Uninstall",
-                                        fontSize = 12.sp,
-                                        color = MaterialTheme.colorScheme.error,
-                                    )
-                                }
-                            }
                         }
                     }
                 }
@@ -1168,6 +1190,7 @@ private fun CustomiseDialog(
 
 // ---------------------------------------------------------------- app picker
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun InstalledAppPicker(
     apps: List<HeadlessCloneEngine.DeviceApp>,
@@ -1183,57 +1206,62 @@ private fun InstalledAppPicker(
         }
     }
 
-    Dialog(
+    ModalBottomSheet(
         onDismissRequest = onClose,
-        properties = DialogProperties(usePlatformDefaultWidth = false),
+        containerColor = MaterialTheme.colorScheme.surface,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
     ) {
-        Surface(
-            modifier = Modifier
+        Column(
+            Modifier
                 .fillMaxWidth()
-                .fillMaxHeight(0.88f)
-                .padding(14.dp)
-                .clip(RoundedCornerShape(18.dp)),
-            color = MaterialTheme.colorScheme.surface,
+                .fillMaxHeight(0.9f)
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 24.dp),
         ) {
-            Column(Modifier.fillMaxSize().padding(14.dp)) {
-                Text("Choose an installed app", fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                Text(
-                    "The clone is hidden from your launcher and gets empty data.",
-                    fontSize = 10.5.sp,
-                    color = fluxMutedText(),
-                )
-                Spacer(Modifier.height(6.dp))
-                QTextField(
-                    value = query,
-                    onValueChange = { query = it },
-                    placeholder = "Search apps",
-                )
-                Spacer(Modifier.height(6.dp))
-                if (apps.isEmpty()) {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("Loading installed apps…", fontSize = 12.sp, color = fluxMutedText())
-                    }
-                } else if (filtered.isEmpty()) {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("No matching apps", fontSize = 12.sp, color = fluxMutedText())
-                    }
-                } else {
-                    LazyColumn(Modifier.fillMaxSize()) {
-                        items(filtered, key = { it.packageName }) { app ->
-                            QRow(
-                                title = app.label,
-                                subtitle = app.packageName,
-                                leading = {
-                                    QIconTile(
-                                        bitmap = app.icon,
-                                        fallback = Icons.Default.Android,
-                                        size = 34.dp,
-                                    )
-                                },
-                                onClick = { onPick(app) },
-                                divider = true,
-                            )
-                        }
+            Text("Choose an installed app", fontSize = 18.sp, fontWeight = FontWeight.Medium)
+            Text(
+                "The clone is hidden from your launcher and gets empty data.",
+                fontSize = 11.5.sp,
+                color = fluxMutedText(),
+            )
+            Spacer(Modifier.height(10.dp))
+            QTextField(
+                value = query,
+                onValueChange = { query = it },
+                placeholder = "Search apps",
+            )
+            Spacer(Modifier.height(8.dp))
+            when {
+                apps.isEmpty() -> Box(
+                    Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text("Loading installed apps…", fontSize = 12.sp, color = fluxMutedText())
+                }
+
+                filtered.isEmpty() -> Box(
+                    Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text("No matching apps", fontSize = 12.sp, color = fluxMutedText())
+                }
+
+                else -> LazyColumn(Modifier.fillMaxSize()) {
+                    items(filtered, key = { it.packageName }) { app ->
+                        QRow(
+                            title = app.label,
+                            subtitle = app.packageName,
+                            leading = {
+                                QIconTile(
+                                    bitmap = app.icon,
+                                    fallback = Icons.Default.Android,
+                                    size = 34.dp,
+                                )
+                            },
+                            onClick = { onPick(app) },
+                            divider = true,
+                        )
                     }
                 }
             }
@@ -1299,10 +1327,4 @@ private fun cloneUsesLandscape(context: Context, clone: CloneApp): Boolean {
 
         else -> context.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
     }
-}
-
-private tailrec fun Context.findActivity(): Activity? = when (this) {
-    is Activity -> this
-    is ContextWrapper -> baseContext.findActivity()
-    else -> null
 }
