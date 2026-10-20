@@ -824,18 +824,23 @@ before `createVirtualDisplay()` is reached, so the service answers `-1` in milli
 `Context` Shizuku hands to the user service constructor was being ignored.
 
 **Fix**
-- `ShellVdService(Context)` now stores the Shizuku context in `hostContext`; the no-arg path stays
-  as a fallback.
+- `ShellVdService(Context)` now stores the Shizuku context in `hostContext`. Shizuku already creates
+  a real `Application` for the package before instantiating the service; when an older Shizuku calls
+  the no-arg constructor, the service recovers that Application via
+  `ActivityThread.currentApplication()` (`resolveHostContext()`).
 - `ShadowShellContext.from(Context)` wraps the real context (still reporting
   `com.android.shell`/shell uid for attribution) instead of fabricating one. The fabricated context
   is only tried when the real one is unavailable.
 - `ShadowDisplay.create(Context, ...)` tries contexts in order (Shizuku first, fabricated second)
-  and flag sets in order (touch+focus, touch, base). A second pass creates the display with a
-  throw-away `SurfaceTexture` surface and then swaps the `ImageReader` surface in (ShadowAuto's own
-  sequence) for ROMs that reject a reader surface at creation.
+  and flag sets in order: touch+focus, touch, base, then progressively simpler PUBLIC/OWN_CONTENT
+  sets, and TRUSTED only as the last resort (some ROMs reject PRESENTATION/OWN_CONTENT_ONLY, and
+  HyperOS treats TRUSTED as secure). A second pass creates the display with a throw-away
+  `SurfaceTexture` surface and then swaps the `ImageReader` surface in (ShadowAuto's own sequence)
+  for ROMs that reject a reader surface at creation.
 - `getDisplay()` is polled briefly instead of failing the first time it returns null.
-- The service logs pid/uid/sdk/context, the chosen context and every attempt; the app-side
+- The service logs pid/uid/sdk/context, the chosen context, and every flag/attempt; the app-side
   `ShellVd.ensure()` error now appends the last shell log lines, so `id=-1` always carries a reason.
+  `launchNowBlocking()` returns that reason instead of the generic "hidden display unavailable".
 - `ShadowShellContext.Workarounds.systemContext()` falls back to
   `ActivityThread.currentActivityThread()`.
-- versionCode 43, 3.10.3 (the version bump also forces Shizuku to restart the user service).
+- versionCode 44, 3.10.4 (the version bump also forces Shizuku to restart the user service).

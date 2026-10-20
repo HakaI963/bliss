@@ -14,8 +14,8 @@ that Bliss's implementation is derived from. Bliss's own ports live in
 
 | File | Lines | Role | What Bliss takes from it |
 |---|---:|---|---|
-| `ShellContext.java` | 157 | Fabricates a system `Context` inside the shell process (reflective `ActivityThread` surgery: `getSystemContext`, `mBoundApplication`, `mInitialApplication`, `mConfigurationController`). | **Ported** → `ShadowShellContext.java` (lazy + failure-proof: upstream builds it in a static initialiser, which can brick the process). |
-| `VirtualDisplaySession.java` | 153 | Creates the `VirtualDisplay`, keeps an `ImageReader` for capture, swaps its surface in/out for on-demand screenshots, sets the IME policy to LOCAL. | **Ported** → `ShadowDisplay.java`, with the two HyperOS fixes below. |
+| `ShellContext.java` | 157 | Fabricates a system `Context` inside the shell process (reflective `ActivityThread` surgery: `getSystemContext`, `mBoundApplication`, `mInitialApplication`, `mConfigurationController`). | **Ported** → `ShadowShellContext.java`, but **not used first**: Shizuku already creates a real `Application` in the user-service process, and Bliss wraps that (`ShadowShellContext.from(Context)`) with shell attribution. The fabrication is only the fallback (e.g. older Shizuku, broken Application). |
+| `VirtualDisplaySession.java` | 153 | Creates the `VirtualDisplay`, keeps an `ImageReader` for capture, swaps its surface in/out for on-demand screenshots, sets the IME policy to LOCAL. | **Ported** → `ShadowDisplay.java`, with the HyperOS fixes below plus fallback passes (simpler flag sets, TRUSTED last, throw-away surface then swap). |
 | `ScreenCapture.java` | 31 | `Image` → `Bitmap` honouring `rowStride`/`pixelStride`, then cropping the padded rows. | **Ported verbatim** → `ShadowScreenCapture.java`. |
 | `InputBridge.java` | 112 | Injects touch/key events **with the virtual display id** (`InputEvent.setDisplayId` + `injectInputEvent`). | **Ported verbatim** → `ShadowInput.java`. |
 | `WindowManagerBridge.java` | 81 | `IWindowManager` reflection to read/set the display IME policy. | **Ported verbatim** → `ShadowWindowManager.java`. |
@@ -63,8 +63,9 @@ same classes run in-process.
 
 ## 3. What ShadowAuto had that Bliss did not — and is now in Bliss
 
-1. **The system-context fabrication** (`ShellContext`) — Bliss had a hand-rolled variant; now a
-   faithful port.
+1. **The system-context handling** (`ShellContext`) — Bliss prefers the real Application Shizuku
+   creates for the user service, wrapped with `com.android.shell` attribution; the reflective
+   fabrication is a failure fallback. This is the part the first port got wrong.
 2. **The capture path** (`VirtualDisplaySession` + `ScreenCapture`) — Bliss had three different
    home-grown variants (permanent ImageReader, swap-in reader, MediaCodec encoder surface); all
    failed. The ported path is the one the reference implementation ships.
