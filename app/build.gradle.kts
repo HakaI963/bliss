@@ -27,8 +27,8 @@ android {
         // app targets 28 like Termux. bash/proot/loader/pulse stay pinned to
         // nativeLibraryDir (jniLibs) as belt-and-braces for future targetSdk bumps.
         targetSdk = 28
-        versionCode = 48
-        versionName = "3.12.0"
+        versionCode = 49
+        versionName = "3.13.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -266,11 +266,11 @@ dependencies {
     
     // Networking
     implementation(libs.okhttp)
-    // On-device OCR for the clone space (in-app AI agent observations).
+    // Shizuku shell user-service for the virtual display + clone engine.
     implementation(libs.shizuku.api)
     implementation(libs.shizuku.provider)
-    // In-app virtual app engine (BlackBox); cloned apps run inside Bliss, no Android user/profile.
-    implementation(project(":Bcore"))
+    // APK patching (ARSC/manifest) and v1/v2/v3 signing used by the clone engine.
+    implementation(files("libs/arsc-lib.jar", "libs/apksig.jar"))
 
     // Embedded terminal (termux-app GPLv3 — app stays open source; see LICENSE/README)
     // Only com.termux.terminal + com.termux.view are used. terminal-emulator is built
@@ -279,9 +279,6 @@ dependencies {
         exclude(group = "com.github.termux.termux-app", module = "terminal-emulator")
     }
     implementation(project(":terminal-emulator"))
-    // Clone space (round 13): shell-based, no embedded engine — see
-    // core/clone/CloneEngine.kt. The old BlackBox sources stay under Bcore/ as
-    // vendored reference only and are no longer built.
 
     // Embedded Termux:X11 (cloned + integrated directly, same-package rendering)
     implementation(project(":termux-x11"))

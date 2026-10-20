@@ -1,0 +1,33 @@
+Bliss — virtual display + clone engine
+Copyright 2026 HakaI963
+
+This product includes software derived from ShadowAuto
+(https://github.com/HakaI963/ShadowAuto, originally mirrored from
+android-notes/ShadowAuto), which is licensed under the Apache License,
+Version 2.0.
+
+Files derived from ShadowAuto:
+  app/src/main/java/com/ivarna/fluxlinux/clone/engine/VirtualDisplaySession.java
+  app/src/main/java/com/ivarna/fluxlinux/clone/engine/ScreenCapture.java
+  app/src/main/java/com/ivarna/fluxlinux/clone/engine/InputBridge.java
+  app/src/main/java/com/ivarna/fluxlinux/clone/engine/WindowManagerBridge.java
+  app/src/main/java/com/ivarna/fluxlinux/clone/engine/AppCatalog.java
+  app/src/main/java/com/ivarna/fluxlinux/clone/engine/DisplayService.java   (was ShellUserService.java)
+  app/src/main/java/com/ivarna/fluxlinux/clone/engine/EngineClient.java     (was ShizukuServerManager.java)
+
+This product includes the Shizuku API
+(https://github.com/RikkaApps/Shizuku-API) by Rikka, licensed under the
+MIT License, consumed as a Maven dependency:
+  dev.rikka.shizuku:api:13.1.5
+  dev.rikka.shizuku:provider:13.1.5
+
+This product includes ARSCLib
+(https://github.com/REAndroid/ARSCLib), licensed under the Apache License,
+Version 2.0, packaged as app/libs/arsc-lib.jar.
+
+This product includes Android apksig
+(https://android.googlesource.com/platform/tools/apksig/), licensed under the
+Apache License, Version 2.0, packaged as app/libs/apksig.jar.
+
+The clone signing key at app/src/main/assets/clone.keystore is a test key and
+is intentionally public.

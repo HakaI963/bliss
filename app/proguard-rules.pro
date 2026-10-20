@@ -27,6 +27,14 @@
 # Kotlin sources stay under com.ivarna.fluxlinux for both flavors).
 -keep class com.ivarna.fluxlinux.** { *; }
 
+# Shizuku instantiates the user service by class name inside the shell process.
+# Keep the whole engine plus the APK patching/signing libraries it reflects over.
+-keep class com.ivarna.fluxlinux.clone.engine.** { *; }
+-dontwarn com.android.apksig.**
+-dontwarn com.reandroid.**
+-keep class com.android.apksig.** { *; }
+-keep class com.reandroid.** { *; }
+
 # Embedded Termux:X11 (cloned module) — keep everything; CmdEntryPoint is
 # launched by class name from app_process and activities via reflection.
 -dontwarn com.termux.x11.**

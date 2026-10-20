@@ -804,7 +804,9 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
                             BottomTab.APPS -> {
-                                com.ivarna.fluxlinux.ui.screens.ClonedAppsScreen()
+                                com.ivarna.fluxlinux.ui.screens.ClonedAppsScreen(
+                                    onOpenTools = { currentTab = BottomTab.TOOLS }
+                                )
                             }
                             BottomTab.TOOLS -> {
                                 com.ivarna.fluxlinux.ui.screens.ToolsScreen(

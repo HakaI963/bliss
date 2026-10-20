@@ -69,7 +69,7 @@ jobs:
           AAPT=$(ls "$ANDROID_HOME"/build-tools/*/aapt | head -n 1)
           echo "APK: $APK"
           "$AAPT" dump badging "$APK" | grep -E "^package:|sdkVersion|targetSdkVersion"
-          unzip -l "$APK" | grep -E "bootstrap\.tar|libbash\.so|libproot\.so" | head -n 8
+          unzip -l "$APK" | grep -E "bootstrap\.tar|libbash\.so|libproot\.so|assets/clone\.keystore" | head -n 10
           sha256sum "$APK"
 
       - name: Upload APK artifact
@@ -88,6 +88,6 @@ jobs:
           APK=app/build/outputs/apk/bliss/debug/app-bliss-debug.apk
           TAG="bliss-debug-${GITHUB_SHA::7}"
           SHA=$(sha256sum "$APK" | awk '{print $1}')
-          gh release create "$TAG" --title "Bliss 3.12.0 — in-app app cloner (BlackBox engine)" \
-            --notes "Cloned apps run inside Bliss. No Android user or profile. APK SHA-256: $SHA" || true
+          gh release create "$TAG" --title "Bliss 3.13.0 — virtual display + app cloner" \
+            --notes "Shizuku shell engine: clone installed apps or APKs, then run them on a private virtual display with live preview and input. APK SHA-256: $SHA" || true
           gh release upload "$TAG" "$APK" --clobber

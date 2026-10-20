@@ -85,7 +85,7 @@ class BlissDesignScreenshotsTest {
                                 QLogPane(
                                     listOf(
                                         "12:00  Display created: id=42 720x1560",
-                                        "12:00  Launch: com.foo (user 10, display 42)",
+                                        "12:00  Launch: com.foo (display 42, hidden clone)",
                                     ),
                                     maxHeight = 56.dp,
                                 )
