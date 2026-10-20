@@ -123,7 +123,7 @@ private data class ViewerSession(
  * The live viewer is intentionally chrome-free; system back closes it.
  */
 @Composable
-fun ClonedAppsScreen() {
+fun ClonedAppsScreen(startOnPreference: Boolean = false) {
     val context = LocalContext.current
     val shizukuInstalled by HeadlessCloneEngine.shizukuInstalled.collectAsState()
     val shizukuRunning by HeadlessCloneEngine.shizukuRunning.collectAsState()
@@ -142,7 +142,9 @@ fun ClonedAppsScreen() {
     val maxFps = remember(context) { maxRefreshRate(context) }
     val fpsValue = displayFps.coerceIn(10, maxFps)
 
-    var section by rememberSaveable { mutableStateOf(AppsSection.INSTALLED) }
+    var section by rememberSaveable {
+        mutableStateOf(if (startOnPreference) AppsSection.PREFERENCE else AppsSection.INSTALLED)
+    }
     var groupKey by rememberSaveable { mutableStateOf<String?>(null) }
     var viewer by remember { mutableStateOf<ViewerSession?>(null) }
     var logsClone by remember { mutableStateOf<CloneApp?>(null) }
@@ -733,7 +735,6 @@ private fun folderSubtitle(group: CloneGroup): String {
     return buildString {
         append(group.clones.size).append(if (group.clones.size == 1) " clone" else " clones")
         if (running > 0) append(" · ").append(running).append(" running")
-        append(" · ").append(group.key)
     }
 }
 

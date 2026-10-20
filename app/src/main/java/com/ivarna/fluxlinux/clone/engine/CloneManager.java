@@ -376,6 +376,7 @@ final class CloneManager {
         String clonePackage = newClonePackage();
         File stage = new File(DIR, "stage-" + id);
         List<File> signed = new ArrayList<>();
+        Map<String, String> authorityPatches = new LinkedHashMap<>();
         try {
             if (!stage.mkdirs() && !stage.isDirectory()) {
                 return Jsons.error("cannot create staging directory");
@@ -388,7 +389,8 @@ final class CloneManager {
                 copyFile(sourceFile, staged);
                 File unsigned = new File(stage, "unsigned-" + name);
                 File signedFile = new File(stage, "signed-" + name);
-                patchApk(staged, unsigned, clonePackage, label, base, originalPackage);
+                patchApk(staged, unsigned, clonePackage, label, base, originalPackage,
+                        authorityPatches);
                 signApk(unsigned, signedFile);
                 deleteFile(unsigned);
                 signed.add(signedFile);
@@ -503,7 +505,8 @@ final class CloneManager {
     // --------------------------------------------------------------- patching
 
     private void patchApk(File input, File output, String newPackage, String label,
-                          boolean base, String originalPackage) throws Exception {
+                          boolean base, String originalPackage,
+                          Map<String, String> authorityPatches) throws Exception {
         ApkModule apk = ApkModule.loadApkFile(input);
         try {
             AndroidManifestBlock manifest = apk.getAndroidManifest();
@@ -524,8 +527,10 @@ final class CloneManager {
                 throw new IllegalStateException("apps with sharedUserId are not supported");
             }
             fixRelativeNames(manifest, originalPackage);
-            Map<String, String> authorityPatches =
-                    rewriteProviderAuthorities(root, originalPackage, newPackage);
+            if (base) {
+                authorityPatches.putAll(
+                        rewriteProviderAuthorities(root, originalPackage, newPackage));
+            }
             patchPackageStrings(manifest, root, originalPackage, newPackage);
             manifest.setPackageName(newPackage);
             if (base) {

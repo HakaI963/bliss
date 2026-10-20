@@ -111,6 +111,19 @@ class BlissDesignScreenshotsTest {
     }
 
     @Test
+    fun apps_preference() {
+        paparazzi.snapshot {
+            FluxLinuxTheme(themeMode = ThemeMode.DARK) {
+                Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                    CompositionLocalProvider(LocalActivityResultRegistryOwner provides NoopRegistryOwner) {
+                        ClonedAppsScreen(startOnPreference = true)
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
     fun tools_hub() {
         paparazzi.snapshot {
             FluxLinuxTheme(themeMode = ThemeMode.DARK) {
