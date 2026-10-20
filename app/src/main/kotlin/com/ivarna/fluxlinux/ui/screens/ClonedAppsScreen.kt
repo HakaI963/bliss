@@ -191,7 +191,6 @@ fun ClonedAppsScreen(startOnPreference: Boolean = false) {
         viewing = null
         HeadlessCloneEngine.clearPreview()
         HeadlessCloneEngine.clearCloneLogs()
-        HeadlessCloneEngine.releaseDisplay()
     }
 
     fun openViewer(clone: CloneApp) {
@@ -609,10 +608,14 @@ private fun InstalledFolders(
                         if (connected) "Open Preference to clone an APK or an installed app."
                         else "Connect Shizuku in Preference to get started.",
                     )
-                    QPrimaryButton(
-                        "Open Preference",
-                        Modifier.padding(horizontal = Quartz.CardPad, vertical = 4.dp),
-                    ) { onOpenPreference() }
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = Quartz.CardPad, vertical = 4.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        QPrimaryButton("Open Preference") { onOpenPreference() }
+                    }
                     Spacer(Modifier.height(8.dp))
                 }
             }
@@ -802,7 +805,9 @@ private fun CloneViewPage(
                 .weight(1f),
             contentAlignment = Alignment.Center,
         ) {
-            val aspect = if (session.width > 0 && session.height > 0) {
+            val aspect = preview?.let {
+                it.width.toFloat() / it.height.coerceAtLeast(1).toFloat()
+            } ?: if (session.width > 0 && session.height > 0) {
                 session.width.toFloat() / session.height.toFloat()
             } else {
                 9f / 16f
