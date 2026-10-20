@@ -29,6 +29,7 @@ final class ShadowShellContext extends ContextWrapper {
     static final String PACKAGE_NAME = "com.android.shell";
 
     private static volatile ShadowShellContext instance;
+    private final boolean fabricated;
 
     static ShadowShellContext get() {
         ShadowShellContext local = instance;
@@ -45,8 +46,35 @@ final class ShadowShellContext extends ContextWrapper {
         return local;
     }
 
+    /**
+     * Prefer the real context Shizuku passes to the user service. The
+     * fabricated ActivityThread context is only a fallback: on newer ROMs the
+     * reflective ActivityThread surgery fails, which used to make every
+     * createVirtualDisplay() call return -1.
+     */
+    static ShadowShellContext from(android.content.Context base) {
+        if (base != null) {
+            try {
+                return new ShadowShellContext(base);
+            } catch (Throwable ignored) {
+                // fall through to the fabricated shell context
+            }
+        }
+        return get();
+    }
+
+    private ShadowShellContext(android.content.Context base) {
+        super(base);
+        this.fabricated = false;
+    }
+
     private ShadowShellContext() {
         super(Workarounds.systemContext());
+        this.fabricated = true;
+    }
+
+    String describeSource() {
+        return fabricated ? "fabricated com.android.shell" : "Shizuku service context";
     }
 
     @Override
@@ -130,9 +158,32 @@ final class ShadowShellContext extends ContextWrapper {
         }
 
         static Context systemContext() {
+            Object thread = ACTIVITY_THREAD;
+            Class<?> threadClass = ACTIVITY_THREAD_CLASS;
+            if (thread == null) {
+                // Some ROMs refuse the reflective ActivityThread constructor;
+                // use the process's existing thread when there is one.
+                try {
+                    if (threadClass == null) {
+                        threadClass = Class.forName("android.app.ActivityThread");
+                    }
+                    Method current = threadClass.getDeclaredMethod("currentActivityThread");
+                    current.setAccessible(true);
+                    thread = current.invoke(null);
+                } catch (Throwable ignored) {
+                }
+            }
+            if (thread == null || threadClass == null) {
+                throw new IllegalStateException("no ActivityThread available for the shell context");
+            }
             try {
-                Method method = ACTIVITY_THREAD_CLASS.getDeclaredMethod("getSystemContext");
-                return (Context) method.invoke(ACTIVITY_THREAD);
+                Method method = threadClass.getDeclaredMethod("getSystemContext");
+                method.setAccessible(true);
+                Context context = (Context) method.invoke(thread);
+                if (context == null) {
+                    throw new IllegalStateException("getSystemContext() returned null");
+                }
+                return context;
             } catch (Throwable e) {
                 throw new IllegalStateException("system context unavailable", e);
             }

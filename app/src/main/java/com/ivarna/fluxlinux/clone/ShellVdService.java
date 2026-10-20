@@ -59,16 +59,24 @@ public class ShellVdService extends IShellVd.Stub {
     private volatile int frameQuality = 80;
     private volatile long framesSent;
 
+    /** The Context Shizuku passes to this user service (null with the no-arg ctor). */
+    private static android.content.Context hostContext;
+
     static {
         installCrashHandler();
     }
 
     public ShellVdService() {
+        android.util.Log.i(TAG, "ShellVdService() no-arg ctor, pid=" + Process.myPid());
     }
 
     public ShellVdService(android.content.Context context) {
-        // Shizuku hands over a context; the display owner works from its own
-        // system context (ShadowShellContext), so nothing is needed here.
+        // Shizuku calls this constructor with the app context running under the
+        // shell uid. The display owner prefers it: the fabricated shell context
+        // is only a fallback for ROMs where ActivityThread reflection fails.
+        hostContext = context == null ? null : context;
+        android.util.Log.i(TAG, "ShellVdService(Context) ctor, pid=" + Process.myPid()
+                + " context=" + (context == null ? "null" : context.getClass().getName()));
     }
 
     // ---------------------------------------------------------------- display
@@ -87,14 +95,20 @@ public class ShellVdService extends IShellVd.Stub {
             stopFramesLocked();
             releaseDisplayLocked();
             try {
-                log("createDisplay: creating " + w + "x" + h + " dpi=" + d);
-                ShadowDisplay session = ShadowDisplay.create(w, h, d);
+                log("createDisplay: creating " + w + "x" + h + " dpi=" + d
+                        + " pid=" + Process.myPid() + " uid=" + Process.myUid()
+                        + " sdk=" + android.os.Build.VERSION.SDK_INT
+                        + " context=" + (hostContext == null
+                            ? "none (no-arg service ctor)"
+                            : hostContext.getClass().getSimpleName()));
+                ShadowDisplay session = ShadowDisplay.create(hostContext, w, h, d);
                 log("createDisplay: created id=" + session.displayId
                         + " flags=0x" + Integer.toHexString(session.flagsUsed)
+                        + " context=" + session.contextSource
                         + " (non-secure, capture surface attached)");
                 ShadowInput bridge = null;
                 try {
-                    bridge = new ShadowInput();
+                    bridge = new ShadowInput(hostContext);
                 } catch (Throwable t) {
                     log("input bridge unavailable (display kept): " + describe(t));
                 }
@@ -353,7 +367,7 @@ public class ShellVdService extends IShellVd.Stub {
         }
         if (bridge == null) {
             try {
-                bridge = new ShadowInput();
+                bridge = new ShadowInput(hostContext);
                 synchronized (lock) {
                     input = bridge;
                 }

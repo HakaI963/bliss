@@ -24,7 +24,15 @@ final class ShadowInput {
     private final Method setDisplayId;
 
     ShadowInput() throws Exception {
-        inputManager = ShadowShellContext.get().getSystemService(Context.INPUT_SERVICE);
+        this(null);
+    }
+
+    ShadowInput(android.content.Context base) throws Exception {
+        android.content.Context context = ShadowShellContext.from(base);
+        inputManager = context.getSystemService(Context.INPUT_SERVICE);
+        if (inputManager == null) {
+            throw new IllegalStateException("input service unavailable (" + context.describeSource() + ")");
+        }
         inject = inputManager.getClass().getMethod("injectInputEvent", InputEvent.class, int.class);
         setDisplayId = InputEvent.class.getMethod("setDisplayId", int.class);
     }

@@ -171,7 +171,16 @@ object ShellVd {
         return try {
             val id = remote.createDisplay(width, height, dpi)
             if (id <= 0) {
-                val message = "createDisplay failed (id=$id)"
+                val base = "createDisplay failed (id=$id)"
+                addLog(base)
+                // The shell service logs the real exception (context, flags,
+                // SecurityException) right before returning -1; surface it.
+                val reason = serviceLogTail(12)
+                    ?.map { it.trim() }
+                    ?.filter { it.isNotEmpty() && !it.contains(base) }
+                    ?.takeLast(3)
+                    ?.joinToString(" · ")
+                val message = if (reason.isNullOrBlank()) base else "$base — $reason"
                 addLog(message)
                 return message
             }

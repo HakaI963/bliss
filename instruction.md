@@ -809,3 +809,33 @@ the way ShadowAuto does. The old MCP attempt did not work; delete the garbage an
 - `QTextField` gained `singleLine`, `minLines`, `secret` so the goal and API key fields work.
 
 versionCode 42, 3.10.2.
+
+---
+
+## 35. Round 35 — display creation fixed: real Shizuku context first, diagnostics (2026-10-20)
+
+**User report:** every clone display attempt returned `createDisplay failed (id=-1)` and the AI
+reported `hidden display unavailable`.
+
+**Cause:** `ShadowDisplay.create()` only ever used the *fabricated* `com.android.shell` context,
+which is built by reflection into `ActivityThread` (`new ActivityThread()`, `sCurrentActivityThread`,
+`getSystemContext()`). On ROMs where any of those reflective steps fail, the constructor throws
+before `createVirtualDisplay()` is reached, so the service answers `-1` in milliseconds. The real
+`Context` Shizuku hands to the user service constructor was being ignored.
+
+**Fix**
+- `ShellVdService(Context)` now stores the Shizuku context in `hostContext`; the no-arg path stays
+  as a fallback.
+- `ShadowShellContext.from(Context)` wraps the real context (still reporting
+  `com.android.shell`/shell uid for attribution) instead of fabricating one. The fabricated context
+  is only tried when the real one is unavailable.
+- `ShadowDisplay.create(Context, ...)` tries contexts in order (Shizuku first, fabricated second)
+  and flag sets in order (touch+focus, touch, base). A second pass creates the display with a
+  throw-away `SurfaceTexture` surface and then swaps the `ImageReader` surface in (ShadowAuto's own
+  sequence) for ROMs that reject a reader surface at creation.
+- `getDisplay()` is polled briefly instead of failing the first time it returns null.
+- The service logs pid/uid/sdk/context, the chosen context and every attempt; the app-side
+  `ShellVd.ensure()` error now appends the last shell log lines, so `id=-1` always carries a reason.
+- `ShadowShellContext.Workarounds.systemContext()` falls back to
+  `ActivityThread.currentActivityThread()`.
+- versionCode 43, 3.10.3 (the version bump also forces Shizuku to restart the user service).

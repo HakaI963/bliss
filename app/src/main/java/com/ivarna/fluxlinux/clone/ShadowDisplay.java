@@ -2,6 +2,7 @@ package com.ivarna.fluxlinux.clone;
 
 import android.graphics.Bitmap;
 import android.graphics.PixelFormat;
+import android.graphics.SurfaceTexture;
 import android.hardware.display.DisplayManager;
 import android.hardware.display.VirtualDisplay;
 import android.media.Image;
@@ -40,6 +41,7 @@ final class ShadowDisplay {
     final int height;
     final int dpi;
     final int flagsUsed;
+    final String contextSource;
 
     private final ImageReader captureReader;
     private final Surface captureSurface;
@@ -55,16 +57,17 @@ final class ShadowDisplay {
     private volatile boolean draining = true;
     private final Thread drainThread;
 
-    private ShadowDisplay(int width, int height, int dpi, ImageReader captureReader,
-                          VirtualDisplay display, int flagsUsed) {
+    private ShadowDisplay(int width, int height, int dpi, int displayId, String contextSource,
+                          ImageReader captureReader, VirtualDisplay display, int flagsUsed) {
         this.width = width;
         this.height = height;
         this.dpi = dpi;
         this.flagsUsed = flagsUsed;
+        this.contextSource = contextSource;
         this.captureReader = captureReader;
         this.captureSurface = captureReader.getSurface();
         this.display = display;
-        this.displayId = display.getDisplay().getDisplayId();
+        this.displayId = displayId;
 
         ShadowWindowManager bridge = null;
         int previous = -1;
@@ -97,39 +100,181 @@ final class ShadowDisplay {
     }
 
     static ShadowDisplay create(int width, int height, int dpi) {
-        android.content.Context context = ShadowShellContext.get();
-        DisplayManager manager = displayManager(context);
-        ImageReader captureReader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 3);
-        int baseFlags = DisplayManager.VIRTUAL_DISPLAY_FLAG_PUBLIC
-                | DisplayManager.VIRTUAL_DISPLAY_FLAG_PRESENTATION
-                | DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY;
-        int touchFlag = hiddenFlag("VIRTUAL_DISPLAY_FLAG_SUPPORTS_TOUCH");
-        int focusFlag = hiddenFlag("VIRTUAL_DISPLAY_FLAG_OWN_FOCUS");
-        // NOTE: VIRTUAL_DISPLAY_FLAG_TRUSTED is intentionally NOT set — on
-        // HyperOS it is the secure flag and a secure display never composites
-        // into our capture surface.
-        int[] candidates = new int[]{
-                baseFlags | touchFlag | focusFlag,
-                baseFlags | touchFlag,
-                baseFlags
-        };
+        return create(null, width, height, dpi);
+    }
+
+    /**
+     * Create the display with the real Shizuku service context first. If that
+     * ROM refuses it, retry with the fabricated shell context. The returned
+     * error names every context/flag combination that was tried.
+     */
+    static ShadowDisplay create(android.content.Context base, int width, int height, int dpi) {
+        android.content.Context[] contexts = base != null
+                ? new android.content.Context[]{base, null}
+                : new android.content.Context[]{null};
         Throwable lastError = null;
-        for (int flags : candidates) {
+        StringBuilder attempts = new StringBuilder();
+        for (android.content.Context candidate : contexts) {
+            ShadowShellContext context;
+            DisplayManager manager;
             try {
-                VirtualDisplay display = manager.createVirtualDisplay("Bliss", width, height, dpi,
-                        captureReader.getSurface(), flags);
-                if (display != null && display.getDisplay() != null) {
-                    return new ShadowDisplay(width, height, dpi, captureReader, display, flags);
-                }
+                context = ShadowShellContext.from(candidate);
+                manager = displayManager(context);
             } catch (Throwable e) {
                 lastError = e;
+                attempts.append("context:").append(describe(e)).append("; ");
+                continue;
+            }
+            if (manager == null) {
+                lastError = new IllegalStateException("DISPLAY_SERVICE unavailable");
+                attempts.append("no DisplayManager; ");
+                continue;
+            }
+            attempts.append("[").append(context.describeSource()).append("] ");
+            ImageReader captureReader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 3);
+            Surface readerSurface = captureReader.getSurface();
+            SurfaceTexture dummyTexture = null;
+            Surface dummySurface = null;
+            boolean handedOver = false;
+            try {
+                int baseFlags = DisplayManager.VIRTUAL_DISPLAY_FLAG_PUBLIC
+                        | DisplayManager.VIRTUAL_DISPLAY_FLAG_PRESENTATION
+                        | DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY;
+                int touchFlag = hiddenFlag("VIRTUAL_DISPLAY_FLAG_SUPPORTS_TOUCH");
+                int focusFlag = hiddenFlag("VIRTUAL_DISPLAY_FLAG_OWN_FOCUS");
+                // NOTE: VIRTUAL_DISPLAY_FLAG_TRUSTED is intentionally NOT set —
+                // on HyperOS it is the secure flag and a secure display never
+                // composites into our capture surface.
+                int[] flagsToTry = new int[]{
+                        baseFlags | touchFlag | focusFlag,
+                        baseFlags | touchFlag,
+                        baseFlags
+                };
+                // Pass 0 attaches the capture reader at creation (this is what
+                // works on HyperOS). Pass 1 mirrors ShadowAuto's own sequence:
+                // create with a throw-away surface, then swap the real capture
+                // surface in.
+                for (int pass = 0; pass < 2; pass++) {
+                    Surface creationSurface = readerSurface;
+                    if (pass == 1) {
+                        dummyTexture = new SurfaceTexture(0);
+                        dummyTexture.setDefaultBufferSize(width, height);
+                        dummySurface = new Surface(dummyTexture);
+                        creationSurface = dummySurface;
+                    }
+                    for (int flags : flagsToTry) {
+                        VirtualDisplay display = null;
+                        try {
+                            display = manager.createVirtualDisplay("Bliss", width, height, dpi,
+                                    creationSurface, flags);
+                            if (display == null) {
+                                lastError = new IllegalStateException("createVirtualDisplay returned null");
+                                continue;
+                            }
+                            android.view.Display screen = null;
+                            for (int attempt = 0; attempt < 6 && screen == null; attempt++) {
+                                try {
+                                    screen = display.getDisplay();
+                                } catch (Throwable e) {
+                                    lastError = e;
+                                }
+                                if (screen == null) {
+                                    SystemClock.sleep(50);
+                                }
+                            }
+                            if (screen == null) {
+                                lastError = new IllegalStateException("display created but getDisplay() stayed null");
+                                try {
+                                    display.release();
+                                } catch (Throwable ignored) {
+                                }
+                                continue;
+                            }
+                            if (pass == 1) {
+                                try {
+                                    display.setSurface(readerSurface);
+                                } catch (Throwable e) {
+                                    lastError = e;
+                                    try {
+                                        display.release();
+                                    } catch (Throwable ignored) {
+                                    }
+                                    continue;
+                                }
+                            }
+                            ShadowDisplay session = new ShadowDisplay(width, height, dpi,
+                                    screen.getDisplayId(), context.describeSource(),
+                                    captureReader, display, flags);
+                            handedOver = true;
+                            return session;
+                        } catch (Throwable e) {
+                            lastError = e;
+                            if (display != null) {
+                                try {
+                                    display.release();
+                                } catch (Throwable ignored) {
+                                }
+                            }
+                        }
+                    }
+                    releaseQuietly(dummySurface);
+                    dummySurface = null;
+                    releaseQuietly(dummyTexture);
+                    dummyTexture = null;
+                }
+            } finally {
+                releaseQuietly(dummySurface);
+                releaseQuietly(dummyTexture);
+                if (!handedOver) {
+                    try {
+                        captureReader.close();
+                    } catch (Throwable ignored) {
+                    }
+                }
             }
         }
+        throw new IllegalStateException("createVirtualDisplay failed after " + attempts, lastError);
+    }
+
+    private static void releaseQuietly(SurfaceTexture texture) {
+        if (texture == null) {
+            return;
+        }
         try {
-            captureReader.close();
+            texture.release();
         } catch (Throwable ignored) {
         }
-        throw new IllegalStateException("createVirtualDisplay failed", lastError);
+    }
+
+    private static void releaseQuietly(Surface surface) {
+        if (surface == null) {
+            return;
+        }
+        try {
+            surface.release();
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private static String describe(Throwable t) {
+        if (t == null) {
+            return "unknown";
+        }
+        StringBuilder sb = new StringBuilder();
+        Throwable current = t;
+        int depth = 0;
+        while (current != null && depth < 5) {
+            if (depth > 0) {
+                sb.append(" <- ");
+            }
+            sb.append(current.getClass().getSimpleName());
+            if (current.getMessage() != null) {
+                sb.append(": ").append(current.getMessage());
+            }
+            current = current.getCause();
+            depth++;
+        }
+        return sb.toString();
     }
 
     /**
