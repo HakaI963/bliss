@@ -66,9 +66,17 @@ object CloneEngine {
         if (initialized) return
         initialized = true
         appContext = app.applicationContext
+        // A previous build may have written a virtual-display id here; the engine
+        // must always launch on the normal display now.
+        clearLegacyDisplayTarget()
         surfacePreviousCrash(app)
         if (!isMainProcess(app)) return
         log("In-app app cloner ready (BlackBox engine)")
+    }
+
+    private fun clearLegacyDisplayTarget() {
+        val dir = appContext?.filesDir ?: return
+        runCatching { File(dir, "clone/display.id").delete() }
     }
 
     @Volatile private var engineReady = false
@@ -460,6 +468,7 @@ object CloneEngine {
 
     /** Starts a clone inside Bliss. Returns null on success. */
     suspend fun launchNowBlocking(packageName: String): String? {
+        clearLegacyDisplayTarget()
         ensureEngine()?.let { return it }
         return try {
             val ok = BlackBoxCore.get().launchApk(packageName, USER_ID)

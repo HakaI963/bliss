@@ -12,8 +12,13 @@ import com.ivarna.fluxlinux.core.terminal.TermuxHostPaths
 
 class FluxApp : Application() {
 
+    /** Screenshot/layoutlib renders run on a JVM and cannot load the engine. */
+    private val isAndroidRuntime: Boolean
+        get() = System.getProperty("java.vm.name")?.contains("Dalvik", ignoreCase = true) == true
+
     override fun attachBaseContext(base: Context) {
         super.attachBaseContext(base)
+        if (!isAndroidRuntime) return
         // In-app virtual app engine. Runs cloned APKs inside Bliss itself; this is
         // not an Android user/profile. Must be attached before any application code.
         runCatching {
@@ -38,7 +43,7 @@ class FluxApp : Application() {
         // installing/launching a clone), so Bliss startup does not pay for it.
         // Proxy/daemon processes must initialise immediately.
         val proc = runCatching { Application.getProcessName() }.getOrDefault("")
-        if (proc != packageName) {
+        if (isAndroidRuntime && proc != packageName) {
             runCatching { BlackBoxCore.get().doCreate() }
                 .onFailure { Log.e("FluxApp", "BlackBox create failed", it) }
         }
