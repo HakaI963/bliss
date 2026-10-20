@@ -26,11 +26,11 @@ Quick facts:
 | App id / brand | `com.nopiece.bliss` / **"Bliss"** (renamed from "Foila Linux" in round 5; functional ids keep `folio`/`flux` internals) |
 | Source package | `com.ivarna.fluxlinux` |
 | Branch | `main` |
-| Latest green CI | run `39100260852` (commit `d9f8c57`, round 8.1) |
-| Released APK | [`bliss-debug-d9f8c57`](https://github.com/HakaI963/folio/releases/tag/bliss-debug-d9f8c57) `app-bliss-debug.apk` (174,244,324 B) — supersedes `bliss-debug-9ac5e64` |
-| APK sha256 | `c6be0558874bad9c3aab24548ff60b957a081637935b7380cbf185414d8d795d` |
-| Verify APK proof | package `com.nopiece.bliss`, `targetSdkVersion 28`, `assets/bootstrap.tar` packaged, libbash/libproot/libloader*.so packaged |
-| Signing | debug only (per-run keystore — uninstall before re-install) |
+| Latest green CI | run `39436949163` (commit `983d411`, v3.13.0 Shizuku clone engine) |
+| Released APK | [`bliss-debug-983d411`](https://github.com/HakaI963/bliss/releases/tag/bliss-debug-983d411) `app-bliss-debug.apk` (177,455,366 B) |
+| APK sha256 | `a13a699715789920158da656523f75c73754b08c30d0b3c3dc0e3a8fb774036c` |
+| Verify APK proof | package `com.nopiece.bliss`, `targetSdkVersion 28`, `assets/bootstrap.tar` packaged, libbash/libproot/libloader*.so packaged, `assets/clone.keystore` packaged |
+| Signing | stable debug keystore (updates over 3.12.0 install in place) |
 | CI gate | `.github/workflows/build.yml` compiles **main sources only** (`assembleBlissDebug` + bootstrap assembly + Verify APK). Unit tests are not part of the gate. |
 
 ---
