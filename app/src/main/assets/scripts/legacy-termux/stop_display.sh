@@ -4,7 +4,7 @@
 DISTRO=${1:-debian}
 
 echo "========================================"
-echo "Bliss: Stopping GUI for $DISTRO"
+echo "Altaris: Stopping GUI for $DISTRO"
 echo "========================================"
 
 # Step 1: Kill XFCE processes inside proot

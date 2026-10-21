@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================
-# Bliss — Start Native Termux XFCE4 Desktop
+# Altaris — Start Native Termux XFCE4 Desktop
 # Location: termux/start/start_xfce4_termux.sh
 # Runs on: HOST Termux (native, no container)
 # Root required: no
@@ -15,7 +15,7 @@
 
 handle_error() {
     echo ""
-    echo "❌ Bliss Error: Script failed at step: $1"
+    echo "❌ Altaris Error: Script failed at step: $1"
     echo "---------------------------------------------------"
     echo "Please check the error message above for details."
     echo "---------------------------------------------------"
@@ -25,7 +25,7 @@ handle_error() {
 
 echo ""
 echo "══════════════════════════════════════════════"
-echo "  Bliss — Launching Native XFCE4 Desktop"
+echo "  Altaris — Launching Native XFCE4 Desktop"
 echo "══════════════════════════════════════════════"
 echo ""
 
@@ -37,7 +37,7 @@ if [ -f "$GPU_CONFIG" ]; then
     GPU_BACKEND="${FLUX_GPU_BACKEND:-virgl}"
 else
     # gpu_config not found — auto-detect now
-    echo "Bliss: gpu_config not found, auto-detecting GPU..."
+    echo "Altaris: gpu_config not found, auto-detecting GPU..."
     _vulkan_hw=$(getprop ro.hardware.vulkan 2>/dev/null || echo "")
     _egl_hw=$(getprop ro.hardware.egl 2>/dev/null || echo "")
     _board=$(getprop ro.product.board 2>/dev/null || echo "")
@@ -51,12 +51,12 @@ else
     # Save result so next launch skips detection
     mkdir -p "$HOME/.fluxlinux"
     echo "FLUX_GPU_BACKEND=$GPU_BACKEND" > "$GPU_CONFIG"
-    echo "Bliss: Auto-detected GPU backend: [$GPU_BACKEND] (saved to gpu_config)"
+    echo "Altaris: Auto-detected GPU backend: [$GPU_BACKEND] (saved to gpu_config)"
 fi
-echo "Bliss: GPU backend [$GPU_BACKEND]"
+echo "Altaris: GPU backend [$GPU_BACKEND]"
 
 # ── Step 1: Kill previous session ─────────────────────────
-echo "Bliss: Cleaning up previous session..."
+echo "Altaris: Cleaning up previous session..."
 pkill -f "xfce4-session" 2>/dev/null || true
 pkill -f "xfwm4" 2>/dev/null || true
 pkill -f "xfdesktop" 2>/dev/null || true
@@ -67,7 +67,7 @@ pkill -f "pulseaudio" 2>/dev/null || true
 sleep 1
 
 # ── Step 2: PulseAudio ────────────────────────────────────
-echo "Bliss: Starting PulseAudio..."
+echo "Altaris: Starting PulseAudio..."
 pulseaudio --start \
     --load="module-native-protocol-tcp auth-ip-acl=127.0.0.1 auth-anonymous=1" \
     --exit-idle-time=-1 2>/dev/null || \
@@ -75,7 +75,7 @@ pulseaudio --start \
 export PULSE_SERVER=127.0.0.1
 
 # ── Step 3: VirGL GPU server ──────────────────────────────
-echo "Bliss: Starting GPU acceleration server..."
+echo "Altaris: Starting GPU acceleration server..."
 case "$GPU_BACKEND" in
     turnip)
         echo " Using Turnip + Zink (Adreno — best performance)"
@@ -100,7 +100,7 @@ esac
 sleep 2
 
 # ── Step 4: Termux:X11 ───────────────────────────────────
-echo "Bliss: Starting Termux:X11..."
+echo "Altaris: Starting Termux:X11..."
 if ! command -v termux-x11 >/dev/null 2>&1; then
     echo "❌ termux-x11 not found. Run 'setup_xfce4_termux.sh' first."
     read -p "Press Enter to exit..."
@@ -110,7 +110,7 @@ termux-x11 :0 &
 sleep 3
 
 # ── Auto-open the Termux:X11 viewer ──────────────────────
-echo "Bliss: Opening Termux:X11 viewer..."
+echo "Altaris: Opening Termux:X11 viewer..."
 am start -n com.termux.x11/.MainActivity 2>/dev/null || \
     echo " [⚠️] Could not auto-open Termux:X11 — please open it manually"
 sleep 1
@@ -125,14 +125,14 @@ case "$GPU_BACKEND" in
 esac
 
 # ── Step 6: D-Bus session ────────────────────────────────
-echo "Bliss: Starting D-Bus session..."
+echo "Altaris: Starting D-Bus session..."
 if [ -z "$DBUS_SESSION_BUS_ADDRESS" ]; then
     eval "$(dbus-launch --sh-syntax)" 2>/dev/null || \
         echo " [⚠️] D-Bus launch failed — some apps may not work"
 fi
 
 # ── Step 7: XFCE4 session ────────────────────────────────
-echo "Bliss: Launching XFCE4..."
+echo "Altaris: Launching XFCE4..."
 echo ""
 echo "  ┌─────────────────────────────────────────┐"
 echo "  │  Open the Termux:X11 app to see desktop │"

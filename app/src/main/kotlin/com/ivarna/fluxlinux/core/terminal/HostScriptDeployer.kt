@@ -230,6 +230,7 @@ object HostScriptDeployer {
             } catch (_: Exception) {
             }
             overlayPulseRuntime(ctx)
+            overlayHostRuntime(ctx)
             // A stale/root-owned home can make every write fail with EACCES —
             // one owner fix + retry usually heals it (no-op without root).
             // Skipped when free space is critically low (storage is the issue).
@@ -381,6 +382,37 @@ object HostScriptDeployer {
     }
 
     /** 0755 so the untrusted_app linker can PROT_EXEC the overlay `.so`. */
+    private val hostRuntimeSos = listOf(
+        "libnghttp3.so",
+        "libngtcp2.so",
+        "libngtcp2_crypto_ossl.so",
+    )
+
+    /**
+     * Repair the host bootstrap's libcurl stack. Some bootstrap snapshots ship
+     * libcurl.so linked against HTTP/3 libraries that were not included, which
+     * breaks `curl` in every distro whose PATH sees the host prefix first
+     * ("libnghttp3.so not found"). Overlay the three MIT-licensed runtime
+     * libraries without re-extracting the prefix, preserving all distros.
+     */
+    fun overlayHostRuntime(ctx: Context) {
+        val libDir = File(ctx.filesDir, "usr/lib").also { it.mkdirs() }
+        for (name in hostRuntimeSos) {
+            val dest = File(libDir, name)
+            if (!dest.isFile || dest.length() < 1024L) {
+                try {
+                    ctx.assets.open("host-runtime/$name").use { input ->
+                        FileOutputStream(dest).use { input.copyTo(it) }
+                    }
+                    Log.i(TAG, "overlaid host runtime $name")
+                } catch (e: Exception) {
+                    Log.w(TAG, "host runtime overlay missed $name", e)
+                }
+            }
+            chmodPulseLib(dest)
+        }
+    }
+
     internal fun chmodPulseLib(dest: File) {
         if (!dest.exists()) return
         try {

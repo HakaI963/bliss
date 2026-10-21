@@ -1,6 +1,6 @@
-# Bliss 3.18.0 test checklist
+# Altaris 3.19.0 test checklist
 
-Install over the previous Bliss build (same `com.nopiece.bliss` package).
+Install over the previous Altaris build (same `com.nopiece.bliss` package).
 
 ## Theme / motion
 - [ ] First launch is **Midnight** (near-black, mint accents), even if the old build was in Light mode.

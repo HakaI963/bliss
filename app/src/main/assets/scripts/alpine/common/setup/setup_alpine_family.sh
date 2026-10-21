@@ -24,10 +24,10 @@ command -v _flux_retry_pkg >/dev/null 2>&1 || _flux_retry_pkg() { "$@"; }
 
 DISTRO_NAME="${1:-alpine}"
 
-echo "Bliss: Configuring ${DISTRO_NAME} (Alpine Family)..."
+echo "Altaris: Configuring ${DISTRO_NAME} (Alpine Family)..."
 
 if [ "$(id -u)" -ne 0 ]; then
-    echo "Bliss: ERROR: must run as root inside the guest (got uid=$(id -u))."
+    echo "Altaris: ERROR: must run as root inside the guest (got uid=$(id -u))."
     exit 1
 fi
 
@@ -41,7 +41,7 @@ export TMPDIR=/tmp
 
 # 1. DNS (minirootfs ships without resolv.conf; keep multi-NS for proot flakiness)
 if [ ! -s /etc/resolv.conf ] || ! grep -q nameserver /etc/resolv.conf 2>/dev/null; then
-    echo "Bliss: Writing /etc/resolv.conf"
+    echo "Altaris: Writing /etc/resolv.conf"
     printf 'nameserver 8.8.8.8\nnameserver 1.1.1.1\nnameserver 8.8.4.4\n' > /etc/resolv.conf
 fi
 
@@ -52,14 +52,14 @@ if [ -f /etc/apk/repositories ]; then
     fi
 fi
 
-echo "Bliss: apk update..."
+echo "Altaris: apk update..."
 apk update || {
-    echo "Bliss: apk update failed (network / repos)"
+    echo "Altaris: apk update failed (network / repos)"
     exit 1
 }
 
 # 3. Bootstrap tools (bash for later scripts; shadow for useradd; sudo)
-echo "Bliss: Installing base packages..."
+echo "Altaris: Installing base packages..."
 apk add --no-cache \
     bash \
     sudo \
@@ -74,7 +74,7 @@ apk add --no-cache \
     dbus \
     dbus-x11 \
     || {
-        echo "Bliss: base package install failed"
+        echo "Altaris: base package install failed"
         exit 1
     }
 
@@ -117,7 +117,7 @@ if [ "$DESKTOPS" != "none" ]; then
         mesa-dri-gallium \
         mesa-gl \
         || {
-            echo "Bliss: base graphics package install failed"
+            echo "Altaris: base graphics package install failed"
             exit 1
         }
 else
@@ -127,7 +127,7 @@ fi
 
 # XFCE desktop (always include xfce4-session for failsafe session name)
 if [ -z "${DESKTOPS##*xfce*}" ]; then
-    echo "Bliss: Installing XFCE4..."
+    echo "Altaris: Installing XFCE4..."
     if ! _flux_retry_pkg apk add --no-cache \
         xfce4 \
         xfce4-session \
@@ -138,12 +138,12 @@ if [ -z "${DESKTOPS##*xfce*}" ]; then
         xfdesktop \
         xfwm4 \
         thunar; then
-        echo "Bliss: XFCE package install failed after 3 tries — check your network, then tap Retry Setup."
+        echo "Altaris: XFCE package install failed after 3 tries — check your network, then tap Retry Setup."
         exit 1
     fi
 
     if [ ! -e /usr/bin/startxfce4 ]; then
-        echo "Bliss: ERROR: startxfce4 missing after apk install"
+        echo "Altaris: ERROR: startxfce4 missing after apk install"
         exit 1
     fi
     # Phone niceties: Whisker panel menu + screenshot tool (best-effort).
@@ -166,7 +166,7 @@ fi
 # Glycin image loaders invoke bubblewrap; real bwrap fails under proot and aborts
 # GTK (exit 134). Install a shim that drops sandbox flags but keeps --dbus-fd.
 if [ "$DESKTOPS" != "none" ]; then
-echo "Bliss: Installing proot-safe bwrap shim for glycin loaders..."
+echo "Altaris: Installing proot-safe bwrap shim for glycin loaders..."
 apk add --no-cache glycin-image-rs glycin-svg gdk-pixbuf 2>/dev/null || true
 if [ -x /usr/bin/bwrap ] && [ ! -e /usr/bin/bwrap.real ] && \
    ! grep -q 'FluxLinux proot' /usr/bin/bwrap 2>/dev/null; then
@@ -192,7 +192,7 @@ fi
 
 # 5. User flux (prefer uid 1000 when free — matches common XFCE defaults)
 if ! id flux >/dev/null 2>&1; then
-    echo "Bliss: Creating user flux..."
+    echo "Altaris: Creating user flux..."
     if command -v useradd >/dev/null 2>&1; then
         if ! id -u 1000 >/dev/null 2>&1; then
             useradd -m -u 1000 -s /bin/bash flux 2>/dev/null \
@@ -296,13 +296,13 @@ _flux_fix_apk_writable() {
     touch /var/log/apk.log 2>/dev/null || true
     chmod 666 /var/log/apk.log 2>/dev/null || true
 }
-echo "Bliss: Ensuring apk database is writable (proot-safe)…"
+echo "Altaris: Ensuring apk database is writable (proot-safe)…"
 _flux_fix_apk_writable
 
 [ -d /etc/fluxlinux ] && [ ! -e /etc/bliss ] && mv /etc/fluxlinux /etc/bliss 2>/dev/null || true
 mkdir -p /etc/bliss
 printf '%s\n' virgl > /etc/bliss/gpu_mode
-echo "Bliss: gpu_mode=virgl (first-paint; hw-accel may upgrade)"
+echo "Altaris: gpu_mode=virgl (first-paint; hw-accel may upgrade)"
 
 # Phone-compact XFCE defaults (30px mono top panel, DPI 96, wallpaper,
 # Home-only desktop icons, shortcuts). Helper ships in bliss_guest_common.sh;
@@ -311,5 +311,11 @@ if [ -z "${DESKTOPS##*xfce*}" ] && command -v _flux_xfce_compact_defaults >/dev/
     _flux_xfce_compact_defaults || true
 fi
 
-echo "Bliss: ${DISTRO_NAME} Alpine setup complete!"
+
+# Altaris universal interactive shell: zsh suggestions, syntax colors, sticker.
+if command -v _flux_setup_altaris_shell >/dev/null 2>&1; then
+    _flux_setup_altaris_shell || true
+fi
+
+echo "Altaris: ${DISTRO_NAME} Alpine setup complete!"
 exit 0

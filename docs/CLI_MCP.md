@@ -1,6 +1,6 @@
-# Bliss local automation
+# Altaris local automation
 
-Bliss exposes a **loopback-only** control plane on `127.0.0.1:47831`.
+Altaris exposes a **loopback-only** control plane on `127.0.0.1:47831`.
 It is kept alive by a foreground service, so clones and the API remain reachable
 while you are in another app or inside a Linux distro. Nothing is exposed to
 the LAN.
@@ -35,7 +35,7 @@ bliss stop com.nopiece.hclone.hXXXX
 bliss uninstall com.nopiece.hclone.hXXXX
 ```
 
-For a local APK, the helper **streams the bytes directly to Bliss** over
+For a local APK, the helper **streams the bytes directly to Altaris** over
 `/install-upload`. The Android app never has to see the guest path, so
 `/emulated/...`, `/OpenCode...`, chroot `/root/...` and any other readable guest
 path work. When the path is not visible inside the guest, `/install` hands the
@@ -58,7 +58,7 @@ one (`apt install curl`, `apk add curl`, `dnf install curl`, …).
 | GET | `/ocr` | `width` → text + bounding boxes |
 | GET | `/logs` | `package`, `lines` |
 | POST | `/install` | `path` or `url`, optional `label` |
-| POST | `/install-upload` | raw APK bytes; headers `X-Bliss-Filename`, `X-Bliss-Label` |
+| POST | `/install-upload` | raw APK bytes; headers `X-Altaris-Filename`, `X-Altaris-Label` |
 | POST | `/uninstall` | `package` |
 | POST | `/launch` | `package`, optional `width`,`height`,`fps` |
 | POST | `/stop` | `package` |
@@ -124,7 +124,7 @@ the clone viewer.
 
 ## Clone compatibility
 
-Cloned apps are re-signed with the Bliss clone key, so signature checks remain
+Cloned apps are re-signed with the Altaris clone key, so signature checks remain
 unsupported. The engine now also rewrites the resource-table package identity
 and verifies installed split parts; re-clone an app after updating so it is
 built by the current pipeline. For apps such as Alight Motion that resolve

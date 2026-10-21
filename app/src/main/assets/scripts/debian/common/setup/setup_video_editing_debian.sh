@@ -33,7 +33,7 @@ PKGS=(
 
 # ─── UNINSTALL MODE ──────────────────────────────────────────────────────
 if [ "$1" = "uninstall" ]; then
-    echo "Bliss: Uninstalling Video Editing Environment..."
+    echo "Altaris: Uninstalling Video Editing Environment..."
 
     export DEBIAN_FRONTEND=noninteractive
 
@@ -46,7 +46,7 @@ if [ "$1" = "uninstall" ]; then
     apt remove -y --purge "${PKGS[@]}" 2>/dev/null || true
     apt autoremove -y 2>/dev/null || true
 
-    echo "Bliss: Video Editing Environment Uninstalled."
+    echo "Altaris: Video Editing Environment Uninstalled."
     exit 0
 fi
 # ─── END UNINSTALL MODE ──────────────────────────────────────────────────
@@ -54,7 +54,7 @@ fi
 # Error Handler
 handle_error() {
     echo ""
-    echo "❌ Bliss Error: Script failed at step: $1"
+    echo "❌ Altaris Error: Script failed at step: $1"
     echo "---------------------------------------------------"
     echo "Please check the error message above for details."
     echo "---------------------------------------------------"
@@ -62,11 +62,11 @@ handle_error() {
     exit 1
 }
 
-echo "Bliss: Setting up Video Editing & Media Environment..."
+echo "Altaris: Setting up Video Editing & Media Environment..."
 echo "Target: Debian 13 (Trixie) - ARM64"
 
 # 1. System Dependencies & FFmpeg
-echo "Bliss: Installing Core Media Tools (FFmpeg)..."
+echo "Altaris: Installing Core Media Tools (FFmpeg)..."
 export DEBIAN_FRONTEND=noninteractive
 apt update -y
 
@@ -84,7 +84,7 @@ apt install -y \
     || handle_error "Core Media Tools Installation"
 
 # 2. Video Editors
-echo "Bliss: Installing Video Editors..."
+echo "Altaris: Installing Video Editors..."
 
 # Kdenlive: Advanced Non-Linear Editor (KDE)
 # Shotcut: Cross-platform, frequent updates
@@ -111,7 +111,7 @@ apt install -y \
 
 # Install Librosa via pip (Not available in apt for Trixie yet)
 # Using --break-system-packages as this is a containerized single-user env
-echo "Bliss: Installing Python Libs (Librosa)..."
+echo "Altaris: Installing Python Libs (Librosa)..."
 pip3 install librosa --break-system-packages || echo " [⚠️] Librosa install failed (Pitivi beat detection may suffer)"
 
 # Fix Kdenlive DBus Launch
@@ -126,14 +126,14 @@ if [ -f /usr/bin/kdenlive ]; then
 fi
 
 # 3. Audio Tools
-echo "Bliss: Installing Audio Tools..."
+echo "Altaris: Installing Audio Tools..."
 # Audacity: The standard for audio editing
 # Note: Audacity in PROOT/termux often has shared memory issues.
 # We try to install it but also install a lightweight alternative like Tenacity or simple recorder.
 apt install -y audacity || echo " [⚠️] Audacity install warn"
 
 # 4. Media Players
-echo "Bliss: Installing Media Players..."
+echo "Altaris: Installing Media Players..."
 # VLC: The classic
 # MPV: Lightweight, powerful, hardware accel friendly
 # SMPlayer: GUI for MPV/MPlayer
@@ -153,13 +153,13 @@ apt install -y \
 # 5. Optional: Blender (3D & Video Editing)
 # Often heavy, but useful. Included in many video workflows.
 # Checking availability (Blender on ARM64 Trixie works well via apt)
-echo "Bliss: Installing Blender (3D/VFX)..."
+echo "Altaris: Installing Blender (3D/VFX)..."
 apt install -y blender || echo " [⚠️] Blender install failed (optional)"
 
 # 6. Verification
 verify_installation() {
     echo ""
-    echo "🔎 Bliss: Verifying Installations..."
+    echo "🔎 Altaris: Verifying Installations..."
     echo "------------------------------------------------"
     
     # Core
@@ -186,5 +186,5 @@ verify_installation() {
 
 verify_installation
 
-echo "Note: For best performance, enable Hardware Acceleration (VirGL) in Bliss settings if available."
+echo "Note: For best performance, enable Hardware Acceleration (VirGL) in Altaris settings if available."
 read -p "Press Enter to close..."

@@ -12,7 +12,7 @@ import java.io.File
 /**
  * One-shot repair for guest `~/.zshrc` that hard-sources missing oh-my-zsh,
  * invokes missing `pokemon-colorscripts`, still uses the old colorful
- * `agnosterzak` theme, or lacks the Bliss launch sticker (random colored
+ * `agnosterzak` theme, or lacks the Altaris launch sticker (random colored
  * anime ASCII banner). Keeps the same optimized profile shape as
  * `setup_customization_debian.sh` / Alpine customization, but guards every
  * optional tool.
@@ -24,7 +24,7 @@ import java.io.File
  * available, never fatal.
  *
  * Also **creates** a missing `.zshrc` when the home dir is writable (Alpine
- * installs that never wrote the Bliss profile).
+ * installs that never wrote the Altaris profile).
  */
 object GuestZshrcRepair {
 
@@ -35,15 +35,16 @@ object GuestZshrcRepair {
      * [GuestRepairCache.zshrcKey]) so the banner/theme sweep runs exactly once
      * on existing installs even though the shared ZSHRC_VERSION is unchanged.
      * Bump when [DEFENSIVE_ZSHRC] / banner content changes again.
-     * r10: zsh shell integration block (syntax highlighting + autosuggestions).
+     * r12: system-wide plugin paths + first-run package fallback so Parrot,
+     * Fedora, Void and other families match Alpine/Debian.
      */
-    private const val REPAIR_REVISION = 11
+    private const val REPAIR_REVISION = 12
 
     /** Marker echoed by the root chroot repair payload on success. */
     internal const val CHROOT_OK_MARKER = "FOLIO_ZSH_OK"
 
     /** Substring identifying the [BLISS_SHELL_BLOCK] marker pair. */
-    private const val SHELL_MARKER = "bliss shell integration v1"
+    private const val SHELL_MARKER = "altaris shell integration v2"
 
     /**
      * Marker-guarded zsh shell integration: live syntax coloring
@@ -60,24 +61,66 @@ object GuestZshrcRepair {
      * against zsh-autosuggestions v0.7.1 sources + README), so no bindkey is set.
      */
     internal val BLISS_SHELL_BLOCK = """
-# >>> bliss shell integration v1 >>>
-# Live syntax coloring (green = resolvable, red = wrong/unknown) + inline
-# history ghost text. OMZ loads both plugins above when available; the direct
-# sources below are the fallback for bare/custom zsh profiles and are guarded.
+# >>> altaris shell integration v2 >>>
+# One profile for every distro: inline history ghost text + live green/red
+# command validation. OMZ wins when present; system packages and the vendored
+# /usr/local/share/altaris/zsh tree are the offline fallbacks.
 # Right arrow / End accept the ghost suggestion (plugin default, no bindkey).
-ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=240'
-_omp="${'$'}{ZSH:-${'$'}HOME/.oh-my-zsh}/custom/plugins"
-if [ -r "${'$'}_omp/zsh-autosuggestions/zsh-autosuggestions.zsh" ] \
-    && (( ! ${'$'}{+functions[_zsh_autosuggest_start]} )); then
-  source "${'$'}_omp/zsh-autosuggestions/zsh-autosuggestions.zsh"
+ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=244'
+_altaris_source() {
+  [ -r "${'$'}1" ] || return 0
+  case "${'$'}1" in
+    *zsh-autosuggestions*) (( ${'$'}{+functions[_zsh_autosuggest_start]} )) && return 0 ;;
+    *zsh-syntax-highlighting*) (( ${'$'}{+ZSH_HIGHLIGHT_VERSION} )) && return 0 ;;
+  esac
+  source "${'$'}1"
+}
+for _altaris_p in \
+  "${'$'}{ZSH:-${'$'}HOME/.oh-my-zsh}/custom/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh" \
+  "${'$'}HOME/.oh-my-zsh/custom/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh" \
+  /usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh \
+  /usr/share/zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh \
+  /usr/share/zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.plugin.zsh \
+  /usr/local/share/zsh-autosuggestions/zsh-autosuggestions.zsh \
+  /usr/local/share/altaris/zsh/zsh-autosuggestions/zsh-autosuggestions.zsh; do
+  _altaris_source "${'$'}_altaris_p"
+done
+for _altaris_p in \
+  "${'$'}{ZSH:-${'$'}HOME/.oh-my-zsh}/custom/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh" \
+  "${'$'}HOME/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh" \
+  /usr/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh \
+  /usr/share/zsh/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh \
+  /usr/share/zsh-syntax-highlighting/zsh-syntax-highlighting.plugin.zsh \
+  /usr/local/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh \
+  /usr/local/share/altaris/zsh/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh; do
+  _altaris_source "${'$'}_altaris_p"
+done
+unset _altaris_p
+unset -f _altaris_source 2>/dev/null || true
+if [ -z "${'$'}{ZSH_THEME:-}" ] || [ "${'$'}{ZSH_THEME:-}" = "bliss" ]; then
+  PROMPT='%F{79}altaris%f%F{244}@%m%f %F{110}%~%f %F{255}%#%f '
 fi
-# zsh-syntax-highlighting must be sourced LAST among the zle widgets.
-if [ -r "${'$'}_omp/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh" ] \
-    && (( ! ${'$'}{+ZSH_HIGHLIGHT_VERSION} )); then
-  source "${'$'}_omp/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh"
+# Existing installs: one bounded package attempt in the background, then the
+# next shell loads the plugins. New installs get them during family setup.
+if [ ! -r /usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh ] \
+    && [ ! -r "${'$'}HOME/.oh-my-zsh/custom/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh" ] \
+    && [ ! -e "${'$'}HOME/.config/altaris/.shell-bootstrap" ]; then
+  mkdir -p "${'$'}HOME/.config/altaris" 2>/dev/null && touch "${'$'}HOME/.config/altaris/.shell-bootstrap" 2>/dev/null || true
+  ( if command -v apt-get >/dev/null 2>&1; then
+      sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends zsh-autosuggestions zsh-syntax-highlighting
+    elif command -v dnf >/dev/null 2>&1; then
+      sudo dnf install -y zsh-autosuggestions zsh-syntax-highlighting
+    elif command -v pacman >/dev/null 2>&1; then
+      sudo pacman -S --noconfirm --needed zsh-autosuggestions zsh-syntax-highlighting
+    elif command -v apk >/dev/null 2>&1; then
+      sudo apk add --no-cache zsh-autosuggestions zsh-syntax-highlighting
+    elif command -v zypper >/dev/null 2>&1; then
+      sudo zypper --non-interactive install zsh-autosuggestions zsh-syntax-highlighting
+    elif command -v xbps-install >/dev/null 2>&1; then
+      sudo xbps-install -y zsh-autosuggestions zsh-syntax-highlighting
+    fi ) >/dev/null 2>&1 &
 fi
-unset _omp
-# <<< bliss shell integration v1 <<<
+# <<< altaris shell integration v2 <<<
 """.trimStart()
 
     /** Defensive zshrc — mirrors setup_customization_debian.sh (post-fix). */
@@ -99,7 +142,7 @@ if [ -n "${'$'}_pick" ]; then
 else
   unset LC_ALL
   export LANG=C
-  echo "Bliss: WARNING: no UTF-8 locale in locale -a; zsh staying LANG=C" >&2
+  echo "Altaris: WARNING: no UTF-8 locale in locale -a; zsh staying LANG=C" >&2
 fi
 unset _have _c _pick
 export PYTHONIOENCODING=UTF-8
@@ -130,10 +173,10 @@ if [ -f "${'$'}ZSH/oh-my-zsh.sh" ]; then
   source "${'$'}ZSH/oh-my-zsh.sh"
 fi
 
-# Bliss launch sticker (random truecolor anime banner; opt out FLUX_NO_BANNER=1)
+# Altaris launch sticker (random truecolor anime banner; opt out FLUX_NO_BANNER=1)
 [ -r "${'$'}HOME/.config/bliss/banner.sh" ] && . "${'$'}HOME/.config/bliss/banner.sh"
 
-# Bliss Linux appearance (wallpaper/colors/terminal; hash-guarded inside).
+# Altaris Linux appearance (wallpaper/colors/terminal; hash-guarded inside).
 [ -r "${'$'}HOME/.config/bliss/appearance-apply.sh" ] && sh "${'$'}HOME/.config/bliss/appearance-apply.sh" >/dev/null 2>&1 || true
 """.trimStart() + "\n" + BLISS_SHELL_BLOCK
 
@@ -183,25 +226,25 @@ fi
 
     /** bliss.zsh-theme content (monochrome prompt; replaces agnosterzak). */
     internal val FOLIO_THEME = """
-# bliss.zsh-theme — Bliss's minimal monochrome prompt.
+# altaris.zsh-theme — Altaris minimal prompt.
 # White/gray on black only; ASCII-safe (no powerline glyphs, no ANSI colors 31-44).
-# Segments:  time  bliss  working-dir  input-char
-PROMPT='%F{240}%D{%H:%M}%f %F{255}bliss%f %F{250}%~%f %F{255}%#%f '
+# Segments:  time  altaris  working-dir  input-char
+PROMPT='%F{240}%D{%H:%M}%f %F{79}altaris%f %F{250}%~%f %F{255}%#%f '
 PROMPT2='%F{240}> %f'
 """.trimStart()
 
     /** .zshrc tail that sources the sticker (idempotent append target). */
     internal val BANNER_SOURCE_BLOCK = """
-# Bliss launch sticker (random truecolor anime banner; opt out FLUX_NO_BANNER=1)
+# Altaris launch sticker (random truecolor anime banner; opt out FLUX_NO_BANNER=1)
 [ -r "${'$'}HOME/.config/bliss/banner.sh" ] && . "${'$'}HOME/.config/bliss/banner.sh"
 """.trimStart()
 
     /**
-     * .zshrc tail that applies the staged Bliss Linux appearance (idempotent
+     * .zshrc tail that applies the staged Altaris Linux appearance (idempotent
      * append target for existing profiles; the guest script hash-guards itself).
      */
     internal val APPEARANCE_SOURCE_BLOCK = """
-# Bliss Linux appearance (wallpaper/colors/terminal; hash-guarded inside).
+# Altaris Linux appearance (wallpaper/colors/terminal; hash-guarded inside).
 [ -r "${'$'}HOME/.config/bliss/appearance-apply.sh" ] && sh "${'$'}HOME/.config/bliss/appearance-apply.sh" >/dev/null 2>&1 || true
 """.trimStart()
 
@@ -274,7 +317,7 @@ PROMPT2='%F{240}> %f'
                     zshrc.appendText("\n$GLIBC_PM_WRAPPER")
                     Log.i(TAG, "Appended glibc PM wrappers to ${zshrc.absolutePath}")
                 }
-                // Gentle path for otherwise-healthy profiles: append the Bliss
+                // Gentle path for otherwise-healthy profiles: append the Altaris
                 // Linux appearance trigger only (the guest script self-guards).
                 if (!needsRepair(text) && !text.contains("appearance-apply.sh") &&
                     zshrc.canWrite()
@@ -291,7 +334,7 @@ PROMPT2='%F{240}> %f'
                     Log.i(TAG, "Appended shell integration block to ${zshrc.absolutePath}")
                 }
             } else {
-                // Create missing Bliss profile (Alpine used to never write .zshrc)
+                // Create missing Altaris profile (Alpine used to never write .zshrc)
                 val home = zshrc.parentFile ?: return
                 if (!home.isDirectory) return
                 if (!home.canWrite() && !zshrc.canWrite()) {
@@ -323,7 +366,7 @@ PROMPT2='%F{240}> %f'
     }
 
     /**
-     * Old colorful OMZ theme shipped by earlier Bliss builds — remove the file
+     * Old colorful OMZ theme shipped by earlier Altaris builds — remove the file
      * (the `.zshrc` rewrite/sed switches the reference to `bliss`).
      */
     internal fun removeLegacyThemes(home: File?) {
@@ -461,7 +504,7 @@ if [ -n "${'$'}_pick" ]; then
 else
   unset LC_ALL
   export LANG=C
-  echo "Bliss: WARNING: no UTF-8 locale in locale -a; zsh staying LANG=C" >&2
+  echo "Altaris: WARNING: no UTF-8 locale in locale -a; zsh staying LANG=C" >&2
 fi
 unset _have _c _pick
 """.trimStart()
@@ -506,7 +549,7 @@ if locale -a 2>/dev/null | grep -qiE 'C\.(utf8|UTF-8)'; then
   printf 'LANG=C.UTF-8\n' > /etc/locale.conf
   exit 0
 fi
-echo "Bliss: ERROR: no UTF-8 locale after generation (locale -a has neither en_US.utf8 nor C.utf8)" >&2
+echo "Altaris: ERROR: no UTF-8 locale after generation (locale -a has neither en_US.utf8 nor C.utf8)" >&2
 exit 1
 """.trimStart()
 
@@ -533,8 +576,8 @@ exit 1
 # bliss colors (bash): green user@host, blue dir; red marker on failure.
 if [ -n "${'$'}BASH_VERSION" ] && [ -n "${'$'}PS1" ]; then
   alias ls='ls --color=auto' 2>/dev/null
-  BLISS_PS1_OK='\[\e[32m\]bliss@\h\[\e[0m\]:\[\e[34m\]\w\[\e[0m\]\$ '
-  BLISS_PS1_FAIL='\[\e[31m\]bliss@\h\[\e[0m\]:\[\e[34m\]\w\[\e[0m\]\[\e[31m\]\$\[\e[0m\] '
+  BLISS_PS1_OK='\[\e[38;5;79m\]altaris@\h\[\e[0m\]:\[\e[38;5;110m\]\w\[\e[0m\]\$ '
+  BLISS_PS1_FAIL='\[\e[38;5;79m\]altaris@\h\[\e[0m\]:\[\e[38;5;110m\]\w\[\e[0m\]\[\e[38;5;203m\]\$\[\e[0m\] '
   PROMPT_COMMAND='[ "${'$'}?" = 0 ] && PS1="${'$'}BLISS_PS1_OK" || PS1="${'$'}BLISS_PS1_FAIL"'
   PS1="${'$'}BLISS_PS1_OK"
 fi
@@ -698,7 +741,7 @@ alias ls='ls --color=auto' 2>/dev/null
         // Theme / pokemon must not be gated on LC_ALL (user-visible shell).
         if (text.contains("ZSH_THEME=\"\"")) return true
         if (text.contains("[ -n \"\${LC_ALL:-}\" ] && command -v pokemon-colorscripts")) return true
-        // Colorful remote theme (pre-Bliss builds) → switch to the mono theme.
+        // Colorful remote theme (pre-Altaris builds) → switch to the mono theme.
         if (text.contains("ZSH_THEME=\"agnosterzak\"")) return true
         // Older profiles never print ZSH_THEME=folio after OMZ loads.
         if (!text.contains("ZSH_THEME=\"bliss\"")) return true

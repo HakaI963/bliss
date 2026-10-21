@@ -226,7 +226,8 @@ mkdir -p \$DEBIANPATH/tmp
         export DEBIAN_FRONTEND=noninteractive
         apt update
         apt upgrade -y
-        apt install -y nano vim net-tools sudo git dbus-x11 wget unzip
+        apt install -y nano vim net-tools sudo git dbus-x11 wget unzip zsh
+        apt install -y zsh-autosuggestions zsh-syntax-highlighting || true
     ' || goodbye
 
     # --- USER CREATION (Matches Guide) ---
@@ -263,10 +264,10 @@ mkdir -p \$DEBIANPATH/tmp
             _xf=1
             until apt install -y xfce4 xfce4-terminal; do
                 if [ "$_xf" -ge 3 ]; then
-                    echo "Bliss: XFCE package install failed after 3 tries — check your network, then tap Retry Setup."
+                    echo "Altaris: XFCE package install failed after 3 tries — check your network, then tap Retry Setup."
                     exit 1
                 fi
-                echo "Bliss: Package download failed — retrying ($((_xf + 1))/3)…"
+                echo "Altaris: Package download failed — retrying ($((_xf + 1))/3)…"
                 apt-get update >/dev/null 2>&1 || true
                 _xf=$((_xf + 1))
             done
@@ -379,7 +380,7 @@ if [ -z "${BB:-}" ]; then
   fi
 fi
 if [ -z "${BB:-}" ]; then
-  echo "Bliss: ERROR — root-capable busybox not found" >&2
+  echo "Altaris: ERROR — root-capable busybox not found" >&2
   exit 1
 fi
 
@@ -393,7 +394,7 @@ fi
 
     DEBIANPATH="/data/local/bliss/chroots/debian"
 
-    # Root-staged launchers live in the Bliss helpers dir (idempotent).
+    # Root-staged launchers live in the Altaris helpers dir (idempotent).
     mkdir -p /data/local/bliss/helpers
 
     # --- CHECK EXISTING INSTALLATION ---
@@ -526,10 +527,10 @@ EOF
     cat <<EOFGUI > "$GUI_LAUNCHER"
 #!/bin/sh
 # HyperOS-Compatible X11 Launcher with Debug Logging
-# Bliss - Debian 13 Chroot GUI Starter
+# Altaris - Debian 13 Chroot GUI Starter
 
 echo "========================================"
-echo "Bliss: Starting Debian 13 GUI"
+echo "Altaris: Starting Debian 13 GUI"
 echo "HyperOS Compatibility Mode"
 echo "========================================"
 
@@ -638,7 +639,7 @@ if pgrep -f virgl_test_server >/dev/null; then
     ls -la \$TARGET_TERMUX_PREFIX/tmp/.virgl_test 2>/dev/null || echo "[WARN] VirGL socket not visible"
 else
     echo "[!] VirGL not running - GPU acceleration will NOT work"
-    echo "[!] Please restart the GUI from Bliss app"
+    echo "[!] Please restart the GUI from Altaris app"
 fi
 
 echo ""
@@ -657,7 +658,7 @@ EOFGUI
 # stop_debian13_gui.sh - Stop Debian 13 Chroot GUI
 
 echo "========================================"
-echo "Bliss: Stopping Debian 13 Chroot GUI"
+echo "Altaris: Stopping Debian 13 Chroot GUI"
 echo "========================================"
 
 DEBIANPATH="/data/local/bliss/chroots/debian"
@@ -813,10 +814,10 @@ EOF
     chmod +x "$ROOT_CLI_SCRIPT"
     success "Root CLI Launcher created: $ROOT_CLI_SCRIPT"
     
-    echo "Bliss: Chroot Setup Complete!"
+    echo "Altaris: Chroot Setup Complete!"
     
     # --- NOTIFY APP ---
-    progress "Notifying Bliss App..."
+    progress "Notifying Altaris App..."
     am start -a android.intent.action.VIEW -d "fluxlinux://callback?result=success&name=distro_install_debian13_chroot" >/dev/null 2>&1
 }
 

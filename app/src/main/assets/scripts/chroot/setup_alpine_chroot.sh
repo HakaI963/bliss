@@ -194,6 +194,7 @@ configure_alpine_chroot() {
         chmod 1777 /tmp /var/tmp 2>/dev/null || true
         apk update || exit 1
         apk add --no-cache bash zsh sudo shadow ca-certificates curl wget nano || exit 1
+        apk add --no-cache zsh-autosuggestions zsh-syntax-highlighting || true
     ' || goodbye
 
     progress "Creating User ($USERNAME)..."
@@ -220,7 +221,7 @@ configure_alpine_chroot() {
     touch "$ALPINEPATH/.bliss_configured"
     success "Alpine Environment Configured (rootfs + user; XFCE via family phase)!"
 
-    # Root-staged helper/launchers live in the Bliss helpers dir (idempotent).
+    # Root-staged helper/launchers live in the Altaris helpers dir (idempotent).
     mkdir -p /data/local/bliss/helpers
 
     # Stage SSOT helper
@@ -268,7 +269,7 @@ EOF
     chmod 755 "$CLI_SCRIPT"
 
     cleanup_mounts
-    success "Bliss: Alpine Chroot Setup Complete!"
+    success "Altaris: Alpine Chroot Setup Complete!"
 
     am start -a android.intent.action.VIEW \
         -d "fluxlinux://callback?result=success&name=distro_install_alpine_chroot" \
@@ -323,7 +324,7 @@ if [ -z "${BB:-}" ]; then
   fi
 fi
 if [ -z "${BB:-}" ]; then
-  echo "Bliss: ERROR — root-capable busybox not found" >&2
+  echo "Altaris: ERROR — root-capable busybox not found" >&2
   exit 1
 fi
 

@@ -166,7 +166,7 @@ object InstallSessionFactory {
         return openHostScriptSession(
             ctx,
             "bliss_install.sh",
-            title = "${profile.displayName} Install (Bliss Terminal)",
+            title = "${profile.displayName} Install (Altaris Terminal)",
             args = args,
             onFinished = onFinished,
             extraEnv = mapOf(

@@ -33,7 +33,7 @@ object ControlServer {
 
     const val PORT = 47831
     const val BASE_URL = "http://127.0.0.1:$PORT"
-    private const val TAG = "BlissControl"
+    private const val TAG = "AltarisControl"
 
     private val running = AtomicBoolean(false)
     private var serverSocket: ServerSocket? = null
@@ -169,7 +169,8 @@ object ControlServer {
         val ctx = appContext
             ?: return json(503, JSONObject().put("ok", false).put("error", "App context is not ready"))
         val dir = File(ctx.cacheDir, "apk-uploads").apply { mkdirs() }
-        val requested = headers["x-bliss-filename"]?.substringAfterLast('/')?.substringAfterLast('\\')
+        val requested = (headers["x-altaris-filename"] ?: headers["x-bliss-filename"])
+            ?.substringAfterLast('/')?.substringAfterLast('\\')
             ?.take(80)?.ifBlank { "upload.apk" } ?: "upload.apk"
         val safeName = requested.replace(Regex("[^A-Za-z0-9._-]"), "_").ifBlank { "upload.apk" }
         val file = File(dir, "upload-${System.currentTimeMillis()}-$safeName")
@@ -188,7 +189,7 @@ object ControlServer {
                     return json(400, JSONObject().put("ok", false).put("error", "Upload ended early"))
                 }
             }
-            val label = headers["x-bliss-label"]?.take(120)?.trim()?.takeIf { it.isNotEmpty() }
+            val label = (headers["x-altaris-label"] ?: headers["x-bliss-label"])?.take(120)?.trim()?.takeIf { it.isNotEmpty() }
             val result = runBlocking {
                 HeadlessCloneEngine.apiInstall(path = file.absolutePath, url = null, label = label)
             }
@@ -204,7 +205,7 @@ object ControlServer {
             return jsonText(
                 200,
                 """
-                Bliss control API
+                Altaris control API
                   GET  /health
                   GET  /status
                   GET  /clones
@@ -213,7 +214,7 @@ object ControlServer {
                   GET  /ocr?width=900
                   GET  /logs?package=com.nopiece.hclone.x&lines=300
                   POST /install        {"path":"/sdcard/Download/app.apk"} or {"url":"https://…"}
-                  POST /install-upload  raw APK bytes; headers X-Bliss-Filename / X-Bliss-Label
+                  POST /install-upload  raw APK bytes; headers X-Altaris-Filename / X-Altaris-Label
                   POST /uninstall      {"package":"com.nopiece.hclone.x"}
                   POST /launch         {"package":"com.nopiece.hclone.x","width":720,"height":1280,"fps":60}
                   POST /stop           {"package":"com.nopiece.hclone.x"}

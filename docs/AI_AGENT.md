@@ -1,7 +1,7 @@
-# Bliss agent guide
+# Altaris agent guide
 
-Bliss runs a loopback-only control plane for Android app clones. An agent can
-install, launch, observe, drive and stop a clone without the Bliss UI being in
+Altaris runs a loopback-only control plane for Android app clones. An agent can
+install, launch, observe, drive and stop a clone without the Altaris UI being in
 front. Everything below is local to the device (`127.0.0.1`); it is not exposed
 to the LAN.
 

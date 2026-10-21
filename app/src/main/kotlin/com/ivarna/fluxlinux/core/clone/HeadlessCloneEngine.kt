@@ -47,7 +47,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  */
 object HeadlessCloneEngine {
 
-    private const val TAG = "BlissClone"
+    private const val TAG = "AltarisClone"
     private const val CLONE_PREFIX = "com.nopiece.hclone."
 
     data class DeviceApp(
@@ -168,7 +168,7 @@ object HeadlessCloneEngine {
             isDaemon = true
             name = "bliss-legacy-cleanup"
         }.start()
-        localLog("Bliss headless clone engine ready")
+        localLog("Altaris headless clone engine ready")
     }
 
     /** Attach the UI to the Shizuku engine. Safe to call repeatedly. */
@@ -1232,7 +1232,7 @@ object HeadlessCloneEngine {
             connectTimeout = 20_000
             readTimeout = 300_000
             instanceFollowRedirects = true
-            setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14) Bliss/3.13")
+            setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14) Altaris/3.13")
             setRequestProperty(
                 "Accept",
                 "application/vnd.android.package-archive,application/octet-stream,*/*",

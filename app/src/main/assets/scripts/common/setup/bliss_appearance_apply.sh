@@ -1,5 +1,5 @@
 #!/bin/sh
-# bliss_appearance_apply.sh — Bliss Linux guest appearance applier (v2).
+# bliss_appearance_apply.sh — Altaris Linux guest appearance applier (v2).
 #
 # Reads <home>/.config/bliss/appearance.env and applies the user's saved
 # appearance choices inside the Linux guest:
@@ -93,7 +93,7 @@ if [ "${FOLIO_APPLY_FORCE:-0}" != "1" ]; then
 fi
 
 # ── helpers ──────────────────────────────────────────────────────────────────
-_fa_log() { echo "Bliss Linux appearance: $*"; }
+_fa_log() { echo "Altaris Linux appearance: $*"; }
 
 # On-disk path for a guest-absolute path (host-side chroot runs prefix the root).
 _fa_guest_path() {
@@ -475,9 +475,9 @@ _fa_apply_video() {
             printf '[Desktop Entry]\n'
             printf 'Type=Application\n'
             printf 'Version=1.0\n'
-            printf 'Name=Bliss Linux video wallpaper (experimental)\n'
-            printf 'Comment=Loops a muted video as an overlay window (mpv); disable in Bliss Linux appearance settings.\n'
-            printf 'Exec=mpv --loop-file --no-audio --no-osc --really-quiet --title=Bliss-video-wallpaper "%s"\n' "$FLUX_VIDEO_WALLPAPER"
+            printf 'Name=Altaris Linux video wallpaper (experimental)\n'
+            printf 'Comment=Loops a muted video as an overlay window (mpv); disable in Altaris Linux appearance settings.\n'
+            printf 'Exec=mpv --loop-file --no-audio --no-osc --really-quiet --title=Altaris-video-wallpaper "%s"\n' "$FLUX_VIDEO_WALLPAPER"
             printf 'Terminal=false\n'
             printf 'X-GNOME-Autostart-enabled=true\n'
         } > "$_df" 2>/dev/null || true
@@ -499,8 +499,8 @@ _fa_ensure_autostart() {
 [Desktop Entry]
 Type=Application
 Version=1.0
-Name=Bliss Linux appearance
-Comment=Applies your Bliss Linux wallpaper, colors and terminal settings at login.
+Name=Altaris Linux appearance
+Comment=Applies your Altaris Linux wallpaper, colors and terminal settings at login.
 Exec=sh $_fa_home/.config/bliss/appearance-apply.sh
 Terminal=false
 StartupNotify=false

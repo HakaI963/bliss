@@ -1,6 +1,6 @@
 #!/bin/bash
 # setup_customization_debian.sh
-# Applies "Bliss" branding and customization to Debian XFCE4 Desktop
+# Applies "Altaris" branding and customization to Debian XFCE4 Desktop
 # Works for both Chroot and Proot environments (run as root, switches to user 'flux')
 
 CUSTOM_USER="flux"
@@ -13,7 +13,7 @@ ICON_DIR="/usr/share/icons"
 # Error Handler — never block on stdin (onboarding / ProcessBuilder has no TTY)
 handle_error() {
     echo ""
-    echo "❌ Bliss Error: Script failed at step: $1"
+    echo "❌ Altaris Error: Script failed at step: $1"
     echo "---------------------------------------------------"
     echo "Please check the error message above for details."
     echo "---------------------------------------------------"
@@ -23,12 +23,12 @@ handle_error() {
     exit 1
 }
 
-echo "Bliss: Starting XFCE4 Customization..."
+echo "Altaris: Starting XFCE4 Customization..."
 
 # Setup scripts must run as root inside proot/chroot (apt/dpkg).
 if [ "$(id -u)" -ne 0 ]; then
-    echo "Bliss: ERROR: must run as root inside the guest (got uid=$(id -u))."
-    echo "Bliss: Component sessions should use --user root; re-run from Distro Settings."
+    echo "Altaris: ERROR: must run as root inside the guest (got uid=$(id -u))."
+    echo "Altaris: Component sessions should use --user root; re-run from Distro Settings."
     handle_error "Not Root"
 fi
 
@@ -37,7 +37,7 @@ _flux_chown() { chown "$@" 2>/dev/null || true; }
 _flux_chown_r() { chown -R "$@" 2>/dev/null || true; }
 
 # 1. Install Dependencies
-echo "Bliss: Installing customization tools (as root)..."
+echo "Altaris: Installing customization tools (as root)..."
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -y || handle_error "Dependency Installation (apt update)"
 # git: guest fallback when host did not pre-stage Oh My Zsh; zsh: terminal shell
@@ -49,7 +49,7 @@ apt-get install -y -o Dpkg::Use-Pty=0 \
 apt-get install -y -o Dpkg::Use-Pty=0 xfce4-whiskermenu-plugin 2>/dev/null || true
 
 # Setup Locales for proper font rendering in ZSH/Terminal
-echo "Bliss: Setting up locales..."
+echo "Altaris: Setting up locales..."
 echo "en_US.UTF-8 UTF-8" > /etc/locale.gen
 locale-gen
 update-locale LANG=en_US.UTF-8
@@ -131,7 +131,7 @@ download_if_needed() {
 
 # 3. Theme Selection Prompt
 if [ -n "$FLUX_THEME" ]; then
-    echo "Bliss: Auto-applying Theme: $FLUX_THEME"
+    echo "Altaris: Auto-applying Theme: $FLUX_THEME"
     if [ "$FLUX_THEME" == "light" ]; then
         THEME_CHOICE="2"
     else
@@ -146,7 +146,7 @@ else
         read -r -p "Enter choice [1-2]: " THEME_CHOICE
         echo "------------------------------------------------"
     else
-        echo "Bliss: No TTY / FLUX_THEME — defaulting to dark"
+        echo "Altaris: No TTY / FLUX_THEME — defaulting to dark"
         THEME_CHOICE="1"
     fi
 fi
@@ -156,14 +156,14 @@ SEL_ICON="Papirus-Dark"
 ICON_TAR="papirus-dark-only.tar.gz"
 
 if [ "$THEME_CHOICE" == "2" ]; then
-    echo "Bliss: Light Mode Selected (icons: Papirus-Dark only)."
+    echo "Altaris: Light Mode Selected (icons: Papirus-Dark only)."
     SEL_THEME="Space-light"
     SEL_CURSOR="Vimix-cursors" # Dark cursor for light theme (better contrast)
     SEL_WALLPAPER="bliss-light.png"
     THEME_TAR="Space-light.tar.xz"
     CURSOR_TAR="01-Vimix-cursors.tar.xz"
 else
-    echo "Bliss: Dark Mode Selected (icons: Papirus-Dark only)."
+    echo "Altaris: Dark Mode Selected (icons: Papirus-Dark only)."
     SEL_THEME="Space-transparency"
     SEL_CURSOR="Vimix-white-cursors" # White cursor for dark theme (better contrast)
     SEL_WALLPAPER="bliss-dark.png"
@@ -176,15 +176,15 @@ mkdir -p "$THEME_DIR" "$ICON_DIR"
 # Host may have already extracted into the proot rootfs (native tar — fast).
 # FLUX_SKIP_THEME_ICONS=1 → only apply configs / wallpaper ownership.
 if [ "${FLUX_SKIP_THEME_ICONS:-0}" = "1" ]; then
-    echo "Bliss: Themes/icons pre-installed on host — skip guest extract"
+    echo "Altaris: Themes/icons pre-installed on host — skip guest extract"
 elif theme_is_installed "$SEL_THEME" && icon_is_installed "$SEL_ICON" && cursor_is_installed "$SEL_CURSOR"; then
-    echo "Bliss: Theme+icons+cursor already installed ($SEL_THEME / $SEL_ICON / $SEL_CURSOR) — skip extract"
+    echo "Altaris: Theme+icons+cursor already installed ($SEL_THEME / $SEL_ICON / $SEL_CURSOR) — skip extract"
 else
     # ── Theme (selected only) ───────────────────────────────────────────────
     if theme_is_installed "$SEL_THEME"; then
-        echo "Bliss: Theme $SEL_THEME already installed — skip"
+        echo "Altaris: Theme $SEL_THEME already installed — skip"
     else
-        echo "Bliss: Installing theme $SEL_THEME only..."
+        echo "Altaris: Installing theme $SEL_THEME only..."
         TFILE="$(find_asset "$THEME_TAR" || true)"
         if [ -z "$TFILE" ]; then
             download_if_needed "$BASE_URL/theme.zip" "/tmp/theme.zip" || handle_error "Theme Download"
@@ -198,9 +198,9 @@ else
 
     # ── Icons: Papirus-Dark only ────────────────────────────────────────────
     if icon_is_installed "$SEL_ICON"; then
-        echo "Bliss: Icons $SEL_ICON already installed — skip"
+        echo "Altaris: Icons $SEL_ICON already installed — skip"
     else
-        echo "Bliss: Installing icons $SEL_ICON only..."
+        echo "Altaris: Installing icons $SEL_ICON only..."
         IFILE="$(find_asset "$ICON_TAR" || find_asset "papirus-dark-only.tar.gz" \
             || find_asset "papirus-dark-only.tar.xz" || true)"
         if [ -z "$IFILE" ]; then
@@ -208,7 +208,7 @@ else
             IFILE="$(find_asset "papirus-icon-theme-20250501.tar.gz" || true)"
         fi
         if [ -z "$IFILE" ]; then
-            echo "Bliss: ERROR: Papirus-Dark archive missing (expected $ICON_TAR in assets)"
+            echo "Altaris: ERROR: Papirus-Dark archive missing (expected $ICON_TAR in assets)"
             handle_error "Icons Archive Missing"
         fi
         extract_local_tar "$IFILE" "$ICON_DIR" "Papirus-Dark" || \
@@ -218,9 +218,9 @@ else
 
     # ── Cursor (selected only) ──────────────────────────────────────────────
     if cursor_is_installed "$SEL_CURSOR"; then
-        echo "Bliss: Cursor $SEL_CURSOR already installed — skip"
+        echo "Altaris: Cursor $SEL_CURSOR already installed — skip"
     else
-        echo "Bliss: Installing cursor $SEL_CURSOR only..."
+        echo "Altaris: Installing cursor $SEL_CURSOR only..."
         CFILE="$(find_asset "$CURSOR_TAR" || true)"
         if [ -z "$CFILE" ]; then
             download_if_needed "$BASE_URL/cursor.zip" "/tmp/cursor.zip" || handle_error "Cursor Download"
@@ -238,9 +238,9 @@ mkdir -p "$WALLPAPER_DIR"
 _flux_chown_r "$CUSTOM_USER:$CUSTOM_GROUP" "$USER_HOME/Pictures"
 
 if [ -f "$WALLPAPER_DIR/$SEL_WALLPAPER" ]; then
-    echo "Bliss: Wallpaper $SEL_WALLPAPER already present — skip"
+    echo "Altaris: Wallpaper $SEL_WALLPAPER already present — skip"
 else
-    echo "Bliss: Installing wallpaper..."
+    echo "Altaris: Installing wallpaper..."
     WFILE="$(find_asset "$SEL_WALLPAPER" || true)"
     if [ -n "$WFILE" ]; then
         cp -f "$WFILE" "$WALLPAPER_DIR/$SEL_WALLPAPER"
@@ -262,12 +262,12 @@ FONT_INSTALLED=false
 
 # Check if font already installed
 if fc-list | grep -qi "JetBrainsMono Nerd"; then
-    echo "Bliss: JetBrains Mono Nerd Font already installed."
+    echo "Altaris: JetBrains Mono Nerd Font already installed."
     FONT_INSTALLED=true
 fi
 
 if [ "$FONT_INSTALLED" = false ]; then
-    echo "Bliss: Installing JetBrains Mono Nerd Font..."
+    echo "Altaris: Installing JetBrains Mono Nerd Font..."
     
     # Create font directory
     mkdir -p "$FONT_DIR"
@@ -278,7 +278,7 @@ if [ "$FONT_INSTALLED" = false ]; then
     
     echo " - Downloading JetBrains Mono Nerd Font..."
     wget -q --show-progress "$NERD_FONT_URL" -O "$TEMP_ZIP" || {
-        echo "Bliss: Direct download failed, trying from release..."
+        echo "Altaris: Direct download failed, trying from release..."
         wget -q --show-progress "$BASE_URL/font.zip" -O "$TEMP_ZIP" || handle_error "Font Download"
     }
     
@@ -306,21 +306,21 @@ if [ "$FONT_INSTALLED" = false ]; then
     
     # Verify installation
     if fc-list | grep -qi "JetBrainsMono Nerd"; then
-        echo "Bliss: ✓ JetBrains Mono Nerd Font installed successfully!"
+        echo "Altaris: ✓ JetBrains Mono Nerd Font installed successfully!"
     else
-        echo "Bliss: ⚠ Font may not be properly registered. Checking installed files..."
+        echo "Altaris: ⚠ Font may not be properly registered. Checking installed files..."
         ls -la "$FONT_DIR"
     fi
 fi
 # 4. Apply Settings for User 'flux'
 # Write directly to XML config files (dbus-launch creates ephemeral sessions that don't persist)
-echo "Bliss: Applying XFCE4 Settings..."
+echo "Altaris: Applying XFCE4 Settings..."
 
 XFCONF_DIR="$USER_HOME/.config/xfce4/xfconf/xfce-perchannel-xml"
 mkdir -p "$XFCONF_DIR"
 
 # Generate xsettings.xml (Theme, Icons, Cursor, Fonts, Scaling)
-echo "Bliss: Writing xsettings.xml..."
+echo "Altaris: Writing xsettings.xml..."
 cat <<EOF > "$XFCONF_DIR/xsettings.xml"
 <?xml version="1.0" encoding="UTF-8"?>
 
@@ -351,7 +351,7 @@ cat <<EOF > "$XFCONF_DIR/xsettings.xml"
 EOF
 
 # Generate xfwm4.xml (Window Manager Theme and Title Font)
-echo "Bliss: Writing xfwm4.xml..."
+echo "Altaris: Writing xfwm4.xml..."
 cat <<EOF > "$XFCONF_DIR/xfwm4.xml"
 <?xml version="1.0" encoding="UTF-8"?>
 
@@ -377,7 +377,7 @@ cat <<EOF > "$XFCONF_DIR/xfwm4.xml"
 EOF
 
 # Generate xfce4-desktop.xml (Wallpaper)
-echo "Bliss: Writing xfce4-desktop.xml..."
+echo "Altaris: Writing xfce4-desktop.xml..."
 WALLPAPER_PATH="$WALLPAPER_DIR/$SEL_WALLPAPER"
 MONITORS="monitor0 monitor1 monitorVNC-0 monitorbuiltin builtin monitorHDMI-A-0 monitorVirtual-0 monitorVirtual-1 monitorVirtual1"
 
@@ -428,11 +428,11 @@ EOF
 
 # Fix ownership
 _flux_chown_r "$CUSTOM_USER:$CUSTOM_GROUP" "$XFCONF_DIR"
-echo "Bliss: XFCE4 settings applied successfully!"
+echo "Altaris: XFCE4 settings applied successfully!"
 
 # Generate xfce4-keyboard-shortcuts.xml (Custom Keyboard Shortcuts)
 # Note: Angle brackets in key names must be XML-escaped as &lt; and &gt;
-echo "Bliss: Writing keyboard shortcuts..."
+echo "Altaris: Writing keyboard shortcuts..."
 cat <<'SHORTCUTEOF' > "$XFCONF_DIR/xfce4-keyboard-shortcuts.xml"
 <?xml version="1.1" encoding="UTF-8"?>
 
@@ -568,7 +568,7 @@ cat <<'SHORTCUTEOF' > "$XFCONF_DIR/xfce4-keyboard-shortcuts.xml"
 </channel>
 SHORTCUTEOF
 
-echo "Bliss: Keyboard shortcuts configured!"
+echo "Altaris: Keyboard shortcuts configured!"
 
 
 _flux_write_folio_xfce_panel() {
@@ -875,7 +875,7 @@ EOF
 }
 
 # 5. Configure XFCE4 Panel
-echo "Bliss: Configuring Panel..."
+echo "Altaris: Configuring Panel..."
 PANEL_CONFIG_DIR="$USER_HOME/.config/xfce4/xfconf/xfce-perchannel-xml"
 mkdir -p "$PANEL_CONFIG_DIR"
 
@@ -1047,7 +1047,7 @@ _flux_chown "$CUSTOM_USER:$CUSTOM_GROUP" "$USER_HOME/.config/info.sh"
 
 
 # 6. Configure Terminal (Direct Config File)
-echo "Bliss: Configuring Terminal..."
+echo "Altaris: Configuring Terminal..."
 TERM_CONFIG_DIR="$USER_HOME/.config/xfce4/terminal"
 mkdir -p "$TERM_CONFIG_DIR"
 cat <<EOF > "$TERM_CONFIG_DIR/terminalrc"
@@ -1079,7 +1079,7 @@ _flux_chown_r "$CUSTOM_USER:$CUSTOM_GROUP" "$USER_HOME/.config"
 
 
 # 7. Configure Zsh and Terminal Enhancements
-echo "Bliss: Configuring Zsh and Terminal..."
+echo "Altaris: Configuring Zsh and Terminal..."
 
 # Bounded network helpers (proot hangs forever on bare curl/git)
 _flux_have_timeout() { command -v timeout >/dev/null 2>&1; }
@@ -1096,7 +1096,7 @@ _flux_git_clone() {
     # _flux_git_clone <url> <dest> [timeout_sec]
     local url="$1" dest="$2" sec="${3:-90}"
     if ! command -v git >/dev/null 2>&1; then
-        echo "Bliss: git not in guest PATH — skip clone $url"
+        echo "Altaris: git not in guest PATH — skip clone $url"
         return 1
     fi
     export GIT_TERMINAL_PROMPT=0
@@ -1132,13 +1132,13 @@ _flux_safe_rm_tree() {
 
 # zsh/git should already be present from apt above; re-check for older rootfs
 if ! command -v zsh >/dev/null 2>&1; then
-    echo "Bliss: Installing zsh..."
+    echo "Altaris: Installing zsh..."
     DEBIAN_FRONTEND=noninteractive apt-get install -y -o Dpkg::Use-Pty=0 zsh 2>/dev/null || true
 else
-    echo "Bliss: zsh already installed — skip apt"
+    echo "Altaris: zsh already installed — skip apt"
 fi
 if ! command -v git >/dev/null 2>&1; then
-    echo "Bliss: Installing git (needed for Oh My Zsh fallback)..."
+    echo "Altaris: Installing git (needed for Oh My Zsh fallback)..."
     DEBIAN_FRONTEND=noninteractive apt-get install -y -o Dpkg::Use-Pty=0 git 2>/dev/null || true
 fi
 
@@ -1146,37 +1146,37 @@ fi
 # Prefer host pre-install (FLUX_SKIP_OMZ=1 + oh-my-zsh.sh present).
 # Never use curl|sh under proot — hangs. Never mkdir empty OMZ after a failed clone
 # (that re-triggers plugin clones into a broken tree).
-echo "Bliss: Installing Oh My Zsh..."
+echo "Altaris: Installing Oh My Zsh..."
 
 OMZ_OK=0
 if [ -f "$USER_HOME/.oh-my-zsh/oh-my-zsh.sh" ]; then
     if [ "${FLUX_SKIP_OMZ:-0}" = "1" ]; then
-        echo "Bliss: Oh My Zsh pre-installed on host — skip guest install"
+        echo "Altaris: Oh My Zsh pre-installed on host — skip guest install"
     else
-        echo "Bliss: Oh My Zsh already valid — skip install"
+        echo "Altaris: Oh My Zsh already valid — skip install"
     fi
     OMZ_OK=1
 else
     # Partial / corrupt tree — remove with bounded rename+rm (not bare rm -rf hang)
     if [ -e "$USER_HOME/.oh-my-zsh" ]; then
-        echo "Bliss: Incomplete Oh My Zsh detected — removing (bounded)…"
+        echo "Altaris: Incomplete Oh My Zsh detected — removing (bounded)…"
         _flux_safe_rm_tree "$USER_HOME/.oh-my-zsh"
     fi
     if [ "${FLUX_SKIP_OMZ:-0}" = "1" ]; then
-        echo "Bliss: FLUX_SKIP_OMZ set but oh-my-zsh.sh missing — guest fallback"
+        echo "Altaris: FLUX_SKIP_OMZ set but oh-my-zsh.sh missing — guest fallback"
     fi
     if command -v git >/dev/null 2>&1; then
-        echo "Bliss: Shallow git clone Oh My Zsh (timeout 120s)…"
+        echo "Altaris: Shallow git clone Oh My Zsh (timeout 120s)…"
         if _flux_git_clone "https://github.com/ohmyzsh/ohmyzsh.git" "$USER_HOME/.oh-my-zsh" 120 \
             && [ -f "$USER_HOME/.oh-my-zsh/oh-my-zsh.sh" ]; then
-            echo "Bliss: Oh My Zsh installed"
+            echo "Altaris: Oh My Zsh installed"
             OMZ_OK=1
         else
-            echo "Bliss: WARNING: Oh My Zsh install failed/timed out — continuing without it"
+            echo "Altaris: WARNING: Oh My Zsh install failed/timed out — continuing without it"
             _flux_safe_rm_tree "$USER_HOME/.oh-my-zsh"
         fi
     else
-        echo "Bliss: WARNING: git unavailable — Oh My Zsh skipped (host stage or install git)"
+        echo "Altaris: WARNING: git unavailable — Oh My Zsh skipped (host stage or install git)"
         _flux_safe_rm_tree "$USER_HOME/.oh-my-zsh"
     fi
 fi
@@ -1186,17 +1186,17 @@ if [ "$OMZ_OK" = "1" ]; then
     ZSH_CUSTOM="$USER_HOME/.oh-my-zsh/custom"
     mkdir -p "$ZSH_CUSTOM/plugins" "$ZSH_CUSTOM/themes" 2>/dev/null || true
 
-    echo "Bliss: Installing Zsh plugins (if missing)…"
+    echo "Altaris: Installing Zsh plugins (if missing)…"
     if [ ! -d "$ZSH_CUSTOM/plugins/zsh-autosuggestions/.git" ] \
         && [ ! -f "$ZSH_CUSTOM/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh" ]; then
         if command -v git >/dev/null 2>&1; then
             _flux_git_clone "https://github.com/zsh-users/zsh-autosuggestions.git" \
                 "$ZSH_CUSTOM/plugins/zsh-autosuggestions" 60 || true
         else
-            echo "Bliss: git missing — skip zsh-autosuggestions"
+            echo "Altaris: git missing — skip zsh-autosuggestions"
         fi
     else
-        echo "Bliss: zsh-autosuggestions already present — skip"
+        echo "Altaris: zsh-autosuggestions already present — skip"
     fi
     if [ ! -d "$ZSH_CUSTOM/plugins/zsh-syntax-highlighting/.git" ] \
         && [ ! -f "$ZSH_CUSTOM/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh" ]; then
@@ -1204,58 +1204,58 @@ if [ "$OMZ_OK" = "1" ]; then
             _flux_git_clone "https://github.com/zsh-users/zsh-syntax-highlighting.git" \
                 "$ZSH_CUSTOM/plugins/zsh-syntax-highlighting" 60 || true
         else
-            echo "Bliss: git missing — skip zsh-syntax-highlighting"
+            echo "Altaris: git missing — skip zsh-syntax-highlighting"
         fi
     else
-        echo "Bliss: zsh-syntax-highlighting already present — skip"
+        echo "Altaris: zsh-syntax-highlighting already present — skip"
     fi
     # Do NOT install zsh-autocomplete
 
     # Local monochrome prompt theme — no remote download (old colorful theme removed).
     rm -f "$ZSH_CUSTOM/themes/agnosterzak.zsh-theme" 2>/dev/null || true
     if [ ! -s "$ZSH_CUSTOM/themes/bliss.zsh-theme" ]; then
-        echo "Bliss: Installing folio prompt theme…"
+        echo "Altaris: Installing folio prompt theme…"
         cat > "$ZSH_CUSTOM/themes/bliss.zsh-theme" <<'FOLIO_THEME_EOF'
-# bliss.zsh-theme — Bliss's minimal monochrome prompt.
+# bliss.zsh-theme — Altaris's minimal monochrome prompt.
 # White/gray on black only; ASCII-safe (no powerline glyphs, no ANSI colors 31-44).
 # Segments:  time  bliss  working-dir  input-char
 PROMPT='%F{240}%D{%H:%M}%f %F{255}bliss%f %F{250}%~%f %F{255}%#%f '
 PROMPT2='%F{240}> %f'
 FOLIO_THEME_EOF
         if [ ! -s "$ZSH_CUSTOM/themes/bliss.zsh-theme" ]; then
-            echo "Bliss: WARNING: folio prompt theme write failed — zsh keeps default prompt"
+            echo "Altaris: WARNING: folio prompt theme write failed — zsh keeps default prompt"
         fi
     else
-        echo "Bliss: folio prompt theme already present — skip"
+        echo "Altaris: folio prompt theme already present — skip"
     fi
     _flux_chown_r "$CUSTOM_USER:$CUSTOM_GROUP" "$USER_HOME/.oh-my-zsh"
 else
-    echo "Bliss: Skipping Zsh plugins (Oh My Zsh not installed)"
+    echo "Altaris: Skipping Zsh plugins (Oh My Zsh not installed)"
 fi
 
 # pokemon-colorscripts: optional; default skip under proot (gitlab stalls; needs git)
 if [ "${FLUX_SKIP_POKEMON:-1}" = "1" ]; then
-    echo "Bliss: pokemon-colorscripts skip (disabled by default)"
+    echo "Altaris: pokemon-colorscripts skip (disabled by default)"
 elif command -v pokemon-colorscripts >/dev/null 2>&1; then
-    echo "Bliss: pokemon-colorscripts already present — skip"
+    echo "Altaris: pokemon-colorscripts already present — skip"
 elif ! command -v git >/dev/null 2>&1; then
-    echo "Bliss: pokemon-colorscripts skip (git missing)"
+    echo "Altaris: pokemon-colorscripts skip (git missing)"
 else
-    echo "Bliss: Installing pokemon-colorscripts (optional, 60s budget)…"
+    echo "Altaris: Installing pokemon-colorscripts (optional, 60s budget)…"
     POKEMON_TEMP="/tmp/pokemon-colorscripts.$$"
     _flux_safe_rm_tree "$POKEMON_TEMP"
     if _flux_git_clone "https://gitlab.com/phoneybadger/pokemon-colorscripts.git" "$POKEMON_TEMP" 60 \
         && [ -f "$POKEMON_TEMP/install.sh" ]; then
         (cd "$POKEMON_TEMP" && _flux_run 30 sh ./install.sh) 2>/dev/null \
-            || echo "Bliss: pokemon-colorscripts install skipped"
+            || echo "Altaris: pokemon-colorscripts install skipped"
     else
-        echo "Bliss: pokemon-colorscripts skipped (clone timeout/fail)"
+        echo "Altaris: pokemon-colorscripts skipped (clone timeout/fail)"
     fi
     _flux_safe_rm_tree "$POKEMON_TEMP"
 fi
 
 # Configure .zshrc
-echo "Bliss: Configuring .zshrc..."
+echo "Altaris: Configuring .zshrc..."
 ZSHRC="$USER_HOME/.zshrc"
 
 # Write complete optimized .zshrc (performance fixes)
@@ -1264,7 +1264,7 @@ ZSHRC="$USER_HOME/.zshrc"
 # - DISABLE_AUTO_UPDATE / DISABLE_UPDATE_PROMPT (no prompts on launch)
 # - ZSH_DISABLE_COMPFIX (no compaudit, faster init)
 # Defensive: never hard-fail on missing oh-my-zsh / pokemon
-echo "Bliss: Writing optimized .zshrc..."
+echo "Altaris: Writing optimized .zshrc..."
 cat > "$ZSHRC" << 'ZSHEOF'
 # PATH setup - local bin, npm global modules
 export PATH="$HOME/.local/bin:/opt/nodejs/bin:$PATH"
@@ -1291,13 +1291,13 @@ if [ -f "$ZSH/oh-my-zsh.sh" ]; then
   plugins=(git zsh-autosuggestions zsh-syntax-highlighting)
   source "$ZSH/oh-my-zsh.sh"
 fi
-# ── Bliss launch sticker (random truecolor anime banner; opt out FLUX_NO_BANNER=1)
+# ── Altaris launch sticker (random truecolor anime banner; opt out FLUX_NO_BANNER=1)
 [ -r "$HOME/.config/bliss/banner.sh" ] && . "$HOME/.config/bliss/banner.sh"
 
 ZSHEOF
 _flux_chown "$CUSTOM_USER:$CUSTOM_GROUP" "$ZSHRC"
 
-# ── Bliss launch stickers: 49 truecolor anime half-block designs ─
+# ── Altaris launch stickers: 49 truecolor anime half-block designs ─
 # Installs ~/.config/bliss/banner/*.txt (random pick per shell open) and
 # ~/.config/bliss/banner.sh (the bliss_banner function sourced by .zshrc/.bashrc).
 # Offline, idempotent (`.banner-rev` refreshes existing installs).
@@ -2181,7 +2181,7 @@ FOLIO_BANNER_ALL
     printf '%s\n' "$_brev" > "$_bdir/.banner-rev" 2>/dev/null || true
 
     cat > "$_home/.config/bliss/banner.sh" <<'FOLIO_BANNER_SH'
-# bliss-banner.sh — Bliss launch sticker: truecolor half-block anime art,
+# bliss-banner.sh — Altaris launch sticker: truecolor half-block anime art,
 # one random design per interactive shell, printed exactly ONCE per shell
 # even when several rc files source it or nested shells inherit the
 # environment. Works with zsh, bash and POSIX sh.
@@ -2260,11 +2260,11 @@ _flux_wire_bash_banner() {
     [ -n "$_home" ] && [ -d "$_home" ] || return 0
     _brc="$_home/.bashrc"
     if [ ! -f "$_brc" ]; then
-        printf '%s\n' '# Bliss bash profile' 'export PATH="$HOME/.local/bin:$PATH"' > "$_brc" 2>/dev/null || true
+        printf '%s\n' '# Altaris bash profile' 'export PATH="$HOME/.local/bin:$PATH"' > "$_brc" 2>/dev/null || true
     fi
     if [ -f "$_brc" ] && ! grep -q 'bliss/banner.sh' "$_brc" 2>/dev/null; then
         {
-            printf '\n# Bliss launch sticker (random truecolor anime banner; opt out FLUX_NO_BANNER=1)\n'
+            printf '\n# Altaris launch sticker (random truecolor anime banner; opt out FLUX_NO_BANNER=1)\n'
             printf '[ -r "$HOME/.config/bliss/banner.sh" ] && . "$HOME/.config/bliss/banner.sh"\n'
         } >> "$_brc" 2>/dev/null || true
     fi
@@ -2298,9 +2298,9 @@ fi
 _flux_chown "$CUSTOM_USER:$CUSTOM_GROUP" "$USER_HOME/.zshrc"
 _flux_chown_r "$CUSTOM_USER:$CUSTOM_GROUP" "$USER_HOME/.local"
 
-echo "Bliss: Terminal configuration complete!"
+echo "Altaris: Terminal configuration complete!"
 
-# ── Bliss Linux appearance (wallpaper/colors/terminal) ───────────────────────
+# ── Altaris Linux appearance (wallpaper/colors/terminal) ───────────────────────
 # Re-apply the app-staged appearance config BEFORE the daemon reload below so
 # xfdesktop picks up the wallpaper live. Forced pass: a re-run always wins.
 if [ -r "$USER_HOME/.config/bliss/appearance-apply.sh" ]; then
@@ -2309,19 +2309,19 @@ if [ -r "$USER_HOME/.config/bliss/appearance-apply.sh" ]; then
 fi
 
 # 8. Reload XFCE Daemons — only if a session is actually running (don't hang install)
-echo "Bliss: Reloading Desktop (if running)..."
+echo "Altaris: Reloading Desktop (if running)..."
 if pgrep -x xfdesktop >/dev/null 2>&1 || pgrep -x xfwm4 >/dev/null 2>&1; then
     su -s /bin/bash - "$CUSTOM_USER" -c "killall -9 xfdesktop xfwm4 xfsettingsd" 2>/dev/null || true
     sleep 1
     su -s /bin/bash - "$CUSTOM_USER" -c "DISPLAY=:0 nohup xfdesktop >/dev/null 2>&1 &" 2>/dev/null || true
     su -s /bin/bash - "$CUSTOM_USER" -c "DISPLAY=:0 nohup xfwm4 --replace >/dev/null 2>&1 &" 2>/dev/null || true
 else
-    echo "Bliss: No XFCE session running — skip daemon reload"
+    echo "Altaris: No XFCE session running — skip daemon reload"
 fi
 su -s /bin/bash - "$CUSTOM_USER" -c "DISPLAY=:0 nohup xfsettingsd > /dev/null 2>&1 &" 2>/dev/null
 sleep 1
 
-echo "Bliss: Customization Complete!"
+echo "Altaris: Customization Complete!"
 echo "------------------------------------------------"
 # Interactive pause only in a real terminal — hangs forever under onboarding
 # (ProcessBuilder / proot-distro with no stdin TTY).

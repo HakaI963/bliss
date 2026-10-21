@@ -21,7 +21,7 @@ import java.io.File
 import java.io.FileOutputStream
 
 /**
- * Bliss per-distro appearance (wallpaper / accent / terminal colors /
+ * Altaris per-distro appearance (wallpaper / accent / terminal colors /
  * optional video wallpaper).
  *
  * Storage: one JSON string per distro in SharedPreferences [PREFS]
@@ -65,7 +65,7 @@ object AppearanceStore {
     const val STYLE_CENTERED = "centered"
     val WALLPAPER_STYLES = listOf(STYLE_ZOOM, STYLE_STRETCHED, STYLE_CENTERED)
 
-    /** Solid desktop color used when no wallpaper image is set (Bliss carbon). */
+    /** Solid desktop color used when no wallpaper image is set (Altaris carbon). */
     const val SOLID_COLOR = "#0B0B0D"
 
     // ── guest paths ──────────────────────────────────────────────────────────
@@ -116,20 +116,20 @@ object AppearanceStore {
         val promptColor: String
     )
 
-    /** Shipped presets (the three originals + three Bliss presets + 7 new). */
+    /** Shipped presets (the three originals + three Altaris presets + 7 new). */
     val WALLPAPER_PRESETS: List<WallpaperPreset> = listOf(
         WallpaperPreset(
-            "bliss-dark", "Bliss Dark",
+            "bliss-dark", "Altaris Dark",
             "xfce4/wallpaper/bliss-dark.png", "wallpaper-bliss-dark.png",
             R.drawable.bliss_wall_dark
         ),
         WallpaperPreset(
-            "bliss-light", "Bliss Light",
+            "bliss-light", "Altaris Light",
             "xfce4/wallpaper/bliss-light.png", "wallpaper-bliss-light.png",
             R.drawable.bliss_wall_light
         ),
         WallpaperPreset(
-            "bliss-shard", "Bliss Shard",
+            "bliss-shard", "Altaris Shard",
             "xfce4/wallpaper/bliss-dark.svg", "wallpaper-bliss-shard.svg",
             R.drawable.bliss_wall_shard
         ),
@@ -149,37 +149,37 @@ object AppearanceStore {
             R.drawable.bliss_wall_density
         ),
         WallpaperPreset(
-            "bliss-amoled", "Bliss AMOLED",
+            "bliss-amoled", "Altaris AMOLED",
             "xfce4/wallpaper/presets/bliss-amoled.png", "wallpaper-bliss-amoled.png",
             R.drawable.bliss_wall_amoled
         ),
         WallpaperPreset(
-            "bliss-mesh", "Bliss Mesh",
+            "bliss-mesh", "Altaris Mesh",
             "xfce4/wallpaper/presets/bliss-mesh.png", "wallpaper-bliss-mesh.png",
             R.drawable.bliss_wall_mesh
         ),
         WallpaperPreset(
-            "bliss-silk", "Bliss Silk",
+            "bliss-silk", "Altaris Silk",
             "xfce4/wallpaper/presets/bliss-silk.png", "wallpaper-bliss-silk.png",
             R.drawable.bliss_wall_silk
         ),
         WallpaperPreset(
-            "bliss-dither", "Bliss Dither",
+            "bliss-dither", "Altaris Dither",
             "xfce4/wallpaper/presets/bliss-dither.png", "wallpaper-bliss-dither.png",
             R.drawable.bliss_wall_dither
         ),
         WallpaperPreset(
-            "bliss-waves", "Bliss Waves",
+            "bliss-waves", "Altaris Waves",
             "xfce4/wallpaper/presets/bliss-waves.png", "wallpaper-bliss-waves.png",
             R.drawable.bliss_wall_waves
         ),
         WallpaperPreset(
-            "bliss-beams", "Bliss Beams",
+            "bliss-beams", "Altaris Beams",
             "xfce4/wallpaper/presets/bliss-beams.png", "wallpaper-bliss-beams.png",
             R.drawable.bliss_wall_beams
         ),
         WallpaperPreset(
-            "bliss-sakura", "Bliss Sakura",
+            "bliss-sakura", "Altaris Sakura",
             "xfce4/wallpaper/presets/bliss-sakura.png", "wallpaper-bliss-sakura.png",
             R.drawable.bliss_wall_sakura
         )
@@ -220,7 +220,7 @@ object AppearanceStore {
 
     /** Terminal color schemes (ids are persisted; colors are resolved app-side). */
     val TERMINAL_SCHEMES: List<TerminalScheme> = listOf(
-        TerminalScheme("folio-mono", "Bliss Mono", "#F4F4F5", "#09090B", "#A1A1AA", "#27272A", "255"),
+        TerminalScheme("folio-mono", "Altaris Mono", "#F4F4F5", "#09090B", "#A1A1AA", "#27272A", "255"),
         TerminalScheme("white-black", "White on Black", "#FFFFFF", "#000000", "#FFFFFF", "#333333", "255"),
         TerminalScheme("amber-crt", "Amber CRT", "#FFB000", "#0A0500", "#FFB000", "#3A2600", "214"),
         TerminalScheme("ice", "Ice", "#D6EEFF", "#060B12", "#7FD4FF", "#14304A", "117"),
@@ -397,7 +397,7 @@ object AppearanceStore {
         prefs(ctx).edit().putString(KEY_PREFIX + distroId, o.toString()).apply()
     }
 
-    /** Legacy prefs file (pre-Bliss); migrated once on first open. */
+    /** Legacy prefs file (pre-Altaris); migrated once on first open. */
     private const val LEGACY_PREFS = "folio_appearance"
 
     private fun prefs(ctx: Context): android.content.SharedPreferences {
@@ -1033,8 +1033,8 @@ object AppearanceStore {
         "[Desktop Entry]\n" +
             "Type=Application\n" +
             "Version=1.0\n" +
-            "Name=Bliss appearance\n" +
-            "Comment=Applies your Bliss wallpaper, colors and terminal settings at login.\n" +
+            "Name=Altaris appearance\n" +
+            "Comment=Applies your Altaris wallpaper, colors and terminal settings at login.\n" +
             "Exec=sh $GUEST_CFG/$GUEST_APPLY_SCRIPT\n" +
             "Terminal=false\n" +
             "StartupNotify=false\n" +

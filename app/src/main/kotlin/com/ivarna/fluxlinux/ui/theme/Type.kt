@@ -6,7 +6,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
-/** Bliss type scale: compact Roboto, slightly tighter headings, calm body. */
+/** Altaris type scale: compact Roboto, slightly tighter headings, calm body. */
 val Typography = Typography(
     headlineSmall = TextStyle(
         fontFamily = FontFamily.Default,
@@ -80,11 +80,11 @@ val Typography = Typography(
     ),
 )
 
-/** Bliss wordmark: compact, spaced, signal-coloured by the top bar. */
+/** Altaris wordmark: compact, spaced, signal-coloured by the top bar. */
 val FolioWordmarkStyle = TextStyle(
     fontFamily = FontFamily.Default,
     fontWeight = FontWeight.Bold,
-    fontSize = 18.sp,
+    fontSize = 17.5.sp,
     lineHeight = 22.sp,
-    letterSpacing = 2.2.sp,
+    letterSpacing = 3.4.sp,
 )

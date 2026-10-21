@@ -195,7 +195,7 @@ class OnboardingInstallRunner(private val ctx: Context) {
         try {
             BaseInstallService.start(
                 appCtx,
-                title = "Bliss — Installing",
+                title = "Altaris — Installing",
                 text = sessionTaskName,
                 percent = 0
             )
@@ -578,7 +578,7 @@ class OnboardingInstallRunner(private val ctx: Context) {
         if (!RootShell.isRootAvailable()) {
             postFail(
                 onProgress, phases,
-                "Root not available. Grant superuser to Bliss, then retry."
+                "Root not available. Grant superuser to Altaris, then retry."
             )
             return
         }
@@ -1407,7 +1407,7 @@ class OnboardingInstallRunner(private val ctx: Context) {
         try {
             BaseInstallService.update(
                 appCtx,
-                title = "Bliss — $label",
+                title = "Altaris — $label",
                 text = detail,
                 percent = percent
             )

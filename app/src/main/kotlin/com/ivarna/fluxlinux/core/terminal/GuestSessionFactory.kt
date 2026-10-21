@@ -56,7 +56,7 @@ object GuestSessionFactory {
         TerminalPalette.apply()
         runCatching { com.ivarna.fluxlinux.core.control.BlissCliInstaller.ensure(ctx, method, distroId) }
         // Patch guest .zshrc if it still hard-sources missing oh-my-zsh / pokemon,
-        // or create a missing Bliss profile (Alpine installs that never wrote one).
+        // or create a missing Altaris profile (Alpine installs that never wrote one).
         GuestZshrcRepair.repairIfNeeded(ctx, method, distroId)
         // Alpine proot: ensure apk db/lock is app-writable so `sudo apk` works.
         GuestApkDbRepair.repairIfNeeded(ctx, method, distroId)

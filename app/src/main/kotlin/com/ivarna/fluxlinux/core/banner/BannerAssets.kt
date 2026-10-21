@@ -20,7 +20,7 @@ data class Art(val name: String, val text: String)
 object BannerAssets {
 
     /** Launch-sticker art revision (`~/.config/bliss/banner/.banner-rev`). */
-    const val REV = "9"
+    const val REV = "10"
 
     private const val QUALITY_MIN = 1
     private const val QUALITY_MAX = 5

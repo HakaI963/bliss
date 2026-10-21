@@ -21,7 +21,7 @@ PKGS=(
 
 # ─── UNINSTALL MODE ──────────────────────────────────────────────────────
 if [ "$1" = "uninstall" ]; then
-    echo "Bliss: Uninstalling Data Science Environment..."
+    echo "Altaris: Uninstalling Data Science Environment..."
 
     export DEBIAN_FRONTEND=noninteractive
     apt remove -y --purge "${PKGS[@]}" 2>/dev/null || true
@@ -52,7 +52,7 @@ if [ "$1" = "uninstall" ]; then
     rm -f /usr/share/applications/jupyter.desktop
     rm -f /usr/share/icons/hicolor/scalable/apps/jupyter.svg
 
-    echo "Bliss: Data Science Environment Uninstalled."
+    echo "Altaris: Data Science Environment Uninstalled."
     exit 0
 fi
 # ─── END UNINSTALL MODE ──────────────────────────────────────────────────
@@ -60,7 +60,7 @@ fi
 # Error Handler
 handle_error() {
     echo ""
-    echo "❌ Bliss Error: Script failed at step: $1"
+    echo "❌ Altaris Error: Script failed at step: $1"
     echo "---------------------------------------------------"
     echo "Please check the error message above for details."
     echo "---------------------------------------------------"
@@ -86,12 +86,12 @@ update_shell_path() {
     fi
 }
 
-echo "Bliss: Setting up Data Science & AI Environment..."
+echo "Altaris: Setting up Data Science & AI Environment..."
 TARGET_USER="flux"
 TARGET_GROUP="users"
 
 # 1. System Dependencies
-echo "Bliss: Installing System Dependencies..."
+echo "Altaris: Installing System Dependencies..."
 export DEBIAN_FRONTEND=noninteractive
 apt update -y
 # Dependencies for R, Python scientific stack, OpenCV, HDF5
@@ -103,7 +103,7 @@ apt install -y curl wget unzip zip xz-utils tar build-essential git \
     || handle_error "System Dependencies"
 
 # 2. Python Data Science Environment
-echo "Bliss: Setting up Python Environment (data_env)..."
+echo "Altaris: Setting up Python Environment (data_env)..."
 VENV_DIR="/home/$TARGET_USER/data_env"
 
 if [ ! -d "$VENV_DIR" ]; then
@@ -151,7 +151,7 @@ Categories=Development;Science;
 EOF
 
 # 3. Julia Language (LTS/Stable)
-echo "Bliss: Installing Julia Language..."
+echo "Altaris: Installing Julia Language..."
 JULIA_DIR="/opt/julia"
 if [ ! -d "$JULIA_DIR" ]; then
     mkdir -p "$JULIA_DIR"
@@ -195,7 +195,7 @@ else
 fi
 
 # 4. PyCharm Community
-echo "Bliss: Installing PyCharm Community..."
+echo "Altaris: Installing PyCharm Community..."
 PYCHARM_DIR="/opt/pycharm"
 if [ ! -d "$PYCHARM_DIR" ]; then
     mkdir -p "$PYCHARM_DIR"
@@ -236,7 +236,7 @@ else
 fi
 
 # 5. Spyder IDE
-echo "Bliss: Installing Spyder IDE..."
+echo "Altaris: Installing Spyder IDE..."
 # apt version is simplest/safest
 # pip install spyder is newer 6.0? but requires PyQt5 matching.
 # Let's use apt for stability or pip for latest? User wants latest.
@@ -245,17 +245,17 @@ echo "Bliss: Installing Spyder IDE..."
 apt install -y spyder || echo " [⚠️] Spyder install failed"
 
 # 6. RStudio (Optional check)
-echo "Bliss: Checking RStudio..."
+echo "Altaris: Checking RStudio..."
 # RStudio on ARM64 Linux is tricky. Often requires manual deb specific to OS version.
 # Skipping auto-install to avoid breakage, but R is installed.
 echo " [ℹ️] R is installed. RStudio is omitted due to lack of stable ARM64 builds for Debian Trixie (Use VS Code or R terminal)."
 
 # 7. Final Permissions
-echo "Bliss: Applying permissions..."
+echo "Altaris: Applying permissions..."
 chown -R $TARGET_USER:$TARGET_GROUP "/home/$TARGET_USER"
 
 # Add to PATH for easy access
-echo "Bliss: Configuring Shell Access..."
+echo "Altaris: Configuring Shell Access..."
 update_shell_path "/home/$TARGET_USER/.bashrc" "/home/$TARGET_USER/data_env/bin" "Data Science Environment"
 
 # Only update zshrc if zsh is installed
@@ -266,7 +266,7 @@ fi
 # 8. Verification
 verify_installation() {
     echo ""
-    echo "🔎 Bliss: Verifying Installations..."
+    echo "🔎 Altaris: Verifying Installations..."
     echo "------------------------------------------------"
     
     # Python

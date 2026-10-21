@@ -192,7 +192,7 @@ fun TerminalSessionSplash(
             }
             Spacer(Modifier.height(20.dp))
             Text(
-                text = "Bliss",
+                text = "Altaris",
                 fontSize = 21.sp,
                 fontWeight = FontWeight.Bold,
                 color = TextPrimary,

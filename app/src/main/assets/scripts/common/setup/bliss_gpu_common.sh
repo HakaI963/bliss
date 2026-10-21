@@ -105,7 +105,7 @@ flux_gpu_write_state() {
     chmod 644 /etc/bliss/gpu_mode /etc/bliss/gpu_vendor 2>/dev/null || true
     mkdir -p /etc/profile.d
     cat > /etc/profile.d/bliss-gpu.sh << 'PROFILE'
-# Bliss GPU mode helpers
+# Altaris GPU mode helpers
 if [ -r /etc/bliss/gpu_mode ]; then
     FLUX_GPU_MODE=$(tr -d '[:space:]' </etc/bliss/gpu_mode)
     export FLUX_GPU_MODE
@@ -177,7 +177,7 @@ flux_gpu_apply_runtime() {
         else
             export LIBGL_ALWAYS_SOFTWARE=1
             export GALLIUM_DRIVER=llvmpipe
-            echo "Bliss(guest): VirGL socket missing — llvmpipe fallback"
+            echo "Altaris(guest): VirGL socket missing — llvmpipe fallback"
         fi
     else
         export LIBGL_ALWAYS_SOFTWARE=1
@@ -247,7 +247,7 @@ flux_gpu_apply_runtime() {
         else
             export LIBGL_ALWAYS_SOFTWARE=1
             export GALLIUM_DRIVER=llvmpipe
-            echo "Bliss(guest): VirGL socket missing — llvmpipe fallback"
+            echo "Altaris(guest): VirGL socket missing — llvmpipe fallback"
         fi
     else
         export LIBGL_ALWAYS_SOFTWARE=1
@@ -263,7 +263,7 @@ flux_gpu_write_gpu_launch() {
     mkdir -p /usr/local/bin
     cat > /usr/local/bin/gpu-launch << 'EOF'
 #!/bin/sh
-# Bliss GPU launcher — reads /etc/bliss/gpu_mode; override via FLUX_GPU_RUNTIME
+# Altaris GPU launcher — reads /etc/bliss/gpu_mode; override via FLUX_GPU_RUNTIME
 if [ -r /usr/local/lib/fluxlinux/apply_gpu_env.sh ]; then
     # shellcheck disable=SC1091
     . /usr/local/lib/fluxlinux/apply_gpu_env.sh
@@ -310,7 +310,7 @@ EOF
 }
 
 flux_gpu_disable_xfce_compositor() {
-    echo "Bliss: Disabling XFCE compositor for GPU acceleration..."
+    echo "Altaris: Disabling XFCE compositor for GPU acceleration..."
     for _userdir in /home/* /root; do
         [ -d "$_userdir" ] || continue
         _xfce="$_userdir/.config/xfce4/xfconf/xfce-perchannel-xml"
@@ -331,7 +331,7 @@ XFCEXML
 }
 
 flux_gpu_fake_dri() {
-    echo "Bliss: Creating /dev/dri compatibility layer..."
+    echo "Altaris: Creating /dev/dri compatibility layer..."
     mkdir -p /dev/dri 2>/dev/null || true
     [ -e /dev/dri/card0 ] || ln -sf /dev/null /dev/dri/card0 2>/dev/null || true
     [ -e /dev/dri/renderD128 ] || ln -sf /dev/null /dev/dri/renderD128 2>/dev/null || true

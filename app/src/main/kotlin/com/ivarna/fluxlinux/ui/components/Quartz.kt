@@ -1,11 +1,16 @@
 package com.ivarna.fluxlinux.ui.components
 
 import android.graphics.Bitmap
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,12 +42,17 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.TextStyle
@@ -56,22 +66,22 @@ import androidx.compose.ui.unit.sp
 import com.ivarna.fluxlinux.ui.theme.fluxMutedText
 
 /**
- * Quartz — Bliss compact component layer.
+ * Quartz — Altaris compact component layer.
  *
- * Rules: 18 dp screen padding, layered midnight surfaces, one hairline,
- * 58 dp list rows, 40 dp controls, mint section labels, rounded 16–18 dp cards.
+ * Rules: 20 dp screen padding, layered midnight surfaces with a light-catcher
+ * edge, 58 dp list rows, 40 dp controls, mint section labels, 22 dp cards.
  */
 object Quartz {
-    val ScreenPad = 18.dp
-    val Gap = 12.dp
+    val ScreenPad = 20.dp
+    val Gap = 14.dp
     val RowGap = 8.dp
-    val CardPad = 16.dp
-    val CardShape = RoundedCornerShape(18.dp)
-    val ButtonShape = RoundedCornerShape(12.dp)
+    val CardPad = 18.dp
+    val CardShape = RoundedCornerShape(22.dp)
+    val ButtonShape = RoundedCornerShape(14.dp)
     val PillShape = RoundedCornerShape(50)
-    val TileShape = RoundedCornerShape(12.dp)
+    val TileShape = RoundedCornerShape(14.dp)
 
-    val TitleSize = 27.sp
+    val TitleSize = 28.sp
     val SectionSize = 10.5.sp
     val RowTitleSize = 14.5.sp
     val RowSubSize = 12.sp
@@ -116,19 +126,41 @@ fun QSectionHeader(text: String, modifier: Modifier = Modifier) {
 @Composable
 fun QCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     val shape = Quartz.CardShape
+    val colors = MaterialTheme.colorScheme
     Column(
         modifier = modifier
             .fillMaxWidth()
             .clip(shape)
             .background(
-                Brush.verticalGradient(
+                Brush.linearGradient(
                     listOf(
-                        MaterialTheme.colorScheme.surface,
-                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f),
-                    )
+                        colors.surface.copy(alpha = 0.98f),
+                        colors.surfaceVariant.copy(alpha = 0.62f),
+                    ),
+                    start = Offset.Zero,
+                    end = Offset(900f, 1400f),
                 )
             )
-            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, shape)
+            .border(1.dp, colors.outlineVariant.copy(alpha = 0.92f), shape)
+            .drawWithContent {
+                drawContent()
+                // Light-catcher edge: a single mint highlight, strongest at the
+                // leading corner, fading before the card midpoint.
+                drawLine(
+                    brush = Brush.horizontalGradient(
+                        listOf(
+                            colors.primary.copy(alpha = 0.34f),
+                            colors.primary.copy(alpha = 0.08f),
+                            Color.Transparent,
+                        ),
+                        0f,
+                        size.width,
+                    ),
+                    start = Offset.Zero,
+                    end = Offset(size.width, 0f),
+                    strokeWidth = 1.dp.toPx(),
+                )
+            }
             .padding(vertical = 2.dp),
         content = content,
     )
@@ -154,12 +186,43 @@ fun QRow(
     onClick: (() -> Unit)? = null,
     divider: Boolean = false,
 ) {
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val pressScale by animateFloatAsState(
+        targetValue = if (pressed && onClick != null) 0.985f else 1f,
+        animationSpec = folioSpring(),
+        label = "rowPress",
+    )
+    val pressFill by animateColorAsState(
+        targetValue = if (pressed && onClick != null) {
+            MaterialTheme.colorScheme.primary.copy(alpha = 0.07f)
+        } else {
+            Color.Transparent
+        },
+        animationSpec = tween(150),
+        label = "rowFill",
+    )
     Column(modifier = modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(min = 58.dp)
-                .let { if (onClick != null) it.clickable(onClick = onClick) else it }
+                .graphicsLayer {
+                    scaleX = pressScale
+                    scaleY = pressScale
+                }
+                .background(pressFill)
+                .let {
+                    if (onClick != null) {
+                        it.clickable(
+                            interactionSource = interaction,
+                            indication = null,
+                            onClick = onClick,
+                        )
+                    } else {
+                        it
+                    }
+                }
                 .padding(horizontal = Quartz.CardPad, vertical = 9.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -261,14 +324,26 @@ fun QPrimaryButton(
     icon: ImageVector? = null,
     onClick: () -> Unit,
 ) {
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed && enabled) 0.97f else 1f,
+        animationSpec = folioSpring(),
+        label = "primaryPress",
+    )
     Button(
         onClick = onClick,
         modifier = modifier
             .height(40.dp)
-            .defaultMinSize(minWidth = 88.dp),
+            .defaultMinSize(minWidth = 88.dp)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            },
         enabled = enabled,
         shape = Quartz.ButtonShape,
         contentPadding = PaddingValues(horizontal = 16.dp),
+        interactionSource = interaction,
         colors = ButtonDefaults.buttonColors(
             containerColor = MaterialTheme.colorScheme.primary,
             contentColor = MaterialTheme.colorScheme.onPrimary,
@@ -292,15 +367,31 @@ fun QSecondaryButton(
     icon: ImageVector? = null,
     onClick: () -> Unit,
 ) {
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed && enabled) 0.97f else 1f,
+        animationSpec = folioSpring(),
+        label = "secondaryPress",
+    )
     OutlinedButton(
         onClick = onClick,
         modifier = modifier
             .height(40.dp)
-            .defaultMinSize(minWidth = 88.dp),
+            .defaultMinSize(minWidth = 88.dp)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            },
         enabled = enabled,
         shape = Quartz.ButtonShape,
         contentPadding = PaddingValues(horizontal = 16.dp),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+        border = BorderStroke(
+            1.dp,
+            if (pressed) MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
+            else MaterialTheme.colorScheme.outline,
+        ),
+        interactionSource = interaction,
         colors = ButtonDefaults.outlinedButtonColors(
             contentColor = MaterialTheme.colorScheme.primary,
             disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
@@ -338,18 +429,34 @@ fun QToolButton(
         active -> MaterialTheme.colorScheme.onPrimaryContainer
         else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed && enabled) 0.96f else 1f,
+        animationSpec = folioSpring(),
+        label = "toolPress",
+    )
     Row(
         modifier = modifier
             .height(36.dp)
-            .clip(RoundedCornerShape(11.dp))
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .clip(RoundedCornerShape(12.dp))
             .background(container)
             .border(
                 1.dp,
                 if (active) MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
                 else MaterialTheme.colorScheme.outlineVariant,
-                RoundedCornerShape(11.dp),
+                RoundedCornerShape(12.dp),
             )
-            .clickable(enabled = enabled, onClick = onClick)
+            .clickable(
+                enabled = enabled,
+                interactionSource = interaction,
+                indication = null,
+                onClick = onClick,
+            )
             .padding(horizontal = 11.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),

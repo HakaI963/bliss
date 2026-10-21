@@ -2,7 +2,7 @@
 # scripts/termux/install_apps.sh
 # Installs Firefox and VSCode (Code OSS) via tur-repo
 
-echo "Bliss: Installing Utilities..."
+echo "Altaris: Installing Utilities..."
 
 # Install tur-repo (Termux User Repository)
 pkg install -y tur-repo
@@ -15,4 +15,4 @@ pkg install -y firefox
 echo "Installing VS Code..."
 pkg install -y code-oss
 
-echo "Bliss: Apps Installed Successfully!"
+echo "Altaris: Apps Installed Successfully!"

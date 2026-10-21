@@ -20,7 +20,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Bliss"
+rootProject.name = "Altaris"
 include(":app")
 include(":termux-x11")
 include(":terminal-emulator")

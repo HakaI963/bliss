@@ -1,4 +1,4 @@
 <resources>
-    <string name="app_name">Bliss</string>
-    <string name="accessibility_service_description">Bliss Keyboard Toggle allows you to toggle the keyboard in Termux:X11 using a floating button.</string>
+    <string name="app_name">Altaris</string>
+    <string name="accessibility_service_description">Altaris Keyboard Toggle allows you to toggle the keyboard in Termux:X11 using a floating button.</string>
 </resources>

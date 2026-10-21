@@ -23,10 +23,10 @@ fi
 # Never install parrot-tools / parrot-interface / parrot-desktop-*.
 
 DISTRO_NAME="${1:-parrot}"
-echo "Bliss: Configuring ${DISTRO_NAME} (Parrot Family)..."
+echo "Altaris: Configuring ${DISTRO_NAME} (Parrot Family)..."
 
 if [ "$(id -u)" -ne 0 ]; then
-    echo "Bliss: ERROR: must run as root inside the guest (got uid=$(id -u))."
+    echo "Altaris: ERROR: must run as root inside the guest (got uid=$(id -u))."
     exit 1
 fi
 
@@ -39,7 +39,7 @@ _flux_disable_guest_selinux
 _flux_apt_prep
 
 if ! command -v apt-get >/dev/null 2>&1; then
-    echo "Bliss: ERROR: apt-get not found"
+    echo "Altaris: ERROR: apt-get not found"
     exit 1
 fi
 
@@ -48,7 +48,7 @@ if ! apt-get update; then
     _flux_log "apt-get update failed — installing ca-certificates and retrying"
     apt-get install -y --no-install-recommends ca-certificates || true
     apt-get update || {
-        echo "Bliss: apt-get update failed (repos/network)"
+        echo "Altaris: apt-get update failed (repos/network)"
         exit 1
     }
 fi
@@ -58,7 +58,7 @@ apt-get install -y --no-install-recommends \
     bash sudo passwd adduser ca-certificates curl wget unzip tar xz-utils \
     git zsh python3 locales \
     dbus dbus-x11 || {
-        echo "Bliss: base package install failed"
+        echo "Altaris: base package install failed"
         exit 1
     }
 
@@ -87,7 +87,7 @@ if [ -z "${DESKTOPS##*xfce*}" ]; then
         libgl1-mesa-dri libegl1 mesa-utils; then
         _flux_log "targeted XFCE install failed — falling back to xfce4 metapackage"
         _flux_retry_pkg apt-get install -y --no-install-recommends xfce4 || {
-            echo "Bliss: XFCE install failed after 3 tries — check your network, then tap Retry Setup."
+            echo "Altaris: XFCE install failed after 3 tries — check your network, then tap Retry Setup."
             exit 1
         }
     fi
@@ -126,5 +126,11 @@ if [ -z "${DESKTOPS##*xfce*}" ] && command -v _flux_xfce_compact_defaults >/dev/
     _flux_xfce_compact_defaults || true
 fi
 
-echo "Bliss: ${DISTRO_NAME} Parrot setup complete!"
+
+# Altaris universal interactive shell: zsh suggestions, syntax colors, sticker.
+if command -v _flux_setup_altaris_shell >/dev/null 2>&1; then
+    _flux_setup_altaris_shell || true
+fi
+
+echo "Altaris: ${DISTRO_NAME} Parrot setup complete!"
 exit 0

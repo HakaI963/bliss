@@ -25,10 +25,10 @@ fi
 #   - no bash/useradd/sudo in bootstrap — install shadow+bash BEFORE user creation
 
 DISTRO_NAME="${1:-chimera}"
-echo "Bliss: Configuring ${DISTRO_NAME} (Chimera Family)..."
+echo "Altaris: Configuring ${DISTRO_NAME} (Chimera Family)..."
 
 if [ "$(id -u)" -ne 0 ]; then
-    echo "Bliss: ERROR: must run as root inside the guest (got uid=$(id -u))."
+    echo "Altaris: ERROR: must run as root inside the guest (got uid=$(id -u))."
     exit 1
 fi
 
@@ -36,7 +36,7 @@ _flux_ensure_tmp
 _flux_ensure_dns
 
 if ! command -v apk >/dev/null 2>&1; then
-    echo "Bliss: ERROR: apk not found"
+    echo "Altaris: ERROR: apk not found"
     exit 1
 fi
 
@@ -47,7 +47,7 @@ printf 'cache-packages\n' > /etc/apk/config
 
 _flux_log "apk update..."
 apk update || {
-    echo "Bliss: apk update failed (repos/network)"
+    echo "Altaris: apk update failed (repos/network)"
     exit 1
 }
 
@@ -61,12 +61,12 @@ if ! apk add bash shadow opendoas ca-certificates curl wget2 unzip gtar xz \
         cmd:wget2 cmd:unzip cmd:gtar cmd:xz cmd:git cmd:zsh cmd:python \
         cmd:dbus-run-session \
         fonts-dejavu || {
-            echo "Bliss: base package install failed"
+            echo "Altaris: base package install failed"
             exit 1
         }
 fi
 
-# GNU tool aliases: Bliss scripts call `wget` / `tar`. wget2 provides
+# GNU tool aliases: Altaris scripts call `wget` / `tar`. wget2 provides
 # /usr/bin/wget2, gtar provides /usr/bin/gtar — link the conventional names.
 if [ ! -e /usr/local/bin/wget ] && command -v wget2 >/dev/null 2>&1; then
     mkdir -p /usr/local/bin
@@ -109,7 +109,7 @@ if [ -z "${DESKTOPS##*xfce*}" ]; then
         _flux_log "XFCE pkg names differ — retrying via cmd: virtual providers"
         _flux_retry_pkg apk add cmd:startxfce4 cmd:xfce4-panel cmd:xfce4-settings \
             cmd:xfce4-terminal cmd:xfdesktop cmd:xfwm4 cmd:thunar || {
-                echo "Bliss: XFCE install failed after 3 tries — check your network, then tap Retry Setup."
+                echo "Altaris: XFCE install failed after 3 tries — check your network, then tap Retry Setup."
                 exit 1
             }
     fi
@@ -161,5 +161,11 @@ if [ -z "${DESKTOPS##*xfce*}" ] && command -v _flux_xfce_compact_defaults >/dev/
     _flux_xfce_compact_defaults || true
 fi
 
-echo "Bliss: ${DISTRO_NAME} Chimera setup complete!"
+
+# Altaris universal interactive shell: zsh suggestions, syntax colors, sticker.
+if command -v _flux_setup_altaris_shell >/dev/null 2>&1; then
+    _flux_setup_altaris_shell || true
+fi
+
+echo "Altaris: ${DISTRO_NAME} Chimera setup complete!"
 exit 0

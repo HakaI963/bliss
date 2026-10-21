@@ -1,4 +1,4 @@
-name: Build Bliss APK
+name: Build Altaris APK
 
 permissions:
   contents: write
@@ -88,6 +88,6 @@ jobs:
           APK=app/build/outputs/apk/bliss/debug/app-bliss-debug.apk
           TAG="bliss-debug-${GITHUB_SHA::7}"
           SHA=$(sha256sum "$APK" | awk '{print $1}')
-          gh release create "$TAG" --title "Bliss 3.18.0 — faster terminal installs, reliable recording, path installs" \
+          gh release create "$TAG" --title "Altaris 3.19.0 — universal shell, hidden control plane, polished UI" \
             --notes "Terminal-base installs no longer pull Mesa/XFCE/VNC payloads (Alpine base: ~25 s on a warm network), proot login now forwards the desktop contract, /emulated + /sdcard + /root APK paths fall back to the shell service, recording captures real frames and always finalizes a playable MP4, the install bar retires stale 100% states, and viewer/PiP previews are capped at 24 fps. APK SHA-256: $SHA" || true
           gh release upload "$TAG" "$APK" --clobber

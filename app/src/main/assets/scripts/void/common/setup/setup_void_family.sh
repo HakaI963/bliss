@@ -20,10 +20,10 @@ fi
 # setup_void_family.sh — Void Linux glibc aarch64 XFCE (proot + chroot). xbps.
 
 DISTRO_NAME="${1:-void}"
-echo "Bliss: Configuring ${DISTRO_NAME} (Void Family)..."
+echo "Altaris: Configuring ${DISTRO_NAME} (Void Family)..."
 
 if [ "$(id -u)" -ne 0 ]; then
-    echo "Bliss: ERROR: must run as root inside the guest (got uid=$(id -u))."
+    echo "Altaris: ERROR: must run as root inside the guest (got uid=$(id -u))."
     exit 1
 fi
 
@@ -32,7 +32,7 @@ _flux_ensure_tmp
 _flux_ensure_dns
 
 if ! command -v xbps-install >/dev/null 2>&1; then
-    echo "Bliss: ERROR: xbps-install not found"
+    echo "Altaris: ERROR: xbps-install not found"
     exit 1
 fi
 
@@ -53,7 +53,7 @@ export SYSTEMD_OFFLINE=1
 
 _flux_log "xbps-install sync..."
 xbps-install -Sy || {
-    echo "Bliss: xbps sync failed (network / repos)"
+    echo "Altaris: xbps sync failed (network / repos)"
     exit 1
 }
 # Rolling Void often requires updating xbps itself before any other transaction.
@@ -91,7 +91,7 @@ if [ -z "${DESKTOPS##*xfce*}" ]; then
     if ! _flux_retry_pkg xbps-install -y \
         xfce4-session xfce4-panel xfce4-settings xfce4-terminal \
         xfdesktop xfwm4; then
-        echo "Bliss: XFCE package install failed after 3 tries — check your network, then tap Retry Setup."
+        echo "Altaris: XFCE package install failed after 3 tries — check your network, then tap Retry Setup."
         exit 1
     fi
     xbps-install -y Thunar 2>/dev/null || xbps-install -y thunar 2>/dev/null || true
@@ -131,5 +131,11 @@ if [ -z "${DESKTOPS##*xfce*}" ] && command -v _flux_xfce_compact_defaults >/dev/
     _flux_xfce_compact_defaults || true
 fi
 
-echo "Bliss: ${DISTRO_NAME} Void setup complete!"
+
+# Altaris universal interactive shell: zsh suggestions, syntax colors, sticker.
+if command -v _flux_setup_altaris_shell >/dev/null 2>&1; then
+    _flux_setup_altaris_shell || true
+fi
+
+echo "Altaris: ${DISTRO_NAME} Void setup complete!"
 exit 0

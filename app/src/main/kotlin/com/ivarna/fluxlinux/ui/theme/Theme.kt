@@ -20,24 +20,24 @@ import com.ivarna.fluxlinux.core.utils.StateManager
 import com.ivarna.fluxlinux.core.utils.ThemeMode
 import com.ivarna.fluxlinux.core.utils.ThemePalette
 
-// Bliss Midnight — the reference look: near-black glass, mint/teal signal,
+// Altaris Midnight — the reference look: near-black glass, mint/teal signal,
 // icy text and hairline borders. Day is the same layout with paper surfaces.
-private val Mint = Color(0xFF79F2C4)
-private val MintContainer = Color(0xFF0D2A23)
-private val Ice = Color(0xFF7DDFF3)
+private val Mint = Color(0xFF7CF5C8)
+private val MintContainer = Color(0xFF0C2B24)
+private val Ice = Color(0xFF86E6FF)
 private val IceContainer = Color(0xFF0A2730)
 private val Violet = Color(0xFFC7B8FF)
 private val VioletContainer = Color(0xFF211B3A)
 private val Amber = Color(0xFFFFD08A)
 private val AmberContainer = Color(0xFF332412)
 
-private val NightBg = Color(0xFF05080B)
-private val NightSurface = Color(0xFF0A1014)
-private val NightSurfaceVariant = Color(0xFF101A1F)
+private val NightBg = Color(0xFF04070A)
+private val NightSurface = Color(0xFF091116)
+private val NightSurfaceVariant = Color(0xFF0F1A20)
 private val NightText = Color(0xFFE7F3EF)
-private val NightMuted = Color(0xFF8CA8A1)
-private val NightOutline = Color(0xFF243B37)
-private val NightOutlineSoft = Color(0xFF172825)
+private val NightMuted = Color(0xFF91AFA7)
+private val NightOutline = Color(0xFF27423B)
+private val NightOutlineSoft = Color(0xFF172B27)
 
 private val DayBg = Color(0xFFF2F6F5)
 private val DaySurface = Color(0xFFFFFFFF)

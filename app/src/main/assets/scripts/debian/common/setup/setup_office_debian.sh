@@ -21,13 +21,13 @@ PKGS=(
 
 # ─── UNINSTALL MODE ──────────────────────────────────────────────────────
 if [ "$1" = "uninstall" ]; then
-    echo "Bliss: Uninstalling Office Productivity Environment..."
+    echo "Altaris: Uninstalling Office Productivity Environment..."
 
     export DEBIAN_FRONTEND=noninteractive
     apt remove -y --purge "${PKGS[@]}" 2>/dev/null || true
     apt autoremove -y 2>/dev/null || true
 
-    echo "Bliss: Office Productivity Environment Uninstalled."
+    echo "Altaris: Office Productivity Environment Uninstalled."
     exit 0
 fi
 # ─── END UNINSTALL MODE ──────────────────────────────────────────────────
@@ -35,7 +35,7 @@ fi
 # Error Handler
 handle_error() {
     echo ""
-    echo "❌ Bliss Error: Script failed at step: $1"
+    echo "❌ Altaris Error: Script failed at step: $1"
     echo "---------------------------------------------------"
     echo "Please check the error message above for details."
     echo "---------------------------------------------------"
@@ -43,11 +43,11 @@ handle_error() {
     exit 1
 }
 
-echo "Bliss: Setting up Office Productivity Environment..."
+echo "Altaris: Setting up Office Productivity Environment..."
 echo "Target: Debian 13 (Trixie) - ARM64"
 
 # 1. System Dependencies
-echo "Bliss: Installing Dependencies..."
+echo "Altaris: Installing Dependencies..."
 export DEBIAN_FRONTEND=noninteractive
 apt update -y
 
@@ -63,12 +63,12 @@ apt install -y \
 # If setup_webdev_debian.sh ran, nodejs includes npm.
 # If not, Debian split packages might need explicit npm.
 if ! command -v npm >/dev/null; then
-    echo "Bliss: NPM not found (bundled), installing explicitly..."
+    echo "Altaris: NPM not found (bundled), installing explicitly..."
     apt install -y npm || echo " [⚠️] NPM install warning (might be bundled)"
 fi
 
 # 2. LibreOffice Suite
-echo "Bliss: Installing LibreOffice Suite..."
+echo "Altaris: Installing LibreOffice Suite..."
 # Use --no-install-recommends to avoid large optional packages like fonts-noto-extra
 # which can fail in proot environments due to resource constraints
 apt install -y --no-install-recommends \
@@ -85,14 +85,14 @@ apt install -y --no-install-recommends \
     }
 
 # 3. Email & PIM
-echo "Bliss: Installing Email & Organization Tools..."
+echo "Altaris: Installing Email & Organization Tools..."
 # Thunderbird: Email client
 apt install -y --no-install-recommends \
     thunderbird \
     || handle_error "Thunderbird Installation"
 
 # 4. PDF Tools
-echo "Bliss: Installing PDF Tools..."
+echo "Altaris: Installing PDF Tools..."
 # Evince: Document Viewer
 # Xournal++: Note taking & PDF Annotation
 # Non-fatal: on Debian Trixie + backports, evince transitively pulls
@@ -113,13 +113,13 @@ apt install -y --no-install-recommends \
     }
 
 # 5. Optional: Try to install extra fonts (non-fatal if fails)
-echo "Bliss: Installing additional fonts (optional)..."
+echo "Altaris: Installing additional fonts (optional)..."
 apt install -y fonts-noto 2>/dev/null || echo " [⚠️] Optional fonts skipped (proot limitation)"
 
 # 6. Verification
 verify_installation() {
     echo ""
-    echo "🔎 Bliss: Verifying Installations..."
+    echo "🔎 Altaris: Verifying Installations..."
     echo "------------------------------------------------"
     
     if command -v libreoffice >/dev/null; then echo " [✅] LibreOffice"; else echo " [❌] LibreOffice Missing"; fi

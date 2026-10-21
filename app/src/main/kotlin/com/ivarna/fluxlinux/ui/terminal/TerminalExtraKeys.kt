@@ -224,7 +224,7 @@ data class ShortcutBarActions(
 )
 
 /**
- * Configurable special-keys toolbar, Bliss frost edition.
+ * Configurable special-keys toolbar, Altaris frost edition.
  *
  * Renders [ShortcutBarConfig.keys]: main keys flow into weighted rows (defaults
  * mirror the classic CTRL ALT SHIFT ESC TAB / arrows ENT ⌫ Fn layout), Fn-flagged

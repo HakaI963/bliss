@@ -20,13 +20,13 @@ PKGS=(
 
 # ─── UNINSTALL MODE ──────────────────────────────────────────────────────
 if [ "$1" = "uninstall" ]; then
-    echo "Bliss: Uninstalling Graphic Design Environment..."
+    echo "Altaris: Uninstalling Graphic Design Environment..."
 
     export DEBIAN_FRONTEND=noninteractive
     apt remove -y --purge "${PKGS[@]}" 2>/dev/null || true
     apt autoremove -y 2>/dev/null || true
 
-    echo "Bliss: Graphic Design Environment Uninstalled."
+    echo "Altaris: Graphic Design Environment Uninstalled."
     exit 0
 fi
 # ─── END UNINSTALL MODE ──────────────────────────────────────────────────
@@ -34,7 +34,7 @@ fi
 # Error Handler
 handle_error() {
     echo ""
-    echo "❌ Bliss Error: Script failed at step: $1"
+    echo "❌ Altaris Error: Script failed at step: $1"
     echo "---------------------------------------------------"
     echo "Please check the error message above for details."
     echo "---------------------------------------------------"
@@ -42,11 +42,11 @@ handle_error() {
     exit 1
 }
 
-echo "Bliss: Setting up Graphic Design Environment..."
+echo "Altaris: Setting up Graphic Design Environment..."
 echo "Target: Debian 13 (Trixie) - ARM64"
 
 # 1. System Dependencies
-echo "Bliss: Installing Dependencies..."
+echo "Altaris: Installing Dependencies..."
 export DEBIAN_FRONTEND=noninteractive
 apt update -y
 
@@ -63,7 +63,7 @@ apt install -y \
     || handle_error "Dependencies & Fonts"
 
 # 2. Raster & Vector Editors
-echo "Bliss: Installing Design Tools..."
+echo "Altaris: Installing Design Tools..."
 
 # GIMP: The GNU Image Manipulation Program (Raster)
 # Inkscape: Professional Vector Graphics Editor
@@ -75,7 +75,7 @@ apt install -y \
     || handle_error "GIMP/Inkscape/Krita Installation"
 
 # 3. Photography & Publishing
-echo "Bliss: Installing Photo & Publishing Tools..."
+echo "Altaris: Installing Photo & Publishing Tools..."
 
 # Darktable: RAW Developer & Lightroom alternative
 # Scribus: Desktop Publishing (Indesign alternative)
@@ -85,7 +85,7 @@ apt install -y \
     || handle_error "Darktable/Scribus Installation"
 
 # 4. 3D & Utilities
-echo "Bliss: Installing 3D & Utility Tools..."
+echo "Altaris: Installing 3D & Utility Tools..."
 
 # Blender: 3D Creation Suite (heavy but powerful)
 # ImageMagick: CLI image manipulation (convert, mogrify)
@@ -99,7 +99,7 @@ apt install -y \
 # 5. Verification
 verify_installation() {
     echo ""
-    echo "🔎 Bliss: Verifying Installations..."
+    echo "🔎 Altaris: Verifying Installations..."
     echo "------------------------------------------------"
     
     # Editors
@@ -121,5 +121,5 @@ verify_installation() {
 
 verify_installation
 
-echo "Note: For best performance with Blender/Krita, enable Hardware Acceleration (VirGL) in Bliss settings."
+echo "Note: For best performance with Blender/Krita, enable Hardware Acceleration (VirGL) in Altaris settings."
 read -p "Press Enter to close..."

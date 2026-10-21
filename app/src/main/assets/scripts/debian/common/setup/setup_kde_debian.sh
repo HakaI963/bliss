@@ -76,7 +76,7 @@ if [ "$1" = "uninstall" ] || [ "$2" = "uninstall" ]; then
     [ "$1" = "uninstall" ] && DISTRO_NAME="debian"
 
     export DEBIAN_FRONTEND=noninteractive
-    echo "Bliss: Uninstalling KDE Plasma Environment..."
+    echo "Altaris: Uninstalling KDE Plasma Environment..."
 
     apt remove -y --purge "${PURGE_PKGS[@]}" 2>/dev/null || true
     apt autoremove -y 2>/dev/null || true
@@ -86,7 +86,7 @@ if [ "$1" = "uninstall" ] || [ "$2" = "uninstall" ]; then
     rm -f /home/flux/.fluxlinux/kde_installed
     rm -f /usr/local/lib/fluxlinux/bliss_kde_env.sh
 
-    echo "Bliss: KDE Plasma Environment Uninstalled."
+    echo "Altaris: KDE Plasma Environment Uninstalled."
     exit 0
 fi
 # ─── END UNINSTALL MODE ──────────────────────────────────────────────────
@@ -107,7 +107,7 @@ _flux_pause() {
 handle_error() {
     local STEP="$1"
     echo ""
-    echo "❌ Bliss KDE Error: Script failed at step: $STEP"
+    echo "❌ Altaris KDE Error: Script failed at step: $STEP"
     echo "──────────────────────────────────────────────────────"
     echo "Log saved to: $LOG_FILE"
     echo ""
@@ -157,7 +157,7 @@ if ! command -v _flux_retry_pkg >/dev/null 2>&1; then
                 _retry_rc=$?
             fi
             [ "$_retry_n" -lt "$_retry_tries" ] || break
-            echo "Bliss: Package download failed — retrying ($((_retry_n + 1))/$_retry_tries)…"
+            echo "Altaris: Package download failed — retrying ($((_retry_n + 1))/$_retry_tries)…"
             _flux_pm_refresh >/dev/null 2>&1 || true
             _retry_n=$((_retry_n + 1))
         done
@@ -168,12 +168,12 @@ fi
 
 # Setup scripts must run as root inside proot/chroot (apt/dpkg).
 if [ "$(id -u)" -ne 0 ]; then
-    echo "Bliss: ERROR: must run as root inside the guest (got uid=$(id -u))."
-    echo "Bliss: Component sessions should use --user root; re-run from Distro Settings."
+    echo "Altaris: ERROR: must run as root inside the guest (got uid=$(id -u))."
+    echo "Altaris: Component sessions should use --user root; re-run from Distro Settings."
     handle_error "Not Root"
 fi
 
-echo "Bliss: Configuring ${DISTRO_NAME} with KDE Plasma..."
+echo "Altaris: Configuring ${DISTRO_NAME} with KDE Plasma..."
 
 # Redirect all output to log
 exec > >(tee -a "$LOG_FILE") 2>&1
@@ -190,7 +190,7 @@ echo "[2/7] Installing KDE Plasma desktop (full suite)..."
 #           gwenview, okular, spectacle, kcalc, kscreen, kinfocenter, and more.
 # Recommends stay enabled — that is what makes the desktop actually usable.
 if ! _flux_retry_pkg apt install -y "${PKGS[@]}" "${BASE_PKGS[@]}"; then
-    echo "Bliss: Package install failed after 3 tries — check your network, then tap Retry Setup."
+    echo "Altaris: Package install failed after 3 tries — check your network, then tap Retry Setup."
     handle_error "KDE Plasma package installation"
 fi
 
@@ -254,7 +254,7 @@ touch /home/flux/.fluxlinux/kde_installed
 chown -R flux:flux /home/flux/.fluxlinux
 
 echo ""
-echo "✅ Bliss: KDE Plasma base setup for ${DISTRO_NAME} complete!"
+echo "✅ Altaris: KDE Plasma base setup for ${DISTRO_NAME} complete!"
 echo "Log saved at: $LOG_FILE"
 
 

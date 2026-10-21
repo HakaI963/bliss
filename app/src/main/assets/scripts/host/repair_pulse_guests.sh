@@ -22,7 +22,7 @@ REPAIR="${HOME}/setup_pulse_guest.sh"
 MODE="${1:-all}"
 
 if [ ! -f "$COMMON" ] || [ ! -f "$REPAIR" ]; then
-  echo "Bliss: [AUDIO] FAIL guest repair scripts not deployed"
+  echo "Altaris: [AUDIO] FAIL guest repair scripts not deployed"
   exit 0
 fi
 
@@ -34,7 +34,7 @@ chmod 755 "$TMPDIR/setup_pulse_guest.sh" 2>/dev/null || true
 repair_proot() {
   _pd="$PREFIX/var/lib/proot-distro"
   command -v proot-distro >/dev/null 2>&1 || {
-    echo "Bliss: [AUDIO] skip proot repair (proot-distro missing)"
+    echo "Altaris: [AUDIO] skip proot repair (proot-distro missing)"
     return 0
   }
   for _layout in containers installed-rootfs; do
@@ -48,7 +48,7 @@ repair_proot() {
       if [ ! -d "$_dir/rootfs/etc" ] && [ ! -d "$_dir/etc" ]; then
         continue
       fi
-      echo "Bliss: [AUDIO] repair proot $_name"
+      echo "Altaris: [AUDIO] repair proot $_name"
       # Same env -i as ProotCommandBuilder.guestLoginEnv — no host PATH/PREFIX.
       _gp="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
       proot-distro login "$_name" --shared-tmp --user root -- \
@@ -57,7 +57,7 @@ repair_proot() {
           TMPDIR=/tmp XDG_RUNTIME_DIR=/tmp PATH="$_gp" \
           PULSE_SERVER=tcp:127.0.0.1 \
           /bin/sh /tmp/setup_pulse_guest.sh \
-        || echo "Bliss: [AUDIO] WARN repair failed proot $_name"
+        || echo "Altaris: [AUDIO] WARN repair failed proot $_name"
     done
   done
 }
@@ -80,7 +80,7 @@ _CHROOT_PATHS="
 repair_chroot_as_root() {
   _helper=/data/local/bliss/helpers/bliss_chroot.sh
   if [ ! -f "$_helper" ]; then
-    echo "Bliss: [AUDIO] skip chroot repair (helper missing)"
+    echo "Altaris: [AUDIO] skip chroot repair (helper missing)"
     return 0
   fi
   for _path in $_CHROOT_PATHS; do
@@ -89,10 +89,10 @@ repair_chroot_as_root() {
     cp -f "$COMMON" "$_path/tmp/bliss_guest_common.sh"
     cp -f "$REPAIR" "$_path/tmp/setup_pulse_guest.sh"
     chmod 755 "$_path/tmp/setup_pulse_guest.sh" 2>/dev/null || true
-    echo "Bliss: [AUDIO] repair chroot $_path"
+    echo "Altaris: [AUDIO] repair chroot $_path"
     FLUX_CHROOT="$_path" FLUX_PACKAGE="$PKG" \
       /system/bin/sh "$_helper" sh --user root -- '/bin/sh /tmp/setup_pulse_guest.sh' \
-      || echo "Bliss: [AUDIO] WARN repair failed chroot $_path"
+      || echo "Altaris: [AUDIO] WARN repair failed chroot $_path"
   done
 }
 
@@ -119,11 +119,11 @@ if [ -z "$_su" ] && command -v su >/dev/null 2>&1; then
 fi
 
 if [ -n "$_su" ]; then
-  echo "Bliss: [AUDIO] chroot repair via su"
+  echo "Altaris: [AUDIO] chroot repair via su"
   "$_su" -c "HOME='$HOME' PREFIX='$PREFIX' TERMUX__PREFIX='$PREFIX' TERMUX__HOME='$HOME' TERMUX_APP__PACKAGE_NAME='$PKG' /system/bin/sh '$0' chroot-only" \
-    || echo "Bliss: [AUDIO] WARN chroot repair su failed"
+    || echo "Altaris: [AUDIO] WARN chroot repair su failed"
 else
-  echo "Bliss: [AUDIO] skip chroot repair (no su)"
+  echo "Altaris: [AUDIO] skip chroot repair (no su)"
 fi
 
 exit 0

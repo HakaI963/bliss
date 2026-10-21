@@ -191,10 +191,10 @@ configure_debian_chroot() {
             _xf=1
             until apt install -y xfce4 xfce4-terminal; do
                 if [ "$_xf" -ge 3 ]; then
-                    echo "Bliss: XFCE package install failed after 3 tries — check your network, then tap Retry Setup."
+                    echo "Altaris: XFCE package install failed after 3 tries — check your network, then tap Retry Setup."
                     exit 1
                 fi
-                echo "Bliss: Package download failed — retrying ($((_xf + 1))/3)…"
+                echo "Altaris: Package download failed — retrying ($((_xf + 1))/3)…"
                 apt-get update >/dev/null 2>&1 || true
                 _xf=$((_xf + 1))
             done
@@ -297,7 +297,7 @@ if [ -z "${BB:-}" ]; then
   fi
 fi
 if [ -z "${BB:-}" ]; then
-  echo "Bliss: ERROR — root-capable busybox not found" >&2
+  echo "Altaris: ERROR — root-capable busybox not found" >&2
   exit 1
 fi
 
@@ -311,7 +311,7 @@ fi
 
     DEBIANPATH="/data/local/bliss/chroots/debian"
 
-    # Root-staged launchers live in the Bliss helpers dir (idempotent).
+    # Root-staged launchers live in the Altaris helpers dir (idempotent).
     mkdir -p /data/local/bliss/helpers
 
     # --- CHECK EXISTING INSTALLATION ---
@@ -514,10 +514,10 @@ EOF
     chmod +x "$CLI_SCRIPT"
     success "CLI Launcher created: $CLI_SCRIPT"
     
-    echo "Bliss: Chroot Setup Complete!"
+    echo "Altaris: Chroot Setup Complete!"
     
     # --- NOTIFY APP ---
-    progress "Notifying Bliss App..."
+    progress "Notifying Altaris App..."
     am start -a android.intent.action.VIEW -d "fluxlinux://callback?result=success&name=distro_install_debian_chroot" >/dev/null 2>&1
 }
 

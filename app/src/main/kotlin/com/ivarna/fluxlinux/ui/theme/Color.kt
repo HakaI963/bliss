@@ -10,36 +10,36 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import com.ivarna.fluxlinux.core.utils.ThemePalette
 
-// ── Bliss Midnight palette ──────────────────────────────────────────────────
+// ── Altaris Midnight palette ──────────────────────────────────────────────────
 // Observable top-level tokens keep legacy Frost/Quartz call sites in sync with
 // the active theme. New code should use MaterialTheme.colorScheme directly.
 
-var FolioBackground by mutableStateOf(Color(0xFF05080B))
+var FolioBackground by mutableStateOf(Color(0xFF04070A))
     internal set
-var FolioSurface by mutableStateOf(Color(0xFF0A1014))
+var FolioSurface by mutableStateOf(Color(0xFF091116))
     internal set
-var FolioCard by mutableStateOf(Color(0xFF101A1F))
+var FolioCard by mutableStateOf(Color(0xFF0F1A20))
     internal set
-var FrostSurface by mutableStateOf(Color(0xFF0A1014))
+var FrostSurface by mutableStateOf(Color(0xFF091116))
     internal set
-var FrostSurfaceElevated by mutableStateOf(Color(0xFF101A1F))
+var FrostSurfaceElevated by mutableStateOf(Color(0xFF0F1A20))
     internal set
-var FrostHairline by mutableStateOf(Color(0xFF172825))
+var FrostHairline by mutableStateOf(Color(0xFF172B27))
     internal set
 var FrostTopSheen by mutableStateOf(Color.Transparent)
     internal set
 
 var TextPrimary by mutableStateOf(Color(0xFFE7F3EF))
     internal set
-var TextSecondary by mutableStateOf(Color(0xFF8CA8A1))
+var TextSecondary by mutableStateOf(Color(0xFF91AFA7))
     internal set
 var TextMuted by mutableStateOf(Color(0xFF607A73))
     internal set
-var PrimaryAction by mutableStateOf(Color(0xFF79F2C4))
+var PrimaryAction by mutableStateOf(Color(0xFF7CF5C8))
     internal set
 var OnPrimaryAction by mutableStateOf(Color(0xFF032019))
     internal set
-var StatusDot by mutableStateOf(Color(0xFF79F2C4))
+var StatusDot by mutableStateOf(Color(0xFF7CF5C8))
     internal set
 var FolioDanger by mutableStateOf(Color(0xFFFF8A80))
     internal set
@@ -47,15 +47,15 @@ var FolioDangerContainer by mutableStateOf(Color(0xFF4A1512))
     internal set
 
 // Frost switch tokens, kept for the existing switch call sites.
-var FolioSwitchCheckedTrack by mutableStateOf(Color(0xFF79F2C4))
+var FolioSwitchCheckedTrack by mutableStateOf(Color(0xFF7CF5C8))
     internal set
 var FolioSwitchCheckedThumb by mutableStateOf(Color(0xFF032019))
     internal set
-var FolioSwitchUncheckedTrack by mutableStateOf(Color(0xFF101A1F))
+var FolioSwitchUncheckedTrack by mutableStateOf(Color(0xFF0F1A20))
     internal set
-var FolioSwitchUncheckedThumb by mutableStateOf(Color(0xFF243B37))
+var FolioSwitchUncheckedThumb by mutableStateOf(Color(0xFF27423B))
     internal set
-var FolioSwitchUncheckedBorder by mutableStateOf(Color(0xFF243B37))
+var FolioSwitchUncheckedBorder by mutableStateOf(Color(0xFF27423B))
     internal set
 
 /** Hairline used by the legacy glass containers; now a flat hairline. */
@@ -67,7 +67,7 @@ val FolioFrostBorder: Brush
 val SlatePrimary = Color(0xFF0E6F8A)
 val PlumPrimary = Color(0xFF6B52A8)
 val SandPrimary = Color(0xFF8A5D20)
-val CarbonPrimary = Color(0xFF79F2C4)
+val CarbonPrimary = Color(0xFF7CF5C8)
 
 /** Swatch dot for the accent picker. */
 fun ThemePalette.accentColor(): Color = when (this) {

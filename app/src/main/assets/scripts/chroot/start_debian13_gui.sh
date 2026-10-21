@@ -19,7 +19,7 @@ fi
 USERNAME="${USERNAME:-flux}"
 
 echo "========================================"
-echo "Bliss: Chroot XFCE (root stage)"
+echo "Altaris: Chroot XFCE (root stage)"
 echo "  rootfs=$DEBIANPATH"
 echo "========================================"
 
@@ -62,28 +62,28 @@ if [ -z "${BB:-}" ]; then
   fi
 fi
 if [ -z "${BB:-}" ]; then
-  echo "Bliss: ERROR — root-capable busybox not found" >&2
+  echo "Altaris: ERROR — root-capable busybox not found" >&2
   exit 1
 fi
 
-echo "Bliss: busybox=$BB"
+echo "Altaris: busybox=$BB"
 
 if [ ! -d "$DEBIANPATH" ]; then
-  echo "Bliss: ERROR — chroot missing: $DEBIANPATH"
+  echo "Altaris: ERROR — chroot missing: $DEBIANPATH"
   exit 1
 fi
 if [ ! -x "$DEBIANPATH/usr/bin/startxfce4" ] && [ ! -f "$DEBIANPATH/usr/bin/startxfce4" ]; then
-  echo "Bliss: ERROR — startxfce4 missing. Re-run chroot environment setup."
+  echo "Altaris: ERROR — startxfce4 missing. Re-run chroot environment setup."
   exit 1
 fi
 
 # Soft SELinux (HyperOS / enforcing) — flux pattern; fail soft
 if command -v getenforce >/dev/null 2>&1; then
   SELINUX_STATUS=$(getenforce 2>/dev/null || true)
-  echo "Bliss: SELinux=$SELINUX_STATUS"
+  echo "Altaris: SELinux=$SELINUX_STATUS"
   if [ "$SELINUX_STATUS" = "Enforcing" ]; then
-    setenforce 0 2>/dev/null && echo "Bliss: SELinux → Permissive (until reboot)" \
-      || echo "Bliss: [WARN] setenforce 0 failed"
+    setenforce 0 2>/dev/null && echo "Altaris: SELinux → Permissive (until reboot)" \
+      || echo "Altaris: [WARN] setenforce 0 failed"
   fi
 fi
 # PREFIX/tmp must stay app_data_file. Labeling it tmpfs:s0 makes termux-x11
@@ -104,14 +104,14 @@ chmod 1777 "$TARGET_PREFIX/tmp/.X11-unix" 2>/dev/null || true
 i=0
 while [ $i -lt 15 ]; do
   if [ -S "$TARGET_PREFIX/tmp/.X11-unix/X0" ]; then
-    echo "Bliss: host X0 socket ready"
+    echo "Altaris: host X0 socket ready"
     break
   fi
   i=$((i + 1))
   sleep 1
 done
 if [ ! -S "$TARGET_PREFIX/tmp/.X11-unix/X0" ]; then
-  echo "Bliss: [WARN] host X0 not seen yet — continuing"
+  echo "Altaris: [WARN] host X0 not seen yet — continuing"
 fi
 
 if [ -f "$HELPER" ]; then
@@ -183,9 +183,9 @@ if [ -e /etc/bliss/kde_gl ]; then case "$GPU_MODE" in turnip|panvk)
     unset MESA_GL_VERSION_OVERRIDE MESA_GLES_VERSION_OVERRIDE
     _o=$(timeout -k 2 30 glxinfo -B 2>/dev/null) || _o=
     case "$_o" in
-      *zink*) echo "Bliss(guest): KDE GL = zink on Turnip" ;;
+      *zink*) echo "Altaris(guest): KDE GL = zink on Turnip" ;;
       *)
-        echo "Bliss(guest): zink-on-Turnip probe failed - kgsl fallback"
+        echo "Altaris(guest): zink-on-Turnip probe failed - kgsl fallback"
         unset GALLIUM_DRIVER VK_ICD_FILENAMES
         export MESA_LOADER_DRIVER_OVERRIDE=kgsl MESA_GL_VERSION_OVERRIDE=4.6 MESA_GLES_VERSION_OVERRIDE=3.2
         ;;
@@ -248,11 +248,11 @@ su - $USERNAME -c '
     else
       export LIBGL_ALWAYS_SOFTWARE=1
       export GALLIUM_DRIVER=llvmpipe
-      echo \"Bliss(guest): software GL fallback\"
+      echo \"Altaris(guest): software GL fallback\"
     fi
     export GPU_MODE
   fi
-  echo \"Bliss(guest): GPU mode=\$GPU_MODE\"
+  echo \"Altaris(guest): GPU mode=\$GPU_MODE\"
 
   xfconf-query -c xfwm4 -p /general/use_compositing -s false 2>/dev/null || true
   if [ x$FLUX_GPU_RUNTIME = xsoftware ]; then

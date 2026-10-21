@@ -126,7 +126,7 @@
             android:foregroundServiceType="specialUse">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Keeps the localhost clone control API and MCP server reachable while the user works in another app or a Linux distro." />
+                android:value="Keeps the loopback-only clone control API and MCP server reachable while the user works in another app or a Linux distro. The service uses a hidden, silent notification channel." />
         </service>
 
         <!-- Desktop / XFCE keep-alive while graphical session is running -->

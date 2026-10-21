@@ -11,21 +11,21 @@ MODEL_FILES=(
 
 # ─── UNINSTALL MODE ──────────────────────────────────────────────────────
 if [ "$1" = "uninstall" ]; then
-    echo "Bliss: Uninstalling Qwen2.5-1.5B Model..."
+    echo "Altaris: Uninstalling Qwen2.5-1.5B Model..."
     for f in "${MODEL_FILES[@]}"; do
         if [ -f "$f" ]; then
             rm -f "$f"
             echo "  Removed: $f"
         fi
     done
-    echo "Bliss: Qwen2.5-1.5B Model Uninstalled."
+    echo "Altaris: Qwen2.5-1.5B Model Uninstalled."
     exit 0
 fi
 # ─── END UNINSTALL MODE ──────────────────────────────────────────────────
 
 handle_error() {
     echo ""
-    echo "❌ Bliss Error: Script failed at step: $1"
+    echo "❌ Altaris Error: Script failed at step: $1"
     echo "---------------------------------------------------"
     echo "Please check the error message above."
     echo "---------------------------------------------------"
@@ -34,10 +34,10 @@ handle_error() {
     exit 1
 }
 
-echo "Bliss: Setting up Qwen2.5-1.5B-Instruct Model..."
+echo "Altaris: Setting up Qwen2.5-1.5B-Instruct Model..."
 
 # --- 1. Check llama.cpp is installed ---
-echo "Bliss: Checking llama.cpp installation..."
+echo "Altaris: Checking llama.cpp installation..."
 if [ ! -f "/usr/local/bin/llama-vulkan" ] && [ ! -f "/usr/local/bin/llama-cli" ]; then
     echo " [❌] llama.cpp not found! Install 'Vulkan Llama.cpp' first."
     handle_error "llama.cpp not installed"
@@ -74,7 +74,7 @@ if [ -f "$MODEL_FILE" ]; then
 fi
 
 if [ ! -f "$MODEL_FILE" ]; then
-    echo "Bliss: Downloading Qwen2.5-1.5B-Instruct Q4_0 (938 MB)..."
+    echo "Altaris: Downloading Qwen2.5-1.5B-Instruct Q4_0 (938 MB)..."
     echo "Source: huggingface.co/bartowski/Qwen2.5-1.5B-Instruct-GGUF"
     echo ""
     curl -L -o "$MODEL_TMP" \

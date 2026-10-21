@@ -265,7 +265,7 @@ class InstallServerService : Service() {
             "Install server",
             NotificationManager.IMPORTANCE_DEFAULT
         ).apply {
-            description = "Shows the active install — keeps Bliss alive during the install"
+            description = "Shows the active install — keeps Altaris alive during the install"
             setShowBadge(true)
         }
         nm.createNotificationChannel(channel)

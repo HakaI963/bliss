@@ -1,4 +1,4 @@
-# bliss-banner.sh — Bliss launch sticker: truecolor half-block anime art,
+# bliss-banner.sh — Altaris launch sticker: truecolor half-block anime art,
 # one random design per interactive shell, printed exactly ONCE per shell
 # even when several rc files source it or nested shells inherit the
 # environment. Works with zsh, bash and POSIX sh.
@@ -47,7 +47,7 @@ bliss_banner() {
   esac
   export _BLISS_BANNER_SHOWN=1
   bliss_banner_art
-  # Header: exactly one line, "bliss@<id>" (distro id only). ID= from
+  # Header: exactly one line, "altaris@<id>" (distro id only). ID= from
   # /etc/os-release; fallbacks: first word of PRETTY_NAME, then "linux".
   _bb_fid=""
   if [ -r /etc/os-release ]; then
@@ -57,7 +57,7 @@ bliss_banner() {
     fi
   fi
   [ -n "$_bb_fid" ] || _bb_fid="linux"
-  printf '%s\n' "bliss@$_bb_fid"
+  printf '%s\n' "altaris@$_bb_fid"
   unset _bb_fid
 }
 bliss_banner

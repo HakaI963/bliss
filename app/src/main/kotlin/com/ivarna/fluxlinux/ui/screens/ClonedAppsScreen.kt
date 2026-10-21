@@ -1312,7 +1312,7 @@ private fun ActionStrip(actions: List<String>, state: LazyListState) {
 
 private fun copyText(context: Context, text: String, label: String) {
     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-    clipboard.setPrimaryClip(ClipData.newPlainText("Bliss", text))
+    clipboard.setPrimaryClip(ClipData.newPlainText("Altaris", text))
     Toast.makeText(context, label, Toast.LENGTH_SHORT).show()
 }
 

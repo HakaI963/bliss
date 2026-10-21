@@ -31,7 +31,7 @@ export PULSE_RUNTIME_PATH="${HOME}/.pulse"
 mkdir -p "$PULSE_RUNTIME_PATH" 2>/dev/null
 
 # Kill stale host graphics services only — NEVER am force-stop own package
-# (that would kill Bliss itself if the package name matches).
+# (that would kill Altaris itself if the package name matches).
 # Pulse is a host service: do not pkill it here (CLI audio stays up).
 pkill -f "virgl_test_server" 2>/dev/null || true
 pkill -f termux-x11 2>/dev/null || true
@@ -56,7 +56,7 @@ if [ -n "$_ctx" ] && command -v chcon >/dev/null 2>&1; then
   chcon -R "$_ctx" "$TMPDIR" 2>/dev/null || chcon "$_ctx" "$TMPDIR" 2>/dev/null || true
 fi
 
-# Host Pulse (app uid). Supervisor logs Bliss: [AUDIO] … and never blocks XFCE.
+# Host Pulse (app uid). Supervisor logs Altaris: [AUDIO] … and never blocks XFCE.
 if [ -x "$TERMUX_HOME/start_pulse_host.sh" ]; then
   bash "$TERMUX_HOME/start_pulse_host.sh" || true
 elif command -v start_pulse_host.sh >/dev/null 2>&1; then
@@ -66,17 +66,17 @@ fi
 # VirGL is optional. Custom package builds currently omit it; XFCE runs
 # with software rendering until a compatible GPU bundle is available.
 if command -v virgl_test_server_android >/dev/null; then
-  echo "Bliss: Starting VirGL server..."
+  echo "Altaris: Starting VirGL server..."
   virgl_test_server_android --socket-path "$TERMUX_PREFIX/tmp/.virgl_test" >/dev/null 2>&1 &
   sleep 2
-  test -S "${TMPDIR}/.virgl_test" && echo "Bliss: VirGL socket ready" || \
-    echo "Bliss: [WARN] VirGL socket not found"
+  test -S "${TMPDIR}/.virgl_test" && echo "Altaris: VirGL socket ready" || \
+    echo "Altaris: [WARN] VirGL socket not found"
 else
-  echo "Bliss: VirGL unavailable; using software rendering"
+  echo "Altaris: VirGL unavailable; using software rendering"
 fi
 
 # Start X server via app_process (needs system context)
-echo "Bliss: Starting termux-x11 server..."
+echo "Altaris: Starting termux-x11 server..."
 export XDG_RUNTIME_DIR="$TMPDIR"
 export DISPLAY=:0
 
@@ -100,7 +100,7 @@ if [ -z "$TERMUX_X11_APK_PATH" ] || [ ! -f "$TERMUX_X11_APK_PATH" ]; then
   TERMUX_X11_APK_PATH=$(/system/bin/find /data/app -name "base.apk" -path "*$PKG*" 2>/dev/null | head -1)
 fi
 export TERMUX_X11_APK_PATH
-echo "Bliss: APK path = $TERMUX_X11_APK_PATH"
+echo "Altaris: APK path = $TERMUX_X11_APK_PATH"
 
 # Extract libXlorie.so from our APK to /data/data app lib dir
 # This is the only location app_process can dlopen without corrupting its linker namespace
@@ -108,7 +108,7 @@ APP_LIB_DIR="/data/data/$PKG/lib"
 mkdir -p "$APP_LIB_DIR" 2>/dev/null
 # Re-extract when the APK is newer, else an app update keeps running the old X server.
 if { [ ! -f "$APP_LIB_DIR/libXlorie.so" ] || [ "$TERMUX_X11_APK_PATH" -nt "$APP_LIB_DIR/libXlorie.so" ]; } && [ -n "$TERMUX_X11_APK_PATH" ]; then
-  echo "Bliss: Extracting libXlorie.so from APK..."
+  echo "Altaris: Extracting libXlorie.so from APK..."
   # Try arm64 first, then armeabi-v7a
   ( cd "$APP_LIB_DIR" && \
     unzip -o "$TERMUX_X11_APK_PATH" 'lib/arm64-v8a/libXlorie.so' 2>/dev/null && \
@@ -118,8 +118,8 @@ if { [ ! -f "$APP_LIB_DIR/libXlorie.so" ] || [ "$TERMUX_X11_APK_PATH" -nt "$APP_
     mv -f lib/armeabi-v7a/libXlorie.so . && rm -rf lib )
   touch "$APP_LIB_DIR/libXlorie.so" 2>/dev/null # unzip keeps the 1981 entry mtime
   ls -la "$APP_LIB_DIR/libXlorie.so" 2>/dev/null && \
-    echo "Bliss: libXlorie.so ready in $APP_LIB_DIR" || \
-    echo "Bliss: [WARN] libXlorie.so extraction failed"
+    echo "Altaris: libXlorie.so ready in $APP_LIB_DIR" || \
+    echo "Altaris: [WARN] libXlorie.so extraction failed"
 fi
 
 # Launch the X server via app_process
@@ -140,13 +140,13 @@ while [ ! -S "$TMPDIR/.X11-unix/X0" ] && [ "$_i" -lt 30 ] && kill -0 "$XSERVER_P
   _i=$((_i + 1))
 done
 if [ ! -S "$TMPDIR/.X11-unix/X0" ] || ! kill -0 "$XSERVER_PID" 2>/dev/null; then
-  echo "Bliss: [ERROR] X server did not create $TMPDIR/.X11-unix/X0 within 15s (or exited)."
+  echo "Altaris: [ERROR] X server did not create $TMPDIR/.X11-unix/X0 within 15s (or exited)."
   exit 1
 fi
-echo "Bliss: host X0 socket ready (X server PID=$XSERVER_PID)"
+echo "Altaris: host X0 socket ready (X server PID=$XSERVER_PID)"
 
 # Open X11 display activity in our app
-echo "Bliss: Launching X11 display activity..."
+echo "Altaris: Launching X11 display activity..."
 am start -n "$PKG/com.termux.x11.MainActivity" \
   --activity-single-top \
   --activity-clear-top 2>/dev/null || \
@@ -166,18 +166,18 @@ case "$FLUX_DESKTOP" in
   xfce|xfce4|XFCE)
     DE_CMD=startxfce4; FLUX_DESKTOP=xfce4 ;;
   none|NONE)
-    echo "Bliss: terminal-only install (FLUX_DESKTOP=none) — no desktop to launch."
+    echo "Altaris: terminal-only install (FLUX_DESKTOP=none) — no desktop to launch."
     exit 1 ;;
   *)
-    echo "Bliss: unknown FLUX_DESKTOP='$FLUX_DESKTOP' — falling back to XFCE4"
+    echo "Altaris: unknown FLUX_DESKTOP='$FLUX_DESKTOP' — falling back to XFCE4"
     DE_CMD=startxfce4; FLUX_DESKTOP=xfce4 ;;
 esac
 if [ ! -e "$ROOTFS/usr/bin/$DE_CMD" ] && [ ! -e "$ROOTFS/usr/sbin/$DE_CMD" ]; then
-  echo "Bliss: $FLUX_DESKTOP setup incomplete ($DE_CMD missing). Re-run environment setup."
+  echo "Altaris: $FLUX_DESKTOP setup incomplete ($DE_CMD missing). Re-run environment setup."
   exit 1
 fi
 
-echo "Bliss: $DE_CMD=READY"
+echo "Altaris: $DE_CMD=READY"
 
 # Guest GPU mode from setup_hw_accel_debian.sh (/etc/bliss/gpu_mode)
 # turnip → Adreno/Zink; virgl → host virgl_test_server; else softpipe
@@ -192,7 +192,7 @@ case "$GPU_MODE" in
   turnip|virgl) ;;
   *) GPU_MODE=virgl ;;
 esac
-echo "Bliss: Guest GPU mode=$GPU_MODE"
+echo "Altaris: Guest GPU mode=$GPU_MODE"
 
 # Launch XFCE in proot — propagate guest exit code (never force exit 0)
 GUEST_RC=0
@@ -297,7 +297,7 @@ else
           else
             export LIBGL_ALWAYS_SOFTWARE=1
             export GALLIUM_DRIVER=llvmpipe
-            echo "Bliss(guest): VirGL socket missing — llvmpipe fallback"
+            echo "Altaris(guest): VirGL socket missing — llvmpipe fallback"
           fi
           ;;
         *)
@@ -307,7 +307,7 @@ else
       esac
       export GPU_MODE
     fi
-    echo "Bliss(guest): GPU mode=$GPU_MODE"
+    echo "Altaris(guest): GPU mode=$GPU_MODE"
     # Fedora 43 / Tumbleweed GTK+glycin execs bwrap to load PNG/SVG.
     # Real bubblewrap needs user namespaces (missing under proot) and
     # "chmod a-x bwrap" becomes "Could not spawn bwrap: Permission denied"
@@ -318,7 +318,7 @@ else
       fi
       cat > /usr/bin/bwrap << "BWRAP_EOF"
 #!/bin/sh
-# Bliss: exec the real glycin loader, not an earlier --ro-bind source.
+# Altaris: exec the real glycin loader, not an earlier --ro-bind source.
 while [ $# -gt 0 ]; do
   case "$1" in
     /usr/libexec/glycin-loaders/*|/usr/lib/glycin-loaders/*|/usr/bin/true|/bin/true)
@@ -371,9 +371,9 @@ if [ -e /etc/bliss/kde_gl ]; then case "$GPU_MODE" in turnip|panvk)
     unset MESA_GL_VERSION_OVERRIDE MESA_GLES_VERSION_OVERRIDE
     _o=$(timeout -k 2 30 glxinfo -B 2>/dev/null) || _o=
     case "$_o" in
-      *zink*) echo "Bliss(guest): KDE GL = zink on Turnip" ;;
+      *zink*) echo "Altaris(guest): KDE GL = zink on Turnip" ;;
       *)
-        echo "Bliss(guest): zink-on-Turnip probe failed - kgsl fallback"
+        echo "Altaris(guest): zink-on-Turnip probe failed - kgsl fallback"
         unset GALLIUM_DRIVER VK_ICD_FILENAMES
         export MESA_LOADER_DRIVER_OVERRIDE=kgsl MESA_GL_VERSION_OVERRIDE=4.6 MESA_GLES_VERSION_OVERRIDE=3.2
         ;;
@@ -457,5 +457,5 @@ KDE_EOF
   GUEST_RC=$?
 fi
 
-echo "Bliss: XFCE session ended (exit $GUEST_RC)"
+echo "Altaris: XFCE session ended (exit $GUEST_RC)"
 exit $GUEST_RC

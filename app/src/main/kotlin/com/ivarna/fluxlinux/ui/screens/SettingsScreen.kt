@@ -168,7 +168,7 @@ fun SettingsScreen(
                 )
             }
             Spacer(Modifier.width(4.dp))
-            QScreenTitle("Settings", "Bliss v${BuildConfig.VERSION_NAME} · Linux environments, on-device")
+            QScreenTitle("Settings", "Altaris v${BuildConfig.VERSION_NAME} · Linux environments, on-device")
         }
 
         // Device — live root probe + shared-storage grant (was the hero card).
@@ -305,7 +305,7 @@ fun SettingsScreen(
                 )
             }
             QRow(
-                title = "About Bliss",
+                title = "About Altaris",
                 subtitle = "Author no_piece",
                 divider = true,
             )

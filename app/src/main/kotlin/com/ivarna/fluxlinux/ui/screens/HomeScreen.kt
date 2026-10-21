@@ -230,7 +230,7 @@ fun HomeScreen(
         if (isChrootRow && !rootAvailable) {
             android.widget.Toast.makeText(
                 context,
-                "Grant superuser to Bliss first",
+                "Grant superuser to Altaris first",
                 android.widget.Toast.LENGTH_SHORT
             ).show()
             return
@@ -366,7 +366,7 @@ fun HomeScreen(
                                     if (needsRoot && !rootAvailable) {
                                         android.widget.Toast.makeText(
                                             context,
-                                            "Grant superuser to Bliss first",
+                                            "Grant superuser to Altaris first",
                                             android.widget.Toast.LENGTH_SHORT
                                         ).show()
                                     } else {
@@ -424,7 +424,7 @@ fun HomeScreen(
                                     if (!rootAvailable) {
                                         android.widget.Toast.makeText(
                                             context,
-                                            "Grant superuser to Bliss first",
+                                            "Grant superuser to Altaris first",
                                             android.widget.Toast.LENGTH_SHORT
                                         ).show()
                                     } else {
@@ -435,7 +435,7 @@ fun HomeScreen(
                                     if (!rootAvailable) {
                                         android.widget.Toast.makeText(
                                             context,
-                                            "Grant superuser to Bliss first",
+                                            "Grant superuser to Altaris first",
                                             android.widget.Toast.LENGTH_SHORT
                                         ).show()
                                     } else if (session != null && session.distroId != distro.id) {
@@ -743,7 +743,7 @@ fun HomeScreen(
     }
 }
 
-// ─── Bliss installed environment row ─────────────────────────────────────────
+// ─── Altaris installed environment row ─────────────────────────────────────────
 // Quartz row: 32 dp tile + name + env-type muted + Shell/XFCE/KDE chips + gear.
 // Row tap opens the launch-mode dialog (shell / root / desktop); Shell chip is a
 // quick Shell open; XFCE/KDE chips launch the desktop directly (KDE via the GPU

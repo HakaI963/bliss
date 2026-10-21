@@ -14,7 +14,7 @@ import androidx.compose.ui.unit.dp
 import dev.chrisbanes.haze.HazeState
 
 /**
- * Bliss shell. Kept under the old name so existing callers compile.
+ * Altaris shell. Kept under the old name so existing callers compile.
  * Midnight grid backdrop, transparent scaffold, floating dock.
  */
 @Composable

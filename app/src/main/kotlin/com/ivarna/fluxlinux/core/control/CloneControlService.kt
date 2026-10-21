@@ -15,7 +15,12 @@ import com.ivarna.fluxlinux.R
 
 /**
  * Keeps the localhost control plane and the clone engine reachable while the
- * user is in another app or in a distro shell. Visible, low-priority only.
+ * user is in another app or in a distro shell.
+ *
+ * The service still needs a foreground notification to satisfy Android's
+ * process-lifetime rules, but its channel is deliberately IMPORTANCE_NONE so
+ * it never appears in the shade. The loopback API is a developer surface, not
+ * a user-facing notification.
  */
 class CloneControlService : Service() {
 
@@ -41,15 +46,21 @@ class CloneControlService : Service() {
     private fun notification(): Notification {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val manager = getSystemService(NotificationManager::class.java)
+            // Remove the old visible channel once, then keep a silent channel
+            // that Android accepts for the FGS but does not render in the shade.
+            runCatching { manager.deleteNotificationChannel("bliss_control_v1") }
             if (manager.getNotificationChannel(CHANNEL_ID) == null) {
                 manager.createNotificationChannel(
                     NotificationChannel(
                         CHANNEL_ID,
-                        "Bliss control",
-                        NotificationManager.IMPORTANCE_LOW
+                        "Altaris background engine",
+                        NotificationManager.IMPORTANCE_NONE
                     ).apply {
                         description = "Local clone control API and MCP server"
                         setShowBadge(false)
+                        setSound(null, null)
+                        enableVibration(false)
+                        lockscreenVisibility = Notification.VISIBILITY_SECRET
                     }
                 )
             }
@@ -62,17 +73,20 @@ class CloneControlService : Service() {
         )
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_terminal)
-            .setContentTitle("Bliss control server")
-            .setContentText("127.0.0.1:${ControlServer.PORT} · clones, OCR, MCP")
+            .setContentTitle("Altaris engine")
+            .setContentText("Local control API")
             .setContentIntent(open)
             .setOngoing(true)
             .setSilent(true)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setShowWhen(false)
+            .setPriority(NotificationCompat.PRIORITY_MIN)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .setVisibility(NotificationCompat.VISIBILITY_SECRET)
             .build()
     }
 
     companion object {
-        private const val CHANNEL_ID = "bliss_control_v1"
+        private const val CHANNEL_ID = "altaris_control_v2"
         private const val NOTIFICATION_ID = 4911
 
         fun start(context: Context) {

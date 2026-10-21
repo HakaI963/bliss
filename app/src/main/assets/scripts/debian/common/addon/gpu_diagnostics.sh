@@ -3,7 +3,7 @@
 # Run this inside Debian to check your GPU setup
 
 echo "=========================================="
-echo "  Bliss GPU Acceleration Diagnostics"
+echo "  Altaris GPU Acceleration Diagnostics"
 echo "=========================================="
 echo ""
 

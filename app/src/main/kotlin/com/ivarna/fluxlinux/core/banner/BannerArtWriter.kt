@@ -26,7 +26,7 @@ object BannerArtWriter {
     private const val TAG = "BannerArtWriter"
 
     private const val STICKER_COMMENT =
-        "# Bliss launch sticker (random anime banner; opt out FLUX_NO_BANNER=1)"
+        "# Altaris launch sticker (random anime banner; opt out FLUX_NO_BANNER=1)"
     private const val STICKER_LINE =
         "[ -r \"\$HOME/.config/bliss/banner.sh\" ] && . \"\$HOME/.config/bliss/banner.sh\""
     private const val BASHRC_LINE = "[ -f \"\$HOME/.bashrc\" ] && . \"\$HOME/.bashrc\""
@@ -97,7 +97,7 @@ object BannerArtWriter {
                 // Bash login with no .bashrc would never show the sticker.
                 try {
                     bashrc.writeText(
-                        "# Bliss bash profile\n" + STICKER_COMMENT + "\n" + STICKER_LINE + "\n"
+                        "# Altaris bash profile\n" + STICKER_COMMENT + "\n" + STICKER_LINE + "\n"
                     )
                     Log.i(TAG, "Created .bashrc at ${bashrc.absolutePath}")
                 } catch (e: Exception) {
@@ -143,15 +143,15 @@ object BannerArtWriter {
             .append("mv -f \"${d}_rc.bliss.${d}${d}\" \"${d}_rc\" 2>/dev/null || ")
             .append("rm -f \"${d}_rc.bliss.${d}${d}\" 2>/dev/null || true\n")
         setup.append("  if ! grep -q 'bliss/banner.sh' \"${d}_rc\" 2>/dev/null; then\n")
-        setup.append("    printf '\\n# Bliss launch sticker (random anime banner; opt out FLUX_NO_BANNER=1)\\n' ")
+        setup.append("    printf '\\n# Altaris launch sticker (random anime banner; opt out FLUX_NO_BANNER=1)\\n' ")
             .append(">> \"${d}_rc\" 2>/dev/null || true\n")
         setup.append("    printf '[ -r \"${d}HOME/.config/bliss/banner.sh\" ] && . \"${d}HOME/.config/bliss/banner.sh\"\\n' ")
             .append(">> \"${d}_rc\" 2>/dev/null || true\n")
         setup.append("  fi\n")
         setup.append("done\n")
         setup.append("if [ ! -f \"${d}H/.bashrc\" ]; then\n")
-        setup.append("  printf '# Bliss bash profile\\n' > \"${d}H/.bashrc\" 2>/dev/null || true\n")
-        setup.append("  printf '# Bliss launch sticker (random anime banner; opt out FLUX_NO_BANNER=1)\\n' ")
+        setup.append("  printf '# Altaris bash profile\\n' > \"${d}H/.bashrc\" 2>/dev/null || true\n")
+        setup.append("  printf '# Altaris launch sticker (random anime banner; opt out FLUX_NO_BANNER=1)\\n' ")
             .append(">> \"${d}H/.bashrc\" 2>/dev/null || true\n")
         setup.append("  printf '[ -r \"${d}HOME/.config/bliss/banner.sh\" ] && . \"${d}HOME/.config/bliss/banner.sh\"\\n' ")
             .append(">> \"${d}H/.bashrc\" 2>/dev/null || true\n")

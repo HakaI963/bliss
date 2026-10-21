@@ -5,7 +5,7 @@
 # Error Handler
 handle_error() {
     echo ""
-    echo "❌ Bliss Error: $1"
+    echo "❌ Altaris Error: $1"
     echo "---------------------------------------------------"
     read -p "Press Enter to exit..."
     exit 1
@@ -13,7 +13,7 @@ handle_error() {
 
 MODEL_PATH="/root/models/Qwen3.5-0.8B-Q4_0.gguf"
 
-echo "Bliss: Starting Qwen3.5-0.8B Chat..."
+echo "Altaris: Starting Qwen3.5-0.8B Chat..."
 echo ""
 
 # --- Check model ---

@@ -296,6 +296,7 @@ configure_debian_chroot() {
         apt-get update -y
         apt-get upgrade -y
         apt-get install -y nano vim net-tools sudo git dbus-x11 wget unzip zsh
+        apt-get install -y zsh-autosuggestions zsh-syntax-highlighting || true
     ' || goodbye
 
     progress "Creating User ($USERNAME)..."
@@ -326,10 +327,10 @@ configure_debian_chroot() {
             _xf=1
             until apt-get install -y xfce4 xfce4-terminal; do
                 if [ "$_xf" -ge 3 ]; then
-                    echo "Bliss: XFCE package install failed after 3 tries — check your network, then tap Retry Setup."
+                    echo "Altaris: XFCE package install failed after 3 tries — check your network, then tap Retry Setup."
                     exit 1
                 fi
-                echo "Bliss: Package download failed — retrying ($((_xf + 1))/3)…"
+                echo "Altaris: Package download failed — retrying ($((_xf + 1))/3)…"
                 apt-get update >/dev/null 2>&1 || true
                 _xf=$((_xf + 1))
             done
@@ -342,7 +343,7 @@ configure_debian_chroot() {
     touch "$DEBIANPATH/.bliss_configured"
     success "Debian Environment Configured!"
 
-    # Root-staged launchers live in the Bliss helpers dir (idempotent).
+    # Root-staged launchers live in the Altaris helpers dir (idempotent).
     mkdir -p /data/local/bliss/helpers
 
     # --- GENERATE GUI LAUNCH SCRIPT (thin → SSOT GUI / helper) ---
@@ -548,7 +549,7 @@ if [ -z "${BB:-}" ]; then
   fi
 fi
 if [ -z "${BB:-}" ]; then
-  echo "Bliss: ERROR — root-capable busybox not found" >&2
+  echo "Altaris: ERROR — root-capable busybox not found" >&2
   exit 1
 fi
 

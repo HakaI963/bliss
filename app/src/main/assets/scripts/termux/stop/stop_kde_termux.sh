@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================
-# Bliss — Stop Native Termux KDE Plasma Desktop
+# Altaris — Stop Native Termux KDE Plasma Desktop
 # Location: termux/stop/stop_kde_termux.sh
 # Runs on: HOST Termux (native, no container)
 # Root required: no
@@ -8,19 +8,19 @@
 
 echo ""
 echo "══════════════════════════════════════════════"
-echo "  Bliss — Stopping Native KDE Plasma"
+echo "  Altaris — Stopping Native KDE Plasma"
 echo "══════════════════════════════════════════════"
 echo ""
 
 # ── Graceful KDE shutdown ─────────────────────────────────
-echo "Bliss: Sending graceful shutdown to KDE..."
+echo "Altaris: Sending graceful shutdown to KDE..."
 if command -v qdbus >/dev/null 2>&1 && [ -n "$DISPLAY" ]; then
     qdbus org.kde.ksmserver /KSMServer logout 0 3 3 2>/dev/null || true
     sleep 3
 fi
 
 # ── Kill KDE session processes ───────────────────────────
-echo "Bliss: Stopping KDE Plasma session..."
+echo "Altaris: Stopping KDE Plasma session..."
 pkill -TERM -f "startplasma" 2>/dev/null || true
 pkill -TERM -f "plasmashell" 2>/dev/null || true
 pkill -TERM -f "kwin_x11" 2>/dev/null || true
@@ -39,7 +39,7 @@ pkill -KILL -f "kded5" 2>/dev/null || true
 echo " [✅] KDE Plasma session stopped"
 
 # ── Kill X11 server ───────────────────────────────────────
-echo "Bliss: Stopping Termux:X11..."
+echo "Altaris: Stopping Termux:X11..."
 pkill -TERM -f "termux-x11" 2>/dev/null || true
 sleep 1
 pkill -KILL -f "Xwayland" 2>/dev/null || true
@@ -47,14 +47,14 @@ pkill -KILL -f "termux-x11" 2>/dev/null || true
 echo " [✅] X11 server stopped"
 
 # ── Kill VirGL server ─────────────────────────────────────
-echo "Bliss: Stopping GPU server..."
+echo "Altaris: Stopping GPU server..."
 pkill -TERM -f "virgl_test_server" 2>/dev/null || true
 sleep 1
 pkill -KILL -f "virgl_test_server" 2>/dev/null || true
 echo " [✅] VirGL server stopped"
 
 # ── Kill PulseAudio ───────────────────────────────────────
-echo "Bliss: Stopping audio server..."
+echo "Altaris: Stopping audio server..."
 pulseaudio --kill 2>/dev/null || \
 pkill -TERM -f "pulseaudio" 2>/dev/null || true
 echo " [✅] PulseAudio stopped"

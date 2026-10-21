@@ -337,7 +337,7 @@ private fun WelcomePage(onNext: () -> Unit) {
                     )
                     Image(
                         painter = painterResource(id = R.drawable.ic_bliss_mark),
-                        contentDescription = "Bliss logo",
+                        contentDescription = "Altaris logo",
                         modifier = Modifier
                             .size(96.dp)
                             .graphicsLayer {
@@ -353,7 +353,7 @@ private fun WelcomePage(onNext: () -> Unit) {
             Spacer(Modifier.height(8.dp))
 
             Text(
-                text = "Bliss",
+                text = "Altaris",
                 fontSize = 32.sp,
                 fontWeight = FontWeight.ExtraBold,
                 color = colors.onBackground,
@@ -383,7 +383,7 @@ private fun WelcomePage(onNext: () -> Unit) {
                 icon = Icons.Filled.DesktopWindows,
                 iconTint = TextSecondary,
                 title = "XFCE4 Desktop",
-                description = "A pre-configured desktop with Bliss glass themes, icons, wallpapers, and fonts."
+                description = "A pre-configured desktop with Altaris glass themes, icons, wallpapers, and fonts."
             )
 
             // Feature 3: Integrated Terminal & X11
@@ -527,7 +527,7 @@ private fun ConsentPage(onBack: () -> Unit, onNext: () -> Unit) {
                     Spacer(Modifier.height(12.dp))
 
                     Text(
-                        text = "The F-Droid APK is intentionally lightweight and does not bundle large Linux OS archives. To provide a complete Linux environment, Bliss downloads the required system components directly from GitHub Releases upon continuation:",
+                        text = "The F-Droid APK is intentionally lightweight and does not bundle large Linux OS archives. To provide a complete Linux environment, Altaris downloads the required system components directly from GitHub Releases upon continuation:",
                         color = colors.onSurface.copy(alpha = 0.75f),
                         fontSize = 13.5.sp,
                         lineHeight = 19.sp
@@ -894,7 +894,7 @@ private fun ReadyPage(
             }
 
             Text(
-                text = "Bliss is ready",
+                text = "Altaris is ready",
                 fontSize = 22.sp,
                 fontWeight = FontWeight.ExtraBold,
                 color = colors.onBackground,
@@ -1048,7 +1048,7 @@ private fun DistroPickPage(
                     Spacer(Modifier.width(10.dp))
                     Text(
                         text = if (probingRoot) "Checking superuser access…"
-                        else "Grant superuser to Bliss in Magisk/KernelSU, then tap Chroot again.",
+                        else "Grant superuser to Altaris in Magisk/KernelSU, then tap Chroot again.",
                         color = colors.error,
                         fontSize = 12.5.sp,
                         lineHeight = 16.sp,
@@ -1256,7 +1256,7 @@ private fun OptionsPage(
                             color = colors.onSurface
                         )
                         Text(
-                            text = "Base XFCE4 desktop with Bliss customizations",
+                            text = "Base XFCE4 desktop with Altaris customizations",
                             fontSize = 12.sp,
                             color = colors.onSurface.copy(alpha = 0.65f)
                         )
@@ -1338,7 +1338,7 @@ private fun OptionsPage(
                             distroId.startsWith("opensuse")
                         )
                             "Mesa / VirGL 3D hardware acceleration" else null,
-                        "Bliss themes, wallpapers, and Nerd fonts",
+                        "Altaris themes, wallpapers, and Nerd fonts",
                         "Embedded X11 display server + Zsh terminal"
                     ).filterNotNull()
 

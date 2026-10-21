@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================
-# Bliss — Native Termux KDE Plasma Desktop Setup
+# Altaris — Native Termux KDE Plasma Desktop Setup
 # Location: termux/setup/setup_kde_termux.sh
 # Runs on: HOST Termux (native, no container)
 # Root required: no
@@ -12,7 +12,7 @@ CALLBACK_NAME="kde_plasma"
 
 handle_error() {
     echo ""
-    echo "❌ Bliss Error: Script failed at step: $1"
+    echo "❌ Altaris Error: Script failed at step: $1"
     echo "---------------------------------------------------"
     echo "Please check the error message above for details."
     echo "---------------------------------------------------"
@@ -24,31 +24,31 @@ handle_error() {
 # Reverse of install path above. Shared deps (x11-repo, termux-x11,
 # pulseaudio, dbus, etc.) intentionally kept.
 if [ "$1" = "uninstall" ]; then
-    echo "Bliss: Uninstalling KDE Plasma Desktop..."
+    echo "Altaris: Uninstalling KDE Plasma Desktop..."
 
     pkg uninstall -y plasma konsole dolphin || true
 
     rm -f "$HOME/.config/kwinrc"
     rm -f "$HOME/.config/kdeglobals"
 
-    echo "Bliss: KDE Plasma Desktop Uninstalled."
+    echo "Altaris: KDE Plasma Desktop Uninstalled."
     exit 0
 fi
 
 echo ""
 echo "══════════════════════════════════════════════"
-echo "  Bliss — Native KDE Plasma Desktop Setup"
+echo "  Altaris — Native KDE Plasma Desktop Setup"
 echo "  ⚠️  EXPERIMENTAL — See docs/termux/ for notes"
 echo "══════════════════════════════════════════════"
 echo ""
 
 # ── Step 1: Repositories ──────────────────────────────────
-echo "Bliss: Enabling required repositories..."
+echo "Altaris: Enabling required repositories..."
 pkg install x11-repo -y || handle_error "x11-repo install"
 pkg install tur-repo -y || handle_error "tur-repo install"
 
 # ── Step 2: Update ───────────────────────────────────────
-echo "Bliss: Updating package lists..."
+echo "Altaris: Updating package lists..."
 pkg update -y || handle_error "pkg update"
 
 # ── Step 3: KDE Plasma packages ──────────────────────────
@@ -122,7 +122,7 @@ echo " [✅] KDE defaults configured for Android screens"
 # ── Verification ─────────────────────────────────────────
 verify_installation() {
     echo ""
-    echo "🔎 Bliss: Verifying KDE Plasma Installation..."
+    echo "🔎 Altaris: Verifying KDE Plasma Installation..."
     echo "------------------------------------------------"
     MISSING=0
 

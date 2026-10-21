@@ -29,10 +29,10 @@ if [ -z "$DISTRO_NAME" ] && [ -r /etc/os-release ]; then
 fi
 [ -n "$DISTRO_NAME" ] || DISTRO_NAME="RPM Linux"
 
-echo "Bliss: Configuring ${DISTRO_NAME} (RPM Family)..."
+echo "Altaris: Configuring ${DISTRO_NAME} (RPM Family)..."
 
 if [ "$(id -u)" -ne 0 ]; then
-    echo "Bliss: ERROR: must run as root inside the guest (got uid=$(id -u))."
+    echo "Altaris: ERROR: must run as root inside the guest (got uid=$(id -u))."
     exit 1
 fi
 
@@ -44,13 +44,13 @@ if [ -r /etc/os-release ]; then
 fi
 case "$OS_ID" in
     rocky)
-        echo "Bliss: Rocky Linux detected (EL9)"
+        echo "Altaris: Rocky Linux detected (EL9)"
         ;;
     centos)
-        echo "Bliss: CentOS Stream detected (EL9)"
+        echo "Altaris: CentOS Stream detected (EL9)"
         ;;
     *)
-        echo "Bliss: WARNING: unexpected os-release ID '${OS_ID:-unknown}' — continuing with the EL9 setup"
+        echo "Altaris: WARNING: unexpected os-release ID '${OS_ID:-unknown}' — continuing with the EL9 setup"
         ;;
 esac
 
@@ -67,7 +67,7 @@ if command -v dnf5 >/dev/null 2>&1; then
     DNF="dnf5"
 fi
 if ! command -v "$DNF" >/dev/null 2>&1; then
-    echo "Bliss: ERROR: dnf/dnf5 not found"
+    echo "Altaris: ERROR: dnf/dnf5 not found"
     exit 1
 fi
 
@@ -89,7 +89,7 @@ fi
 
 _flux_log "dnf makecache ($DNF)..."
 _flux_retry_pkg $DNF -y --setopt=install_weak_deps=False makecache || {
-    echo "Bliss: dnf makecache failed (network / repos)"
+    echo "Altaris: dnf makecache failed (network / repos)"
     exit 1
 }
 
@@ -99,7 +99,7 @@ _flux_retry_pkg $DNF $DNF_OPTS install \
     gzip xz tzdata \
     dbus \
     || {
-        echo "Bliss: base package install failed"
+        echo "Altaris: base package install failed"
         exit 1
     }
 # dbus-daemon / dbus-x11 subpackages vary across EL9 images — best-effort.
@@ -124,7 +124,7 @@ if [ "$DESKTOPS" != "none" ]; then
         gsettings-desktop-schemas \
         mesa-dri-drivers mesa-libGL mesa-libEGL \
         || {
-            echo "Bliss: base graphics package install failed"
+            echo "Altaris: base graphics package install failed"
             exit 1
         }
 fi
@@ -147,7 +147,7 @@ unset _norm
 # KDE is not delivered for the EL9 cards (no kde_plasma component ships for
 # Rocky / CentOS Stream). XFCE still installs when both were requested.
 if [ -z "${DESKTOPS##*kde*}" ]; then
-    echo "Bliss: KDE is not available for this distro — skipping"
+    echo "Altaris: KDE is not available for this distro — skipping"
 fi
 
 if [ -z "${DESKTOPS##*xfce*}" ]; then
@@ -155,7 +155,7 @@ if [ -z "${DESKTOPS##*xfce*}" ]; then
     # EPEL carries the Xfce stack on EL9. Retry the repo package so a flaky
     # link cannot abort the desktop install.
     if ! _flux_retry_pkg $DNF $DNF_OPTS install epel-release; then
-        echo "Bliss: WARNING: epel-release install failed — XFCE packages may be unavailable"
+        echo "Altaris: WARNING: epel-release install failed — XFCE packages may be unavailable"
     fi
     # Import the EPEL key explicitly: scriptlets are skipped (tsflags=noscripts)
     # and dnf only auto-imports keys with -y on some versions.
@@ -174,13 +174,13 @@ if [ -z "${DESKTOPS##*xfce*}" ]; then
         XFCE_OK=1
     fi
     if [ "$XFCE_OK" -ne 1 ]; then
-        echo "Bliss: Xfce group unavailable — trying the @xfce group id"
+        echo "Altaris: Xfce group unavailable — trying the @xfce group id"
         if _flux_retry_pkg $DNF $DNF_OPTS install @xfce; then
             XFCE_OK=1
         fi
     fi
     if [ "$XFCE_OK" -ne 1 ]; then
-        echo "Bliss: Xfce group unavailable — installing the explicit package set"
+        echo "Altaris: Xfce group unavailable — installing the explicit package set"
         if _flux_retry_pkg $DNF $DNF_OPTS install \
             xfce4-session xfce4-panel xfce4-settings xfce4-terminal \
             xfdesktop xfwm4 thunar; then
@@ -188,7 +188,7 @@ if [ -z "${DESKTOPS##*xfce*}" ]; then
         fi
     fi
     if [ "$XFCE_OK" -ne 1 ]; then
-        echo "Bliss: XFCE package install failed after 3 tries — check your network, then tap Retry Setup."
+        echo "Altaris: XFCE package install failed after 3 tries — check your network, then tap Retry Setup."
         exit 1
     fi
     unset XFCE_OK
@@ -210,12 +210,12 @@ command -v glib-compile-schemas >/dev/null 2>&1 && \
     glib-compile-schemas /usr/share/glib-2.0/schemas 2>/dev/null || true
 command -v update-mime-database >/dev/null 2>&1 && update-mime-database /usr/share/mime 2>/dev/null || true
 if [ -x /usr/bin/bwrap ] && [ ! -e /usr/bin/bwrap.real ] && \
-   ! grep -q 'Bliss proot' /usr/bin/bwrap 2>/dev/null; then
+   ! grep -q 'Altaris proot' /usr/bin/bwrap 2>/dev/null; then
     mv /usr/bin/bwrap /usr/bin/bwrap.real 2>/dev/null || true
 fi
 cat > /usr/bin/bwrap <<'BWRAP_EOF'
 #!/bin/sh
-# Bliss: exec the real glycin loader, not an earlier --ro-bind source.
+# Altaris: exec the real glycin loader, not an earlier --ro-bind source.
 while [ $# -gt 0 ]; do
   case "$1" in
     /usr/libexec/glycin-loaders/*|/usr/lib/glycin-loaders/*|/usr/bin/true|/bin/true)
@@ -270,5 +270,11 @@ if [ -z "${DESKTOPS##*xfce*}" ] && command -v _flux_xfce_compact_defaults >/dev/
     _flux_xfce_compact_defaults || true
 fi
 
-echo "Bliss: ${DISTRO_NAME} RPM setup complete!"
+
+# Altaris universal interactive shell: zsh suggestions, syntax colors, sticker.
+if command -v _flux_setup_altaris_shell >/dev/null 2>&1; then
+    _flux_setup_altaris_shell || true
+fi
+
+echo "Altaris: ${DISTRO_NAME} RPM setup complete!"
 exit 0

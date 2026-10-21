@@ -208,7 +208,7 @@ configure_guest_chroot() {
     touch "$GUESTPATH/.bliss_configured"
     success "$DISTRO_LABEL environment configured (rootfs + user; XFCE via family phase)!"
 
-    # Root-staged helper/launchers live in the Bliss helpers dir (idempotent).
+    # Root-staged helper/launchers live in the Altaris helpers dir (idempotent).
     mkdir -p /data/local/bliss/helpers
 
     HELPER="/data/local/bliss/helpers/bliss_chroot.sh"
@@ -242,7 +242,7 @@ configure_guest_chroot() {
     done
 
     cleanup_mounts
-    success "Bliss: $DISTRO_LABEL Chroot Setup Complete!"
+    success "Altaris: $DISTRO_LABEL Chroot Setup Complete!"
 
     am start -a android.intent.action.VIEW \
         -d "fluxlinux://callback?result=success&name=distro_install_${DISTRO_LABEL}_chroot" \
@@ -297,7 +297,7 @@ if [ -z "${BB:-}" ]; then
   fi
 fi
 if [ -z "${BB:-}" ]; then
-  echo "Bliss: ERROR — root-capable busybox not found" >&2
+  echo "Altaris: ERROR — root-capable busybox not found" >&2
   exit 1
 fi
 

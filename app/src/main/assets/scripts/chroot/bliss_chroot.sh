@@ -423,7 +423,7 @@ resolve_login_shell() {
   printf '%s' "sh"
 }
 
-# Bliss profile bootstrap for the interactive users (flux AND root). Old
+# Altaris profile bootstrap for the interactive users (flux AND root). Old
 # builds only repaired /home/flux, so /root kept stale duplicated banner
 # source lines + an unguarded banner.sh — every rc line printed its own art
 # in the same shell (the "flood" on root tabs).
@@ -466,25 +466,42 @@ if [ -f "$ZSH/oh-my-zsh.sh" ]; then
   plugins=(git zsh-autosuggestions zsh-syntax-highlighting)
   source "$ZSH/oh-my-zsh.sh"
 fi
+# System package fallback for minimal chroots (no OMZ network clone needed).
+for _p in \
+  /usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh \
+  /usr/share/zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh \
+  /usr/local/share/altaris/zsh/zsh-autosuggestions/zsh-autosuggestions.zsh; do
+  [ -r "$_p" ] && (( ! ${+functions[_zsh_autosuggest_start]} )) && source "$_p"
+done
+for _p in \
+  /usr/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh \
+  /usr/share/zsh/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh \
+  /usr/local/share/altaris/zsh/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh; do
+  [ -r "$_p" ] && (( ! ${+ZSH_HIGHLIGHT_VERSION} )) && source "$_p"
+done
+unset _p
+if [ -z "${ZSH_THEME:-}" ]; then
+  PROMPT='%F{79}altaris%f%F{244}@%m%f %F{110}%~%f %F{255}%#%f '
+fi
 
 if command -v apk >/dev/null 2>&1 && command -v sudo >/dev/null 2>&1; then
   apk() { command sudo apk "$@"; }
 fi
 
-# Bliss launch sticker (random truecolor anime banner; opt out FLUX_NO_BANNER=1)
+# Altaris launch sticker (random truecolor anime banner; opt out FLUX_NO_BANNER=1)
 [ -r "$HOME/.config/bliss/banner.sh" ] && . "$HOME/.config/bliss/banner.sh"
 ZSHRC
   fi
-  # Monochrome Bliss prompt theme (replaces the removed agnosterzak theme).
+  # Monochrome Altaris prompt theme (replaces the removed agnosterzak theme).
   if [ -d "$_home/.oh-my-zsh" ]; then
     mkdir -p "$_home/.oh-my-zsh/custom/themes" 2>/dev/null || true
     rm -f "$_home/.oh-my-zsh/custom/themes/agnosterzak.zsh-theme" 2>/dev/null || true
     if [ ! -s "$_home/.oh-my-zsh/custom/themes/bliss.zsh-theme" ]; then
       cat > "$_home/.oh-my-zsh/custom/themes/bliss.zsh-theme" <<'FOLIO_THEME_EOF'
-# bliss.zsh-theme — Bliss's minimal monochrome prompt.
+# altaris prompt — Altaris's minimal monochrome prompt.
 # White/gray on black only; ASCII-safe (no powerline glyphs, no ANSI colors 31-44).
-# Segments:  time  bliss  working-dir  input-char
-PROMPT='%F{240}%D{%H:%M}%f %F{255}bliss%f %F{250}%~%f %F{255}%#%f '
+# Segments:  altaris  host  working-dir  input-char
+PROMPT='%F{79}altaris%f%F{244}@%m%f %F{110}%~%f %F{255}%#%f '
 PROMPT2='%F{240}> %f'
 FOLIO_THEME_EOF
     fi
@@ -493,7 +510,7 @@ FOLIO_THEME_EOF
   if [ -f "$_home/.zshrc" ] && grep -q 'ZSH_THEME="agnosterzak"' "$_home/.zshrc" 2>/dev/null; then
     sed -i 's|ZSH_THEME="agnosterzak"|ZSH_THEME="bliss"|' "$_home/.zshrc" 2>/dev/null || true
   fi
-  # ── Bliss launch sticker: 5 truecolor anime half-block designs + -----------
+  # ── Altaris launch sticker: 5 truecolor anime half-block designs + -----------
   # banner.sh. Random one per interactive shell; opt out with FLUX_NO_BANNER=1.
   # Host-side write (root owns the chroot tree); guards keep it non-fatal.
   # `.banner-rev` refreshes existing installs on the next customization re-run.
@@ -1370,7 +1387,7 @@ FOLIO_BANNER_ALL
     rm -f "$_fbdir/.bliss-banners.$$" 2>/dev/null || true
     printf '%s\n' "$_fbrev" > "$_fbdir/.banner-rev" 2>/dev/null || true
     cat > "$_home/.config/bliss/banner.sh" <<'FB_SH'
-# bliss-banner.sh — Bliss launch sticker: truecolor half-block anime art,
+# bliss-banner.sh — Altaris launch sticker: truecolor half-block anime art,
 # one random design per interactive shell, printed exactly ONCE per shell
 # even when several rc files source it or nested shells inherit the
 # environment. Works with zsh, bash and POSIX sh.
@@ -1444,18 +1461,18 @@ FB_SH
       mv -f "$_home/.zshrc.bliss.$$" "$_home/.zshrc" 2>/dev/null || rm -f "$_home/.zshrc.bliss.$$" 2>/dev/null || true
     if ! grep -q 'bliss/banner.sh' "$_home/.zshrc" 2>/dev/null; then
       {
-        printf '\n# Bliss launch sticker (random truecolor anime banner; opt out FLUX_NO_BANNER=1)\n'
+        printf '\n# Altaris launch sticker (random truecolor anime banner; opt out FLUX_NO_BANNER=1)\n'
         printf '[ -r "$HOME/.config/bliss/banner.sh" ] && . "$HOME/.config/bliss/banner.sh"\n'
       } >> "$_home/.zshrc" 2>/dev/null || true
     fi
   fi
   # Bash login wiring (bash sessions get the same sticker).
   if [ ! -f "$_home/.bashrc" ]; then
-    printf '%s\n' '# Bliss bash profile' 'export PATH="$HOME/.local/bin:$PATH"' > "$_home/.bashrc" 2>/dev/null || true
+    printf '%s\n' '# Altaris bash profile' 'export PATH="$HOME/.local/bin:$PATH"' > "$_home/.bashrc" 2>/dev/null || true
   fi
   if [ -f "$_home/.bashrc" ] && ! grep -q 'bliss/banner.sh' "$_home/.bashrc" 2>/dev/null; then
     {
-      printf '\n# Bliss launch sticker (random truecolor anime banner; opt out FLUX_NO_BANNER=1)\n'
+      printf '\n# Altaris launch sticker (random truecolor anime banner; opt out FLUX_NO_BANNER=1)\n'
       printf '[ -r "$HOME/.config/bliss/banner.sh" ] && . "$HOME/.config/bliss/banner.sh"\n'
     } >> "$_home/.bashrc" 2>/dev/null || true
   fi
@@ -1481,7 +1498,7 @@ FB_SH
   if [ -d "$_home/.config/bliss" ]; then
     chown -R --reference="$_home" "$_home/.config/bliss" 2>/dev/null || true
   fi
-  # Bliss Linux appearance: re-apply the app-staged config when it changed.
+  # Altaris Linux appearance: re-apply the app-staged config when it changed.
   # Runs inside the chroot (guest tools + guest paths); the script is
   # hash-guarded, so repeated logins are cheap no-ops when nothing changed.
   if [ -r "$_home/.config/bliss/appearance-apply.sh" ]; then
@@ -1511,13 +1528,13 @@ FB_SH
     done
     if [ -f "$_home/.zshrc" ] && ! grep -q 'bliss/banner.sh' "$_home/.zshrc" 2>/dev/null; then
       {
-        printf '\n# Bliss launch sticker (random truecolor anime banner; opt out FLUX_NO_BANNER=1)\n'
+        printf '\n# Altaris launch sticker (random truecolor anime banner; opt out FLUX_NO_BANNER=1)\n'
         printf '[ -r "$HOME/.config/bliss/banner.sh" ] && . "$HOME/.config/bliss/banner.sh"\n'
       } >> "$_home/.zshrc" 2>/dev/null || true
     fi
     if [ -f "$_home/.bashrc" ] && ! grep -q 'bliss/banner.sh' "$_home/.bashrc" 2>/dev/null; then
       {
-        printf '\n# Bliss launch sticker (random truecolor anime banner; opt out FLUX_NO_BANNER=1)\n'
+        printf '\n# Altaris launch sticker (random truecolor anime banner; opt out FLUX_NO_BANNER=1)\n'
         printf '[ -r "$HOME/.config/bliss/banner.sh" ] && . "$HOME/.config/bliss/banner.sh"\n'
       } >> "$_home/.bashrc" 2>/dev/null || true
     fi

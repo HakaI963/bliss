@@ -19,7 +19,7 @@ fi
 USERNAME="${USERNAME:-flux}"
 
 echo "========================================"
-echo "Bliss: Chroot XFCE (root stage)"
+echo "Altaris: Chroot XFCE (root stage)"
 echo "  rootfs=$CHROOT_ROOT"
 echo "========================================"
 
@@ -62,28 +62,28 @@ if [ -z "${BB:-}" ]; then
   fi
 fi
 if [ -z "${BB:-}" ]; then
-  echo "Bliss: ERROR — root-capable busybox not found" >&2
+  echo "Altaris: ERROR — root-capable busybox not found" >&2
   exit 1
 fi
 
-echo "Bliss: busybox=$BB"
+echo "Altaris: busybox=$BB"
 
 if [ ! -d "$CHROOT_ROOT" ]; then
-  echo "Bliss: ERROR — chroot missing: $CHROOT_ROOT"
+  echo "Altaris: ERROR — chroot missing: $CHROOT_ROOT"
   exit 1
 fi
 if [ ! -e "$CHROOT_ROOT/usr/bin/startxfce4" ] && [ ! -e "$CHROOT_ROOT/usr/sbin/startxfce4" ]; then
-  echo "Bliss: ERROR — startxfce4 missing. Re-run chroot environment setup."
+  echo "Altaris: ERROR — startxfce4 missing. Re-run chroot environment setup."
   exit 1
 fi
 
 # Soft SELinux (HyperOS / enforcing) — flux pattern; fail soft
 if command -v getenforce >/dev/null 2>&1; then
   SELINUX_STATUS=$(getenforce 2>/dev/null || true)
-  echo "Bliss: SELinux=$SELINUX_STATUS"
+  echo "Altaris: SELinux=$SELINUX_STATUS"
   if [ "$SELINUX_STATUS" = "Enforcing" ]; then
-    setenforce 0 2>/dev/null && echo "Bliss: SELinux → Permissive (until reboot)" \
-      || echo "Bliss: [WARN] setenforce 0 failed"
+    setenforce 0 2>/dev/null && echo "Altaris: SELinux → Permissive (until reboot)" \
+      || echo "Altaris: [WARN] setenforce 0 failed"
   fi
 fi
 # PREFIX/tmp must stay app_data_file. Labeling it tmpfs:s0 makes termux-x11
@@ -104,14 +104,14 @@ chmod 1777 "$TARGET_PREFIX/tmp/.X11-unix" 2>/dev/null || true
 i=0
 while [ $i -lt 15 ]; do
   if [ -S "$TARGET_PREFIX/tmp/.X11-unix/X0" ]; then
-    echo "Bliss: host X0 socket ready"
+    echo "Altaris: host X0 socket ready"
     break
   fi
   i=$((i + 1))
   sleep 1
 done
 if [ ! -S "$TARGET_PREFIX/tmp/.X11-unix/X0" ]; then
-  echo "Bliss: [WARN] host X0 not seen yet — continuing"
+  echo "Altaris: [WARN] host X0 not seen yet — continuing"
 fi
 
 if [ -f "$HELPER" ]; then
@@ -170,7 +170,7 @@ if [ "${#_mid}" -ne 32 ]; then
   _mid=$(tr -d '-' < /proc/sys/kernel/random/uuid 2>/dev/null | tr -d '\n')
   printf '%s\n' "$_mid" > "$_midf"
   chmod 644 "$_midf" 2>/dev/null || true
-  echo "Bliss: wrote /etc/machine-id"
+  echo "Altaris: wrote /etc/machine-id"
 fi
 echo "[4/5] GPU mode + launch XFCE as $USERNAME..."
 # Fedora 43 / Tumbleweed glycin execs bwrap. Keep a compiled native shim
@@ -190,7 +190,7 @@ if [ "$_keep" = 0 ]; then
   fi
   cat > "$_bwrap" <<'BWRAP_EOF'
 #!/bin/sh
-# Bliss: exec the real glycin loader, not an earlier --ro-bind source.
+# Altaris: exec the real glycin loader, not an earlier --ro-bind source.
 while [ $# -gt 0 ]; do
   case "$1" in
     /usr/libexec/glycin-loaders/*|/usr/lib/glycin-loaders/*|/usr/bin/true|/bin/true)
@@ -283,18 +283,18 @@ _runas '
     else
       export LIBGL_ALWAYS_SOFTWARE=1
       export GALLIUM_DRIVER=llvmpipe
-      echo \"Bliss(guest): software GL fallback\"
+      echo \"Altaris(guest): software GL fallback\"
     fi
     export GPU_MODE
   fi
-  echo \"Bliss(guest): GPU mode=\$GPU_MODE\"
+  echo \"Altaris(guest): GPU mode=\$GPU_MODE\"
 
   if command -v dbus-run-session >/dev/null 2>&1; then
     exec dbus-run-session -- startxfce4
   elif command -v dbus-launch >/dev/null 2>&1; then
     exec dbus-launch --exit-with-session startxfce4
   else
-    echo \"Bliss(guest): no dbus-launch; starting XFCE without session wrapper\"
+    echo \"Altaris(guest): no dbus-launch; starting XFCE without session wrapper\"
     exec startxfce4
   fi
 '

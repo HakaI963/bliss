@@ -23,10 +23,10 @@ fi
 # HoldPkg stays pacman glibc. User alarm occupies uid 1000 — rename to flux.
 
 DISTRO_NAME="${1:-archlinux}"
-echo "Bliss: Configuring ${DISTRO_NAME} (Arch Family)..."
+echo "Altaris: Configuring ${DISTRO_NAME} (Arch Family)..."
 
 if [ "$(id -u)" -ne 0 ]; then
-    echo "Bliss: ERROR: must run as root inside the guest (got uid=$(id -u))."
+    echo "Altaris: ERROR: must run as root inside the guest (got uid=$(id -u))."
     exit 1
 fi
 
@@ -38,7 +38,7 @@ _flux_ensure_tmp
 _flux_ensure_dns
 
 if ! command -v pacman >/dev/null 2>&1; then
-    echo "Bliss: ERROR: pacman not found"
+    echo "Altaris: ERROR: pacman not found"
     exit 1
 fi
 
@@ -156,7 +156,7 @@ _flux_ensure_groups
 
 _flux_log "pacman -Sy..."
 if ! pacman -Sy --noconfirm; then
-    echo "Bliss: pacman -Sy failed (repos/network)"
+    echo "Altaris: pacman -Sy failed (repos/network)"
     exit 1
 fi
 
@@ -177,7 +177,7 @@ if [ "$DESKTOPS" != "none" ]; then
     _BASE_PKGS="$_BASE_PKGS ttf-dejavu adwaita-icon-theme mesa mesa-utils"
 fi
 if ! pacman -S --noconfirm --needed $_BASE_PKGS; then
-    echo "Bliss: base package install failed"
+    echo "Altaris: base package install failed"
     exit 1
 fi
 unset _BASE_PKGS
@@ -201,7 +201,7 @@ if [ -z "${DESKTOPS##*xfce*}" ]; then
     if ! _flux_retry_pkg pacman -S --noconfirm --needed \
         xfce4-session xfce4-panel xfce4-settings xfce4-terminal \
         xfdesktop xfwm4 thunar; then
-        echo "Bliss: XFCE install failed after 3 tries — check your network, then tap Retry Setup."
+        echo "Altaris: XFCE install failed after 3 tries — check your network, then tap Retry Setup."
         exit 1
     fi
 
@@ -255,5 +255,11 @@ if [ -z "${DESKTOPS##*xfce*}" ] && command -v _flux_xfce_compact_defaults >/dev/
     _flux_xfce_compact_defaults || true
 fi
 
-echo "Bliss: ${DISTRO_NAME} Arch setup complete!"
+
+# Altaris universal interactive shell: zsh suggestions, syntax colors, sticker.
+if command -v _flux_setup_altaris_shell >/dev/null 2>&1; then
+    _flux_setup_altaris_shell || true
+fi
+
+echo "Altaris: ${DISTRO_NAME} Arch setup complete!"
 exit 0

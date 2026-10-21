@@ -1,5 +1,5 @@
 #!/bin/sh
-# uninstall_guest_chroot.sh — remove a Bliss guest chroot (Requires Root)
+# uninstall_guest_chroot.sh — remove a Altaris guest chroot (Requires Root)
 # Target from FLUX_CHROOT (must be set). Does not remove shared bliss_chroot.sh.
 
 GUESTPATH="${FLUX_CHROOT:-}"

@@ -21,10 +21,10 @@ fi
 # Common helpers may be prepended by BaseDesktopInstallPlan.
 
 DISTRO_NAME="${1:-fedora}"
-echo "Bliss: Configuring ${DISTRO_NAME} (Fedora Family)..."
+echo "Altaris: Configuring ${DISTRO_NAME} (Fedora Family)..."
 
 if [ "$(id -u)" -ne 0 ]; then
-    echo "Bliss: ERROR: must run as root inside the guest (got uid=$(id -u))."
+    echo "Altaris: ERROR: must run as root inside the guest (got uid=$(id -u))."
     exit 1
 fi
 
@@ -38,7 +38,7 @@ if command -v dnf5 >/dev/null 2>&1; then
     DNF="dnf5"
 fi
 if ! command -v "$DNF" >/dev/null 2>&1; then
-    echo "Bliss: ERROR: dnf/dnf5 not found"
+    echo "Altaris: ERROR: dnf/dnf5 not found"
     exit 1
 fi
 
@@ -60,7 +60,7 @@ fi
 
 _flux_log "dnf makecache ($DNF)..."
 $DNF -y --setopt=install_weak_deps=False makecache || {
-    echo "Bliss: dnf makecache failed (network / repos)"
+    echo "Altaris: dnf makecache failed (network / repos)"
     exit 1
 }
 
@@ -70,7 +70,7 @@ $DNF $DNF_OPTS install \
     gzip xz tzdata \
     dbus dbus-daemon \
     || {
-        echo "Bliss: base package install failed"
+        echo "Altaris: base package install failed"
         exit 1
     }
 # dbus-x11 is optional on F44 (some images use dbus-daemon only)
@@ -95,7 +95,7 @@ if [ "$DESKTOPS" != "none" ]; then
         gsettings-desktop-schemas \
         mesa-dri-drivers mesa-libGL mesa-libEGL \
         || {
-            echo "Bliss: base graphics package install failed"
+            echo "Altaris: base graphics package install failed"
             exit 1
         }
 fi
@@ -119,7 +119,7 @@ if [ -z "${DESKTOPS##*xfce*}" ]; then
     if ! _flux_retry_pkg $DNF $DNF_OPTS install \
         xfce4-session xfce4-panel xfce4-settings xfce4-terminal \
         xfdesktop xfwm4 thunar; then
-        echo "Bliss: XFCE package install failed after 3 tries — check your network, then tap Retry Setup."
+        echo "Altaris: XFCE package install failed after 3 tries — check your network, then tap Retry Setup."
         exit 1
     fi
     # Phone niceties: Whisker panel menu + screenshot tool (best-effort).
@@ -145,7 +145,7 @@ if [ -x /usr/bin/bwrap ] && [ ! -e /usr/bin/bwrap.real ] && \
 fi
 cat > /usr/bin/bwrap <<'BWRAP_EOF'
 #!/bin/sh
-# Bliss: exec the real glycin loader, not an earlier --ro-bind source.
+# Altaris: exec the real glycin loader, not an earlier --ro-bind source.
 while [ $# -gt 0 ]; do
   case "$1" in
     /usr/libexec/glycin-loaders/*|/usr/lib/glycin-loaders/*|/usr/bin/true|/bin/true)
@@ -193,5 +193,11 @@ if [ -z "${DESKTOPS##*xfce*}" ] && command -v _flux_xfce_compact_defaults >/dev/
     _flux_xfce_compact_defaults || true
 fi
 
-echo "Bliss: ${DISTRO_NAME} Fedora setup complete!"
+
+# Altaris universal interactive shell: zsh suggestions, syntax colors, sticker.
+if command -v _flux_setup_altaris_shell >/dev/null 2>&1; then
+    _flux_setup_altaris_shell || true
+fi
+
+echo "Altaris: ${DISTRO_NAME} Fedora setup complete!"
 exit 0

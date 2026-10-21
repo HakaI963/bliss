@@ -21,15 +21,15 @@ do
 done
 
 if ! command -v _flux_setup_pulse >/dev/null 2>&1; then
-    echo "Bliss: [AUDIO] ERROR bliss_guest_common.sh not staged — cannot repair guest"
+    echo "Altaris: [AUDIO] ERROR bliss_guest_common.sh not staged — cannot repair guest"
     exit 0
 fi
 
 _flux_setup_pulse
 _have=$(_flux_guest_pactl || true)
 if [ -n "$_have" ]; then
-    echo "Bliss: [AUDIO] guest pactl=$_have"
+    echo "Altaris: [AUDIO] guest pactl=$_have"
     exit 0
 fi
-echo "Bliss: [AUDIO] WARN guest pactl still missing"
+echo "Altaris: [AUDIO] WARN guest pactl still missing"
 exit 0

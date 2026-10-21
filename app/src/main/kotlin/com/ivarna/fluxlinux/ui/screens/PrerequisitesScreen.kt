@@ -181,7 +181,7 @@ fun PrerequisitesScreen(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Text(
-                    text = "Bliss requires these to function",
+                    text = "Altaris requires these to function",
                     color = androidx.compose.material3.MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
                     fontSize = 14.sp
                 )
@@ -353,7 +353,7 @@ private fun PrerequisitesLandscapeLayout(
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = "Bliss requires these to function",
+                text = "Altaris requires these to function",
                 color = androidx.compose.material3.MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
                 fontSize = 14.sp
             )
@@ -528,7 +528,7 @@ fun HostBootstrapStep(
 
         // Embedded host card (ivarna: download bootstrap.tar from GitHub; zenithblue: APK asset)
         PrerequisiteItem(
-            name = "Bliss Host (embedded)",
+            name = "Altaris Host (embedded)",
             isInstalled = bootstrapDone,
             isOutdated = false,
             version = if (bootstrapDone) "v1 (extracted)" else null,
@@ -623,7 +623,7 @@ fun TermuxConfigurationStep(
         Spacer(modifier = Modifier.height(16.dp))
         
         Text(
-            text = "Allow Bliss to communicate with Termux",
+            text = "Allow Altaris to communicate with Termux",
             color = androidx.compose.material3.MaterialTheme.colorScheme.onBackground.copy(alpha=0.7f),
             fontSize = 14.sp
         )
@@ -763,7 +763,7 @@ fun PermissionRequestStep(
         Spacer(modifier = Modifier.height(16.dp))
         
         Text(
-            text = "Bliss needs permission to communicate with Termux",
+            text = "Altaris needs permission to communicate with Termux",
             color = androidx.compose.material3.MaterialTheme.colorScheme.onBackground.copy(alpha=0.7f),
             fontSize = 14.sp
         )
@@ -1795,7 +1795,7 @@ fun FinalInstructionsStep(
                 Spacer(modifier = Modifier.height(16.dp))
                 
                 Text(
-                    text = "Bliss runs on top of Termux.",
+                    text = "Altaris runs on top of Termux.",
                     color = androidx.compose.material3.MaterialTheme.colorScheme.onSurface,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold
@@ -2289,7 +2289,7 @@ fun HelpAndSupportStep(
         
         Spacer(modifier = Modifier.height(32.dp))
         
-        // Bliss Setup Link
+        // Altaris Setup Link
         androidx.compose.material3.Card(
             colors = androidx.compose.material3.CardDefaults.cardColors(
                 containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surfaceVariant
@@ -2304,7 +2304,7 @@ fun HelpAndSupportStep(
                 androidx.compose.foundation.Image(painter = painterResource(id = R.drawable.ic_bliss_mark), contentDescription = null, modifier = Modifier.size(32.dp))
                 Spacer(modifier = Modifier.width(16.dp))
                 Column {
-                    Text("Bliss Setup", color = androidx.compose.material3.MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Text("Altaris Setup", color = androidx.compose.material3.MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                     Text("Step-by-Step Installation", color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
                 }
             }

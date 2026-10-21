@@ -8,7 +8,7 @@ export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 unset LD_LIBRARY_PATH
 unset LD_PRELOAD
 
-_flux_log() { echo "Bliss: $*"; }
+_flux_log() { echo "Altaris: $*"; }
 
 # Portable stat: GNU coreutils uses `-c %u`, BSD userland (Chimera) uses `-f %u`.
 _flux_stat_u() { stat -c %u "$1" 2>/dev/null || stat -f %u "$1" 2>/dev/null || true; }
@@ -143,7 +143,7 @@ _flux_repair_sudo_pam() {
             for _pam in /etc/pam.d/sudo /etc/pam.d/sudo-i; do
                 cat > "$_pam" <<'PAM'
 #%PAM-1.0
-# Bliss proot: pam_unix/audit cannot run → sudo asks for a password.
+# Altaris proot: pam_unix/audit cannot run → sudo asks for a password.
 auth       sufficient pam_permit.so
 account    sufficient pam_permit.so
 password   sufficient pam_permit.so
@@ -180,12 +180,12 @@ _flux_ensure_sudo() {
         # 0400 root:root → "doas is not enabled, Permission denied" under proot.
         chmod 0644 /etc/doas.conf
         chown root:root /etc/doas.conf 2>/dev/null || true
-        # sudo shim so Bliss wrappers (zshrc / scripts) keep working.
+        # sudo shim so Altaris wrappers (zshrc / scripts) keep working.
         if ! command -v sudo >/dev/null 2>&1; then
             mkdir -p /usr/local/bin
             cat > /usr/local/bin/sudo <<'EOF'
 #!/bin/sh
-# Bliss shim: sudo -> doas (nopass flux).
+# Altaris shim: sudo -> doas (nopass flux).
 exec doas "$@"
 EOF
             chmod 755 /usr/local/bin/sudo
@@ -223,7 +223,7 @@ _flux_ensure_home() {
 #!/bin/sh
 export PULSE_SERVER=tcp:127.0.0.1
 [ -f "\$HOME/.Xresources" ] && xrdb "\$HOME/.Xresources"
-# Bliss Linux appearance (wallpaper/colors/terminal; hash-guarded inside).
+# Altaris Linux appearance (wallpaper/colors/terminal; hash-guarded inside).
 [ -r "\$HOME/.config/bliss/appearance-apply.sh" ] && sh "\$HOME/.config/bliss/appearance-apply.sh" >/dev/null 2>&1 || true
 exec $_xs_de
 EOF
@@ -270,7 +270,7 @@ _flux_require_startxfce4() {
     if [ ! -e /usr/bin/startxfce4 ] && [ ! -e /usr/sbin/startxfce4 ] \
         && [ ! -e /usr/local/bin/startxfce4 ] \
         && ! command -v startxfce4 >/dev/null 2>&1; then
-        echo "Bliss: ERROR: startxfce4 missing after desktop install"
+        echo "Altaris: ERROR: startxfce4 missing after desktop install"
         exit 1
     fi
 }
@@ -338,7 +338,7 @@ if [ -n "$_pick" ]; then
 else
   unset LC_ALL
   export LANG=C
-  echo "Bliss: WARNING: no UTF-8 locale in locale -a; zsh staying LANG=C" >&2
+  echo "Altaris: WARNING: no UTF-8 locale in locale -a; zsh staying LANG=C" >&2
 fi
 unset _have _c _pick
 EOF
@@ -469,7 +469,7 @@ _flux_apt_prep() {
     mkdir -p /etc/apt/apt.conf.d
     printf 'APT::Sandbox::User "root";\nDPkg::Use-Pty "false";\n' \
         > /etc/apt/apt.conf.d/99flux-nosandbox
-    # Bliss: earliest common apt point — apply the quiet speed tuning now.
+    # Altaris: earliest common apt point — apply the quiet speed tuning now.
     _flux_pick_fast_mirror
 }
 
@@ -528,7 +528,7 @@ _flux_mask_pipewire_pulse() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Bliss: fastest-mirror picker (B2). Runs ONCE per install — from
+# Altaris: fastest-mirror picker (B2). Runs ONCE per install — from
 # `_flux_retry_pkg` (all families, before the largest transaction) and from
 # `_flux_apt_prep` (early apt tuning). A handful of candidate mirrors race with
 # a 256 KiB range GET each (`--max-time 4`, 200/206 only) and the fastest above
@@ -608,7 +608,7 @@ _flux_apk_fast_mirror() {
         "https://dl-2.alpinelinux.org/alpine/$_rel/main/$_arch/APKINDEX.tar.gz"
     if [ -n "$_flux_race_winner" ]; then
         _base="${_flux_race_winner%%/alpine/*}"
-        echo "Bliss: fast mirror: $(_flux_mirror_host "$_base")"
+        echo "Altaris: fast mirror: $(_flux_mirror_host "$_base")"
         _tmp="/etc/apk/repositories.bliss.$$"
         if {
             printf '%s\n' \
@@ -650,10 +650,10 @@ _flux_xbps_fast_mirror() {
         "https://mirror.clarkson.edu/voidlinux/current/$_adir/$_adir-repodata"
     if [ -n "$_flux_race_winner" ]; then
         _wbase="${_flux_race_winner%/$_adir-repodata}"
-        echo "Bliss: fast mirror: $(_flux_mirror_host "$_wbase")"
+        echo "Altaris: fast mirror: $(_flux_mirror_host "$_wbase")"
         if mkdir -p /etc/xbps.d 2>/dev/null; then
             {
-                printf '# Bliss: fastest mirror from a one-shot speed race.\n'
+                printf '# Altaris: fastest mirror from a one-shot speed race.\n'
                 printf 'repository=%s\n' "$_wbase"
             } > /etc/xbps.d/00-bliss-repository.conf 2>/dev/null || true
         fi
@@ -714,10 +714,10 @@ _flux_pacman_fast_mirror() {
     if [ -n "$_flux_race_winner" ]; then
         _wtpl=$(awk -F'|' -v u="$_flux_race_winner" '$2 == u { print $1; exit }' "$_pf")
         if [ -n "$_wtpl" ]; then
-            echo "Bliss: fast mirror: $(_flux_mirror_host "$_wtpl")"
+            echo "Altaris: fast mirror: $(_flux_mirror_host "$_wtpl")"
             _mtmp="/etc/pacman.d/mirrorlist.bliss.$$"
             {
-                printf '# Bliss: fastest mirror from a one-shot speed race.\n'
+                printf '# Altaris: fastest mirror from a one-shot speed race.\n'
                 printf 'Server = %s\n' "$_wtpl"
                 grep -vF "Server = $_wtpl" /etc/pacman.d/mirrorlist 2>/dev/null || true
             } > "$_mtmp" 2>/dev/null && mv -f "$_mtmp" /etc/pacman.d/mirrorlist 2>/dev/null \
@@ -736,7 +736,7 @@ _flux_pacman_fast_mirror() {
 _flux_apt_fast_tuning() {
     [ -d /etc/apt/apt.conf.d ] || return 0
     cat > /etc/apt/apt.conf.d/99-bliss-fast 2>/dev/null <<'EOF'
-// Bliss: retry/timeout/parallel tuning (quiet, idempotent).
+// Altaris: retry/timeout/parallel tuning (quiet, idempotent).
 Acquire::Retries "5";
 Acquire::http::Timeout "30";
 Acquire::https::Timeout "30";
@@ -831,7 +831,7 @@ _flux_pm_refresh() {
 }
 
 _flux_retry_pkg() {
-    # Bliss: one mirror race per install, before the first (largest) transaction.
+    # Altaris: one mirror race per install, before the first (largest) transaction.
     _flux_pick_fast_mirror
     _retry_tries=3
     _retry_n=1
@@ -941,7 +941,7 @@ _flux_setup_pulse() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Bliss Linux appearance: apply the app-staged wallpaper/colors/terminal config
+# Altaris Linux appearance: apply the app-staged wallpaper/colors/terminal config
 # (~/.config/bliss/appearance.env + appearance-apply.sh, staged by the app).
 # No-op when the user never configured appearance. Forces ONE pass because
 # callers are install / script re-run paths that just rewrote the defaults.
@@ -1545,7 +1545,7 @@ EOF
     if [ -n "${_uid:-}" ]; then
         chown -R "$_uid:$_gid" "$_h/.config" 2>/dev/null || true
     fi
-    # Bliss Linux appearance (staged by the app) — applied after the compact
+    # Altaris Linux appearance (staged by the app) — applied after the compact
     # defaults so the user's wallpaper/colors win. No-op when unconfigured.
     if command -v _flux_apply_folio_appearance >/dev/null 2>&1; then
         _flux_apply_folio_appearance "$_h" || true
@@ -1553,4 +1553,174 @@ EOF
     unset _h _cfg _theme _icon _cursor _font _mono _title _menu_plugin \
         _wpdir _wp _img_style _monitors _props _m _t _src _uid _gid
     return 0
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Altaris universal interactive shell
+#
+# Every distro gets the same zsh experience, not just the desktop-customized
+# Alpine/Debian images:
+#   * zsh as the login shell for the Linux user
+#   * inline history suggestions (zsh-autosuggestions)
+#   * green/red command validity coloring (zsh-syntax-highlighting)
+#   * the random truecolor anime launch sticker already staged by the app
+#   * the same `altaris@<distro>` prompt on every family
+#
+# Packages are preferred because they are offline-fast after the normal mirror
+# pass. If a distro does not package a plugin, a bounded shallow git clone into
+# /usr/local/share/altaris/zsh fills the gap. Every step is best-effort: a
+# missing plugin never fails an install.
+# ─────────────────────────────────────────────────────────────────────────────
+
+_altaris_shell_pm() {
+    if [ "$(id -u 2>/dev/null || echo 1)" = "0" ]; then _as=""
+    elif command -v sudo >/dev/null 2>&1; then _as="sudo"
+    else _as=""; fi
+    if command -v apt-get >/dev/null 2>&1; then
+        DEBIAN_FRONTEND=noninteractive $_as apt-get install -y --no-install-recommends "$@" >/dev/null 2>&1
+    elif command -v apk >/dev/null 2>&1; then
+        $_as apk add --no-cache "$@" >/dev/null 2>&1
+    elif command -v pacman >/dev/null 2>&1; then
+        $_as pacman -S --noconfirm --needed "$@" >/dev/null 2>&1
+    elif command -v dnf >/dev/null 2>&1; then
+        $_as dnf install -y "$@" >/dev/null 2>&1
+    elif command -v dnf5 >/dev/null 2>&1; then
+        $_as dnf5 install -y "$@" >/dev/null 2>&1
+    elif command -v zypper >/dev/null 2>&1; then
+        $_as zypper --non-interactive install "$@" >/dev/null 2>&1
+    elif command -v xbps-install >/dev/null 2>&1; then
+        $_as xbps-install -y "$@" >/dev/null 2>&1
+    else
+        return 1
+    fi
+}
+
+_altaris_shell_clone() {
+    command -v git >/dev/null 2>&1 || return 1
+    mkdir -p /usr/local/share/altaris/zsh 2>/dev/null || return 1
+    _url="$1"; _dst="$2"
+    [ -s "$_dst" ] && return 0
+    if command -v timeout >/dev/null 2>&1; then
+        timeout 60 git clone --depth 1 --single-branch --quiet "$_url" "$_dst" >/dev/null 2>&1
+    else
+        GIT_TERMINAL_PROMPT=0 git clone --depth 1 --single-branch --quiet "$_url" "$_dst" >/dev/null 2>&1
+    fi
+    unset _url _dst
+}
+
+_altaris_shell_ensure_plugins() {
+    # zsh itself is the only hard requirement; the helper is called after the
+    # family package transaction, so usually this is one tiny no-op.
+    _altaris_shell_pm zsh git || true
+    _altaris_shell_pm zsh-autosuggestions zsh-syntax-highlighting || true
+
+    _asug=""
+    _ssyn=""
+    for _p in \
+        /usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh \
+        /usr/share/zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh \
+        /usr/share/zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.plugin.zsh \
+        /usr/local/share/zsh-autosuggestions/zsh-autosuggestions.zsh \
+        /usr/local/share/altaris/zsh/zsh-autosuggestions/zsh-autosuggestions.zsh \
+        /home/flux/.oh-my-zsh/custom/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh \
+        /root/.oh-my-zsh/custom/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh; do
+        [ -r "$_p" ] && { _asug="$_p"; break; }
+    done
+    for _p in \
+        /usr/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh \
+        /usr/share/zsh/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh \
+        /usr/share/zsh-syntax-highlighting/zsh-syntax-highlighting.plugin.zsh \
+        /usr/local/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh \
+        /usr/local/share/altaris/zsh/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh \
+        /home/flux/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh \
+        /root/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh; do
+        [ -r "$_p" ] && { _ssyn="$_p"; break; }
+    done
+
+    [ -n "$_asug" ] || _altaris_shell_clone \
+        https://github.com/zsh-users/zsh-autosuggestions.git \
+        /usr/local/share/altaris/zsh/zsh-autosuggestions || true
+    [ -n "$_ssyn" ] || _altaris_shell_clone \
+        https://github.com/zsh-users/zsh-syntax-highlighting.git \
+        /usr/local/share/altaris/zsh/zsh-syntax-highlighting || true
+    unset _asug _ssyn _p
+}
+
+_altaris_shell_write_profile() {
+    _h="$1"
+    [ -n "$_h" ] && [ -d "$_h" ] || return 0
+    _z="$_h/.zshrc"
+    if [ ! -e "$_z" ]; then
+        printf '# Altaris interactive shell\n' > "$_z" 2>/dev/null || return 0
+    fi
+    if ! grep -q 'altaris shell integration v2' "$_z" 2>/dev/null; then
+        cat >> "$_z" <<'ALTARIS_SHELL_EOF'
+
+# >>> altaris shell integration v2 >>>
+# One profile for every distro: history ghost text, live green/red command
+# validation, and the same launch sticker. Loaded after the distro profile.
+ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=244'
+_altaris_shell_source() {
+  [ -r "$1" ] || return 0
+  case "$1" in
+    *zsh-autosuggestions*) (( ${+functions[_zsh_autosuggest_start]} )) && return 0 ;;
+    *zsh-syntax-highlighting*) (( ${+ZSH_HIGHLIGHT_VERSION} )) && return 0 ;;
+  esac
+  source "$1"
+}
+_altaris_shell_source "${ZSH:-$HOME/.oh-my-zsh}/custom/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh"
+_altaris_shell_source "$HOME/.oh-my-zsh/custom/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh"
+_altaris_shell_source /usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh
+_altaris_shell_source /usr/share/zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh
+_altaris_shell_source /usr/share/zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.plugin.zsh
+_altaris_shell_source /usr/local/share/zsh-autosuggestions/zsh-autosuggestions.zsh
+_altaris_shell_source /usr/local/share/altaris/zsh/zsh-autosuggestions/zsh-autosuggestions.zsh
+# Syntax highlighting must be the last zle source.
+_altaris_shell_source "${ZSH:-$HOME/.oh-my-zsh}/custom/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh"
+_altaris_shell_source "$HOME/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh"
+_altaris_shell_source /usr/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
+_altaris_shell_source /usr/share/zsh/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
+_altaris_shell_source /usr/share/zsh-syntax-highlighting/zsh-syntax-highlighting.plugin.zsh
+_altaris_shell_source /usr/local/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
+_altaris_shell_source /usr/local/share/altaris/zsh/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
+unset -f _altaris_shell_source 2>/dev/null || true
+if [ -z "${ZSH_THEME:-}" ] || [ "${ZSH_THEME:-}" = "bliss" ]; then
+  PROMPT='%F{79}altaris%f%F{244}@%m%f %F{110}%~%f %F{255}%#%f '
+fi
+# Sticker arrives from the app (BannerArtWriter); both old/new dirs are read.
+[ -r "$HOME/.config/altaris/banner.sh" ] && . "$HOME/.config/altaris/banner.sh"
+[ -r "$HOME/.config/bliss/banner.sh" ] && . "$HOME/.config/bliss/banner.sh"
+# <<< altaris shell integration v2 <<<
+ALTARIS_SHELL_EOF
+        if [ ! -s "$_z" ]; then
+            printf '# Altaris interactive shell\n' > "$_z" 2>/dev/null || true
+        fi
+    fi
+    _u=$(stat -c %u "$_h" 2>/dev/null || stat -f %u "$_h" 2>/dev/null || true)
+    _g=$(stat -c %g "$_h" 2>/dev/null || stat -f %g "$_h" 2>/dev/null || true)
+    [ -n "$_u" ] && chown "$_u:$_g" "$_z" 2>/dev/null || true
+    if [ -f "$_h/.bashrc" ] && ! grep -q 'altaris banner' "$_h/.bashrc" 2>/dev/null; then
+        printf '\n# altaris banner\n[ -r "$HOME/.config/altaris/banner.sh" ] && . "$HOME/.config/altaris/banner.sh"\n[ -r "$HOME/.config/bliss/banner.sh" ] && . "$HOME/.config/bliss/banner.sh"\n' >> "$_h/.bashrc" 2>/dev/null || true
+    fi
+    unset _z _u _g
+}
+
+_altaris_shell_bootstrap() {
+    _altaris_shell_ensure_plugins || true
+    if command -v zsh >/dev/null 2>&1; then
+        _zp=$(command -v zsh)
+        grep -qxF "$_zp" /etc/shells 2>/dev/null || echo "$_zp" >> /etc/shells 2>/dev/null || true
+        for _u in flux altaris; do
+            id "$_u" >/dev/null 2>&1 && chsh -s "$_zp" "$_u" >/dev/null 2>&1 || true
+        done
+        unset _zp
+    fi
+    for _h in /home/flux /home/altaris /root; do
+        _altaris_shell_write_profile "$_h"
+    done
+    unset _h _u
+}
+
+_flux_setup_altaris_shell() {
+    _altaris_shell_bootstrap || true
 }

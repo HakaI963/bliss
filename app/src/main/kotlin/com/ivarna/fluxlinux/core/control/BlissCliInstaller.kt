@@ -10,20 +10,22 @@ import com.ivarna.fluxlinux.core.terminal.TermuxHostPaths
 import java.io.File
 
 /**
- * Installs the `bliss` helper into the host prefix and every guest rootfs.
- * The helper is a thin curl/wget client for [ControlServer]; it does not need
- * root or the app's UID inside the guest.
+ * Installs the `altaris` helper into the host prefix and every guest rootfs.
+ * `bliss` remains as a compatibility alias. The helper is a thin HTTP client
+ * for [ControlServer]; it does not need root or the app's UID inside the guest.
  */
 object BlissCliInstaller {
-    private const val TAG = "BlissCli"
-    private const val MARKER = ".bliss-cli-v5"
+    private const val TAG = "AltarisCli"
+    private const val MARKER = ".altaris-cli-v6"
     private const val ASSET = "scripts/bliss-cli.sh"
+    private const val PRIMARY = "altaris"
+    private const val COMPAT = "bliss"
 
     fun ensureHost(ctx: Context) {
         runCatching {
             val bin = File(TermuxHostPaths.BIN)
             if (!bin.isDirectory) return
-            val target = File(bin, "bliss")
+            val target = File(bin, PRIMARY)
             writeAsset(ctx, target, null)
         }.onFailure { Log.w(TAG, "host CLI install failed", it) }
     }
@@ -56,7 +58,7 @@ object BlissCliInstaller {
             "usr/var/lib/proot-distro/containers/${profile.prootName}/rootfs"
         )
         if (!rootfs.isDirectory) return
-        val target = File(rootfs, "usr/local/bin/bliss")
+        val target = File(rootfs, "usr/local/bin/$PRIMARY")
         writeAsset(ctx, target, File(rootfs, MARKER))
     }
 
@@ -70,8 +72,10 @@ object BlissCliInstaller {
         val b64 = Base64.encodeToString(script.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
         val cmd = buildString {
             append("mkdir -p '$root/usr/local/bin' && ")
-            append("printf '%s' '$b64' | base64 -d > '$root/usr/local/bin/bliss' && ")
-            append("chmod 755 '$root/usr/local/bin/bliss' && ")
+            append("printf '%s' '$b64' | base64 -d > '$root/usr/local/bin/$PRIMARY' && ")
+            append("chmod 755 '$root/usr/local/bin/$PRIMARY' && ")
+            append("cp -f '$root/usr/local/bin/$PRIMARY' '$root/usr/local/bin/$COMPAT' && ")
+            append("chmod 755 '$root/usr/local/bin/$COMPAT' && ")
             append("touch '$marker'")
         }
         val result = RootShell.captureResult(cmd, 15_000)
@@ -82,15 +86,20 @@ object BlissCliInstaller {
 
     private fun writeAsset(ctx: Context, target: File, marker: File?) {
         val script = readAsset(ctx) ?: return
-        if (marker != null && marker.isFile && target.isFile &&
-            target.length() == script.length.toLong()
+        val compat = File(target.parentFile, COMPAT)
+        if (marker != null && marker.isFile && target.isFile && compat.isFile &&
+            target.length() == script.length.toLong() && compat.length() == script.length.toLong()
         ) {
             return
         }
         target.parentFile?.mkdirs()
         target.writeText(script)
-        runCatching { target.setExecutable(true, false) }
-        if (marker != null) runCatching { marker.writeText("5") }
+        compat.writeText(script)
+        runCatching {
+            target.setExecutable(true, false)
+            compat.setExecutable(true, false)
+        }
+        if (marker != null) runCatching { marker.writeText("6") }
     }
 
     private fun readAsset(ctx: Context): String? = runCatching {

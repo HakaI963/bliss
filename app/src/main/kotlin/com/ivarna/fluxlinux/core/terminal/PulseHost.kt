@@ -176,7 +176,7 @@ object PulseHost {
         val script = TermuxHostPaths.hostScript(ctx, "repair_pulse_guests.sh")
         if (!script.isFile) {
             val msg = "repair_pulse_guests.sh not deployed"
-            appendLog(ctx, "Bliss: [AUDIO] FAIL $msg")
+            appendLog(ctx, "Altaris: [AUDIO] FAIL $msg")
             return msg
         }
         return try {
@@ -189,7 +189,7 @@ object PulseHost {
             out
         } catch (e: Exception) {
             val msg = e.message ?: "guest repair failed"
-            appendLog(ctx, "Bliss: [AUDIO] FAIL $msg")
+            appendLog(ctx, "Altaris: [AUDIO] FAIL $msg")
             msg
         }
     }
@@ -237,7 +237,7 @@ object PulseHost {
         if (!script.isFile) {
             val msg = "start_pulse_host.sh not deployed"
             Log.w(TAG, msg)
-            appendLog(ctx, "Bliss: [AUDIO] FAIL $msg")
+            appendLog(ctx, "Altaris: [AUDIO] FAIL $msg")
             startedThisProcess.set(false)
             return msg
         }
@@ -252,7 +252,7 @@ object PulseHost {
             out
         } catch (e: Exception) {
             Log.w(TAG, "supervisor failed", e)
-            appendLog(ctx, "Bliss: [AUDIO] FAIL ${e.message}")
+            appendLog(ctx, "Altaris: [AUDIO] FAIL ${e.message}")
             startedThisProcess.set(false)
             e.message ?: "supervisor failed"
         }

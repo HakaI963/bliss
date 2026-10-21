@@ -23,7 +23,7 @@ command -v _flux_retry_pkg >/dev/null 2>&1 || _flux_retry_pkg() { "$@"; }
 
 DISTRO_NAME="${1:-debian}"
 
-echo "Bliss: Configuring ${DISTRO_NAME} (Debian Family)..."
+echo "Altaris: Configuring ${DISTRO_NAME} (Debian Family)..."
 
 # 1. Update and Install Core Packages
 export DEBIAN_FRONTEND=noninteractive
@@ -58,7 +58,7 @@ if [ -z "${DESKTOPS##*xfce*}" ]; then
         xfdesktop4 xfwm4 thunar \
         adwaita-icon-theme fonts-dejavu-core \
         libgl1-mesa-dri libegl1 mesa-utils; then
-        echo "Bliss: XFCE package install failed after 3 tries — check your network, then tap Retry Setup."
+        echo "Altaris: XFCE package install failed after 3 tries — check your network, then tap Retry Setup."
         exit 1
     fi
     # Phone niceties: Whisker panel menu + screenshot tool (best-effort).
@@ -88,7 +88,7 @@ fi
 [ -d /etc/fluxlinux ] && [ ! -e /etc/bliss ] && mv /etc/fluxlinux /etc/bliss 2>/dev/null || true
 mkdir -p /etc/bliss
 printf '%s\n' virgl > /etc/bliss/gpu_mode
-echo "Bliss: gpu_mode=virgl (first-paint; hw-accel may upgrade)"
+echo "Altaris: gpu_mode=virgl (first-paint; hw-accel may upgrade)"
 
 # 2. Create User 'flux'
 if ! id "flux" &>/dev/null; then
@@ -156,4 +156,10 @@ if [ -z "${DESKTOPS##*xfce*}" ] && command -v _flux_xfce_compact_defaults >/dev/
     _flux_xfce_compact_defaults || true
 fi
 
-echo "Bliss: ${DISTRO_NAME} Setup Complete!"
+
+# Altaris universal interactive shell: zsh suggestions, syntax colors, sticker.
+if command -v _flux_setup_altaris_shell >/dev/null 2>&1; then
+    _flux_setup_altaris_shell || true
+fi
+
+echo "Altaris: ${DISTRO_NAME} Setup Complete!"

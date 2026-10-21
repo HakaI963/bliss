@@ -1,6 +1,6 @@
 # Banner art credits
 
-The Bliss terminal launch sticker (`folio-banner`) is rendered from
+The Altaris terminal launch sticker (`folio-banner`) is rendered from
 **truecolor half-block** versions of the anime-style illustrations below.
 Each source was cropped to a head-and-shoulders composition, downscaled, and
 quantized to `▀` (U+2580) half-block cells with per-cell foreground/background

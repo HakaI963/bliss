@@ -24,6 +24,10 @@ class FluxApp : Application() {
         // nativeLibraryDir moves on every app update; fix host env before ANY host script runs.
         runCatching { TermuxHostPaths.refreshHostEnvIfStale(filesDir, this) }
             .onFailure { Log.w("FluxApp", "host env refresh failed", it) }
+        // Some bootstrap snapshots ship libcurl without its HTTP/3 runtime; the
+        // CLI sources curl from this prefix inside every guest, so repair it once.
+        runCatching { com.ivarna.fluxlinux.core.terminal.HostScriptDeployer.overlayHostRuntime(this) }
+            .onFailure { Log.w("FluxApp", "host libcurl repair failed", it) }
         // Remove leftovers from the retired in-app virtual-app engine. The
         // Shizuku clone engine is initialised lazily when the Apps/Tools UI opens.
         HeadlessCloneEngine.onAppCreate(this)

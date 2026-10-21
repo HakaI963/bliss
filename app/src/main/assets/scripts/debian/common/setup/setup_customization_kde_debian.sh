@@ -1,6 +1,6 @@
 #!/bin/bash
 # setup_customization_kde_debian.sh
-# Applies "Bliss" branding and customization to Debian KDE Plasma Desktop
+# Applies "Altaris" branding and customization to Debian KDE Plasma Desktop
 # Mirrors setup_customization_debian.sh structure exactly, adapted for KDE
 # Works for both Chroot and Proot environments (run as root, switches to user 'flux')
 
@@ -22,7 +22,7 @@ _flux_pause() {
 
 handle_error() {
     echo ""
-    echo "❌ Bliss KDE Customization Error: Script failed at step: $1"
+    echo "❌ Altaris KDE Customization Error: Script failed at step: $1"
     echo "─────────────────────────────────────────────────────────────"
     echo "Log saved to: $LOG_FILE"
     echo ""
@@ -35,12 +35,12 @@ handle_error() {
     exit 1
 }
 
-echo "Bliss: Starting KDE Plasma Customization..."
+echo "Altaris: Starting KDE Plasma Customization..."
 
 # Setup scripts must run as root inside proot/chroot (apt/dpkg).
 if [ "$(id -u)" -ne 0 ]; then
-    echo "Bliss: ERROR: must run as root inside the guest (got uid=$(id -u))."
-    echo "Bliss: Component sessions should use --user root; re-run from Distro Settings."
+    echo "Altaris: ERROR: must run as root inside the guest (got uid=$(id -u))."
+    echo "Altaris: Component sessions should use --user root; re-run from Distro Settings."
     handle_error "Not Root"
 fi
 
@@ -52,14 +52,14 @@ _flux_chown_r() { chown -R "$@" 2>/dev/null || true; }
 exec > >(tee -a "$LOG_FILE") 2>&1
 
 # 1. Install Dependencies
-echo "Bliss: Installing customization tools..."
+echo "Altaris: Installing customization tools..."
 export DEBIAN_FRONTEND=noninteractive
 apt update -y
 apt install -y curl fastfetch wget unzip fontconfig locales breeze breeze-gtk-theme \
-    || echo "Bliss: [WARN] some customization tools unavailable — continuing"
+    || echo "Altaris: [WARN] some customization tools unavailable — continuing"
 
 # Setup Locales for proper font rendering in ZSH/Terminal
-echo "Bliss: Setting up locales..."
+echo "Altaris: Setting up locales..."
 echo "en_US.UTF-8 UTF-8" > /etc/locale.gen
 locale-gen
 update-locale LANG=en_US.UTF-8
@@ -72,7 +72,7 @@ ASSET_REPO="abhay-byte/fluxlinux"
 ASSET_TAG="debian-v1"
 BASE_URL="https://github.com/$ASSET_REPO/releases/download/$ASSET_TAG"
 
-echo "Bliss: Downloading assets from $BASE_URL..."
+echo "Altaris: Downloading assets from $BASE_URL..."
 
 # Helper to extract all contents
 extract_all_assets() {
@@ -97,7 +97,7 @@ extract_all_assets() {
 # Prompts need FLUX_INTERACTIVE=1: the install pipeline gives the script a pty,
 # so "[ -t 0 ]" alone would block a terminal-only install on stdin.
 if [ -n "$FLUX_THEME" ]; then
-    echo "Bliss: Auto-applying Theme: $FLUX_THEME"
+    echo "Altaris: Auto-applying Theme: $FLUX_THEME"
     if [ "$FLUX_THEME" == "light" ]; then
         THEME_CHOICE="2"
     else
@@ -111,7 +111,7 @@ elif [ "${FLUX_INTERACTIVE:-0}" = "1" ] && [ -t 0 ]; then
     read -r -p "Enter choice [1-2]: " THEME_CHOICE
     echo "------------------------------------------------"
 else
-    echo "Bliss: No TTY / FLUX_THEME — defaulting to dark"
+    echo "Altaris: No TTY / FLUX_THEME — defaulting to dark"
     THEME_CHOICE="1"
 fi
 
@@ -119,14 +119,14 @@ fi
 SEL_ICON="Papirus-Dark"
 
 if [ "$THEME_CHOICE" == "2" ]; then
-    echo "Bliss: Light Mode Selected (icons: Papirus-Dark only)."
+    echo "Altaris: Light Mode Selected (icons: Papirus-Dark only)."
     SEL_GTK_THEME="Space-light"
     SEL_CURSOR="Vimix-cursors"
     SEL_WALLPAPER="bliss-light.png"
     KDE_COLOR_SCHEME="BreezeLight"
     KWIN_THEME="Breeze"
 else
-    echo "Bliss: Dark Mode Selected (icons: Papirus-Dark only)."
+    echo "Altaris: Dark Mode Selected (icons: Papirus-Dark only)."
     SEL_GTK_THEME="Space-transparency"
     SEL_CURSOR="Vimix-white-cursors"
     SEL_WALLPAPER="bliss-dark.png"
@@ -135,17 +135,17 @@ else
 fi
 
 # Install GTK Themes (same as XFCE — KDE apps use GTK theme via qt5-style-plugins)
-echo "Bliss: Installing Themes..."
+echo "Altaris: Installing Themes..."
 mkdir -p "$THEME_DIR"
 extract_all_assets "$BASE_URL/theme.zip" "$THEME_DIR"
 
 # Install Icons (Papirus works perfectly in KDE)
-echo "Bliss: Installing Icons..."
+echo "Altaris: Installing Icons..."
 mkdir -p "$ICON_DIR"
 extract_all_assets "$BASE_URL/icons.zip" "$ICON_DIR"
 
 # Install Cursors
-echo "Bliss: Installing Cursors..."
+echo "Altaris: Installing Cursors..."
 extract_all_assets "$BASE_URL/cursor.zip" "$ICON_DIR"
 
 # Wallpaper Setup
@@ -153,7 +153,7 @@ WALLPAPER_DIR="$USER_HOME/Pictures/Wallpapers"
 mkdir -p "$WALLPAPER_DIR"
 _flux_chown_r "$CUSTOM_USER:$CUSTOM_GROUP" "$USER_HOME/Pictures"
 
-echo "Bliss: Downloading Wallpaper..."
+echo "Altaris: Downloading Wallpaper..."
 TEMP_WP_ZIP="/tmp/wallpaper.zip"
 wget -q --show-progress "$BASE_URL/wallpaper.zip" -O "$TEMP_WP_ZIP"
 unzip -o -j "$TEMP_WP_ZIP" -d "$WALLPAPER_DIR"
@@ -169,18 +169,18 @@ FONT_DIR="/usr/share/fonts/truetype/jetbrains-mono-nerd"
 FONT_INSTALLED=false
 
 if fc-list | grep -qi "JetBrainsMono Nerd"; then
-    echo "Bliss: JetBrains Mono Nerd Font already installed."
+    echo "Altaris: JetBrains Mono Nerd Font already installed."
     FONT_INSTALLED=true
 fi
 
 if [ "$FONT_INSTALLED" = false ]; then
-    echo "Bliss: Installing JetBrains Mono Nerd Font..."
+    echo "Altaris: Installing JetBrains Mono Nerd Font..."
     mkdir -p "$FONT_DIR"
     NERD_FONT_URL="https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.zip"
     TEMP_ZIP="/tmp/JetBrainsMono.zip"
     echo " - Downloading JetBrains Mono Nerd Font..."
     wget -q --show-progress "$NERD_FONT_URL" -O "$TEMP_ZIP" || {
-        echo "Bliss: Direct download failed, trying from release..."
+        echo "Altaris: Direct download failed, trying from release..."
         wget -q --show-progress "$BASE_URL/font.zip" -O "$TEMP_ZIP" || handle_error "Font Download"
     }
     echo " - Extracting font files..."
@@ -194,21 +194,21 @@ if [ "$FONT_INSTALLED" = false ]; then
     fc-cache -fv "$FONT_DIR"
     su -s /bin/bash - "$CUSTOM_USER" -c "fc-cache -f" 2>/dev/null
     if fc-list | grep -qi "JetBrainsMono Nerd"; then
-        echo "Bliss: ✓ JetBrains Mono Nerd Font installed successfully!"
+        echo "Altaris: ✓ JetBrains Mono Nerd Font installed successfully!"
     else
-        echo "Bliss: ⚠ Font may not be properly registered."
+        echo "Altaris: ⚠ Font may not be properly registered."
         ls -la "$FONT_DIR"
     fi
 fi
 
 # 4. Apply KDE Settings via config files
-echo "Bliss: Applying KDE Plasma Settings..."
+echo "Altaris: Applying KDE Plasma Settings..."
 
 KDE_CONFIG="$USER_HOME/.config"
 mkdir -p "$KDE_CONFIG"
 
 # ── kdeglobals: global KDE theme, icons, fonts, cursor ──────────────────────
-echo "Bliss: Writing kdeglobals..."
+echo "Altaris: Writing kdeglobals..."
 cat > "$KDE_CONFIG/kdeglobals" << EOF
 [General]
 ColorScheme=$KDE_COLOR_SCHEME
@@ -235,7 +235,7 @@ activeFont=JetBrainsMonoNerdFont,10,-1,5,700,0,0,0,0,0
 EOF
 
 # ── kcminputrc: cursor theme ─────────────────────────────────────────────────
-echo "Bliss: Writing kcminputrc (cursor)..."
+echo "Altaris: Writing kcminputrc (cursor)..."
 cat > "$KDE_CONFIG/kcminputrc" << EOF
 [Mouse]
 cursorSize=24
@@ -243,7 +243,7 @@ cursorTheme=$SEL_CURSOR
 EOF
 
 # ── kwinrc: window manager (Breeze), compositing, tiling ────────────────────
-echo "Bliss: Writing kwinrc..."
+echo "Altaris: Writing kwinrc..."
 cat > "$KDE_CONFIG/kwinrc" << EOF
 [Compositing]
 Backend=QPainter
@@ -271,14 +271,14 @@ theme=Breeze
 EOF
 
 # ── plasmarc: Plasma shell theme ─────────────────────────────────────────────
-echo "Bliss: Writing plasmarc..."
+echo "Altaris: Writing plasmarc..."
 cat > "$KDE_CONFIG/plasmarc" << EOF
 [Theme]
 name=breeze-dark
 EOF
 
 # ── plasma-org.kde.plasma.desktop-appletsrc: wallpaper + panel layout ────────
-echo "Bliss: Writing Plasma desktop config (wallpaper + panel)..."
+echo "Altaris: Writing Plasma desktop config (wallpaper + panel)..."
 cat > "$KDE_CONFIG/plasma-org.kde.plasma.desktop-appletsrc" << EOF
 [Containments][1]
 ItemGeometriesHorizontal=
@@ -331,7 +331,7 @@ AppletOrder=3;4;5;6;7
 EOF
 
 # ── kglobalshortcutsrc: keyboard shortcuts (KDE equivalent) ─────────────────
-echo "Bliss: Writing keyboard shortcuts (kglobalshortcutsrc)..."
+echo "Altaris: Writing keyboard shortcuts (kglobalshortcutsrc)..."
 cat > "$KDE_CONFIG/kglobalshortcutsrc" << 'EOF'
 [kwin]
 Show Desktop=Meta+D,Meta+D,Show Desktop
@@ -353,14 +353,14 @@ _launch=none,none,KDE Plasma Desktop
 EOF
 
 # ── kcmfonts: DPI / font scaling (2x for mobile displays) ───────────────────
-echo "Bliss: Writing font DPI config..."
+echo "Altaris: Writing font DPI config..."
 cat > "$KDE_CONFIG/kcmfonts" << EOF
 [General]
 forceFontDPI=192
 EOF
 
 # ── Konsole profile: replaces xfce4-terminal config ─────────────────────────
-echo "Bliss: Configuring Konsole..."
+echo "Altaris: Configuring Konsole..."
 KONSOLE_DIR="$USER_HOME/.local/share/konsole"
 mkdir -p "$KONSOLE_DIR"
 
@@ -372,7 +372,7 @@ antialias=true
 
 [General]
 Command=/bin/zsh
-Name=Bliss
+Name=Altaris
 Parent=FALLBACK/
 
 [Interaction Options]
@@ -407,21 +407,21 @@ _flux_chown_r "$CUSTOM_USER:$CUSTOM_GROUP" "$KONSOLE_DIR" "$KONSOLE_CONFIG_DIR/k
 
 # Fix ownership on all KDE configs
 _flux_chown_r "$CUSTOM_USER:$CUSTOM_GROUP" "$KDE_CONFIG"
-echo "Bliss: KDE settings applied successfully!"
+echo "Altaris: KDE settings applied successfully!"
 
 # 5. Configure Zsh and Terminal (identical to XFCE4 customization)
-echo "Bliss: Configuring Zsh and Terminal..."
+echo "Altaris: Configuring Zsh and Terminal..."
 
 # Install zsh
-echo "Bliss: Installing zsh..."
+echo "Altaris: Installing zsh..."
 apt-get install -y zsh 2>/dev/null
 
 # Install Oh My Zsh for flux user
-echo "Bliss: Installing Oh My Zsh..."
+echo "Altaris: Installing Oh My Zsh..."
 
 # Check for corrupt installation
 if [ -d "$USER_HOME/.oh-my-zsh" ] && [ ! -f "$USER_HOME/.oh-my-zsh/oh-my-zsh.sh" ]; then
-    echo "Bliss: Detected corrupt Oh My Zsh installation. Removing..."
+    echo "Altaris: Detected corrupt Oh My Zsh installation. Removing..."
     rm -rf "$USER_HOME/.oh-my-zsh"
 fi
 
@@ -431,18 +431,18 @@ if [ ! -d "$USER_HOME/.oh-my-zsh" ] || [ ! -f "$USER_HOME/.oh-my-zsh/oh-my-zsh.s
     su -s /bin/bash - "$CUSTOM_USER" -c 'RUNZSH=no CHSH=no sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"' 2>/dev/null || true
 fi
 if [ ! -f "$USER_HOME/.oh-my-zsh/oh-my-zsh.sh" ]; then
-    echo "Bliss: Oh My Zsh installer failed — trying git clone fallback..."
+    echo "Altaris: Oh My Zsh installer failed — trying git clone fallback..."
     rm -rf "$USER_HOME/.oh-my-zsh"
     su -s /bin/bash - "$CUSTOM_USER" -c "git clone --depth 1 https://github.com/ohmyzsh/ohmyzsh.git '$USER_HOME/.oh-my-zsh'" 2>/dev/null || true
 fi
 if [ ! -f "$USER_HOME/.oh-my-zsh/oh-my-zsh.sh" ]; then
-    echo "Bliss: WARNING: Oh My Zsh not installed — .zshrc will skip source (no hard fail)"
+    echo "Altaris: WARNING: Oh My Zsh not installed — .zshrc will skip source (no hard fail)"
 fi
 
 ZSH_CUSTOM="$USER_HOME/.oh-my-zsh/custom"
 
 # Install Zsh plugins
-echo "Bliss: Installing Zsh plugins..."
+echo "Altaris: Installing Zsh plugins..."
 su -s /bin/bash - "$CUSTOM_USER" -c "git clone https://github.com/zsh-users/zsh-autosuggestions '$ZSH_CUSTOM/plugins/zsh-autosuggestions'" 2>/dev/null
 su -s /bin/bash - "$CUSTOM_USER" -c "git clone https://github.com/zsh-users/zsh-syntax-highlighting '$ZSH_CUSTOM/plugins/zsh-syntax-highlighting'" 2>/dev/null
 su -s /bin/bash - "$CUSTOM_USER" -c "git clone --depth 1 https://github.com/marlonrichert/zsh-autocomplete.git '$ZSH_CUSTOM/plugins/zsh-autocomplete'" 2>/dev/null
@@ -450,24 +450,24 @@ su -s /bin/bash - "$CUSTOM_USER" -c "git clone --depth 1 https://github.com/marl
 # Local monochrome prompt theme — no remote download (old colorful theme removed).
 rm -f "$ZSH_CUSTOM/themes/agnosterzak.zsh-theme" 2>/dev/null || true
 if [ ! -s "$ZSH_CUSTOM/themes/bliss.zsh-theme" ]; then
-    echo "Bliss: Installing folio prompt theme..."
+    echo "Altaris: Installing folio prompt theme..."
     mkdir -p "$ZSH_CUSTOM/themes"
     cat > "$ZSH_CUSTOM/themes/bliss.zsh-theme" <<'FOLIO_THEME_EOF'
-# bliss.zsh-theme — Bliss's minimal monochrome prompt.
+# bliss.zsh-theme — Altaris's minimal monochrome prompt.
 # White/gray on black only; ASCII-safe (no powerline glyphs, no ANSI colors 31-44).
 # Segments:  time  bliss  working-dir  input-char
 PROMPT='%F{240}%D{%H:%M}%f %F{255}bliss%f %F{250}%~%f %F{255}%#%f '
 PROMPT2='%F{240}> %f'
 FOLIO_THEME_EOF
     if [ ! -s "$ZSH_CUSTOM/themes/bliss.zsh-theme" ]; then
-        echo "Bliss: WARNING: folio prompt theme write failed — zsh keeps default prompt"
+        echo "Altaris: WARNING: folio prompt theme write failed — zsh keeps default prompt"
     fi
 else
-    echo "Bliss: folio prompt theme already present — skip"
+    echo "Altaris: folio prompt theme already present — skip"
 fi
 
 # Install pokemon-colorscripts
-echo "Bliss: Installing pokemon-colorscripts..."
+echo "Altaris: Installing pokemon-colorscripts..."
 POKEMON_TEMP="/tmp/pokemon-colorscripts"
 rm -rf "$POKEMON_TEMP"
 git clone https://gitlab.com/phoneybadger/pokemon-colorscripts.git "$POKEMON_TEMP" 2>/dev/null
@@ -476,7 +476,7 @@ cd - > /dev/null
 rm -rf "$POKEMON_TEMP"
 
 # Configure .zshrc
-echo "Bliss: Configuring .zshrc..."
+echo "Altaris: Configuring .zshrc..."
 ZSHRC="$USER_HOME/.zshrc"
 
 # Write complete optimized .zshrc (performance fixes from screenshot)
@@ -484,7 +484,7 @@ ZSHRC="$USER_HOME/.zshrc"
 # - Backgrounded visuals with &! (async, don't block shell startup)
 # - DISABLE_AUTO_UPDATE / DISABLE_UPDATE_PROMPT (no prompts on launch)
 # - ZSH_DISABLE_COMPFIX (no compaudit, faster init)
-echo "Bliss: Writing optimized .zshrc..."
+echo "Altaris: Writing optimized .zshrc..."
 # Defensive: never hard-fail on missing oh-my-zsh / pokemon (network installs often skip).
 cat > "$ZSHRC" << 'ZSHEOF'
 # PATH setup - local bin, npm global modules
@@ -1407,7 +1407,7 @@ FOLIO_BANNER_ALL
 }
 
     cat > "$_home/.config/bliss/banner.sh" <<'FOLIO_BANNER_SH'
-# bliss-banner.sh — Bliss launch sticker: truecolor half-block anime art,
+# bliss-banner.sh — Altaris launch sticker: truecolor half-block anime art,
 # one random design per interactive shell, printed exactly ONCE per shell
 # even when several rc files source it or nested shells inherit the
 # environment. Works with zsh, bash and POSIX sh.
@@ -1480,11 +1480,11 @@ _flux_wire_bash_banner() {
     [ -n "$_home" ] && [ -d "$_home" ] || return 0
     _brc="$_home/.bashrc"
     if [ ! -f "$_brc" ]; then
-        printf '%s\n' '# Bliss bash profile' 'export PATH="$HOME/.local/bin:$PATH"' > "$_brc" 2>/dev/null || true
+        printf '%s\n' '# Altaris bash profile' 'export PATH="$HOME/.local/bin:$PATH"' > "$_brc" 2>/dev/null || true
     fi
     if [ -f "$_brc" ] && ! grep -q 'bliss/banner.sh' "$_brc" 2>/dev/null; then
         {
-            printf '\n# Bliss launch sticker (random truecolor anime banner; opt out FLUX_NO_BANNER=1)\n'
+            printf '\n# Altaris launch sticker (random truecolor anime banner; opt out FLUX_NO_BANNER=1)\n'
             printf '[ -r "$HOME/.config/bliss/banner.sh" ] && . "$HOME/.config/bliss/banner.sh"\n'
         } >> "$_brc" 2>/dev/null || true
     fi
@@ -1508,12 +1508,12 @@ _flux_write_folio_banner /root
 _flux_wire_bash_banner "$USER_HOME" "$CUSTOM_USER:$CUSTOM_GROUP"
 _flux_wire_bash_banner /root
 
-echo "Bliss: Zsh configuration complete!"
+echo "Altaris: Zsh configuration complete!"
 
 # 6. Reload KDE Shell — only if a Plasma session is actually running
 # (installing from the terminal tab / onboarding must never spawn stray
 # plasmashell/kwin processes or block on a missing X server).
-echo "Bliss: Reloading KDE Plasma Shell (if running)..."
+echo "Altaris: Reloading KDE Plasma Shell (if running)..."
 if pgrep -x plasmashell >/dev/null 2>&1 || pgrep -x kwin_x11 >/dev/null 2>&1; then
     su -s /bin/bash - "$CUSTOM_USER" -c "
         export DISPLAY=\${DISPLAY:-:0}
@@ -1530,10 +1530,10 @@ if pgrep -x plasmashell >/dev/null 2>&1 || pgrep -x kwin_x11 >/dev/null 2>&1; th
         kwin_x11 --replace > /dev/null 2>&1 &
     " 2>/dev/null || true
 else
-    echo "Bliss: No KDE session running — skip shell reload"
+    echo "Altaris: No KDE session running — skip shell reload"
 fi
 
-echo "Bliss: KDE Customization Complete!"
+echo "Altaris: KDE Customization Complete!"
 echo "Log saved at: $LOG_FILE"
 echo "------------------------------------------------"
 # Interactive pause only on request (FLUX_INTERACTIVE=1). The install pipeline

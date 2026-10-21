@@ -7,61 +7,78 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.Color
 
 /**
- * Bliss Midnight backdrop: a near-black wash, one soft mint signal bloom and
- * a static technical grid. No drifting blobs, no continuous animation.
+ * Altaris backdrop: a quiet near-black canvas lit by three restrained aurora
+ * blooms (mint, ice, violet). Static by design — the glass surfaces and press
+ * feedback provide depth without a continuously animating background.
  */
 @Composable
 fun FolioAnimatedBackground(modifier: Modifier = Modifier) {
     val colors = MaterialTheme.colorScheme
-    val step = with(LocalDensity.current) { 28.dp.toPx() }
     Canvas(modifier = modifier.fillMaxSize()) {
+        // Ink base with a slightly lifted lower-right corner.
         drawRect(
-            brush = Brush.verticalGradient(
+            brush = Brush.linearGradient(
                 0f to colors.background,
                 0.55f to colors.background,
-                1f to colors.surface.copy(alpha = 0.86f),
-                endY = size.height,
+                1f to colors.surface.copy(alpha = 0.92f),
+                start = Offset.Zero,
+                end = Offset(size.width, size.height),
             )
         )
+
+        // Mint halo behind the top bar / hero content.
         drawCircle(
             brush = Brush.radialGradient(
                 colors = listOf(
-                    colors.primary.copy(alpha = 0.10f),
-                    colors.primary.copy(alpha = 0.025f),
-                    colors.background.copy(alpha = 0f),
+                    colors.primary.copy(alpha = 0.13f),
+                    colors.primary.copy(alpha = 0.035f),
+                    Color.Transparent,
                 ),
-                center = Offset(size.width * 0.82f, size.height * 0.06f),
-                radius = size.width * 0.95f,
+                center = Offset(size.width * 0.86f, size.height * 0.01f),
+                radius = size.width * 1.05f,
             ),
-            radius = size.width * 0.95f,
-            center = Offset(size.width * 0.82f, size.height * 0.06f),
+            radius = size.width * 1.05f,
+            center = Offset(size.width * 0.86f, size.height * 0.01f),
         )
+
+        // Ice counter-light low on the left, kept below content contrast.
         drawCircle(
             brush = Brush.radialGradient(
                 colors = listOf(
-                    colors.secondary.copy(alpha = 0.055f),
-                    colors.background.copy(alpha = 0f),
+                    colors.secondary.copy(alpha = 0.075f),
+                    Color.Transparent,
                 ),
-                center = Offset(size.width * 0.08f, size.height * 0.86f),
+                center = Offset(size.width * 0.02f, size.height * 0.76f),
+                radius = size.width * 0.9f,
+            ),
+            radius = size.width * 0.9f,
+            center = Offset(size.width * 0.02f, size.height * 0.76f),
+        )
+
+        // A restrained violet ribbon far below the fold.
+        drawCircle(
+            brush = Brush.radialGradient(
+                colors = listOf(
+                    colors.tertiary.copy(alpha = 0.05f),
+                    Color.Transparent,
+                ),
+                center = Offset(size.width * 0.72f, size.height * 1.04f),
                 radius = size.width * 0.8f,
             ),
             radius = size.width * 0.8f,
-            center = Offset(size.width * 0.08f, size.height * 0.86f),
+            center = Offset(size.width * 0.72f, size.height * 1.04f),
         )
-        val line = colors.primary.copy(alpha = 0.035f)
-        var x = 0f
-        while (x < size.width) {
-            drawLine(line, Offset(x, 0f), Offset(x, size.height), strokeWidth = 1f)
-            x += step
-        }
-        var y = 0f
-        while (y < size.height) {
-            drawLine(line, Offset(0f, y), Offset(size.width, y), strokeWidth = 1f)
-            y += step
-        }
+
+        // Edge vignette keeps the glass cards visually anchored.
+        drawRect(
+            brush = Brush.radialGradient(
+                colors = listOf(Color.Transparent, colors.background.copy(alpha = 0.42f)),
+                center = Offset(size.width * 0.5f, size.height * 0.42f),
+                radius = size.maxDimension * 0.82f,
+            )
+        )
     }
 }

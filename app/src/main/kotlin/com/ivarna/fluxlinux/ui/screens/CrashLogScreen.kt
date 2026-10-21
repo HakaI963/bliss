@@ -153,7 +153,7 @@ fun CrashLogScreen(onBack: () -> Unit) {
                         )
                         Spacer(Modifier.height(4.dp))
                         Text(
-                            text = "Bliss saves a report here if it ever crashes.",
+                            text = "Altaris saves a report here if it ever crashes.",
                             fontSize = 12.sp,
                             color = TextMuted
                         )
@@ -238,7 +238,7 @@ fun CrashLogScreen(onBack: () -> Unit) {
 
 private fun copyTrace(context: Context, text: String) {
     val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager ?: return
-    cm.setPrimaryClip(ClipData.newPlainText("Bliss crash log", text))
+    cm.setPrimaryClip(ClipData.newPlainText("Altaris crash log", text))
     Toast.makeText(context, "Crash log copied", Toast.LENGTH_SHORT).show()
 }
 

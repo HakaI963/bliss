@@ -29,10 +29,10 @@ object ProotZshBootstrap {
      * dependency for the prompt anymore.
      */
     private val FOLIO_THEME = """
-        # bliss.zsh-theme — Bliss's minimal monochrome prompt.
+        # altaris.zsh-theme — Altaris minimal prompt.
         # White/gray on black only; ASCII-safe (no powerline glyphs, no ANSI colors 31-44).
-        # Segments:  time  bliss  working-dir  input-char
-        PROMPT='%F{240}%D{%H:%M}%f %F{255}bliss%f %F{250}%~%f %F{255}%#%f '
+        # Segments:  time  altaris  working-dir  input-char
+        PROMPT='%F{240}%D{%H:%M}%f %F{79}altaris%f %F{250}%~%f %F{255}%#%f '
         PROMPT2='%F{240}> %f'
     """.trimIndent() + "\n"
 

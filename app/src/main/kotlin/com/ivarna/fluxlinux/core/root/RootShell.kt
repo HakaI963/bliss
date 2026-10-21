@@ -536,7 +536,7 @@ object RootShell {
     }
 
     /**
-     * Self-heal: if helper missing from the Bliss helpers dir, copy from app home/staged.
+     * Self-heal: if helper missing from the Altaris helpers dir, copy from app home/staged.
      * Then `sh helper b64 …`.
      */
     private fun buildChrootHelperCmd(user: String, b64: String, chrootPath: String): String {

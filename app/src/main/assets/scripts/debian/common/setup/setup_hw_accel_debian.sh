@@ -10,7 +10,7 @@ do
         exec /bin/sh "$f" "$@"
     fi
 done
-echo "Bliss: setup_hw_accel_guest.sh not found — writing virgl"
+echo "Altaris: setup_hw_accel_guest.sh not found — writing virgl"
 [ -d /etc/fluxlinux ] && [ ! -e /etc/bliss ] && mv /etc/fluxlinux /etc/bliss 2>/dev/null || true
 mkdir -p /etc/bliss
 printf '%s\n' virgl > /etc/bliss/gpu_mode

@@ -25,7 +25,7 @@ PKGS=(
 
 # ─── UNINSTALL MODE ──────────────────────────────────────────────────────
 if [ "$1" = "uninstall" ]; then
-    echo "Bliss: Uninstalling Game Development Environment..."
+    echo "Altaris: Uninstalling Game Development Environment..."
 
     export DEBIAN_FRONTEND=noninteractive
     apt remove -y --purge "${PKGS[@]}" 2>/dev/null || true
@@ -55,7 +55,7 @@ if [ "$1" = "uninstall" ]; then
         ldconfig 2>/dev/null || true
     fi
 
-    echo "Bliss: Game Development Environment Uninstalled."
+    echo "Altaris: Game Development Environment Uninstalled."
     exit 0
 fi
 # ─── END UNINSTALL MODE ──────────────────────────────────────────────────
@@ -63,7 +63,7 @@ fi
 # Error Handler
 handle_error() {
     echo ""
-    echo "❌ Bliss Error: Script failed at step: $1"
+    echo "❌ Altaris Error: Script failed at step: $1"
     echo "---------------------------------------------------"
     echo "Please check the error message above for details."
     echo "---------------------------------------------------"
@@ -94,12 +94,12 @@ update_shell_path() {
     fi
 }
 
-echo "Bliss: Setting up Game Development Environment..."
+echo "Altaris: Setting up Game Development Environment..."
 TARGET_USER="flux"
 TARGET_GROUP="users"
 
 # 1. Install System Dependencies & Build Tools
-echo "Bliss: Installing System Dependencies..."
+echo "Altaris: Installing System Dependencies..."
 export DEBIAN_FRONTEND=noninteractive
 apt update -y
 apt install -y curl wget unzip zip xz-utils tar build-essential git \
@@ -109,7 +109,7 @@ apt install -y curl wget unzip zip xz-utils tar build-essential git \
     || handle_error "System Dependencies"
 
 # 2. Install Godot Engine (ARM64 Linux)
-echo "Bliss: Installing Godot Engine..."
+echo "Altaris: Installing Godot Engine..."
 GODOT_DIR="/opt/godot"
 if [ ! -d "$GODOT_DIR" ]; then
     mkdir -p "$GODOT_DIR"
@@ -169,7 +169,7 @@ update_shell_path "/home/$TARGET_USER/.bashrc" "/opt/godot" "Godot Engine"
 update_shell_path "/home/$TARGET_USER/.zshrc" "/opt/godot" "Godot Engine"
 
 # 3. Install Ren'Py SDK
-echo "Bliss: Installing Ren'Py SDK..."
+echo "Altaris: Installing Ren'Py SDK..."
 
 # CLEANUP: Remove broken manual install from previous script runs
 if [ -d "/opt/renpy" ] || [ -L "/usr/local/bin/renpy" ]; then
@@ -189,11 +189,11 @@ else
 fi
 
 # 4. Install LÖVE (Love2D)
-echo "Bliss: Installing LÖVE..."
+echo "Altaris: Installing LÖVE..."
 apt install -y love || handle_error "Love2D Install"
 
 # 5. Python Game Dev Libraries (Pygame-ce, Arcade, Panda3D)
-echo "Bliss: Installing Python Game Libraries..."
+echo "Altaris: Installing Python Game Libraries..."
 
 # Create a 'gamedev' virtual environment for the user, or install system-wide?
 # System-wide allows 'python3 mygame.py' to work easily, but risks breakage.
@@ -219,7 +219,7 @@ su - "$TARGET_USER" -c "$venv_dir/bin/pip install pygame-ce panda3d" || echo " [
 apt install -y python3-pygame || true
 
 # 6. C/C++ Libraries (Raylib, Box2D)
-echo "Bliss: Installing C/C++ Game Libraries..."
+echo "Altaris: Installing C/C++ Game Libraries..."
 
 # Helper check for Raylib
 if [ -f "/usr/local/include/raylib.h" ] || [ -f "/usr/include/raylib.h" ]; then
@@ -249,13 +249,13 @@ fi
 apt install -y libbox2d-dev || echo " [⚠️] libbox2d-dev not found."
 
 # 7. Final Permissions
-echo "Bliss: Applying permissions..."
+echo "Altaris: Applying permissions..."
 chown -R $TARGET_USER:$TARGET_GROUP "/home/$TARGET_USER"
 
 # 8. Verification
 verify_installation() {
     echo ""
-    echo "🔎 Bliss: Verifying Installations..."
+    echo "🔎 Altaris: Verifying Installations..."
     echo "------------------------------------------------"
     MISSING=0
     

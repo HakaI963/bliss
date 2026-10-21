@@ -3,7 +3,7 @@
 # Enhance Termux with Oh My Zsh, themes, fonts, and fastfetch
 # Based on: https://github.com/abhay-byte/Linux_Setup
 
-echo "🎨 Bliss: Enhancing Termux Environment..."
+echo "🎨 Altaris: Enhancing Termux Environment..."
 
 install_ohmyzsh() {
     echo "🐚 Installing Oh My Zsh..."
@@ -16,12 +16,12 @@ install_ohmyzsh() {
     git clone --depth 1 https://github.com/marlonrichert/zsh-autocomplete.git "$ZSH_CUSTOM/plugins/zsh-autocomplete"
 
     echo "⚙️ Configuring .zshrc..."
-    # Monochrome Bliss prompt theme (local; replaces the old colorful default).
+    # Monochrome Altaris prompt theme (local; replaces the old colorful default).
     mkdir -p "$ZSH_CUSTOM/themes"
     rm -f "$ZSH_CUSTOM/themes/agnosterzak.zsh-theme" 2>/dev/null || true
     if [ ! -s "$ZSH_CUSTOM/themes/bliss.zsh-theme" ]; then
         cat > "$ZSH_CUSTOM/themes/bliss.zsh-theme" <<'FOLIO_THEME_EOF'
-# bliss.zsh-theme — Bliss's minimal monochrome prompt.
+# bliss.zsh-theme — Altaris's minimal monochrome prompt.
 # White/gray on black only; ASCII-safe (no powerline glyphs, no ANSI colors 31-44).
 # Segments:  time  bliss  working-dir  input-char
 PROMPT='%F{240}%D{%H:%M}%f %F{255}bliss%f %F{250}%~%f %F{255}%#%f '
@@ -164,7 +164,7 @@ install_nerd_font() {
     termux-reload-settings
 }
 
-# ── Bliss launch stickers: 49 truecolor anime half-block designs ─
+# ── Altaris launch stickers: 49 truecolor anime half-block designs ─
 # Installs ~/.config/bliss/banner/*.txt (random pick per shell open) and
 # ~/.config/bliss/banner.sh (the bliss_banner function sourced by .zshrc/.bashrc).
 # Offline, idempotent (`.banner-rev` refreshes existing installs).
@@ -1048,7 +1048,7 @@ FOLIO_BANNER_ALL
     printf '%s\n' "$_brev" > "$_bdir/.banner-rev" 2>/dev/null || true
 
     cat > "$_home/.config/bliss/banner.sh" <<'FOLIO_BANNER_SH'
-# bliss-banner.sh — Bliss launch sticker: truecolor half-block anime art,
+# bliss-banner.sh — Altaris launch sticker: truecolor half-block anime art,
 # one random design per interactive shell, printed exactly ONCE per shell
 # even when several rc files source it or nested shells inherit the
 # environment. Works with zsh, bash and POSIX sh.
@@ -1126,11 +1126,11 @@ _flux_wire_bash_banner() {
     [ -n "$_home" ] && [ -d "$_home" ] || return 0
     _brc="$_home/.bashrc"
     if [ ! -f "$_brc" ]; then
-        printf '%s\n' '# Bliss bash profile' 'export PATH="$HOME/.local/bin:$PATH"' > "$_brc" 2>/dev/null || true
+        printf '%s\n' '# Altaris bash profile' 'export PATH="$HOME/.local/bin:$PATH"' > "$_brc" 2>/dev/null || true
     fi
     if [ -f "$_brc" ] && ! grep -q 'bliss/banner.sh' "$_brc" 2>/dev/null; then
         {
-            printf '\n# Bliss launch sticker (random truecolor anime banner; opt out FLUX_NO_BANNER=1)\n'
+            printf '\n# Altaris launch sticker (random truecolor anime banner; opt out FLUX_NO_BANNER=1)\n'
             printf '[ -r "$HOME/.config/bliss/banner.sh" ] && . "$HOME/.config/bliss/banner.sh"\n'
         } >> "$_brc" 2>/dev/null || true
     fi
@@ -1174,7 +1174,7 @@ configure_shell_banner() {
     fi
     if [ -f "$RCFILE" ] && ! grep -q 'bliss/banner.sh' "$RCFILE" 2>/dev/null; then
         {
-            printf '\n# Bliss launch sticker (random truecolor anime banner; opt out FLUX_NO_BANNER=1)\n'
+            printf '\n# Altaris launch sticker (random truecolor anime banner; opt out FLUX_NO_BANNER=1)\n'
             printf '[ -r "$HOME/.config/bliss/banner.sh" ] && . "$HOME/.config/bliss/banner.sh"\n'
         } >> "$RCFILE"
     fi
@@ -1184,7 +1184,7 @@ configure_shell_banner() {
     chsh -s zsh
 }
 
-# ── Bliss Linux appearance (host Termux side) ────────────────────────────────
+# ── Altaris Linux appearance (host Termux side) ────────────────────────────────
 # Applies the terminal colors from ~/.config/bliss/appearance.env when the app
 # staged one for the host bootstrap. No-op otherwise; never fatal.
 apply_host_appearance() {
@@ -1213,7 +1213,7 @@ configure_shell_banner
 apply_host_appearance
 
 echo ""
-echo "🎉 Bliss: Termux enhancement complete!"
+echo "🎉 Altaris: Termux enhancement complete!"
 echo "🔄 Restart Termux to see all changes."
 
 # Create marker file to track tweaks application

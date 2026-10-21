@@ -172,27 +172,27 @@ chmod 700 "$PROOT_TMP_DIR" 2>/dev/null || true
 PYTHON="${PREFIX}/bin/python"
 PROOT_DISTRO="${PREFIX}/bin/proot-distro"
 if [ ! -x "$PYTHON" ]; then
-    echo "Bliss: missing $PYTHON"
+    echo "Altaris: missing $PYTHON"
     exit 1
 fi
 if [ ! -f "$PROOT_DISTRO" ]; then
-    echo "Bliss: missing $PROOT_DISTRO"
+    echo "Altaris: missing $PROOT_DISTRO"
     exit 1
 fi
 
 # Fail early with a clear message if W^X proot paths are unset (host ProcessBuilder bug).
 if [ -z "${PD_PROOT_BIN:-}" ] || [ ! -e "${PD_PROOT_BIN}" ]; then
-    echo "Bliss: PD_PROOT_BIN missing or not found (${PD_PROOT_BIN:-unset})"
-    echo "Bliss: Host env must set PD_PROOT_BIN to libproot.so under nativeLibraryDir."
+    echo "Altaris: PD_PROOT_BIN missing or not found (${PD_PROOT_BIN:-unset})"
+    echo "Altaris: Host env must set PD_PROOT_BIN to libproot.so under nativeLibraryDir."
     exit 1
 fi
 if [ -z "${PROOT_LOADER:-}" ] || [ ! -e "${PROOT_LOADER}" ]; then
-    echo "Bliss: PROOT_LOADER missing or not found (${PROOT_LOADER:-unset})"
-    echo "Bliss: Host env must set PROOT_LOADER to libloader.so under nativeLibraryDir."
+    echo "Altaris: PROOT_LOADER missing or not found (${PROOT_LOADER:-unset})"
+    echo "Altaris: Host env must set PROOT_LOADER to libloader.so under nativeLibraryDir."
     exit 1
 fi
 
-echo "Bliss: Debugging Environment:"
+echo "Altaris: Debugging Environment:"
 echo "HOME=$HOME"
 echo "PREFIX=$PREFIX"
 echo "TERMUX__HOME=$TERMUX__HOME"
@@ -226,7 +226,7 @@ resolve_rootfs_archive() {
 
     if [ -n "${FLUX_ROOTFS_PATH:-}" ] && [ -f "$FLUX_ROOTFS_PATH" ] && [ -s "$FLUX_ROOTFS_PATH" ]; then
         ROOTFS_ARCHIVE="$FLUX_ROOTFS_PATH"
-        echo "Bliss: rootfs from FLUX_ROOTFS_PATH=$ROOTFS_ARCHIVE"
+        echo "Altaris: rootfs from FLUX_ROOTFS_PATH=$ROOTFS_ARCHIVE"
         return 0
     fi
 
@@ -244,7 +244,7 @@ resolve_rootfs_archive() {
     do
         if [ -f "$candidate" ] && [ -s "$candidate" ]; then
             ROOTFS_ARCHIVE="$candidate"
-            echo "Bliss: rootfs found: $ROOTFS_ARCHIVE"
+            echo "Altaris: rootfs found: $ROOTFS_ARCHIVE"
             return 0
         fi
     done
@@ -257,31 +257,31 @@ resolve_rootfs_archive() {
     CACHE_DIR="$PREFIX/var/lib/proot-distro/cache/rootfs"
     mkdir -p "$CACHE_DIR" 2>/dev/null || true
     DEST="$CACHE_DIR/$ROOTFS_NAME"
-    echo "Bliss: rootfs not in app paths — downloading $ROOTFS_URL"
+    echo "Altaris: rootfs not in app paths — downloading $ROOTFS_URL"
     for _url in $(root_download_urls "$ROOTFS_URL"); do
         if [ "$_url" != "$ROOTFS_URL" ]; then
-            echo "Bliss: trying mirror: $_url"
+            echo "Altaris: trying mirror: $_url"
         fi
         rm -f "$DEST.partial" 2>/dev/null || true
         if command -v curl >/dev/null 2>&1; then
             if curl -fL --retry 3 --retry-delay 2 -o "$DEST.partial" "$_url" \
                 && [ -s "$DEST.partial" ] && mv -f "$DEST.partial" "$DEST"; then
                 ROOTFS_ARCHIVE="$DEST"
-                echo "Bliss: rootfs downloaded: $ROOTFS_ARCHIVE"
+                echo "Altaris: rootfs downloaded: $ROOTFS_ARCHIVE"
                 return 0
             fi
             rm -f "$DEST.partial" 2>/dev/null || true
         elif command -v wget >/dev/null 2>&1; then
             if wget -O "$DEST.partial" "$_url" && [ -s "$DEST.partial" ] && mv -f "$DEST.partial" "$DEST"; then
                 ROOTFS_ARCHIVE="$DEST"
-                echo "Bliss: rootfs downloaded: $ROOTFS_ARCHIVE"
+                echo "Altaris: rootfs downloaded: $ROOTFS_ARCHIVE"
                 return 0
             fi
             rm -f "$DEST.partial" 2>/dev/null || true
         fi
     done
 
-    echo "Bliss: no rootfs archive found (expected $HOME/$ROOTFS_NAME from app assets)"
+    echo "Altaris: no rootfs archive found (expected $HOME/$ROOTFS_NAME from app assets)"
     return 1
 }
 
@@ -291,17 +291,17 @@ verify_rootfs_sha() {
     if command -v sha256sum >/dev/null 2>&1; then
         _got="$(sha256sum "$_file" | awk '{print $1}')"
         if [ "$_got" != "$ROOTFS_SHA256" ]; then
-            echo "Bliss: SHA256 mismatch for $_file"
+            echo "Altaris: SHA256 mismatch for $_file"
             echo "  expected $ROOTFS_SHA256"
             echo "  got      $_got"
             return 1
         fi
-        echo "Bliss: SHA256 OK"
+        echo "Altaris: SHA256 OK"
     fi
     return 0
 }
 
-echo "Bliss: Installing $DISTRO..."
+echo "Altaris: Installing $DISTRO..."
 
 # Alpine minirootfs: bin/sh -> /bin/busybox (absolute). Host-side test -e follows
 # the link into Android /bin/busybox (missing) and false-negatives. Prefer -L or
@@ -322,24 +322,24 @@ wipe_proot_container() {
     _wipe_name="$1"
     _wipe_dir="$PREFIX/var/lib/proot-distro/containers/$_wipe_name"
     [ -e "$_wipe_dir" ] || return 0
-    echo "Bliss: removing container $_wipe_dir"
+    echo "Altaris: removing container $_wipe_dir"
     rm -rf "$_wipe_dir" 2>/dev/null || true
     if [ ! -e "$_wipe_dir" ]; then
         return 0
     fi
-    echo "Bliss: leftover after unprivileged rm (root-owned files) — trying su"
+    echo "Altaris: leftover after unprivileged rm (root-owned files) — trying su"
     _wipe_q=$(printf "%s" "$_wipe_dir" | sed "s/'/'\\\\''/g")
     for _su in /system/bin/su /system/xbin/su su; do
         if [ -x "$_su" ] || command -v "$_su" >/dev/null 2>&1; then
             "$_su" -c "rm -rf '$_wipe_q'" </dev/null 2>/dev/null || true
             if [ ! -e "$_wipe_dir" ]; then
-                echo "Bliss: privileged wipe ok"
+                echo "Altaris: privileged wipe ok"
                 return 0
             fi
         fi
     done
-    echo "Bliss: ERROR: cannot remove $_wipe_dir (root-owned leftovers)."
-    echo "Bliss: From a root shell run: rm -rf $_wipe_dir"
+    echo "Altaris: ERROR: cannot remove $_wipe_dir (root-owned leftovers)."
+    echo "Altaris: From a root shell run: rm -rf $_wipe_dir"
     return 1
 }
 
@@ -353,7 +353,7 @@ guest_version_id() {
 }
 
 if [ "$DISTRO" = "termux" ]; then
-    echo "Bliss: Native Termux Mode"
+    echo "Altaris: Native Termux Mode"
     EXIT_CODE=0
 else
     DISTRO_ROOTFS="$PREFIX/var/lib/proot-distro/containers/$DISTRO/rootfs"
@@ -364,7 +364,7 @@ else
         if [ "$DISTRO" = "fedora" ]; then
             _have_ver=$(guest_version_id "$DISTRO_ROOTFS")
             if [ "$_have_ver" != "44" ]; then
-                echo "Bliss: fedora guest is VERSION_ID=${_have_ver:-unknown} — replacing with 44"
+                echo "Altaris: fedora guest is VERSION_ID=${_have_ver:-unknown} — replacing with 44"
             else
                 SKIP_EXTRACT=1
             fi
@@ -374,17 +374,17 @@ else
     fi
 
     if [ "$SKIP_EXTRACT" -eq 1 ]; then
-        echo "Bliss: $DISTRO already installed with valid rootfs. Skipping base installation."
+        echo "Altaris: $DISTRO already installed with valid rootfs. Skipping base installation."
         EXIT_CODE=0
     else
         if [ "${FLUX_PD_INSTALL_MODE:-file}" = "registry" ]; then
-            echo "Bliss: FLUX_PD_INSTALL_MODE=registry — installing $DISTRO from registry"
+            echo "Altaris: FLUX_PD_INSTALL_MODE=registry — installing $DISTRO from registry"
             wipe_proot_container "$DISTRO" || exit 1
             "$PYTHON" "$PROOT_DISTRO" install "$DISTRO"
             EXIT_CODE=$?
         else
             if ! resolve_rootfs_archive; then
-                echo "Bliss: Install Failed — no local rootfs archive"
+                echo "Altaris: Install Failed — no local rootfs archive"
                 exit 1
             fi
             # Ensure absolute path so proot-distro never treats name as registry image
@@ -396,13 +396,13 @@ else
             if ! verify_rootfs_sha "$ROOTFS_ARCHIVE"; then
                 exit 1
             fi
-            echo "Bliss: Installing $DISTRO from local archive..."
-            echo "Bliss: install $ROOTFS_ARCHIVE --name $DISTRO"
+            echo "Altaris: Installing $DISTRO from local archive..."
+            echo "Altaris: install $ROOTFS_ARCHIVE --name $DISTRO"
             wipe_proot_container "$DISTRO" || exit 1
             "$PYTHON" "$PROOT_DISTRO" install "$ROOTFS_ARCHIVE" --name "$DISTRO"
             EXIT_CODE=$?
             if [ "$EXIT_CODE" -eq 0 ] && ! rootfs_has_shell "$DISTRO_ROOTFS"; then
-                echo "Bliss: install reported OK but no shell/busybox under $DISTRO_ROOTFS"
+                echo "Altaris: install reported OK but no shell/busybox under $DISTRO_ROOTFS"
                 EXIT_CODE=1
             fi
         fi
@@ -410,11 +410,11 @@ else
 fi
 
 if [ "$EXIT_CODE" -ne 0 ]; then
-    echo "Bliss: Install Failed with code $EXIT_CODE!"
+    echo "Altaris: Install Failed with code $EXIT_CODE!"
     exit 1
 fi
 
-echo "Bliss: Install Successful!"
+echo "Altaris: Install Successful!"
 
 # openSUSE: keep a copy of libcurl-mini. Family setup must never replace it
 # with full libcurl4+libldap (EVP_md2 vs OpenSSL 3.5.3 breaks zypper).
@@ -431,7 +431,7 @@ if [ "$DISTRO" = "opensuse" ] && [ -n "${DISTRO_ROOTFS:-}" ]; then
     done
     if [ -n "$_curl" ] && [ ! -f "${_curl}.flux-mini" ]; then
         cp -f "$_curl" "${_curl}.flux-mini" 2>/dev/null || true
-        echo "Bliss: stashed libcurl-mini → ${_curl}.flux-mini"
+        echo "Altaris: stashed libcurl-mini → ${_curl}.flux-mini"
     fi
     # Stage EVP_md2 stub into guest /tmp (shared-tmp) and /usr/lib64.
     for _stub in \
@@ -443,7 +443,7 @@ if [ "$DISTRO" = "opensuse" ] && [ -n "${DISTRO_ROOTFS:-}" ]; then
             cp -f "$_stub" "$TMPDIR/libevp_md2.so" 2>/dev/null || true
             mkdir -p "$DISTRO_ROOTFS/usr/lib64"
             cp -f "$_stub" "$DISTRO_ROOTFS/usr/lib64/libevp_md2.so" 2>/dev/null || true
-            echo "Bliss: staged EVP_md2 stub"
+            echo "Altaris: staged EVP_md2 stub"
             break
         fi
     done
@@ -472,14 +472,14 @@ rm -f "$SETUP_HOST_PATH" "$TMPDIR/flux_setup_temp.sh" "$TMPDIR/$SETUP_GUEST_NAME
 SETUP_MODE=""
 
 if [ -n "$SETUP_B64" ] && [ "$SETUP_B64" != "null" ]; then
-    echo "Bliss: Configuring from base64 payload..."
+    echo "Altaris: Configuring from base64 payload..."
     if ! _decode_b64 "$SETUP_B64" "$SETUP_HOST_PATH"; then
-        echo "Bliss: base64 decode failed"
+        echo "Altaris: base64 decode failed"
         exit 1
     fi
     SETUP_MODE="b64"
 elif [ -n "$DEFAULT_SETUP" ]; then
-    echo "Bliss: Configuring from local setup: $DEFAULT_SETUP"
+    echo "Altaris: Configuring from local setup: $DEFAULT_SETUP"
     : > "$SETUP_HOST_PATH"
     for _common in \
         "${HOME:-}/bliss_guest_common.sh" \
@@ -492,12 +492,12 @@ elif [ -n "$DEFAULT_SETUP" ]; then
         fi
     done
     cat "$DEFAULT_SETUP" >> "$SETUP_HOST_PATH" || {
-        echo "Bliss: failed to copy $DEFAULT_SETUP"
+        echo "Altaris: failed to copy $DEFAULT_SETUP"
         exit 1
     }
     SETUP_MODE="local"
 else
-    echo "Bliss: No setup payload and no ${FAMILY_SCRIPT_NAME} found — install only."
+    echo "Altaris: No setup payload and no ${FAMILY_SCRIPT_NAME} found — install only."
     SETUP_MODE=""
 fi
 
@@ -514,13 +514,13 @@ if [ -n "$SETUP_MODE" ]; then
         chmod 700 "$PROOT_TMP_DIR" 2>/dev/null || true
         # --shared-tmp: host $PREFIX/tmp → guest /tmp
         if ! cp -f "$SETUP_HOST_PATH" "$TMPDIR/$SETUP_GUEST_NAME"; then
-            echo "Bliss: failed to stage setup script into $TMPDIR"
+            echo "Altaris: failed to stage setup script into $TMPDIR"
             exit 1
         fi
         chmod 755 "$TMPDIR/$SETUP_GUEST_NAME" 2>/dev/null || true
         # Alpine minirootfs has only ash until family installs bash — prefer sh then bash.
-        echo "Bliss: Running setup inside proot (shared-tmp)…"
-        echo "Bliss: PD_PROOT_BIN=$PD_PROOT_BIN PROOT_LOADER=$PROOT_LOADER"
+        echo "Altaris: Running setup inside proot (shared-tmp)…"
+        echo "Altaris: PD_PROOT_BIN=$PD_PROOT_BIN PROOT_LOADER=$PROOT_LOADER"
         # proot-distro's login wrapper starts the guest with `env -i`, so
         # host-side FLUX_DESKTOPS/FLUX_DESKTOP would silently disappear and
         # every install would fall back to XFCE (the slow path). Re-export the
@@ -537,13 +537,13 @@ if [ -n "$SETUP_MODE" ]; then
     rm -f "$SETUP_HOST_PATH" "$TMPDIR/$SETUP_GUEST_NAME" "$TMPDIR/flux_setup_temp.sh"
 
     if [ "$SETUP_EXIT" -ne 0 ]; then
-        echo "Bliss: Configuration/Setup Script Failed! (exit $SETUP_EXIT)"
-        echo "Bliss: Hint: if you saw 'execve(...): Permission denied' or 'loader was not found',"
+        echo "Altaris: Configuration/Setup Script Failed! (exit $SETUP_EXIT)"
+        echo "Altaris: Hint: if you saw 'execve(...): Permission denied' or 'loader was not found',"
         echo "  ensure PROOT_LOADER points at libloader.so (jniLibs) and proot-distro was patched"
         echo "  to pass PROOT_LOADER through (TermuxHostPaths.patchProotDistroLoaderPassThrough)."
         exit 1
     fi
-    echo "Bliss: Configuration Complete!"
+    echo "Altaris: Configuration Complete!"
 fi
 
 touch "$HOME/.fluxlinux_distro_${DISTRO}_installed"

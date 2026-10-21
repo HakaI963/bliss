@@ -22,7 +22,6 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.filled.Android
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.List
@@ -52,7 +51,6 @@ import androidx.compose.ui.unit.sp
 import com.ivarna.fluxlinux.core.control.AgentDetector
 import com.ivarna.fluxlinux.core.control.BlissCliInstaller
 import com.ivarna.fluxlinux.core.control.CloneControlService
-import com.ivarna.fluxlinux.core.control.CloneRecorder
 import com.ivarna.fluxlinux.core.control.ControlServer
 import com.ivarna.fluxlinux.core.control.DetectedAgent
 import com.ivarna.fluxlinux.core.control.DistroAgentReport
@@ -74,7 +72,7 @@ private enum class ToolsPage { HOME, CLONE }
 
 private const val MCP_CONFIG = """{
   "mcp": {
-    "bliss": {
+    "altaris": {
       "type": "remote",
       "url": "http://127.0.0.1:47831/mcp",
       "enabled": true
@@ -82,28 +80,28 @@ private const val MCP_CONFIG = """{
   }
 }"""
 
-private const val CLI_HELP = """bliss status
-bliss clones
-bliss apps
-bliss list
-bliss ps
-bliss install /sdcard/Download/app.apk [label]
-bliss install https://example.com/app.apk [label]
-bliss uninstall <clone-package>
-bliss launch <clone-package> [width height fps]
-bliss stop <clone-package>
-bliss shot [out.jpg]
-bliss logs <clone-package> [lines]
-bliss ocr
-bliss tap <x> <y>
-bliss swipe <x1> <y1> <x2> <y2> [ms]
-bliss text <text...>
-bliss key <back|home|enter|tab|esc|recents|keycode>
-bliss record start [fps] [width]
-bliss record stop
-bliss record status"""
+private const val CLI_HELP = """altaris status
+altaris clones
+altaris apps
+altaris list
+altaris ps
+altaris install /sdcard/Download/app.apk [label]
+altaris install https://example.com/app.apk [label]
+altaris uninstall <clone-package>
+altaris launch <clone-package> [width height fps]
+altaris stop <clone-package>
+altaris shot [out.jpg]
+altaris logs <clone-package> [lines]
+altaris ocr
+altaris tap <x> <y>
+altaris swipe <x1> <y1> <x2> <y2> [ms]
+altaris text <text...>
+altaris key <back|home|enter|tab|esc|recents|keycode>
+altaris record start [fps] [width]
+altaris record stop
+altaris record status"""
 
-private const val AGENT_BRIEF = """You are controlling Bliss clones through MCP.
+private const val AGENT_BRIEF = """You are controlling Altaris clones through MCP.
 Endpoint: http://127.0.0.1:47831/mcp
 
 Protocol:
@@ -118,7 +116,7 @@ Rules:
 - Input is in virtual-display pixels: bliss_tap, bliss_swipe, bliss_text, bliss_key.
 - Use bliss_logs after a crash; use bliss_stop_clone when done.
 - Screenshots and OCR are available even when the viewer is not open.
-- The same operations are available in any distro terminal as `bliss ...`.
+- The same operations are available in any distro terminal as `altaris ...` (or the legacy `bliss` alias).
 
 If a task needs visual confirmation, take a screenshot after every action group.
 The UI action feed in the clone viewer shows your taps, swipes, text and keys."""
@@ -144,7 +142,7 @@ fun ToolsScreen() {
         ToolsPage.HOME -> ToolsHome(onOpen = { page = ToolsPage.CLONE })
         ToolsPage.CLONE -> ToolsDetail(
             "Clone",
-            "Server, MCP, CLI, agents, OCR/input and recording",
+            "Server, MCP, CLI, desktop agents and OCR/input",
             { page = ToolsPage.HOME },
         ) {
             ControlCard(context, running, error) { running = ControlServer.isRunning() }
@@ -152,7 +150,6 @@ fun ToolsScreen() {
             McpCard(context)
             CliCard(context)
             AutomationCard(context)
-            RecordingCard()
         }
     }
 }
@@ -172,7 +169,7 @@ private fun ToolsHome(onOpen: (ToolsPage) -> Unit) {
         QCard {
             CategoryRow(
                 "Clone",
-                "Server/API · MCP · CLI · agent scan · OCR/input · recording",
+                "Server/API · MCP · CLI · desktop agent scan · OCR/input",
                 Icons.Default.Build,
             ) { onOpen(ToolsPage.CLONE) }
         }
@@ -262,7 +259,7 @@ private fun ControlCard(context: Context, running: Boolean, error: String?, onSt
         QDivider()
         QStatusRow("HTTP API", ControlServer.BASE_URL)
         QStatusRow("MCP", "${ControlServer.BASE_URL}/mcp")
-        QStatusRow("Guest CLI", "bliss")
+        QStatusRow("Guest CLI", "altaris · bliss alias")
         QDivider()
         Row(
             modifier = Modifier.padding(horizontal = Quartz.CardPad, vertical = 12.dp),
@@ -374,12 +371,12 @@ private fun AgentsCard(context: Context) {
     }
 
     Spacer(Modifier.height(6.dp))
-    QSectionHeader("Host / Android agents")
+    QSectionHeader("Host desktop agents")
     QCard {
         if (!scanned) {
             Text("Scanning…", fontSize = 12.sp, color = fluxMutedText(), modifier = Modifier.padding(Quartz.CardPad))
         } else if (hostAgents.isEmpty()) {
-            Text("No host binaries or Android agent apps found.", fontSize = 12.sp, color = fluxMutedText(), modifier = Modifier.padding(Quartz.CardPad))
+            Text("No desktop agent binaries found in the host prefix.", fontSize = 12.sp, color = fluxMutedText(), modifier = Modifier.padding(Quartz.CardPad))
         } else {
             hostAgents.forEachIndexed { index, agent ->
                 QStatusRow(
@@ -401,7 +398,7 @@ private fun AgentsCard(context: Context) {
 private fun CliCard(context: Context) {
     QSectionHeader("Commands")
     QCard {
-        Text("Installed as `bliss` in the host and every proot/chroot guest.", fontSize = 12.sp, color = fluxMutedText(), modifier = Modifier.padding(horizontal = Quartz.CardPad, vertical = 10.dp))
+        Text("Installed as `altaris` (with a `bliss` compatibility alias) in the host and every proot/chroot guest.", fontSize = 12.sp, color = fluxMutedText(), modifier = Modifier.padding(horizontal = Quartz.CardPad, vertical = 10.dp))
         CodeBlock(CLI_HELP)
         Row(Modifier.padding(horizontal = Quartz.CardPad, vertical = 10.dp)) {
             QSecondaryButton("Copy commands", icon = Icons.Default.ContentCopy) { copy(context, CLI_HELP, "CLI copied") }
@@ -430,7 +427,7 @@ private fun McpCard(context: Context) {
             "bliss_launch_clone · stop_clone" to "Control a background clone",
             "bliss_screenshot · ocr" to "See the display and read text boxes",
             "bliss_tap · swipe · text · key" to "Drive the virtual display",
-            "bliss_logs · record_start · record_stop" to "Diagnose and capture",
+            "bliss_logs" to "Diagnose crashes and display state",
         )
         tools.forEachIndexed { i, (t, d) ->
             Column(Modifier.fillMaxWidth().padding(horizontal = Quartz.CardPad, vertical = 9.dp)) {
@@ -447,43 +444,15 @@ private fun AutomationCard(context: Context) {
     QSectionHeader("How an agent sees")
     QCard {
         Text("`bliss_ocr` / GET /ocr captures the virtual display and returns text plus boxes with centre coordinates. Use the centre with `bliss_tap`.", fontSize = 12.sp, color = fluxMutedText(), modifier = Modifier.padding(horizontal = Quartz.CardPad, vertical = 12.dp))
-        CodeBlock("bliss shot /sdcard/Download/state.jpg\nbliss ocr /sdcard/Download/state.json\nbliss tap 540 1200\nbliss swipe 540 1600 540 500 280\nbliss text hello\nbliss key back")
+        CodeBlock("altaris shot /sdcard/Download/state.jpg\naltaris ocr /sdcard/Download/state.json\naltaris tap 540 1200\naltaris swipe 540 1600 540 500 280\naltaris text hello\naltaris key back")
         Row(Modifier.padding(horizontal = Quartz.CardPad, vertical = 10.dp)) {
-            QSecondaryButton("Copy examples", icon = Icons.Default.ContentCopy) { copy(context, "bliss shot /sdcard/Download/state.jpg\nbliss ocr\nbliss tap 540 1200", "Examples copied") }
+            QSecondaryButton("Copy examples", icon = Icons.Default.ContentCopy) { copy(context, "altaris shot /sdcard/Download/state.jpg\naltaris ocr\naltaris tap 540 1200", "Examples copied") }
         }
     }
     Spacer(Modifier.height(8.dp))
     QSectionHeader("Action feed")
     QCard {
         Text("The clone viewer shows an ACTIONS strip with the agent's taps, swipes, text, keys and launches as they happen.", fontSize = 12.sp, color = fluxMutedText(), modifier = Modifier.padding(Quartz.CardPad))
-    }
-}
-
-@Composable
-private fun RecordingCard() {
-    var status by remember { mutableStateOf(CloneRecorder.status()) }
-    LaunchedEffect(Unit) {
-        while (true) { status = CloneRecorder.status(); delay(900) }
-    }
-    val recording = status.optBoolean("recording")
-    QSectionHeader("MP4 capture")
-    QCard {
-        QStatusRow("State", if (recording) "recording" else "idle", if (recording) MaterialTheme.colorScheme.primary else null)
-        QStatusRow("Frames", status.optInt("frames").toString())
-        QStatusRow("Path", status.optString("path").ifBlank { "—" })
-        if (status.optString("error").isNotBlank()) QStatusRow("Error", status.optString("error"), MaterialTheme.colorScheme.error)
-        Row(Modifier.padding(horizontal = Quartz.CardPad, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            QPrimaryButton("Start recording", icon = Icons.Default.PlayArrow, enabled = !recording) {
-                val ctx = ControlServer.context()
-                if (ctx != null) {
-                    CloneRecorder.start(ctx, 6, 720)
-                    status = CloneRecorder.status()
-                }
-            }
-            QSecondaryButton("Stop", enabled = recording) {
-                CloneRecorder.stop(); status = CloneRecorder.status()
-            }
-        }
     }
 }
 
@@ -509,6 +478,6 @@ private fun CodeBlock(text: String) {
 
 private fun copy(context: Context, text: String, toast: String) {
     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-    clipboard.setPrimaryClip(ClipData.newPlainText("Bliss", text))
+    clipboard.setPrimaryClip(ClipData.newPlainText("Altaris", text))
     Toast.makeText(context, toast, Toast.LENGTH_SHORT).show()
 }

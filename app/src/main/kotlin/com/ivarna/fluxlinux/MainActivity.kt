@@ -28,6 +28,7 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -861,7 +862,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                // Helper for Top Bar — Bliss wordmark + live signal chip.
+                // Helper for Top Bar — Altaris wordmark + live signal chip.
                 @Composable
                 fun TopBar(
                     hazeState: HazeState,
@@ -894,7 +895,7 @@ class MainActivity : ComponentActivity() {
                                 )
                                 Spacer(modifier = Modifier.width(9.dp))
                                 Text(
-                                    text = "BLISS",
+                                    text = "ALTARIS",
                                     style = com.ivarna.fluxlinux.ui.theme.FolioWordmarkStyle,
                                     color = MaterialTheme.colorScheme.onBackground
                                 )
@@ -952,9 +953,19 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                         }
-                        HorizontalDivider(
-                            thickness = 0.75.dp,
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
+                        Box(
+                            Modifier
+                                .fillMaxWidth()
+                                .height(1.dp)
+                                .background(
+                                    Brush.horizontalGradient(
+                                        listOf(
+                                            MaterialTheme.colorScheme.primary.copy(alpha = 0.42f),
+                                            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
+                                            androidx.compose.ui.graphics.Color.Transparent,
+                                        )
+                                    )
+                                )
                         )
                     }
                 }
@@ -1315,7 +1326,7 @@ class MainActivity : ComponentActivity() {
                                            currentScreen = Screen.INSTALL_WIZARD
                                        },
                                      onUninstallDistro = {
-                                         // Embedded uninstall: proot → proot-distro remove in Bliss
+                                         // Embedded uninstall: proot → proot-distro remove in Altaris
                                          // Terminal; chroot → uninstall_debian13_chroot.sh in Root Shell.
                                          val distro = selectedDistro ?: return@DistroSettingsScreen
                                          com.ivarna.fluxlinux.core.terminal.TerminalLauncher.prepareHost(
@@ -1381,7 +1392,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-// ── Bliss navigation motion ─────────────────────────────────────────────────
+// ── Altaris navigation motion ─────────────────────────────────────────────────
 // Depth model: root routes (onboarding/home tabs) = 0, settings hubs = 1,
 // their detail pages + desktop/install/terminal full-screen flows = 2. Push
 // enters from the right, pop from the left (15% width + fade, 240ms); same-depth
