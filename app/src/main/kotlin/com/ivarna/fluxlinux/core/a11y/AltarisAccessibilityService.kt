@@ -121,14 +121,18 @@ class AltarisAccessibilityService : AccessibilityService() {
                 .put("nodes", JSONArray())
                 .toString()
         }
-        val root = pickAppWindow(windows)?.root
+        val window = pickAppWindow(windows)
+        val root = window?.window?.root
         JSONObject()
             .put("ok", true)
             .put("display", displayId)
             .put("source", "accessibility")
             .put("windows", windows.size)
             .put("package", root?.packageName?.toString().orEmpty())
-            .put("nodes", if (root == null) JSONArray() else walk(root, limit))
+            .put(
+                "nodes",
+                if (root == null) JSONArray() else walk(root, limit, window?.displayId ?: displayId),
+            )
             .toString()
     }.getOrElse { errorJson("snapshot failed: ${it.message}") }
 
@@ -344,26 +348,26 @@ class AltarisAccessibilityService : AccessibilityService() {
     }
 
     /** Prefer the focused application window, then the largest visible one. */
-    private fun pickAppWindow(windows: List<WindowRef>): AccessibilityWindowInfo? {
+    private fun pickAppWindow(windows: List<WindowRef>): WindowRef? {
         if (windows.isEmpty()) return null
         val apps = windows.filter { it.window.type == AccessibilityWindowInfo.TYPE_APPLICATION }
         val pool = apps.ifEmpty { windows }
         pool.firstOrNull { runCatching { it.window.isFocused }.getOrDefault(false) }
-            ?.let { return it.window }
+            ?.let { return it }
         return pool.maxByOrNull { ref ->
             val root = runCatching { ref.window.root }.getOrNull() ?: return@maxByOrNull 0
             val bounds = boundsInScreen(root) ?: return@maxByOrNull 0
             bounds.width() * bounds.height()
-        }?.window
+        }
     }
 
     /** Breadth first walk so parents are always listed before their children. */
-    private fun walk(root: AccessibilityNodeInfo, maxNodes: Int): JSONArray {
+    private fun walk(root: AccessibilityNodeInfo, maxNodes: Int, displayId: Int): JSONArray {
         val out = JSONArray()
         val queue = ArrayDeque<AccessibilityNodeInfo>()
         val paths = ArrayDeque<String>()
         queue.addLast(root)
-        paths.addLast(ROOT_PATH)
+        paths.addLast("$displayId:$ROOT_PATH")
         while (queue.isNotEmpty() && out.length() < maxNodes) {
             val node = queue.removeFirst()
             val path = paths.removeFirst()
@@ -453,14 +457,34 @@ class AltarisAccessibilityService : AccessibilityService() {
         return ids
     }
 
-    /** Paths are only valid inside one snapshot, so always re-resolve them. */
+    /**
+     * Paths are only valid inside one snapshot, so always re-resolve them.
+     *
+     * A path carries the display it came from ("79:r.0.2"): the app window
+     * and the clone window live on different displays and have different
+     * trees, so the node has to be looked up in the right one.
+     */
     private fun resolveNode(path: String): AccessibilityNodeInfo? {
-        val windows = windowsFor(-1)
-        val root = pickAppWindow(windows)?.root ?: return null
-        val parts = path.trim().split('.').filter { it.isNotEmpty() }
+        val trimmed = path.trim()
+        val separator = trimmed.indexOf(':')
+        if (separator <= 0) return null
+        val displayId = trimmed.substring(0, separator).toIntOrNull() ?: return null
+        val nodePath = trimmed.substring(separator + 1)
+        val parts = nodePath.split('.').filter { it.isNotEmpty() }
         if (parts.isEmpty() || parts.first() != ROOT_PATH) return null
+        val windows = windowsFor(displayId).ifEmpty { windowsFor(-1) }
+        for (window in windows) {
+            val root = runCatching { window.window.root }.getOrNull() ?: continue
+            val node = resolveIn(root, parts.drop(1)) ?: continue
+            return node
+        }
+        return null
+    }
+
+    /** Walks the child indexes of a node path. */
+    private fun resolveIn(root: AccessibilityNodeInfo, indexes: List<String>): AccessibilityNodeInfo? {
         var node = root
-        for (index in parts.drop(1)) {
+        for (index in indexes) {
             val position = index.toIntOrNull() ?: return null
             val count = runCatching { node.childCount }.getOrDefault(0)
             if (position < 0 || position >= count) return null

@@ -146,9 +146,9 @@ clone can be driven by element name instead of by pixel coordinates.
   `text`, `desc`, `package`, `bounds`, `winBounds`, `clickable`, `editable`,
   `scrollable`, `focusable`, `enabled`, `visible`, `checked`, `actions`,
   `childCount` and `depth`.
-- `nodeId` is the node path inside the tree (`"r.0.2"`), not a platform id;
-  it is only valid inside one snapshot, so read the tree again after every
-  navigation step.
+- `nodeId` is the node path inside the tree (`"79:r.0.2"` — display id, then
+  the path), not a platform id; it is only valid inside one snapshot, so read
+  the tree again after every navigation step.
 - Canvas and game UIs expose no nodes; OCR and pixel mode stay the fallback
   for them. The clone viewer shows the same list under **Elements**.
 

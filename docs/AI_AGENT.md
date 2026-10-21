@@ -37,11 +37,11 @@ be addressed by name instead of by pixel.
 
 - `GET /uiauto?display=<id>` returns the node tree of the display:
   `{"ok":true,"display":75,"source":"accessibility","nodes":[...]}` where each
-  node carries `id` (its path in the tree, e.g. `"r.0.2"`), `class`, `text`,
+  node carries `id` (its path in the tree, e.g. `"79:r.0.2"`), `class`, `text`,
   `desc`, `bounds`, `clickable`, `editable`, `scrollable`, `visible`.
 - `POST /uiauto/tap-text {"text":"Projects"}` taps the first element whose text
   or content description matches — the shortest way to drive a UI.
-- `POST /uiauto/click {"nodeId":"r.0.2"}` clicks a node from the last tree.
+- `POST /uiauto/click {"nodeId":"79:r.0.2"}` clicks a node from the last tree.
 - `POST /uiauto/text {"nodeId":"...","text":"hello"}` types into an editable node.
 - `POST /uiauto/scroll {"nodeId":"...","forward":true}` scrolls a node.
 - `POST /uiauto/gesture {"x1":..,"y1":..,"x2":..,"y2":..}` swipes on the display.
