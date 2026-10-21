@@ -115,7 +115,11 @@ object CloneRecorder {
                         if (image != null) {
                             fillYuv(image, scaled)
                             val pts = frameIndex * 1_000_000L / rate
-                            encoder.queueInputBuffer(inputIndex, 0, 0, pts, 0)
+                            // Qualcomm's encoder treats a zero-sized Image
+                            // input as an empty access unit and emits only EOS.
+                            // Pass the I420 byte count explicitly.
+                            val i420Bytes = image.width * image.height * 3 / 2
+                            encoder.queueInputBuffer(inputIndex, 0, i420Bytes, pts, 0)
                             frameIndex++
                         } else {
                             encoder.queueInputBuffer(inputIndex, 0, 0, 0, 0)
