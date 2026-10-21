@@ -47,13 +47,36 @@ object A11yBridge {
      * UI tree JSON of [displayId]:
      * `{"ok":true,"display":id,"source":"accessibility","nodes":[...]}`.
      */
-    fun tree(context: Context, displayId: Int, maxNodes: Int = 600): String =
+    fun tree(
+        context: Context,
+        displayId: Int,
+        maxNodes: Int = 600,
+        packageName: String? = null,
+    ): String =
         call(
             context,
             "tree",
             displayId.toString(),
-            Bundle().apply { putInt("max", maxNodes.coerceIn(1, 2000)) },
+            Bundle().apply {
+                putInt("max", maxNodes.coerceIn(1, 2000))
+                packageName?.takeIf { it.isNotBlank() }?.let { putString("package", it) }
+            },
         )
+
+    /**
+     * Framework display id of the window owned by [packageName], or -1.
+     * The clone engine numbers displays on its own; the accessibility service
+     * reports the framework id, which gestures have to use.
+     */
+    fun displayIdFor(context: Context, packageName: String): Int {
+        val raw = call(
+            context,
+            "display",
+            null,
+            Bundle().apply { putString("package", packageName) },
+        )
+        return runCatching { JSONObject(raw).optInt("display", -1) }.getOrDefault(-1)
+    }
 
     /**
      * Click a node. Falls back to an engine tap at the node centre when the

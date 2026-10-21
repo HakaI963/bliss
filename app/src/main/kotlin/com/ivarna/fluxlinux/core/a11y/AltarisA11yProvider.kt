@@ -58,6 +58,12 @@ class AltarisA11yProvider : ContentProvider() {
                 "tree" -> service.snapshot(
                     arg?.toIntOrNull() ?: -1,
                     extras?.getInt("max", 600) ?: 600,
+                    extras?.getString("package"),
+                )
+                "display" -> json(
+                    JSONObject()
+                        .put("ok", true)
+                        .put("display", service.displayIdFor(extras?.getString("package").orEmpty())),
                 )
                 "click" -> service.clickDetailed(arg.orEmpty())
                 "text" -> service.setTextDetailed(

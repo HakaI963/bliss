@@ -1280,6 +1280,7 @@ private fun CloneViewPage(
     if (showElements) {
         ElementsSheet(
             displayId = displayId,
+            packageName = HeadlessCloneEngine.activeClonePackage.value,
             onClose = { showElements = false },
         )
     }
@@ -1303,6 +1304,7 @@ private data class ElementsSnapshot(
 @Composable
 private fun ElementsSheet(
     displayId: Int,
+    packageName: String?,
     onClose: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -1318,7 +1320,9 @@ private fun ElementsSheet(
         if (busy) return
         busy = true
         scope.launch {
-            val loaded = withContext(Dispatchers.IO) { loadElements(context, displayId) }
+            val loaded = withContext(Dispatchers.IO) {
+                loadElements(context, displayId, packageName)
+            }
             running = loaded.running
             status = if (loaded.running) "Accessibility: ready" else "Accessibility: not enabled"
             nodes = loaded.nodes
@@ -1450,7 +1454,7 @@ private fun ElementsSheet(
                                         node.label.isNotBlank()
                                     ) {
                                         val fresh = withContext(Dispatchers.IO) {
-                                            loadElements(context, displayId)
+                                            loadElements(context, displayId, packageName)
                                         }
                                         val again = fresh.nodes.firstOrNull {
                                             it.label == node.label && it.id != node.id
@@ -1479,7 +1483,11 @@ private fun ElementsSheet(
 }
 
 /** Reads the accessibility tree of the virtual display. Blocking, IO only. */
-private fun loadElements(context: Context, displayId: Int): ElementsSnapshot {
+private fun loadElements(
+    context: Context,
+    displayId: Int,
+    packageName: String? = null,
+): ElementsSnapshot {
     val status = runCatching { A11yBridge.status(context) }.getOrDefault("{}")
     val running = runCatching { JSONObject(status).optBoolean("serviceRunning", false) }.getOrDefault(false)
     if (!running) {
@@ -1489,7 +1497,9 @@ private fun loadElements(context: Context, displayId: Int): ElementsSnapshot {
             note = "Enable the service to tap app elements by name.",
         )
     }
-    val tree = runCatching { A11yBridge.tree(context, displayId, 600) }.getOrDefault("{}")
+    val tree = runCatching {
+        A11yBridge.tree(context, displayId, 600, packageName)
+    }.getOrDefault("{}")
     val all = A11yNodes.parse(tree)
     // Plain containers are noise: keep the elements a person would target —
     // anything with a label, plus everything clickable, editable or

@@ -234,6 +234,13 @@ object McpProtocol {
                 JSONObject()
             )
         )
+        put(
+            tool(
+                "bliss_ui_display",
+                "Framework display id of the running clone (needed for gestures).",
+                schema("package" to "string: optional clone package, default the running clone")
+            )
+        )
     }
 
     private fun tool(name: String, description: String, properties: JSONObject): JSONObject {
@@ -369,7 +376,9 @@ object McpProtocol {
             val ctx = ControlServer.context() ?: throw IllegalStateException("App context unavailable")
             val display = args.optInt("display", HeadlessCloneEngine.displayId.value)
             val max = args.optInt("max", 600).coerceIn(1, 2000)
-            textResult(a11yObject(A11yBridge.tree(ctx, display, max)))
+            val pkg = args.optString("package").takeIf { it.isNotBlank() }
+                ?: HeadlessCloneEngine.activeClonePackage.value
+            textResult(a11yObject(A11yBridge.tree(ctx, display, max, pkg)))
         }
         "bliss_ui_click" -> {
             val ctx = ControlServer.context() ?: throw IllegalStateException("App context unavailable")
@@ -391,6 +400,13 @@ object McpProtocol {
             textResult(
                 a11yObject(A11yBridge.tapText(ctx, display, args.optString("text"), args.optBoolean("exact", false)))
             )
+        }
+        "bliss_ui_display" -> {
+            val ctx = ControlServer.context() ?: throw IllegalStateException("App context unavailable")
+            val pkg = args.optString("package").takeIf { it.isNotBlank() }
+                ?: HeadlessCloneEngine.activeClonePackage.value
+            val display = if (pkg.isNullOrBlank()) -1 else A11yBridge.displayIdFor(ctx, pkg)
+            textResult(JSONObject().put("ok", display >= 0).put("display", display).put("package", pkg))
         }
         "bliss_ui_enable" -> {
             val ctx = ControlServer.context() ?: throw IllegalStateException("App context unavailable")

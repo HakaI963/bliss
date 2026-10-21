@@ -106,13 +106,28 @@ class AltarisAccessibilityService : AccessibilityService() {
      *
      * Shape: `{"ok":true,"display":id,"source":"accessibility","windows":n,"nodes":[...]}`.
      */
-    fun snapshot(displayId: Int, maxNodes: Int = 600): String = runCatching {
+    fun snapshot(
+        displayId: Int,
+        maxNodes: Int = 600,
+        packageFilter: String? = null,
+    ): String = runCatching {
         val limit = maxNodes.coerceIn(1, 2000)
-        var windows = windowsFor(displayId)
-        // The engine display id can lag behind the framework id; fall back to
-        // every display so a running clone is never invisible.
-        if (windows.isEmpty() && displayId >= 0) windows = windowsFor(-1)
-        if (windows.isEmpty()) {
+        val wanted = packageFilter?.takeIf { it.isNotBlank() }
+        // The engine display id and the framework display id are different
+        // numbering, so the clone is located by its package first and only
+        // then by display.
+        var pool = windowsFor(displayId)
+        if (wanted != null) {
+            val matching = pool.filter { windowPackage(it) == wanted }
+            if (matching.isNotEmpty()) {
+                pool = matching
+            } else {
+                val across = windowsFor(-1).filter { windowPackage(it) == wanted }
+                if (across.isNotEmpty()) pool = across
+            }
+        }
+        if (pool.isEmpty()) pool = windowsFor(-1)
+        if (pool.isEmpty()) {
             return@runCatching JSONObject()
                 .put("ok", true)
                 .put("display", displayId)
@@ -121,13 +136,13 @@ class AltarisAccessibilityService : AccessibilityService() {
                 .put("nodes", JSONArray())
                 .toString()
         }
-        val window = pickAppWindow(windows)
+        val window = pickAppWindow(pool)
         val root = window?.window?.root
         JSONObject()
             .put("ok", true)
-            .put("display", displayId)
+            .put("display", window?.displayId ?: displayId)
             .put("source", "accessibility")
-            .put("windows", windows.size)
+            .put("windows", pool.size)
             .put("package", root?.packageName?.toString().orEmpty())
             .put(
                 "nodes",
@@ -135,6 +150,20 @@ class AltarisAccessibilityService : AccessibilityService() {
             )
             .toString()
     }.getOrElse { errorJson("snapshot failed: ${it.message}") }
+
+    /**
+     * Framework display id of the window owned by [packageName], or -1.
+     * The clone engine numbers displays on its own, so gestures have to be
+     * aimed with the framework id the accessibility service reports.
+     */
+    fun displayIdFor(packageName: String): Int {
+        if (packageName.isBlank()) return -1
+        return windowsFor(-1).firstOrNull { windowPackage(it) == packageName }?.displayId ?: -1
+    }
+
+    /** Package that owns a window, or an empty string. */
+    private fun windowPackage(ref: WindowRef): String =
+        runCatching { ref.window.root?.packageName?.toString() }.getOrNull().orEmpty()
 
     /** Click the node at [path] (paths are only valid inside one snapshot). */
     fun click(path: String): Boolean =

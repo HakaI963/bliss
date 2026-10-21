@@ -284,12 +284,15 @@ object ControlServer {
                 ?: return json(503, JSONObject().put("ok", false).put("error", "App context is not ready"))
             val service = a11yJson(A11yBridge.status(ctx))
             val display = HeadlessCloneEngine.displayId.value
+            val clone = HeadlessCloneEngine.activeClonePackage.value
+            val frameworkDisplay = if (clone.isNullOrBlank()) -1 else A11yBridge.displayIdFor(ctx, clone)
             if (!service.optBoolean("serviceRunning", false)) {
                 return json(
                     200,
                     JSONObject()
                         .put("ok", false)
                         .put("display", display)
+                        .put("frameworkDisplay", frameworkDisplay)
                         .put("error", "accessibility service not enabled")
                         .put("hint", "POST /uiauto/enable")
                         .put("service", service),
@@ -300,6 +303,7 @@ object ControlServer {
                 JSONObject()
                     .put("ok", true)
                     .put("display", display)
+                    .put("frameworkDisplay", frameworkDisplay)
                     .put("connected", service.optBoolean("connected", false))
                     .put("serviceRunning", true)
                     .put("windows", service.optInt("windows", 0))
@@ -311,13 +315,17 @@ object ControlServer {
                 ?: return json(503, JSONObject().put("ok", false).put("error", "App context is not ready"))
             val display = query["display"]?.toIntOrNull() ?: HeadlessCloneEngine.displayId.value
             val max = query["max"]?.toIntOrNull()?.coerceIn(10, 2000) ?: 600
-            if (display < 0) {
+            // The clone is located by package: the engine numbers displays on
+            // its own, the accessibility service uses the framework ids.
+            val packageName = query["package"]?.takeIf { it.isNotBlank() }
+                ?: HeadlessCloneEngine.activeClonePackage.value
+            if (display < 0 && packageName.isNullOrBlank()) {
                 return json(
                     409,
                     JSONObject().put("ok", false).put("error", "no virtual display is running"),
                 )
             }
-            val payload = uiautoPayload(A11yBridge.tree(ctx, display, max))
+            val payload = uiautoPayload(A11yBridge.tree(ctx, display, max, packageName))
             return json(if (payload.optString("error").contains("not enabled")) 503 else 200, payload)
         }
         if (method == "GET" && path == "/logs") {
@@ -454,7 +462,16 @@ object ControlServer {
                 when {
                     ctx == null -> json(503, JSONObject().put("ok", false).put("error", "App context is not ready"))
                     else -> {
-                        val display = obj.optInt("display", HeadlessCloneEngine.displayId.value)
+                        val clone = HeadlessCloneEngine.activeClonePackage.value
+                        val requested = obj.optInt("display", -1)
+                        val display = if (requested >= 0) {
+                            requested
+                        } else if (clone.isNullOrBlank()) {
+                            HeadlessCloneEngine.displayId.value
+                        } else {
+                            val framework = A11yBridge.displayIdFor(ctx, clone)
+                            if (framework >= 0) framework else HeadlessCloneEngine.displayId.value
+                        }
                         uiautoResponse(
                             A11yBridge.gesture(
                                 ctx,
