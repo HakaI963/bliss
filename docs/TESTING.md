@@ -22,7 +22,7 @@ Install over the previous Altaris build (same `com.nopiece.bliss` package).
 
 ## Viewer / agent coexistence
 - [ ] View opens the display; switch to Tools or another bottom tab and come back — the same viewer is still open.
-- [ ] Start a clone from an agent (`bliss launch ...`), then tap **View** — it must show the existing display, not relaunch the app.
+- [ ] Start a clone from an agent (`altaris launch ...`), then tap **View** — it must show the existing display, not relaunch the app.
 - [ ] Back or **Leave** hides the viewer and keeps the clone/display alive.
 - [ ] **Stop** ends the clone and releases the display.
 - [ ] **PiP** puts the viewer into a floating window (device/ROM support permitting).
@@ -41,21 +41,21 @@ Install over the previous Altaris build (same `com.nopiece.bliss` package).
 - [ ] Host binaries and Android agent apps appear under Host / Android agents.
 - [ ] **Copy agent brief** explains the MCP protocol, command set and coordinate workflow.
 - [ ] In a distro terminal:
-  - `bliss status`
-  - `bliss clones`, `bliss apps`, `bliss list`, `bliss ps`
-  - `bliss install /emulated/OpenCodeMobile-v1.0.0.apk` (APK bytes stream directly; no shared path needed)
-  - `bliss install /OpenCodeMobile-v1.0.0.apk` (same)
-  - `bliss install /sdcard/Download/app.apk "Label"`
-  - `bliss launch <clone-package>`
-  - `bliss shot /sdcard/Download/shot.jpg`
-  - `bliss ocr`
-  - `bliss tap 540 1200`
-  - `bliss record start 6 720` then `bliss record stop`
-  - `bliss stop <clone-package>`
+  - `altaris status`
+  - `altaris clones`, `altaris apps`, `altaris list`, `altaris ps`
+  - `altaris install /emulated/OpenCodeMobile-v1.0.0.apk` (APK bytes stream directly; no shared path needed)
+  - `altaris install /OpenCodeMobile-v1.0.0.apk` (same)
+  - `altaris install /sdcard/Download/app.apk "Label"`
+  - `altaris launch <clone-package>`
+  - `altaris shot /sdcard/Download/shot.jpg`
+  - `altaris ocr`
+  - `altaris tap 540 1200`
+  - `altaris record start 6 720` then `altaris record stop`
+  - `altaris stop <clone-package>`
 - [ ] MCP `bliss_apps` lists source apps; `bliss_clones` includes created / last-opened / parts.
 - [ ] `bliss_screenshot` returns an image and `bliss_ocr` returns boxes.
 - [ ] Recordings appear under `/sdcard/Android/data/com.nopiece.bliss/files/recordings/`.
-- [ ] Start a recording, wait at least 2 seconds, stop it: the MP4 must be playable, larger than a header-only 585-byte file, and `bliss record status` must report a non-zero frame count while recording.
+- [ ] Start a recording, wait at least 2 seconds, stop it: the MP4 must be playable, larger than a header-only 585-byte file, and `altaris record status` must report a non-zero frame count while recording.
 - [ ] Start then stop immediately: the MP4 should still contain one frame and play (no empty/corrupt file).
 
 Report the exact command + result, and the clone log lines for any app that still crashes.

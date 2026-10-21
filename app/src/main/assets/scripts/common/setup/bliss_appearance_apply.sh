@@ -358,7 +358,7 @@ _fa_apply_prompt() {
     _t="$_fa_home/.oh-my-zsh/custom/themes/bliss.zsh-theme"
     [ -f "$_t" ] || return 0
     command -v awk >/dev/null 2>&1 || return 0
-    _line="PROMPT='%F{240}%D{%H:%M}%f %F{${FLUX_PROMPT_COLOR}}bliss%f %F{250}%~%f %F{${FLUX_PROMPT_COLOR}}%#%f '"
+    _line="PROMPT='%F{240}%D{%H:%M}%f %F{${FLUX_PROMPT_COLOR}}altaris%f %F{244}@%m%f %F{110}%~%f %F{${FLUX_PROMPT_COLOR}}%#%f '"
     awk -v l="$_line" '/^PROMPT=/ { print l; next } { print }' "$_t" \
         > "$_t.fa.$$" 2>/dev/null && mv "$_t.fa.$$" "$_t" 2>/dev/null \
         || rm -f "$_t.fa.$$"

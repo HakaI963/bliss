@@ -26,7 +26,7 @@ OpenCode / compatible client:
 Protocol: JSON-RPC 2.0 over HTTP. Send `initialize`, then `tools/list`, then
 `tools/call` with `{ "name": "...", "arguments": { ... } }`.
 
-The same operations are available in any distro terminal through the `bliss`
+The same operations are available in any distro terminal through the `altaris`
 helper, and over HTTP at `http://127.0.0.1:47831`.
 
 ## Mental model
@@ -100,30 +100,30 @@ Recordings are stored at
 
 ## CLI equivalents
 
-The installed `bliss` helper uses the same API. For local files it streams the
+The installed `altaris` helper uses the same API. For local files it streams the
 APK bytes to `/install-upload`, so any path the distro can read works, including
 `/emulated`, `/OpenCode...` and chroot `/root`.
 
 ```sh
-bliss status
-bliss clones
-bliss apps
-bliss list
-bliss ps
-bliss install /sdcard/Download/app.apk "My app"
-bliss install /emulated/SomeApp.apk "My app"   # bytes uploaded; no shared path needed
-bliss launch com.nopiece.hclone.hXXXX 720 1280 30
-bliss shot /sdcard/Download/state.jpg
-bliss ocr
-bliss tap 540 1200
-bliss swipe 540 1600 540 500 280
-bliss text hello
-bliss key back
-bliss logs com.nopiece.hclone.hXXXX 300
-bliss record start 6 720
-bliss record stop
-bliss stop com.nopiece.hclone.hXXXX
-bliss uninstall com.nopiece.hclone.hXXXX
+altaris status
+altaris clones
+altaris apps
+altaris list
+altaris ps
+altaris install /sdcard/Download/app.apk "My app"
+altaris install /emulated/SomeApp.apk "My app"   # bytes uploaded; no shared path needed
+altaris launch com.nopiece.hclone.hXXXX 720 1280 30
+altaris shot /sdcard/Download/state.jpg
+altaris ocr
+altaris tap 540 1200
+altaris swipe 540 1600 540 500 280
+altaris text hello
+altaris key back
+altaris logs com.nopiece.hclone.hXXXX 300
+altaris record start 6 720
+altaris record stop
+altaris stop com.nopiece.hclone.hXXXX
+altaris uninstall com.nopiece.hclone.hXXXX
 ```
 
 If `curl`/`wget` is missing in a guest, install one (`apt install curl`,

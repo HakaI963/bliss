@@ -21,10 +21,10 @@ install_ohmyzsh() {
     rm -f "$ZSH_CUSTOM/themes/agnosterzak.zsh-theme" 2>/dev/null || true
     if [ ! -s "$ZSH_CUSTOM/themes/bliss.zsh-theme" ]; then
         cat > "$ZSH_CUSTOM/themes/bliss.zsh-theme" <<'FOLIO_THEME_EOF'
-# bliss.zsh-theme — Altaris's minimal monochrome prompt.
+# altaris prompt — Altaris's minimal monochrome prompt.
 # White/gray on black only; ASCII-safe (no powerline glyphs, no ANSI colors 31-44).
-# Segments:  time  bliss  working-dir  input-char
-PROMPT='%F{240}%D{%H:%M}%f %F{255}bliss%f %F{250}%~%f %F{255}%#%f '
+# Segments:  altaris  host  working-dir  input-char
+PROMPT='%F{79}altaris%f%F{244}@%m%f %F{110}%~%f %F{255}%#%f '
 PROMPT2='%F{240}> %f'
 FOLIO_THEME_EOF
     fi
@@ -1097,7 +1097,7 @@ bliss_banner() {
   esac
   export _BLISS_BANNER_SHOWN=1
   bliss_banner_art
-  # Header: exactly one line, "bliss@<id>" (distro id only). ID= from
+  # Header: exactly one line, "altaris@<id>" (distro id only). ID= from
   # /etc/os-release; fallbacks: first word of PRETTY_NAME, then "linux".
   _bb_fid=""
   if [ -r /etc/os-release ]; then
@@ -1107,7 +1107,7 @@ bliss_banner() {
     fi
   fi
   [ -n "$_bb_fid" ] || _bb_fid="linux"
-  printf '%s\n' "bliss@$_bb_fid"
+  printf '%s\n' "altaris@$_bb_fid"
   unset _bb_fid
 }
 bliss_banner
@@ -1154,7 +1154,7 @@ configure_shell_banner() {
     rm -f "$PREFIX/etc/motd"
 
     echo "⚡ Configuring shell banner..."
-    # Random truecolor anime launch sticker + minimal `bliss@<id>` header.
+    # Random truecolor anime launch sticker + minimal `altaris@<id>` header.
     _flux_write_folio_banner "$HOME"
     _flux_wire_bash_banner "$HOME"
 

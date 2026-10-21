@@ -158,7 +158,7 @@ export XDG_RUNTIME_DIR="${'$'}{XDG_RUNTIME_DIR:-/tmp}"
 # shell can get SIGTTIN-killed. Disable MONITOR (job control) for the guest.
 setopt no_monitor
 
-# Launch sticker + `bliss@<id>` header: ~/.config/bliss/banner.sh (sourced at the end).
+# Launch sticker + `altaris@<id>` header: ~/.config/bliss/banner.sh (sourced at the end).
 # pokemon-colorscripts stays installed but no longer auto-prints (old style).
 
 export ZSH="${'$'}{ZSH:-${'$'}HOME/.oh-my-zsh}"

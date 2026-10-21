@@ -7,32 +7,32 @@ the LAN.
 
 ## CLI inside a distro
 
-The app installs a small `bliss` helper into the host prefix and into every
+The app installs a small `altaris` helper (legacy `bliss` alias kept) into the host prefix and into every
 installed proot/chroot rootfs. Open a terminal in a distro and run:
 
 ```sh
-bliss status
-bliss clones          # package, label, status, created, last_opened, parts
-bliss apps            # installed source apps available for cloning
-bliss list            # alias for clones
-bliss ps              # currently running clones
-bliss install /sdcard/Download/app.apk "My app"
-bliss install /emulated/SomeApp.apk "My app"
-bliss install /OpenCodeMobile-v1.0.0.apk "My app"
-bliss install /root/app.apk "My app"
-bliss install https://example.com/app.apk "My app"
-bliss launch com.nopiece.hclone.hXXXX
-bliss shot /sdcard/Download/state.jpg
-bliss logs com.nopiece.hclone.hXXXX 200
-bliss ocr
-bliss tap 540 1200
-bliss swipe 540 1600 540 500 280
-bliss text hello
-bliss key back
-bliss record start 6 720
-bliss record stop
-bliss stop com.nopiece.hclone.hXXXX
-bliss uninstall com.nopiece.hclone.hXXXX
+altaris status
+altaris clones          # package, label, status, created, last_opened, parts
+altaris apps            # installed source apps available for cloning
+altaris list            # alias for clones
+altaris ps              # currently running clones
+altaris install /sdcard/Download/app.apk "My app"
+altaris install /emulated/SomeApp.apk "My app"
+altaris install /OpenCodeMobile-v1.0.0.apk "My app"
+altaris install /root/app.apk "My app"
+altaris install https://example.com/app.apk "My app"
+altaris launch com.nopiece.hclone.hXXXX
+altaris shot /sdcard/Download/state.jpg
+altaris logs com.nopiece.hclone.hXXXX 200
+altaris ocr
+altaris tap 540 1200
+altaris swipe 540 1600 540 500 280
+altaris text hello
+altaris key back
+altaris record start 6 720
+altaris record stop
+altaris stop com.nopiece.hclone.hXXXX
+altaris uninstall com.nopiece.hclone.hXXXX
 ```
 
 For a local APK, the helper **streams the bytes directly to Altaris** over
@@ -129,4 +129,4 @@ unsupported. The engine now also rewrites the resource-table package identity
 and verifies installed split parts; re-clone an app after updating so it is
 built by the current pipeline. For apps such as Alight Motion that resolve
 shape strings dynamically, this identity sync is required. If it still fails,
-capture `bliss logs <clone-package> 300` before stopping the clone.
+capture `altaris logs <clone-package> 300` before stopping the clone.

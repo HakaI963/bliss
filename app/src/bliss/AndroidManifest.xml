@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
-    <!-- Bliss flavor: guests mount /sdcard and /storage (same as ivarna F-Droid flavor). -->
+    <!-- Altaris flavor: guests mount /sdcard and /storage (same as ivarna F-Droid flavor). -->
     <uses-permission
         android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
         tools:ignore="ScopedStorage" />
