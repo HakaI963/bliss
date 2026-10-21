@@ -1,9 +1,9 @@
 # Altaris local automation
 
 Altaris exposes a **loopback-only** control plane on `127.0.0.1:47831`.
-It is kept alive by a foreground service, so clones and the API remain reachable
-while you are in another app or inside a Linux distro. Nothing is exposed to
-the LAN.
+It starts with the app process, so clones and the API stay reachable while you
+are working in the app, a Linux distro, or an agent session. There is no
+persistent control-plane notification. Nothing is exposed to the LAN.
 
 ## CLI inside a distro
 

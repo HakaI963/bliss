@@ -38,7 +38,7 @@ object GuestZshrcRepair {
      * r12: system-wide plugin paths + first-run package fallback so Parrot,
      * Fedora, Void and other families match Alpine/Debian.
      */
-    private const val REPAIR_REVISION = 12
+    private const val REPAIR_REVISION = 13
 
     /** Marker echoed by the root chroot repair payload on success. */
     internal const val CHROOT_OK_MARKER = "FOLIO_ZSH_OK"
@@ -357,6 +357,7 @@ PROMPT2='%F{240}> %f'
                 writeLocaleProfile(rootfs)
                 writeEnsureLocaleScript(rootfs)
                 writeColorProfile(rootfs)
+                writeBashPrompt(zshrc.parentFile)
             }
             // Cache only after a completed pass (exception above leaves it unset).
             prefs.edit().putBoolean(cacheKey, true).apply()
@@ -488,8 +489,16 @@ PROMPT2='%F{240}> %f'
         sb.append("  cat \"\$H/.zshrc.bliss-block\" >> \"\$H/.zshrc\" 2>/dev/null || true\n")
         sb.append("  rm -f \"\$H/.zshrc.bliss-block\" 2>/dev/null || true\n")
         sb.append("fi\n")
+        // Debian's stock .bashrc resets PS1 after /etc/profile.d, so append the
+        // Altaris prompt at the very end of the interactive bash profile too.
+        sb.append("if [ -f \"\$H/.bashrc\" ] && ! grep -q 'altaris bash prompt v1' \"\$H/.bashrc\" 2>/dev/null; then\n")
+        sb.append("  _put \"\$H/.bashrc.altaris-prompt\" '").append(b64(BASH_PROMPT_BLOCK)).append("'\n")
+        sb.append("  printf '\\n' >> \"\$H/.bashrc\" 2>/dev/null || true\n")
+        sb.append("  cat \"\$H/.bashrc.altaris-prompt\" >> \"\$H/.bashrc\" 2>/dev/null || true\n")
+        sb.append("  rm -f \"\$H/.bashrc.altaris-prompt\" 2>/dev/null || true\n")
+        sb.append("fi\n")
         sb.append("chown --reference=\"\$H\" \"\$H/.oh-my-zsh/custom/themes/bliss.zsh-theme\" 2>/dev/null || true\n")
-        sb.append("chown --reference=\"\$H\" \"\$H/.zshrc\" 2>/dev/null || true\n")
+        sb.append("chown --reference=\"\$H\" \"\$H/.zshrc\" \"\$H/.bashrc\" 2>/dev/null || true\n")
         return sb.toString()
     }
 
@@ -572,8 +581,20 @@ exit 1
      * the marker red after a failed command, plus `ls --color`.
      * ash/busybox-only guests keep their plain prompt (escapes differ there).
      */
+    /** Bash login prompt: Altaris identity + red marker after a failed command. */
+    internal val BASH_PROMPT_BLOCK = """
+# >>> altaris bash prompt v1 >>>
+if [ -n "${'$'}BASH_VERSION" ] && [ -n "${'$'}PS1" ]; then
+  _ALTARIS_PS1_OK='\[\e[38;5;79m\]altaris@\h\[\e[0m\]:\[\e[38;5;110m\]\w\[\e[0m\]\$ '
+  _ALTARIS_PS1_FAIL='\[\e[38;5;79m\]altaris@\h\[\e[0m\]:\[\e[38;5;110m\]\w\[\e[0m\]\[\e[38;5;203m\]\$\[\e[0m\] '
+  PROMPT_COMMAND='if [ "${'$'}?" = 0 ]; then PS1="${'$'}_ALTARIS_PS1_OK"; else PS1="${'$'}_ALTARIS_PS1_FAIL"; fi'
+  PS1="${'$'}_ALTARIS_PS1_OK"
+fi
+# <<< altaris bash prompt v1 <<<
+""".trimStart()
+
     internal val COLOR_PROFILE = """
-# bliss colors (bash): green user@host, blue dir; red marker on failure.
+# Altaris colors (bash): green user@host, blue dir; red marker on failure.
 if [ -n "${'$'}BASH_VERSION" ] && [ -n "${'$'}PS1" ]; then
   alias ls='ls --color=auto' 2>/dev/null
   BLISS_PS1_OK='\[\e[38;5;79m\]altaris@\h\[\e[0m\]:\[\e[38;5;110m\]\w\[\e[0m\]\$ '
@@ -595,6 +616,24 @@ alias ls='ls --color=auto' 2>/dev/null
             Log.i(TAG, "Wrote color profile at ${'$'}{dest.absolutePath}")
         } catch (e: Exception) {
             Log.w(TAG, "color profile write failed: ${'$'}{e.message}")
+        }
+    }
+
+    /** Keep Debian's stock .bashrc from overwriting the Altaris prompt. */
+    internal fun writeBashPrompt(home: File?) {
+        if (home == null || !home.isDirectory) return
+        val bashrc = File(home, ".bashrc")
+        try {
+            val text = if (bashrc.isFile) bashrc.readText() else ""
+            if (text.contains("altaris bash prompt v1")) return
+            if (!bashrc.isFile) {
+                if (!home.canWrite()) return
+                bashrc.writeText("# Altaris interactive shell\n")
+            }
+            if (!bashrc.canWrite()) return
+            bashrc.appendText("\n" + BASH_PROMPT_BLOCK)
+        } catch (e: Exception) {
+            Log.w(TAG, "bash prompt write failed: ${'$'}{e.message}")
         }
     }
 

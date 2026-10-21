@@ -122,12 +122,7 @@
         <service
             android:name=".core.control.CloneControlService"
             android:enabled="true"
-            android:exported="false"
-            android:foregroundServiceType="specialUse">
-            <property
-                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Keeps the loopback-only clone control API and MCP server reachable while the user works in another app or a Linux distro. The service uses a hidden, silent notification channel." />
-        </service>
+            android:exported="false" />
 
         <!-- Desktop / XFCE keep-alive while graphical session is running -->
         <service

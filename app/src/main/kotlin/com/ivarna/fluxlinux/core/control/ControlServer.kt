@@ -27,7 +27,7 @@ import kotlin.concurrent.thread
  * (`/install`, `/launch`, `/tap`, …) and the MCP JSON-RPC endpoint (`/mcp`).
  *
  * It binds to 127.0.0.1 only: proot/chroot guests share the Android loopback,
- * and no LAN device can reach it. A foreground service keeps it alive.
+ * and no LAN device can reach it. The app process keeps it alive.
  */
 object ControlServer {
 

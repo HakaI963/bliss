@@ -1702,6 +1702,22 @@ ALTARIS_SHELL_EOF
     if [ -f "$_h/.bashrc" ] && ! grep -q 'altaris banner' "$_h/.bashrc" 2>/dev/null; then
         printf '\n# altaris banner\n[ -r "$HOME/.config/altaris/banner.sh" ] && . "$HOME/.config/altaris/banner.sh"\n[ -r "$HOME/.config/bliss/banner.sh" ] && . "$HOME/.config/bliss/banner.sh"\n' >> "$_h/.bashrc" 2>/dev/null || true
     fi
+    # Bash (Debian, Alpine, ...): keep the identity and failed-command marker
+    # even when stock .bashrc replaces PS1 after /etc/profile.d has run.
+    if [ -f "$_h/.bashrc" ] && ! grep -q 'altaris bash prompt v1' "$_h/.bashrc" 2>/dev/null; then
+        cat >> "$_h/.bashrc" <<'ALTARIS_BASH_PROMPT_EOF'
+
+# >>> altaris bash prompt v1 >>>
+if [ -n "$BASH_VERSION" ] && [ -n "$PS1" ]; then
+  _ALTARIS_PS1_OK='\[\e[38;5;79m\]altaris@\h\[\e[0m\]:\[\e[38;5;110m\]\w\[\e[0m\]\$ '
+  _ALTARIS_PS1_FAIL='\[\e[38;5;79m\]altaris@\h\[\e[0m\]:\[\e[38;5;110m\]\w\[\e[0m\]\[\e[38;5;203m\]\$\[\e[0m\] '
+  PROMPT_COMMAND='if [ "$?" = 0 ]; then PS1="$_ALTARIS_PS1_OK"; else PS1="$_ALTARIS_PS1_FAIL"; fi'
+  PS1="$_ALTARIS_PS1_OK"
+fi
+# <<< altaris bash prompt v1 <<<
+ALTARIS_BASH_PROMPT_EOF
+    fi
+    [ -n "$_u" ] && chown "$_u:$_g" "$_h/.bashrc" 2>/dev/null || true
     unset _z _u _g
 }
 

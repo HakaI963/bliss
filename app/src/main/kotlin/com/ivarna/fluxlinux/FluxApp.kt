@@ -32,8 +32,9 @@ class FluxApp : Application() {
         // Shizuku clone engine is initialised lazily when the Apps/Tools UI opens.
         HeadlessCloneEngine.onAppCreate(this)
         HeadlessCloneEngine.attach(this)
-        // Localhost CLI/MCP control plane. The foreground service keeps the
-        // process reachable while a guest distro or an AI agent drives clones.
+        // Localhost CLI/MCP control plane. It is process-scoped: no permanent
+        // foreground notification, while the service is best-effort keep-alive.
+        com.ivarna.fluxlinux.core.control.CloneControlService.clearLegacyNotification(this)
         runCatching { com.ivarna.fluxlinux.core.control.CloneControlService.start(this) }
             .onFailure { Log.w("FluxApp", "control service start failed", it) }
         runCatching { com.ivarna.fluxlinux.core.control.ControlServer.start(this) }

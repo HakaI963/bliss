@@ -59,3 +59,11 @@ Install over the previous Altaris build (same `com.nopiece.bliss` package).
 - [ ] Start then stop immediately: the MP4 should still contain one frame and play (no empty/corrupt file).
 
 Report the exact command + result, and the clone log lines for any app that still crashes.
+
+## 3.19 additions
+- [ ] Open a Parrot zsh terminal: the prompt is `altaris@<host>`, suggestions appear, and a valid command is green while a bogus command is red.
+- [ ] Open a Debian/Alpine bash terminal: ble.sh supplies the same green/red syntax coloring and inline suggestions.
+- [ ] In any proot terminal run `altaris status` and `bliss status`; both resolve the loopback server.
+- [ ] Confirm the notification shade has no persistent Altaris/clone-control notification.
+- [ ] Tools → Clone scans only host/guest Linux agent binaries; Android apps are absent.
+- [ ] Tools → Clone has no MP4 capture card.

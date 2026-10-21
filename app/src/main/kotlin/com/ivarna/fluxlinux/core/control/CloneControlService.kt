@@ -1,101 +1,63 @@
 package com.ivarna.fluxlinux.core.control
 
-import android.app.Notification
-import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.IBinder
-import androidx.core.app.NotificationCompat
-import com.ivarna.fluxlinux.MainActivity
-import com.ivarna.fluxlinux.R
 
 /**
  * Keeps the localhost control plane and the clone engine reachable while the
  * user is in another app or in a distro shell.
  *
- * The service still needs a foreground notification to satisfy Android's
- * process-lifetime rules, but its channel is deliberately IMPORTANCE_NONE so
- * it never appears in the shade. The loopback API is a developer surface, not
- * a user-facing notification.
+ * This is intentionally a plain started service, not a foreground service.
+ * Android forces every foreground-service notification into the shade, even
+ * when its channel is created with IMPORTANCE_NONE, and the control API is a
+ * developer/automation surface that should not leave a permanent notification.
+ * [ControlServer] is also started directly by the application process, so the
+ * service is only a best-effort process-priority hint.
  */
 class CloneControlService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        startForeground(NOTIFICATION_ID, notification())
         ControlServer.start(this)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        startForeground(NOTIFICATION_ID, notification())
         ControlServer.start(this)
         return START_STICKY
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    // FluxApp owns the process-wide server; do not stop it when Android trims
+    // this optional service.
     override fun onDestroy() {
-        ControlServer.stop()
         super.onDestroy()
     }
 
-    private fun notification(): Notification {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val manager = getSystemService(NotificationManager::class.java)
-            // Remove the old visible channel once, then keep a silent channel
-            // that Android accepts for the FGS but does not render in the shade.
-            runCatching { manager.deleteNotificationChannel("bliss_control_v1") }
-            if (manager.getNotificationChannel(CHANNEL_ID) == null) {
-                manager.createNotificationChannel(
-                    NotificationChannel(
-                        CHANNEL_ID,
-                        "Altaris background engine",
-                        NotificationManager.IMPORTANCE_NONE
-                    ).apply {
-                        description = "Local clone control API and MCP server"
-                        setShowBadge(false)
-                        setSound(null, null)
-                        enableVibration(false)
-                        lockscreenVisibility = Notification.VISIBILITY_SECRET
-                    }
-                )
+    companion object {
+        /** Remove the old visible foreground-service channel and notification. */
+        fun clearLegacyNotification(context: Context) {
+            runCatching {
+                val manager = context.getSystemService(NotificationManager::class.java)
+                manager.cancel(4911)
+                manager.cancel(4912)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    manager.deleteNotificationChannel("bliss_control_v1")
+                    manager.deleteNotificationChannel("altaris_control_v2")
+                }
             }
         }
-        val open = PendingIntent.getActivity(
-            this,
-            0,
-            Intent(this, MainActivity::class.java),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_terminal)
-            .setContentTitle("Altaris engine")
-            .setContentText("Local control API")
-            .setContentIntent(open)
-            .setOngoing(true)
-            .setSilent(true)
-            .setShowWhen(false)
-            .setPriority(NotificationCompat.PRIORITY_MIN)
-            .setCategory(NotificationCompat.CATEGORY_SERVICE)
-            .setVisibility(NotificationCompat.VISIBILITY_SECRET)
-            .build()
-    }
-
-    companion object {
-        private const val CHANNEL_ID = "altaris_control_v2"
-        private const val NOTIFICATION_ID = 4911
 
         fun start(context: Context) {
+            clearLegacyNotification(context)
             val intent = Intent(context, CloneControlService::class.java)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
-            }
+            // A normal service is enough: the app starts the HTTP server itself
+            // and this service must never post a permanent notification.
+            runCatching { context.startService(intent) }
         }
     }
 }
