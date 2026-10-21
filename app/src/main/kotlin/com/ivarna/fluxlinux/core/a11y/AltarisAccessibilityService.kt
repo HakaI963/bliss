@@ -116,17 +116,28 @@ class AltarisAccessibilityService : AccessibilityService() {
         // The engine display id and the framework display id are different
         // numbering, so the clone is located by its package first and only
         // then by display.
+        val everything = windowsFor(-1)
         var pool = windowsFor(displayId)
         if (wanted != null) {
             val matching = pool.filter { windowPackage(it) == wanted }
-            if (matching.isNotEmpty()) {
-                pool = matching
+            pool = if (matching.isNotEmpty()) {
+                matching
             } else {
-                val across = windowsFor(-1).filter { windowPackage(it) == wanted }
-                if (across.isNotEmpty()) pool = across
+                everything.filter { windowPackage(it) == wanted }
+            }
+            if (pool.isEmpty()) {
+                // Never fall back to another app's window: the caller asked
+                // for one package and would get somebody else's tree.
+                return@runCatching JSONObject()
+                    .put("ok", false)
+                    .put("display", displayId)
+                    .put("source", "accessibility")
+                    .put("error", "no window for package $wanted")
+                    .put("candidates", candidates(everything))
+                    .toString()
             }
         }
-        if (pool.isEmpty()) pool = windowsFor(-1)
+        if (pool.isEmpty()) pool = everything
         if (pool.isEmpty()) {
             return@runCatching JSONObject()
                 .put("ok", true)
@@ -144,6 +155,7 @@ class AltarisAccessibilityService : AccessibilityService() {
             .put("source", "accessibility")
             .put("windows", pool.size)
             .put("package", root?.packageName?.toString().orEmpty())
+            .put("candidates", candidates(everything))
             .put(
                 "nodes",
                 if (root == null) JSONArray() else walk(root, limit, window?.displayId ?: displayId),
@@ -159,6 +171,20 @@ class AltarisAccessibilityService : AccessibilityService() {
     fun displayIdFor(packageName: String): Int {
         if (packageName.isBlank()) return -1
         return windowsFor(-1).firstOrNull { windowPackage(it) == packageName }?.displayId ?: -1
+    }
+
+    /** Every window the service can see, for diagnostics. */
+    private fun candidates(windows: List<WindowRef>): JSONArray {
+        val out = JSONArray()
+        windows.forEach { ref ->
+            out.put(
+                JSONObject()
+                    .put("display", ref.displayId)
+                    .put("package", windowPackage(ref))
+                    .put("focused", runCatching { ref.window.isFocused }.getOrDefault(false)),
+            )
+        }
+        return out
     }
 
     /** Package that owns a window, or an empty string. */
