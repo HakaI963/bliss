@@ -139,8 +139,8 @@ object A11yBridge {
                 exact -> label.equals(needle, true) || desc.equals(needle, true)
                 else -> label.contains(needle, true) || desc.contains(needle, true)
             }
-            if (!hit || nodeId.isBlank()) continue
             val nodeId = node.optString("id")
+            if (!hit || nodeId.isBlank()) continue
             val clickResult = runCatching { JSONObject(click(context, nodeId)) }.getOrNull()
             val ok = clickResult?.optBoolean("ok", false) ?: false
             return JSONObject()

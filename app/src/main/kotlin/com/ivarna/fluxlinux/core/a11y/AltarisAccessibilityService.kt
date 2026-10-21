@@ -360,7 +360,7 @@ class AltarisAccessibilityService : AccessibilityService() {
     /** Breadth first walk so parents are always listed before their children. */
     private fun walk(root: AccessibilityNodeInfo, maxNodes: Int): JSONArray {
         val out = JSONArray()
-        val queue = ArrayDeque<Pair<AccessibilityNodeInfo, Int>>()
+        val queue = ArrayDeque<AccessibilityNodeInfo>()
         val paths = ArrayDeque<String>()
         queue.addLast(root)
         paths.addLast(ROOT_PATH)
@@ -406,14 +406,20 @@ class AltarisAccessibilityService : AccessibilityService() {
     /** Screen bounds of a node. The no-argument getter is gone on API 34+. */
     private fun boundsInScreen(node: AccessibilityNodeInfo): Rect? {
         val rect = Rect()
-        val ok = runCatching { node.getBoundsInScreen(rect) }.getOrDefault(false)
+        val ok = runCatching {
+            node.getBoundsInScreen(rect)
+            true
+        }.getOrDefault(false)
         return if (ok) rect else null
     }
 
     /** Window bounds of a node. */
     private fun boundsInWindow(node: AccessibilityNodeInfo): Rect? {
         val rect = Rect()
-        val ok = runCatching { node.getBoundsInWindow(rect) }.getOrDefault(false)
+        val ok = runCatching {
+            node.getBoundsInWindow(rect)
+            true
+        }.getOrDefault(false)
         return if (ok) rect else null
     }
 
