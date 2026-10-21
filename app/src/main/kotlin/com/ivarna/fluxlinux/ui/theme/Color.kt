@@ -10,36 +10,36 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import com.ivarna.fluxlinux.core.utils.ThemePalette
 
-// ── Altaris Midnight palette ──────────────────────────────────────────────────
+// ── Altaris palette ─────────────────────────────────────────────────────────
 // Observable top-level tokens keep legacy Frost/Quartz call sites in sync with
-// the active theme. New code should use MaterialTheme.colorScheme directly.
+// the active identity. New code should use MaterialTheme.colorScheme directly.
 
-var FolioBackground by mutableStateOf(Color(0xFF04070A))
+var FolioBackground by mutableStateOf(Color(0xFF070A1C))
     internal set
-var FolioSurface by mutableStateOf(Color(0xFF091116))
+var FolioSurface by mutableStateOf(Color(0xFF0E1430))
     internal set
-var FolioCard by mutableStateOf(Color(0xFF0F1A20))
+var FolioCard by mutableStateOf(Color(0xFF161E42))
     internal set
-var FrostSurface by mutableStateOf(Color(0xFF091116))
+var FrostSurface by mutableStateOf(Color(0xFF0E1430))
     internal set
-var FrostSurfaceElevated by mutableStateOf(Color(0xFF0F1A20))
+var FrostSurfaceElevated by mutableStateOf(Color(0xFF161E42))
     internal set
-var FrostHairline by mutableStateOf(Color(0xFF172B27))
+var FrostHairline by mutableStateOf(Color(0xFF1B2440))
     internal set
-var FrostTopSheen by mutableStateOf(Color.Transparent)
+var FrostTopSheen by mutableStateOf(Color.White.copy(alpha = 0.26f))
     internal set
 
-var TextPrimary by mutableStateOf(Color(0xFFE7F3EF))
+var TextPrimary by mutableStateOf(Color(0xFFF2F5FF))
     internal set
-var TextSecondary by mutableStateOf(Color(0xFF91AFA7))
+var TextSecondary by mutableStateOf(Color(0xFFA9B2D6))
     internal set
-var TextMuted by mutableStateOf(Color(0xFF607A73))
+var TextMuted by mutableStateOf(Color(0xFF2A3358))
     internal set
-var PrimaryAction by mutableStateOf(Color(0xFF7CF5C8))
+var PrimaryAction by mutableStateOf(Color(0xFF5EE7FF))
     internal set
-var OnPrimaryAction by mutableStateOf(Color(0xFF032019))
+var OnPrimaryAction by mutableStateOf(Color(0xFF00202B))
     internal set
-var StatusDot by mutableStateOf(Color(0xFF7CF5C8))
+var StatusDot by mutableStateOf(Color(0xFF5EE7FF))
     internal set
 var FolioDanger by mutableStateOf(Color(0xFFFF8A80))
     internal set
@@ -47,23 +47,72 @@ var FolioDangerContainer by mutableStateOf(Color(0xFF4A1512))
     internal set
 
 // Frost switch tokens, kept for the existing switch call sites.
-var FolioSwitchCheckedTrack by mutableStateOf(Color(0xFF7CF5C8))
+var FolioSwitchCheckedTrack by mutableStateOf(Color(0xFF5EE7FF))
     internal set
-var FolioSwitchCheckedThumb by mutableStateOf(Color(0xFF032019))
+var FolioSwitchCheckedThumb by mutableStateOf(Color(0xFF00202B))
     internal set
-var FolioSwitchUncheckedTrack by mutableStateOf(Color(0xFF0F1A20))
+var FolioSwitchUncheckedTrack by mutableStateOf(Color(0xFF161E42))
     internal set
-var FolioSwitchUncheckedThumb by mutableStateOf(Color(0xFF27423B))
+var FolioSwitchUncheckedThumb by mutableStateOf(Color(0xFF2A3358))
     internal set
-var FolioSwitchUncheckedBorder by mutableStateOf(Color(0xFF27423B))
+var FolioSwitchUncheckedBorder by mutableStateOf(Color(0xFF2A3358))
+    internal set
+
+/**
+ * Gradient stops of the active identity. Custom-painted surfaces (hero
+ * panels, the aurora backdrop) read these instead of hard-coding colours.
+ */
+var HeroGradientStops by mutableStateOf(
+    listOf(
+        Color(0xFF22D3EE),
+        Color(0xFF6366F1),
+        Color(0xFFA855F7),
+        Color(0xFFF472B6),
+    )
+)
+    internal set
+
+/** Tight accent gradient (three stops) used by primary actions. */
+var AccentGradientStops by mutableStateOf(
+    listOf(
+        Color(0xFF5EE7FF),
+        Color(0xFFA78BFA),
+        Color(0xFFFF5FD2),
+    )
+)
     internal set
 
 /** Hairline used by the legacy glass containers; now a flat hairline. */
 val FolioFrostBorder: Brush
     get() = SolidColor(FrostHairline)
 
+/**
+ * Gradient hairline used by the Altaris surfaces: a quiet sheen that runs
+ * across the edge of the card instead of a flat border.
+ */
+fun altarisHairlineBrush(palette: AltarisPalette): Brush = Brush.horizontalGradient(
+    listOf(
+        palette.outlineVariant,
+        if (palette.isDark) {
+            palette.glassHighlight.copy(alpha = 0.32f)
+        } else {
+            palette.outline.copy(alpha = 0.45f)
+        },
+        palette.outlineVariant,
+    )
+)
+
+/** Specular sheen painted along the top edge of the glass surfaces. */
+fun altarisSheenBrush(palette: AltarisPalette): Brush = Brush.horizontalGradient(
+    listOf(
+        Color.Transparent,
+        palette.glassHighlight,
+        Color.Transparent,
+    )
+)
+
 // ── Accent palette ──────────────────────────────────────────────────────────
-// Surfaces stay Midnight/Day. These accents only colour primary controls.
+// The identity owns the surfaces; these accents only colour primary controls.
 val SlatePrimary = Color(0xFF0E6F8A)
 val PlumPrimary = Color(0xFF6B52A8)
 val SandPrimary = Color(0xFF8A5D20)
@@ -75,6 +124,8 @@ fun ThemePalette.accentColor(): Color = when (this) {
     ThemePalette.SLATE -> SlatePrimary
     ThemePalette.PLUM -> PlumPrimary
     ThemePalette.SAND -> SandPrimary
+    // "Scheme" follows the active identity, so the swatch mirrors it.
+    ThemePalette.SCHEME -> PrimaryAction
 }
 
 @Composable

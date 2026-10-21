@@ -7,10 +7,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
@@ -20,8 +22,9 @@ import com.ivarna.fluxlinux.core.utils.StateManager
 import com.ivarna.fluxlinux.core.utils.ThemeMode
 import com.ivarna.fluxlinux.core.utils.ThemePalette
 
-// Altaris Midnight — the reference look: near-black glass, mint/teal signal,
-// icy text and hairline borders. Day is the same layout with paper surfaces.
+// ── Legacy accent skins ────────────────────────────────────────────────────
+// The accent picker still works: it tints the primary role of the active
+// identity. "Scheme" (the default) leaves the identity's own colours alone.
 private val Mint = Color(0xFF7CF5C8)
 private val MintContainer = Color(0xFF0C2B24)
 private val Ice = Color(0xFF86E6FF)
@@ -31,21 +34,6 @@ private val VioletContainer = Color(0xFF211B3A)
 private val Amber = Color(0xFFFFD08A)
 private val AmberContainer = Color(0xFF332412)
 
-private val NightBg = Color(0xFF04070A)
-private val NightSurface = Color(0xFF091116)
-private val NightSurfaceVariant = Color(0xFF0F1A20)
-private val NightText = Color(0xFFE7F3EF)
-private val NightMuted = Color(0xFF91AFA7)
-private val NightOutline = Color(0xFF27423B)
-private val NightOutlineSoft = Color(0xFF172B27)
-
-private val DayBg = Color(0xFFF2F6F5)
-private val DaySurface = Color(0xFFFFFFFF)
-private val DaySurfaceVariant = Color(0xFFEAF0EE)
-private val DayText = Color(0xFF14201D)
-private val DayMuted = Color(0xFF5D726C)
-private val DayOutline = Color(0xFFC8D6D1)
-private val DayOutlineSoft = Color(0xFFDDE7E3)
 private val DayPrimary = Color(0xFF0F766E)
 
 private fun accentFor(palette: ThemePalette, dark: Boolean): Color = when (palette) {
@@ -53,6 +41,7 @@ private fun accentFor(palette: ThemePalette, dark: Boolean): Color = when (palet
     ThemePalette.SLATE -> if (dark) Ice else Color(0xFF0E6F8A)
     ThemePalette.PLUM -> if (dark) Violet else Color(0xFF6B52A8)
     ThemePalette.SAND -> if (dark) Amber else Color(0xFF8A5D20)
+    ThemePalette.SCHEME -> Color.Unspecified
 }
 
 private fun accentContainerFor(palette: ThemePalette, dark: Boolean): Color = when (palette) {
@@ -60,6 +49,7 @@ private fun accentContainerFor(palette: ThemePalette, dark: Boolean): Color = wh
     ThemePalette.SLATE -> if (dark) IceContainer else Color(0xFFD6EFF5)
     ThemePalette.PLUM -> if (dark) VioletContainer else Color(0xFFE9E2FF)
     ThemePalette.SAND -> if (dark) AmberContainer else Color(0xFFF7E8CC)
+    ThemePalette.SCHEME -> Color.Unspecified
 }
 
 private fun onAccentContainerFor(palette: ThemePalette, dark: Boolean): Color = when (palette) {
@@ -67,6 +57,7 @@ private fun onAccentContainerFor(palette: ThemePalette, dark: Boolean): Color = 
     ThemePalette.SLATE -> if (dark) Color(0xFFC6F2FF) else Color(0xFF003743)
     ThemePalette.PLUM -> if (dark) Color(0xFFEDE5FF) else Color(0xFF2B1B56)
     ThemePalette.SAND -> if (dark) Color(0xFFFFE7BD) else Color(0xFF422B09)
+    ThemePalette.SCHEME -> Color.Unspecified
 }
 
 private fun onAccentFor(palette: ThemePalette, dark: Boolean): Color = when (palette) {
@@ -74,118 +65,182 @@ private fun onAccentFor(palette: ThemePalette, dark: Boolean): Color = when (pal
     ThemePalette.SLATE -> if (dark) Color(0xFF001F28) else Color.White
     ThemePalette.PLUM -> if (dark) Color(0xFF160E2D) else Color.White
     ThemePalette.SAND -> if (dark) Color(0xFF261706) else Color.White
-}
-
-private fun lightSchemeFor(palette: ThemePalette): ColorScheme {
-    val accent = accentFor(palette, dark = false)
-    return lightColorScheme(
-        primary = accent,
-        onPrimary = onAccentFor(palette, false),
-        primaryContainer = accentContainerFor(palette, false),
-        onPrimaryContainer = onAccentContainerFor(palette, false),
-        secondary = Color(0xFF1E6B63),
-        onSecondary = Color.White,
-        secondaryContainer = Color(0xFFD4F3EA),
-        onSecondaryContainer = Color(0xFF053D37),
-        tertiary = Color(0xFF3C6478),
-        onTertiary = Color.White,
-        background = DayBg,
-        onBackground = DayText,
-        surface = DaySurface,
-        onSurface = DayText,
-        surfaceVariant = DaySurfaceVariant,
-        onSurfaceVariant = DayMuted,
-        outline = DayOutline,
-        outlineVariant = DayOutlineSoft,
-        inverseSurface = Color(0xFF1B2925),
-        inverseOnSurface = Color(0xFFEAF3F0),
-        error = Color(0xFFB3261E),
-        onError = Color.White,
-        errorContainer = Color(0xFFF9DEDC),
-        onErrorContainer = Color(0xFF410E0B),
-        scrim = Color(0xFF000000),
-    )
-}
-
-private fun darkSchemeFor(palette: ThemePalette): ColorScheme {
-    val accent = accentFor(palette, dark = true)
-    return darkColorScheme(
-        primary = accent,
-        onPrimary = onAccentFor(palette, true),
-        primaryContainer = accentContainerFor(palette, true),
-        onPrimaryContainer = onAccentContainerFor(palette, true),
-        secondary = Ice,
-        onSecondary = Color(0xFF00252E),
-        secondaryContainer = IceContainer,
-        onSecondaryContainer = Color(0xFFC6F2FF),
-        tertiary = Color(0xFFA8C7FF),
-        onTertiary = Color(0xFF002E6A),
-        background = NightBg,
-        onBackground = NightText,
-        surface = NightSurface,
-        onSurface = NightText,
-        surfaceVariant = NightSurfaceVariant,
-        onSurfaceVariant = NightMuted,
-        outline = NightOutline,
-        outlineVariant = NightOutlineSoft,
-        inverseSurface = NightText,
-        inverseOnSurface = NightBg,
-        error = Color(0xFFFF8A80),
-        onError = Color(0xFF3A0907),
-        errorContainer = Color(0xFF4A1512),
-        onErrorContainer = Color(0xFFFFD9D6),
-        scrim = Color(0xFF000000),
-    )
+    ThemePalette.SCHEME -> Color.Unspecified
 }
 
 /**
- * Mirror the active scheme into the legacy Frost/Quartz tokens. Keeping these
- * observable means older screens (and the few custom-painted surfaces) follow
- * Midnight/Day and the accent picker without a screen-by-screen rewrite.
+ * The resolved identity of the current theme. Every Altaris surface reads its
+ * colours from here, so a scheme change restyles the whole app at once.
  */
-private fun applyLegacyTokens(scheme: ColorScheme, dark: Boolean) {
-    FolioBackground = scheme.background
-    FolioSurface = scheme.surface
-    FolioCard = scheme.surfaceVariant
-    FrostSurface = scheme.surface
-    FrostSurfaceElevated = scheme.surfaceVariant
-    FrostHairline = scheme.outlineVariant
-    FrostTopSheen = Color.Transparent
-    TextPrimary = scheme.onBackground
-    TextSecondary = scheme.onSurfaceVariant
-    TextMuted = scheme.outline
-    PrimaryAction = scheme.primary
-    OnPrimaryAction = scheme.onPrimary
-    FolioDanger = scheme.error
-    FolioDangerContainer = scheme.errorContainer
-    FolioSwitchCheckedTrack = scheme.primary
-    FolioSwitchCheckedThumb = scheme.onPrimary
-    FolioSwitchUncheckedTrack = scheme.surfaceVariant
-    FolioSwitchUncheckedThumb = scheme.outline
-    FolioSwitchUncheckedBorder = scheme.outline
-    StatusDot = scheme.primary
+val LocalAltarisPalette = staticCompositionLocalOf {
+    AltarisPalettes.of(AltarisScheme.AURORA_NEON, dark = true)
 }
 
+/**
+ * Builds the Material3 scheme for an identity. The optional accent skin only
+ * replaces the primary role (and its container), exactly like the pre-scheme
+ * picker did.
+ */
+private fun colorSchemeFor(palette: AltarisPalette, accent: ThemePalette): ColorScheme {
+    val useAccent = accent != ThemePalette.SCHEME
+    val primary = if (useAccent) accentFor(accent, palette.isDark) else palette.primary
+    val onPrimary = if (useAccent) onAccentFor(accent, palette.isDark) else palette.onPrimary
+    val primaryContainer =
+        if (useAccent) accentContainerFor(accent, palette.isDark) else palette.primaryContainer
+    val onPrimaryContainer =
+        if (useAccent) onAccentContainerFor(accent, palette.isDark) else palette.onPrimaryContainer
+    val tintAlpha = if (palette.isDark) 0.22f else 0.14f
+    val secondaryContainer = palette.secondary.copy(alpha = tintAlpha)
+    val tertiaryContainer = palette.tertiary.copy(alpha = tintAlpha)
+    val onError = if (palette.isDark) Color(0xFF3A0907) else Color.White
+    val onErrorContainer = if (palette.isDark) Color(0xFFFFD9D6) else Color(0xFF410E0B)
+    val inverseSurface = if (palette.isDark) palette.onSurface.copy(alpha = 0.92f) else palette.base
+    val inverseOnSurface = if (palette.isDark) palette.base else palette.onSurface
+    val scrim = Color.Black
+
+    return if (palette.isDark) {
+        darkColorScheme(
+            primary = primary,
+            onPrimary = onPrimary,
+            primaryContainer = primaryContainer,
+            onPrimaryContainer = onPrimaryContainer,
+            secondary = palette.secondary,
+            onSecondary = palette.onSecondary,
+            secondaryContainer = secondaryContainer,
+            onSecondaryContainer = palette.onSurface,
+            tertiary = palette.tertiary,
+            onTertiary = palette.onTertiary,
+            tertiaryContainer = tertiaryContainer,
+            onTertiaryContainer = palette.onSurface,
+            background = palette.base,
+            onBackground = palette.onSurface,
+            surface = palette.surface,
+            onSurface = palette.onSurface,
+            surfaceVariant = palette.surfaceVariant,
+            onSurfaceVariant = palette.onSurfaceVariant,
+            outline = palette.outline,
+            outlineVariant = palette.outlineVariant,
+            inverseSurface = inverseSurface,
+            inverseOnSurface = inverseOnSurface,
+            error = palette.error,
+            onError = onError,
+            errorContainer = palette.errorContainer,
+            onErrorContainer = onErrorContainer,
+            scrim = scrim,
+        )
+    } else {
+        lightColorScheme(
+            primary = primary,
+            onPrimary = onPrimary,
+            primaryContainer = primaryContainer,
+            onPrimaryContainer = onPrimaryContainer,
+            secondary = palette.secondary,
+            onSecondary = palette.onSecondary,
+            secondaryContainer = secondaryContainer,
+            onSecondaryContainer = palette.onSurface,
+            tertiary = palette.tertiary,
+            onTertiary = palette.onTertiary,
+            tertiaryContainer = tertiaryContainer,
+            onTertiaryContainer = palette.onSurface,
+            background = palette.base,
+            onBackground = palette.onSurface,
+            surface = palette.surface,
+            onSurface = palette.onSurface,
+            surfaceVariant = palette.surfaceVariant,
+            onSurfaceVariant = palette.onSurfaceVariant,
+            outline = palette.outline,
+            outlineVariant = palette.outlineVariant,
+            inverseSurface = inverseSurface,
+            inverseOnSurface = inverseOnSurface,
+            error = palette.error,
+            onError = onError,
+            errorContainer = palette.errorContainer,
+            onErrorContainer = onErrorContainer,
+            scrim = scrim,
+        )
+    }
+}
+
+/**
+ * Mirror the active identity into the legacy Frost/Quartz tokens. Keeping
+ * these observable means older screens (and the few custom-painted surfaces)
+ * follow the selected scheme without a screen-by-screen rewrite.
+ */
+private fun applyLegacyTokens(palette: AltarisPalette, accent: ThemePalette) {
+    val useAccent = accent != ThemePalette.SCHEME
+    val primary = if (useAccent) accentFor(accent, palette.isDark) else palette.primary
+    val onPrimary = if (useAccent) onAccentFor(accent, palette.isDark) else palette.onPrimary
+    FolioBackground = palette.base
+    FolioSurface = palette.surface
+    FolioCard = palette.surfaceVariant
+    FrostSurface = palette.surface
+    FrostSurfaceElevated = palette.surfaceElevated
+    FrostHairline = palette.outlineVariant
+    FrostTopSheen = palette.glassHighlight
+    TextPrimary = palette.onSurface
+    TextSecondary = palette.onSurfaceVariant
+    TextMuted = palette.outline
+    PrimaryAction = primary
+    OnPrimaryAction = onPrimary
+    StatusDot = primary
+    FolioDanger = palette.error
+    FolioDangerContainer = palette.errorContainer
+    FolioSwitchCheckedTrack = primary
+    FolioSwitchCheckedThumb = onPrimary
+    FolioSwitchUncheckedTrack = palette.surfaceVariant
+    FolioSwitchUncheckedThumb = palette.outline
+    FolioSwitchUncheckedBorder = palette.outline
+    HeroGradientStops = palette.heroStops
+    AccentGradientStops = palette.accentStops
+}
+
+/**
+ * The app theme.
+ *
+ * [scheme] picks the identity (surfaces, glass, gradients). Passing the
+ * default value means "follow the persisted choice", so the Settings picker
+ * can switch identities without a restart. [accent] is the optional legacy
+ * accent skin; null follows the persisted choice.
+ */
 @Composable
 fun FolioTheme(
     themeMode: ThemeMode = ThemeMode.DARK,
     dynamicColor: Boolean = false,
+    scheme: AltarisScheme = AltarisScheme.AURORA_NEON,
+    accent: ThemePalette? = null,
     content: @Composable () -> Unit
 ) {
     val context = LocalContext.current
-    remember(context) { StateManager.getThemePalette(context) }
-    val palette by StateManager.themePalette.collectAsState()
+    remember(context) {
+        runCatching { StateManager.getScheme(context) }
+            .getOrDefault(AltarisScheme.AURORA_NEON)
+    }
+    remember(context) {
+        runCatching { StateManager.getThemePalette(context) }
+            .getOrDefault(ThemePalette.SCHEME)
+    }
+    val persistedScheme by StateManager.scheme.collectAsState()
+    val persistedAccent by StateManager.themePalette.collectAsState()
 
     val darkTheme = when (themeMode) {
         ThemeMode.LIGHT -> false
         ThemeMode.DARK -> true
         else -> isSystemInDarkTheme()
     }
-    val colorScheme = if (darkTheme) darkSchemeFor(palette) else lightSchemeFor(palette)
+    // An explicit non-default scheme wins; otherwise the persisted one does.
+    val activeScheme =
+        if (scheme != AltarisScheme.AURORA_NEON) scheme else persistedScheme
+    val activeAccent = accent ?: persistedAccent
+    val palette = remember(activeScheme, darkTheme) {
+        AltarisPalettes.of(activeScheme, darkTheme)
+    }
+    val colorScheme = remember(palette, activeAccent) {
+        colorSchemeFor(palette, activeAccent)
+    }
 
     val view = LocalView.current
     SideEffect {
-        applyLegacyTokens(colorScheme, darkTheme)
+        applyLegacyTokens(palette, activeAccent)
         val window = (view.context as? Activity)?.window ?: return@SideEffect
         window.statusBarColor = colorScheme.background.toArgb()
         window.navigationBarColor = colorScheme.background.toArgb()
@@ -195,11 +250,13 @@ fun FolioTheme(
         }
     }
 
-    MaterialTheme(
-        colorScheme = colorScheme,
-        typography = Typography,
-        content = content
-    )
+    CompositionLocalProvider(LocalAltarisPalette provides palette) {
+        MaterialTheme(
+            colorScheme = colorScheme,
+            typography = Typography,
+            content = content
+        )
+    }
 }
 
 /** Legacy entry point — preserved so existing call sites keep compiling. */
@@ -207,7 +264,15 @@ fun FolioTheme(
 fun FluxLinuxTheme(
     themeMode: ThemeMode = ThemeMode.DARK,
     dynamicColor: Boolean = false,
+    scheme: AltarisScheme = AltarisScheme.AURORA_NEON,
+    accent: ThemePalette? = null,
     content: @Composable () -> Unit
 ) {
-    FolioTheme(themeMode = themeMode, dynamicColor = false, content = content)
+    FolioTheme(
+        themeMode = themeMode,
+        dynamicColor = dynamicColor,
+        scheme = scheme,
+        accent = accent,
+        content = content
+    )
 }

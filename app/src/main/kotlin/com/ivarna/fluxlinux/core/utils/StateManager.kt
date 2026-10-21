@@ -2,6 +2,7 @@ package com.ivarna.fluxlinux.core.utils
 
 import android.content.Context
 import android.content.pm.PackageManager
+import com.ivarna.fluxlinux.ui.theme.AltarisScheme
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -23,19 +24,19 @@ object StateManager {
     // Persisted in "theme_prefs" (the same file ThemeMode uses, see
     // ThemePreferences) so the pick survives restarts. The observable lets
     // FluxLinuxTheme and the Settings picker react with no extra plumbing.
-    private val _themePalette = MutableStateFlow(ThemePalette.CARBON)
+    private val _themePalette = MutableStateFlow(ThemePalette.SCHEME)
     val themePalette: StateFlow<ThemePalette> = _themePalette.asStateFlow()
 
     /**
-     * Read the persisted palette (defaults to CARBON) and hydrate the flow.
+     * Read the persisted palette (defaults to SCHEME) and hydrate the flow.
      */
     fun getThemePalette(context: Context): ThemePalette {
         val prefs = context.getSharedPreferences("theme_prefs", Context.MODE_PRIVATE)
-        val paletteName = prefs.getString("theme_palette", ThemePalette.CARBON.name)
+        val paletteName = prefs.getString("theme_palette", ThemePalette.SCHEME.name)
         val palette = try {
-            ThemePalette.valueOf(paletteName ?: ThemePalette.CARBON.name)
+            ThemePalette.valueOf(paletteName ?: ThemePalette.SCHEME.name)
         } catch (e: IllegalArgumentException) {
-            ThemePalette.CARBON
+            ThemePalette.SCHEME
         }
         _themePalette.value = palette
         return palette
@@ -49,6 +50,39 @@ object StateManager {
         prefs.edit().putString("theme_palette", palette.name).apply()
         android.util.Log.d("StateManager", "Theme palette set to: ${palette.name}")
         _themePalette.value = palette
+    }
+
+    // ── Colour scheme (Altaris identity) ──────────────────────────────────
+    // Persisted under the "scheme" key of the same "theme_prefs" file (see
+    // ThemePreferences.getScheme/setScheme). The observable lets FolioTheme
+    // and the Settings picker restyle the app with no extra plumbing.
+    private val _scheme = MutableStateFlow(AltarisScheme.AURORA_NEON)
+    val scheme: StateFlow<AltarisScheme> = _scheme.asStateFlow()
+
+    /**
+     * Read the persisted identity (defaults to AURORA_NEON) and hydrate the
+     * flow.
+     */
+    fun getScheme(context: Context): AltarisScheme {
+        val prefs = context.getSharedPreferences("theme_prefs", Context.MODE_PRIVATE)
+        val schemeName = prefs.getString("scheme", AltarisScheme.AURORA_NEON.name)
+        val scheme = try {
+            AltarisScheme.valueOf(schemeName ?: AltarisScheme.AURORA_NEON.name)
+        } catch (e: IllegalArgumentException) {
+            AltarisScheme.AURORA_NEON
+        }
+        _scheme.value = scheme
+        return scheme
+    }
+
+    /**
+     * Persist [scheme] and publish it to the flow.
+     */
+    fun setScheme(context: Context, scheme: AltarisScheme) {
+        val prefs = context.getSharedPreferences("theme_prefs", Context.MODE_PRIVATE)
+        prefs.edit().putString("scheme", scheme.name).apply()
+        android.util.Log.d("StateManager", "Colour scheme set to: ${scheme.name}")
+        _scheme.value = scheme
     }
 
     /**

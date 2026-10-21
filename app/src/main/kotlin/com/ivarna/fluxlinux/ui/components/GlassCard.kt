@@ -39,6 +39,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -50,7 +52,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ivarna.fluxlinux.core.data.Distro
 import com.ivarna.fluxlinux.ui.theme.FolioMotion
+import com.ivarna.fluxlinux.ui.theme.LocalAltarisPalette
 import com.ivarna.fluxlinux.ui.theme.TextSecondary
+import com.ivarna.fluxlinux.ui.theme.altarisHairlineBrush
+import com.ivarna.fluxlinux.ui.theme.altarisSheenBrush
 
 private val CardShape = RoundedCornerShape(16.dp)
 private val MethodProot = Color(0xFF00B8D4)
@@ -86,6 +91,7 @@ fun DistroCard(
     val isChroot = distro.isChrootCard()
     val methodColor = if (isChroot) MethodChroot else MethodProot
     val colors = MaterialTheme.colorScheme
+    val palette = LocalAltarisPalette.current
     val showLogs = logsAvailable || isGuiStarting || isGuiRunning
 
     Box(
@@ -94,7 +100,17 @@ fun DistroCard(
             .padding(horizontal = 16.dp, vertical = 5.dp)
             .clip(CardShape)
             .background(colors.surface)
-            .border(BorderStroke(1.dp, colors.outlineVariant), CardShape)
+            .border(BorderStroke(1.dp, altarisHairlineBrush(palette)), CardShape)
+            .drawWithContent {
+                drawContent()
+                // Specular sheen along the top edge of the card.
+                drawLine(
+                    brush = altarisSheenBrush(palette),
+                    start = Offset.Zero,
+                    end = Offset(size.width, 0f),
+                    strokeWidth = 1.dp.toPx(),
+                )
+            }
     ) {
         Column(
             modifier = Modifier
@@ -433,10 +449,15 @@ fun GlassSettingCard(
     content: @Composable () -> Unit
 ) {
     val shape = RoundedCornerShape(12.dp)
+    val palette = LocalAltarisPalette.current
     Box(
         modifier = modifier
             .clip(shape)
-            .background(MaterialTheme.colorScheme.surface)
+            .background(
+                Brush.verticalGradient(
+                    listOf(palette.glassFillTop, palette.glassFillBottom)
+                )
+            )
             .then(
                 if (onClick != null) {
                     Modifier.clickable(onClick = onClick)
@@ -444,9 +465,19 @@ fun GlassSettingCard(
             )
             .border(
                 1.dp,
-                MaterialTheme.colorScheme.outlineVariant,
+                altarisHairlineBrush(palette),
                 shape
             )
+            .drawWithContent {
+                drawContent()
+                // Specular sheen along the top edge of the glass.
+                drawLine(
+                    brush = altarisSheenBrush(palette),
+                    start = Offset.Zero,
+                    end = Offset(size.width, 0f),
+                    strokeWidth = 1.dp.toPx(),
+                )
+            }
     ) {
         content()
     }

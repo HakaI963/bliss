@@ -35,12 +35,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ivarna.fluxlinux.ui.theme.LocalAltarisPalette
+import com.ivarna.fluxlinux.ui.theme.altarisHairlineBrush
+import com.ivarna.fluxlinux.ui.theme.altarisSheenBrush
 
 private val FrostEdgeWidth = 1.dp
 private val FrostPillShape = RoundedCornerShape(20.dp)
@@ -63,12 +69,28 @@ fun FrostContainer(
     corner: Dp = 12.dp,
     content: @Composable ColumnScope.() -> Unit
 ) {
+    val palette = LocalAltarisPalette.current
+    val shape = RoundedCornerShape(corner)
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(corner))
-            .background(MaterialTheme.colorScheme.surface)
-            .border(FrostEdgeWidth, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(corner))
+            .clip(shape)
+            .background(
+                Brush.verticalGradient(
+                    listOf(palette.glassFillTop, palette.glassFillBottom)
+                )
+            )
+            .border(FrostEdgeWidth, altarisHairlineBrush(palette), shape)
+            .drawWithContent {
+                drawContent()
+                // Specular sheen along the top edge of the panel.
+                drawLine(
+                    brush = altarisSheenBrush(palette),
+                    start = Offset.Zero,
+                    end = Offset(size.width, 0f),
+                    strokeWidth = 1.dp.toPx(),
+                )
+            }
             .padding(vertical = 2.dp),
         content = content
     )

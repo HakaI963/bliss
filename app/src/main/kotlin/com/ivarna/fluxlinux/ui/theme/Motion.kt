@@ -1,8 +1,11 @@
 package com.ivarna.fluxlinux.ui.theme
 
-import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.SpringSpec
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -59,10 +62,69 @@ fun rememberStaggerEntrance(): Boolean {
  * rest instead of staying at alpha 0.
  */
 @Composable
-private fun isScreenshotRun(): Boolean =
-    LocalInspectionMode.current ||
-        System.getProperty("paparazzi.test.record") != null ||
-        System.getProperty("paparazzi.test.verify") != null
+internal fun isScreenshotRun(): Boolean =
+    LocalInspectionMode.current || isPaparazziRun()
+
+/**
+ * True inside a Paparazzi run (JVM screenshots). Paparazzi marks the JVM with
+ * "paparazzi.test.record"/"paparazzi.test.verify"; the class lookup is a
+ * belt-and-braces fallback for runners that do not set them.
+ */
+internal fun isPaparazziRun(): Boolean =
+    System.getProperty("paparazzi.test.record") != null ||
+        System.getProperty("paparazzi.test.verify") != null ||
+        paparazziOnClasspath
+
+/** Cached once: the Paparazzi runtime only exists in screenshot test runs. */
+private val paparazziOnClasspath: Boolean by lazy {
+    runCatching { Class.forName("app.cash.paparazzi.Paparazzi") }.isSuccess
+}
+
+/**
+ * Altaris spring tokens. Springs keep the UI feeling physical without the
+ * long tail of a tween: layout shifts settle quickly, effects snap.
+ */
+object AltarisMotion {
+    /** Layout moves (cards, panels, lists). */
+    val spatial: SpringSpec<Float> = spring(dampingRatio = 0.8f, stiffness = 380f)
+    /** Effects (press, glow, ripple). */
+    val effects: SpringSpec<Float> = spring(dampingRatio = 1.0f, stiffness = 1600f)
+    /** Fast spatial (chips, tabs, pills). */
+    val fastSpatial: SpringSpec<Float> = spring(dampingRatio = 0.6f, stiffness = 800f)
+    /** Slow spatial (hero panels, sheets, large reveals). */
+    val slowSpatial: SpringSpec<Float> = spring(dampingRatio = 0.8f, stiffness = 200f)
+}
+
+/**
+ * Press feedback for any tappable surface: the node shrinks slightly while
+ * the pointer is held and springs back on release. The scale is applied in
+ * the draw phase, so children are never recomposed.
+ */
+@Composable
+fun Modifier.pressScale(
+    minScale: Float = 0.96f,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+): Modifier {
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed && enabled) minScale else 1f,
+        animationSpec = AltarisMotion.effects,
+        label = "pressScale",
+    )
+    return this
+        .graphicsLayer {
+            scaleX = scale
+            scaleY = scale
+        }
+        .clickable(
+            enabled = enabled,
+            interactionSource = interaction,
+            indication = null,
+            onClick = onClick,
+        )
+}
 
 /**
  * One-shot stagger progress for [index]: 0 = not revealed yet, 1 = at rest.
@@ -81,10 +143,7 @@ fun rememberStaggerProgress(index: Int, entrance: Boolean): Float {
     }
     return animateFloatAsState(
         targetValue = if (shown) 1f else 0f,
-        animationSpec = tween(
-            durationMillis = FolioMotion.ScreenMs,
-            easing = FastOutSlowInEasing
-        ),
+        animationSpec = AltarisMotion.spatial,
         label = "stagger"
     ).value
 }

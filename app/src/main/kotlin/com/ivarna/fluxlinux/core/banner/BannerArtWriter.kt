@@ -138,11 +138,11 @@ object BannerArtWriter {
         setup.append("mkdir -p \"${d}H/.config/bliss/banner\" 2>/dev/null || true\n")
         setup.append("for _rc in \"${d}H/.zshrc\" \"${d}H/.bashrc\"; do\n")
         setup.append("  [ -f \"${d}_rc\" ] || continue\n")
-        setup.append("  awk '/banner\\.sh/ { if (b++) next } /appearance-apply\\.sh/ { if (a++) next } { print }' ")
+        setup.append("  awk '!/^[[:space:]]*#/ && /banner\\.sh/ { if (b++) next } !/^[[:space:]]*#/ && /appearance-apply\\.sh/ { if (a++) next } { print }' ")
             .append("\"${d}_rc\" > \"${d}_rc.bliss.${d}${d}\" 2>/dev/null && ")
             .append("mv -f \"${d}_rc.bliss.${d}${d}\" \"${d}_rc\" 2>/dev/null || ")
             .append("rm -f \"${d}_rc.bliss.${d}${d}\" 2>/dev/null || true\n")
-        setup.append("  if ! grep -q 'bliss/banner.sh' \"${d}_rc\" 2>/dev/null; then\n")
+        setup.append("  if ! grep -q '^[[:space:]]*[^#].*bliss/banner.sh' \"${d}_rc\" 2>/dev/null; then\n")
         setup.append("    printf '\\n# Altaris launch sticker (random anime banner; opt out FLUX_NO_BANNER=1)\\n' ")
             .append(">> \"${d}_rc\" 2>/dev/null || true\n")
         setup.append("    printf '[ -r \"${d}HOME/.config/bliss/banner.sh\" ] && . \"${d}HOME/.config/bliss/banner.sh\"\\n' ")
@@ -297,11 +297,15 @@ object BannerArtWriter {
         var sawBanner = false
         var sawAppearance = false
         for (line in lines) {
-            if (line.contains("banner.sh")) {
+            // Comments mention banner.sh; only an executable source line counts
+            // as the sticker hook. Otherwise a comment before the real line
+            // would be kept and the real line discarded as a duplicate.
+            val executable = !line.trimStart().startsWith("#")
+            if (executable && line.contains("banner.sh")) {
                 if (sawBanner) continue
                 sawBanner = true
             }
-            if (line.contains("appearance-apply.sh")) {
+            if (executable && line.contains("appearance-apply.sh")) {
                 if (sawAppearance) continue
                 sawAppearance = true
             }
@@ -318,7 +322,7 @@ object BannerArtWriter {
             return
         }
         var out = dedupeRc(text)
-        if (out.lines().none { it.contains(".config/bliss/banner.sh") }) {
+        if (out.lines().none { !it.trimStart().startsWith("#") && it.contains(".config/bliss/banner.sh") }) {
             out += "\n" + STICKER_COMMENT + "\n" + STICKER_LINE + "\n"
         }
         if (out == text) return

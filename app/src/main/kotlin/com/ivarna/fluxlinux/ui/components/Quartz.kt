@@ -2,7 +2,11 @@ package com.ivarna.fluxlinux.ui.components
 
 import android.graphics.Bitmap
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
@@ -47,14 +51,20 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -63,6 +73,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ivarna.fluxlinux.ui.theme.AltarisMotion
+import com.ivarna.fluxlinux.ui.theme.LocalAltarisPalette
+import com.ivarna.fluxlinux.ui.theme.altarisHairlineBrush
 import com.ivarna.fluxlinux.ui.theme.fluxMutedText
 
 /**
@@ -127,6 +140,7 @@ fun QSectionHeader(text: String, modifier: Modifier = Modifier) {
 fun QCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     val shape = Quartz.CardShape
     val colors = MaterialTheme.colorScheme
+    val palette = LocalAltarisPalette.current
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -141,11 +155,11 @@ fun QCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> 
                     end = Offset(900f, 1400f),
                 )
             )
-            .border(1.dp, colors.outlineVariant.copy(alpha = 0.92f), shape)
+            .border(1.dp, altarisHairlineBrush(palette), shape)
             .drawWithContent {
                 drawContent()
-                // Light-catcher edge: a single mint highlight, strongest at the
-                // leading corner, fading before the card midpoint.
+                // Light-catcher edge: a single accent highlight, strongest at
+                // the leading corner, fading before the card midpoint.
                 drawLine(
                     brush = Brush.horizontalGradient(
                         listOf(
@@ -190,7 +204,7 @@ fun QRow(
     val pressed by interaction.collectIsPressedAsState()
     val pressScale by animateFloatAsState(
         targetValue = if (pressed && onClick != null) 0.985f else 1f,
-        animationSpec = folioSpring(),
+        animationSpec = AltarisMotion.effects,
         label = "rowPress",
     )
     val pressFill by animateColorAsState(
@@ -202,6 +216,12 @@ fun QRow(
         animationSpec = tween(150),
         label = "rowFill",
     )
+    val glow by animateFloatAsState(
+        targetValue = if (pressed && onClick != null) 1f else 0f,
+        animationSpec = AltarisMotion.effects,
+        label = "rowGlow",
+    )
+    val accent = MaterialTheme.colorScheme.primary
     Column(modifier = modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
@@ -210,6 +230,23 @@ fun QRow(
                 .graphicsLayer {
                     scaleX = pressScale
                     scaleY = pressScale
+                }
+                .drawWithContent {
+                    // Accent bar blooming at the leading edge while pressed.
+                    if (glow > 0.01f) {
+                        drawRect(
+                            brush = Brush.horizontalGradient(
+                                listOf(
+                                    accent.copy(alpha = 0.55f * glow),
+                                    accent.copy(alpha = 0.06f * glow),
+                                    Color.Transparent,
+                                ),
+                                0f,
+                                size.width * 0.45f,
+                            )
+                        )
+                    }
+                    drawContent()
                 }
                 .background(pressFill)
                 .let {
@@ -278,8 +315,19 @@ fun QPill(text: String, selected: Boolean, modifier: Modifier = Modifier, onClic
     val bg = if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
     val fg = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
     else MaterialTheme.colorScheme.onSurfaceVariant
-    val edge = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
-    else MaterialTheme.colorScheme.outlineVariant
+    val edge by animateColorAsState(
+        targetValue = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
+        else MaterialTheme.colorScheme.outlineVariant,
+        animationSpec = tween(150),
+        label = "pillEdge",
+    )
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val pressScale by animateFloatAsState(
+        targetValue = if (pressed) 0.95f else 1f,
+        animationSpec = AltarisMotion.effects,
+        label = "pillPress",
+    )
     Text(
         text,
         fontSize = 12.5.sp,
@@ -287,10 +335,14 @@ fun QPill(text: String, selected: Boolean, modifier: Modifier = Modifier, onClic
         color = fg,
         maxLines = 1,
         modifier = modifier
+            .graphicsLayer {
+                scaleX = pressScale
+                scaleY = pressScale
+            }
             .clip(Quartz.PillShape)
             .background(bg)
             .border(1.dp, edge, Quartz.PillShape)
-            .clickable(onClick = onClick)
+            .clickable(interactionSource = interaction, indication = null, onClick = onClick)
             .padding(horizontal = 13.dp, vertical = 7.dp),
     )
 }
@@ -316,6 +368,11 @@ fun QStatusRow(label: String, value: String, valueColor: Color? = null) {
     }
 }
 
+/**
+ * The primary action: an animated accent-gradient button. The gradient
+ * sweeps slowly across the surface, the button springs under the finger and
+ * confirms the tap with a short haptic tick.
+ */
 @Composable
 fun QPrimaryButton(
     text: String,
@@ -328,25 +385,71 @@ fun QPrimaryButton(
     val pressed by interaction.collectIsPressedAsState()
     val scale by animateFloatAsState(
         targetValue = if (pressed && enabled) 0.97f else 1f,
-        animationSpec = folioSpring(),
+        animationSpec = AltarisMotion.effects,
         label = "primaryPress",
     )
+    val glow by animateFloatAsState(
+        targetValue = if (pressed && enabled) 1f else 0f,
+        animationSpec = AltarisMotion.effects,
+        label = "primaryGlow",
+    )
+    val haptics = LocalHapticFeedback.current
+    val palette = LocalAltarisPalette.current
+    val stops = palette.accentStops
+    val transition = rememberInfiniteTransition()
+    val sweep = transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 5200, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+    )
     Button(
-        onClick = onClick,
+        onClick = {
+            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            onClick()
+        },
         modifier = modifier
             .height(40.dp)
             .defaultMinSize(minWidth = 88.dp)
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
+            }
+            .shadow(
+                elevation = 12.dp * glow,
+                shape = Quartz.ButtonShape,
+                clip = false,
+                ambientColor = palette.primary,
+                spotColor = palette.primary,
+            )
+            .drawBehind {
+                // The accent gradient drifts across the button. The sweep is
+                // read inside the draw lambda, so only the draw phase runs —
+                // the button never recomposes.
+                val width = size.width
+                val position = sweep.value
+                val gradient = Brush.linearGradient(
+                    colors = stops,
+                    start = Offset(-width * 0.3f * position, 0f),
+                    end = Offset(width * (1f + 0.3f * position), 0f),
+                )
+                drawRoundRect(
+                    brush = gradient,
+                    size = size,
+                    cornerRadius = CornerRadius(14.dp.toPx()),
+                )
             },
         enabled = enabled,
         shape = Quartz.ButtonShape,
         contentPadding = PaddingValues(horizontal = 16.dp),
         interactionSource = interaction,
+        // The gradient carries the depth; the Material shadow would double up.
+        elevation = null,
         colors = ButtonDefaults.buttonColors(
-            containerColor = MaterialTheme.colorScheme.primary,
-            contentColor = MaterialTheme.colorScheme.onPrimary,
+            containerColor = Color.Transparent,
+            contentColor = palette.onPrimary,
             disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
             disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
         ),
@@ -371,7 +474,7 @@ fun QSecondaryButton(
     val pressed by interaction.collectIsPressedAsState()
     val scale by animateFloatAsState(
         targetValue = if (pressed && enabled) 0.97f else 1f,
-        animationSpec = folioSpring(),
+        animationSpec = AltarisMotion.effects,
         label = "secondaryPress",
     )
     OutlinedButton(
@@ -433,7 +536,7 @@ fun QToolButton(
     val pressed by interaction.collectIsPressedAsState()
     val scale by animateFloatAsState(
         targetValue = if (pressed && enabled) 0.96f else 1f,
-        animationSpec = folioSpring(),
+        animationSpec = AltarisMotion.effects,
         label = "toolPress",
     )
     Row(

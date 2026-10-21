@@ -1,4 +1,5 @@
 <resources>
     <string name="app_name">Altaris</string>
     <string name="accessibility_service_description">Altaris Keyboard Toggle allows you to toggle the keyboard in Termux:X11 using a floating button.</string>
+    <string name="altaris_a11y_description">Altaris UI automation reads the element tree of the private clone display so clones can be driven by name instead of by pixel coordinates.</string>
 </resources>

@@ -2,6 +2,7 @@ package com.ivarna.fluxlinux.core.control
 
 import android.graphics.BitmapFactory
 import android.util.Base64
+import com.ivarna.fluxlinux.core.a11y.A11yBridge
 import com.ivarna.fluxlinux.core.clone.HeadlessCloneEngine
 import kotlinx.coroutines.runBlocking
 import org.json.JSONArray
@@ -181,6 +182,58 @@ object McpProtocol {
                 schema("width" to "integer: optional max width, default 1000")
             )
         )
+        put(
+            tool(
+                "bliss_ui_tree",
+                "Read the UI node tree of the virtual display through the accessibility service.",
+                schema(
+                    "display" to "integer: optional display id, default the running clone display",
+                    "max" to "integer: optional max nodes, default 600"
+                )
+            )
+        )
+        put(
+            tool(
+                "bliss_ui_click",
+                "Click a UI node by the id from the last bliss_ui_tree snapshot.",
+                schema("nodeId" to "integer: node id from bliss_ui_tree")
+            )
+        )
+        put(
+            tool(
+                "bliss_ui_type",
+                "Type text into an editable UI node.",
+                schema("nodeId" to "integer: node id from bliss_ui_tree", "text" to "string: text to enter")
+            )
+        )
+        put(
+            tool(
+                "bliss_ui_scroll",
+                "Scroll a UI node forward or backward.",
+                schema(
+                    "nodeId" to "integer: node id from bliss_ui_tree",
+                    "forward" to "boolean: optional, default true"
+                )
+            )
+        )
+        put(
+            tool(
+                "bliss_ui_tap_text",
+                "Tap the first element whose text or content description matches.",
+                schema(
+                    "text" to "string: text to match",
+                    "exact" to "boolean: optional, default false",
+                    "display" to "integer: optional display id"
+                )
+            )
+        )
+        put(
+            tool(
+                "bliss_ui_enable",
+                "Enable the Altaris accessibility service (needs root).",
+                JSONObject()
+            )
+        )
     }
 
     private fun tool(name: String, description: String, properties: JSONObject): JSONObject {
@@ -312,7 +365,53 @@ object McpProtocol {
                 ?: throw IllegalStateException("Frame decode failed")
             textResult(runBlocking { OcrEngine.recognize(bitmap) })
         }
+        "bliss_ui_tree" -> {
+            val ctx = ControlServer.context() ?: throw IllegalStateException("App context unavailable")
+            val display = args.optInt("display", HeadlessCloneEngine.displayId.value)
+            val max = args.optInt("max", 600).coerceIn(1, 2000)
+            textResult(a11yObject(A11yBridge.tree(ctx, display, max)))
+        }
+        "bliss_ui_click" -> {
+            val ctx = ControlServer.context() ?: throw IllegalStateException("App context unavailable")
+            textResult(a11yObject(A11yBridge.click(ctx, args.optLong("nodeId", -1L))))
+        }
+        "bliss_ui_type" -> {
+            val ctx = ControlServer.context() ?: throw IllegalStateException("App context unavailable")
+            textResult(a11yObject(A11yBridge.setText(ctx, args.optLong("nodeId", -1L), args.optString("text"))))
+        }
+        "bliss_ui_scroll" -> {
+            val ctx = ControlServer.context() ?: throw IllegalStateException("App context unavailable")
+            textResult(
+                a11yObject(A11yBridge.scroll(ctx, args.optLong("nodeId", -1L), args.optBoolean("forward", true)))
+            )
+        }
+        "bliss_ui_tap_text" -> {
+            val ctx = ControlServer.context() ?: throw IllegalStateException("App context unavailable")
+            val display = args.optInt("display", HeadlessCloneEngine.displayId.value)
+            textResult(
+                a11yObject(A11yBridge.tapText(ctx, display, args.optString("text"), args.optBoolean("exact", false)))
+            )
+        }
+        "bliss_ui_enable" -> {
+            val ctx = ControlServer.context() ?: throw IllegalStateException("App context unavailable")
+            textResult(a11yObject(A11yBridge.ensureEnabled(ctx)))
+        }
         else -> throw IllegalArgumentException("Unknown tool: $name")
+    }
+
+    /** Parse a bridge reply, never throws. */
+    private fun a11yObject(raw: String): JSONObject {
+        val obj = runCatching { JSONObject(raw) }.getOrElse {
+            JSONObject().put("ok", false).put("error", it.message ?: it.javaClass.simpleName)
+        }
+        if (!obj.optBoolean("ok", false)) {
+            val error = obj.optString("error")
+            if (error.contains("not running") || error.contains("not enabled")) {
+                obj.put("error", "accessibility service not enabled")
+                    .put("hint", "POST /uiauto/enable (or call bliss_ui_enable)")
+            }
+        }
+        return obj
     }
 
     private fun requirePackage(args: JSONObject): String =

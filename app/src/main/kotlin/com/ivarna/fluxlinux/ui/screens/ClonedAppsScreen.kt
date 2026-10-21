@@ -41,6 +41,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -60,6 +61,7 @@ import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.filled.Widgets
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -79,6 +81,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -97,6 +100,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ivarna.fluxlinux.core.a11y.A11yBridge
+import com.ivarna.fluxlinux.core.a11y.A11yNode
+import com.ivarna.fluxlinux.core.a11y.A11yNodes
 import com.ivarna.fluxlinux.core.clone.HeadlessCloneEngine
 import com.ivarna.fluxlinux.core.clone.HeadlessCloneEngine.CloneApp
 import com.ivarna.fluxlinux.core.clone.HeadlessCloneEngine.Quality
@@ -115,7 +121,10 @@ import com.ivarna.fluxlinux.ui.components.QToggleRow
 import com.ivarna.fluxlinux.ui.components.QToolButton
 import com.ivarna.fluxlinux.ui.components.Quartz
 import com.ivarna.fluxlinux.ui.theme.fluxMutedText
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -123,6 +132,7 @@ import kotlinx.coroutines.isActive
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
+import org.json.JSONObject
 
 private enum class AppsSection { INSTALLED, RUNNING, PREFERENCE }
 
@@ -982,8 +992,10 @@ private fun CloneViewPage(
     val lastError by HeadlessCloneEngine.lastError.collectAsState()
     val lines by HeadlessCloneEngine.cloneLogs.collectAsState()
     val actions by HeadlessCloneEngine.actionLog.collectAsState()
+    val displayId by HeadlessCloneEngine.displayId.collectAsState()
     var live by rememberSaveable { mutableStateOf(true) }
     var showLayout by rememberSaveable { mutableStateOf(false) }
+    var showElements by rememberSaveable { mutableStateOf(false) }
     var split by rememberSaveable { mutableStateOf(0.58f) }
     var displayScale by rememberSaveable { mutableStateOf(1f) }
     val logState = rememberLazyListState()
@@ -1101,6 +1113,14 @@ private fun CloneViewPage(
                         )
                     }
                 }
+                // Element tree of the clone display: tap by name, not by pixel.
+                QToolButton(
+                    "Elements",
+                    Icons.Default.Widgets,
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(6.dp),
+                ) { showElements = true }
             }
         }
 
@@ -1256,6 +1276,220 @@ private fun CloneViewPage(
             }
         }
     }
+
+    if (showElements) {
+        ElementsSheet(
+            displayId = displayId,
+            onClose = { showElements = false },
+        )
+    }
+}
+
+// ---------------------------------------------------------------- elements
+
+/** Result of one accessibility tree read for the elements panel. */
+private data class ElementsSnapshot(
+    val running: Boolean,
+    val nodes: List<A11yNode>,
+    val note: String?,
+)
+
+/**
+ * Element list of the virtual display. Tapping a row clicks that node through
+ * the accessibility service, so a clone can be driven by name instead of by
+ * pixel coordinates.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ElementsSheet(
+    displayId: Int,
+    onClose: () -> Unit,
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var status by remember { mutableStateOf("Accessibility: checking…") }
+    var running by remember { mutableStateOf(false) }
+    var nodes by remember { mutableStateOf<List<A11yNode>>(emptyList()) }
+    var note by remember { mutableStateOf<String?>(null) }
+    var enableNote by remember { mutableStateOf<String?>(null) }
+    var busy by remember { mutableStateOf(false) }
+
+    fun refresh() {
+        if (busy) return
+        busy = true
+        scope.launch {
+            val loaded = withContext(Dispatchers.IO) { loadElements(context, displayId) }
+            running = loaded.running
+            status = if (loaded.running) "Accessibility: ready" else "Accessibility: not enabled"
+            nodes = loaded.nodes
+            note = loaded.note
+            busy = false
+        }
+    }
+
+    LaunchedEffect(Unit) { refresh() }
+
+    ModalBottomSheet(
+        onDismissRequest = onClose,
+        containerColor = MaterialTheme.colorScheme.surface,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.85f)
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 24.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Elements", fontSize = 18.sp, fontWeight = FontWeight.Medium)
+                Spacer(Modifier.weight(1f))
+                TextButton(
+                    onClick = { refresh() },
+                    contentPadding = PaddingValues(horizontal = 8.dp),
+                ) {
+                    Text("Refresh", fontSize = 12.sp)
+                }
+            }
+            Text(
+                "Tap an element to open it in the clone.",
+                fontSize = 11.5.sp,
+                color = fluxMutedText(),
+            )
+            Spacer(Modifier.height(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(
+                            if (running) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.error,
+                        )
+                )
+                Spacer(Modifier.width(9.dp))
+                Text(
+                    status,
+                    fontSize = 12.5.sp,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.weight(1f),
+                )
+                if (!running) {
+                    QSecondaryButton("Enable") {
+                        scope.launch {
+                            val result = withContext(Dispatchers.IO) {
+                                A11yBridge.ensureEnabled(context)
+                            }
+                            val obj = runCatching { JSONObject(result) }.getOrNull()
+                            if (obj?.optBoolean("ok", false) == true) {
+                                enableNote = "Accessibility service enabled."
+                                refresh()
+                            } else {
+                                val error = obj?.optString("error").orEmpty()
+                                enableNote = if (error.contains("root", ignoreCase = true)) {
+                                    "Root is unavailable — enable the service from Android settings."
+                                } else {
+                                    error.ifBlank { "The accessibility service could not be enabled." }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            (enableNote ?: note)?.let {
+                Text(
+                    it,
+                    fontSize = 11.5.sp,
+                    lineHeight = 15.sp,
+                    color = fluxMutedText(),
+                    modifier = Modifier.padding(top = 6.dp),
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            when {
+                nodes.isEmpty() && busy -> Box(
+                    Modifier.fillMaxWidth().padding(24.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text("Reading elements…", fontSize = 12.sp, color = fluxMutedText())
+                }
+
+                nodes.isEmpty() -> Box(
+                    Modifier.fillMaxWidth().padding(24.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        if (running) {
+                            "No elements found. This app paints its UI on a canvas, so OCR and pixel taps are still used for it."
+                        } else {
+                            "The accessibility service is not running, so no elements can be read."
+                        },
+                        fontSize = 12.sp,
+                        lineHeight = 17.sp,
+                        color = fluxMutedText(),
+                    )
+                }
+
+                else -> LazyColumn(Modifier.fillMaxWidth()) {
+                    itemsIndexed(nodes) { _, node ->
+                        QRow(
+                            title = node.label.ifBlank { node.type },
+                            subtitle = elementSubtitle(node),
+                            onClick = {
+                                scope.launch {
+                                    val result = withContext(Dispatchers.IO) {
+                                        A11yBridge.click(context, node.id)
+                                    }
+                                    val obj = runCatching { JSONObject(result) }.getOrNull()
+                                    if (obj?.optBoolean("ok", false) != true) {
+                                        enableNote = obj?.optString("error").orEmpty().ifBlank { "Tap failed" }
+                                    }
+                                    refresh()
+                                }
+                            },
+                            divider = true,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Reads the accessibility tree of the virtual display. Blocking, IO only. */
+private fun loadElements(context: Context, displayId: Int): ElementsSnapshot {
+    val status = runCatching { A11yBridge.status(context) }.getOrDefault("{}")
+    val running = runCatching { JSONObject(status).optBoolean("serviceRunning", false) }.getOrDefault(false)
+    if (!running) {
+        return ElementsSnapshot(
+            running = false,
+            nodes = emptyList(),
+            note = "Enable the service to tap app elements by name.",
+        )
+    }
+    val tree = runCatching { A11yBridge.tree(context, displayId, 600) }.getOrDefault("{}")
+    val nodes = A11yNodes.parse(tree)
+    return ElementsSnapshot(
+        running = true,
+        nodes = nodes,
+        note = if (nodes.isEmpty()) {
+            "This app paints its UI on a canvas, so OCR and pixel taps are still used for it."
+        } else {
+            null
+        },
+    )
+}
+
+/** "TextView · 12,34 → 200,98" style summary for one element row. */
+private fun elementSubtitle(node: A11yNode): String {
+    val parts = ArrayList<String>(3)
+    parts.add(node.type)
+    if (node.boundsLabel.isNotEmpty()) parts.add(node.boundsLabel)
+    if (node.clickable) parts.add("clickable")
+    if (node.editable) parts.add("editable")
+    if (node.scrollable) parts.add("scrollable")
+    return parts.joinToString(" · ")
 }
 
 @Composable

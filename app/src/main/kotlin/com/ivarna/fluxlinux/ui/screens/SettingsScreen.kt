@@ -5,7 +5,10 @@ import android.content.Intent
 import android.net.Uri
 import android.util.Log
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,9 +22,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -38,6 +43,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -63,6 +69,8 @@ import com.ivarna.fluxlinux.ui.components.QRow
 import com.ivarna.fluxlinux.ui.components.QScreenTitle
 import com.ivarna.fluxlinux.ui.components.QSectionHeader
 import com.ivarna.fluxlinux.ui.components.Quartz
+import com.ivarna.fluxlinux.ui.theme.AltarisPalettes
+import com.ivarna.fluxlinux.ui.theme.AltarisScheme
 import com.ivarna.fluxlinux.ui.theme.accentColor
 import com.ivarna.fluxlinux.ui.theme.fluxMutedText
 import com.ivarna.fluxlinux.ui.theme.rememberStaggerEntrance
@@ -108,6 +116,16 @@ fun SettingsScreen(
 
     // Theme palette (persisted via StateManager; applied by FluxLinuxTheme).
     val themePalette by StateManager.themePalette.collectAsState()
+
+    // Colour scheme (persisted via StateManager; applied by FolioTheme).
+    val scheme by StateManager.scheme.collectAsState()
+
+    // The swatches follow the active mode, like the surfaces do.
+    val darkMode = when (currentTheme) {
+        ThemeMode.DARK -> true
+        ThemeMode.LIGHT -> false
+        else -> isSystemInDarkTheme()
+    }
 
     // Shared-storage grant refreshes on resume (backend preserved).
     val storageDeclared = SharedStorageAccess.declared(context)
@@ -190,9 +208,25 @@ fun SettingsScreen(
             )
         }
 
-        // Appearance — light/dark mode and accent. Surfaces stay neutral.
-        QSectionHeader("Appearance", modifier = Modifier.staggerIn(2, entrance))
+        // Identity — the five Altaris schemes. Picking one restyles the app.
+        QSectionHeader("Color scheme", modifier = Modifier.staggerIn(2, entrance))
         QCard(modifier = Modifier.staggerIn(2, entrance)) {
+            AltarisScheme.entries.forEachIndexed { index, entry ->
+                SchemeRow(
+                    scheme = entry,
+                    dark = darkMode,
+                    selected = entry == scheme,
+                    onClick = { StateManager.setScheme(context, entry) },
+                )
+                if (index < AltarisScheme.entries.lastIndex) {
+                    QDivider(Modifier.padding(start = Quartz.CardPad))
+                }
+            }
+        }
+
+        // Appearance — light/dark mode and accent. Surfaces stay neutral.
+        QSectionHeader("Appearance", modifier = Modifier.staggerIn(3, entrance))
+        QCard(modifier = Modifier.staggerIn(3, entrance)) {
             ThemeModeRow(
                 current = currentTheme,
                 onSelect = { onThemeChanged?.invoke(it) },
@@ -205,8 +239,8 @@ fun SettingsScreen(
         }
 
         // Environment & Host
-        QSectionHeader("Environment & Host", modifier = Modifier.staggerIn(3, entrance))
-        QCard(modifier = Modifier.staggerIn(3, entrance)) {
+        QSectionHeader("Environment & Host", modifier = Modifier.staggerIn(4, entrance))
+        QCard(modifier = Modifier.staggerIn(4, entrance)) {
             if (storageDeclared) {
                 QRow(
                     title = "Shared storage",
@@ -236,8 +270,8 @@ fun SettingsScreen(
         }
 
         // Interface & Session
-        QSectionHeader("Interface & Session", modifier = Modifier.staggerIn(4, entrance))
-        QCard(modifier = Modifier.staggerIn(4, entrance)) {
+        QSectionHeader("Interface & Session", modifier = Modifier.staggerIn(5, entrance))
+        QCard(modifier = Modifier.staggerIn(5, entrance)) {
             QRow(
                 title = "Terminal",
                 subtitle = "Font zoom, extra keys, guest shell",
@@ -258,8 +292,8 @@ fun SettingsScreen(
         }
 
         // Containers
-        QSectionHeader("Containers", modifier = Modifier.staggerIn(5, entrance))
-        QCard(modifier = Modifier.staggerIn(5, entrance)) {
+        QSectionHeader("Containers", modifier = Modifier.staggerIn(6, entrance))
+        QCard(modifier = Modifier.staggerIn(6, entrance)) {
             QRow(
                 title = "PRoot",
                 subtitle = "Installed containers, app-storage size",
@@ -274,8 +308,8 @@ fun SettingsScreen(
         }
 
         // System & About
-        QSectionHeader("System & About", modifier = Modifier.staggerIn(6, entrance))
-        QCard(modifier = Modifier.staggerIn(6, entrance)) {
+        QSectionHeader("System & About", modifier = Modifier.staggerIn(7, entrance))
+        QCard(modifier = Modifier.staggerIn(7, entrance)) {
             if (onNavigateToOnboarding != null) {
                 QRow(
                     title = "Show onboarding",
@@ -347,8 +381,62 @@ private fun QDot(active: Boolean) {
 }
 
 /**
- * Theme mode row: Light / Dark / System. Light is the shipped default; the
- * choice is persisted by MainActivity through ThemePreferences.
+ * One identity in the scheme list: a live gradient swatch, the label and the
+ * tagline. Tapping it persists the choice, which restyles the app at once.
+ */
+@Composable
+private fun SchemeRow(
+    scheme: AltarisScheme,
+    dark: Boolean,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val palette = remember(scheme, dark) { AltarisPalettes.of(scheme, dark) }
+    val shape = RoundedCornerShape(12.dp)
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .clickable(onClick = onClick)
+            .padding(horizontal = Quartz.CardPad, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(38.dp)
+                .clip(shape)
+                .background(Brush.linearGradient(palette.heroStops))
+                .border(1.dp, palette.onSurface.copy(alpha = 0.18f), shape)
+        )
+        Spacer(Modifier.width(14.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = scheme.label,
+                fontSize = Quartz.RowTitleSize,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = scheme.tagline,
+                fontSize = Quartz.RowSubSize,
+                color = fluxMutedText(),
+            )
+        }
+        if (selected) {
+            Icon(
+                Icons.Default.Check,
+                contentDescription = "Selected",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(18.dp),
+            )
+        }
+    }
+}
+
+/**
+ * Theme mode row: Dark / Light / System. The choice is persisted by
+ * MainActivity through ThemePreferences.
  */
 @Composable
 private fun ThemeModeRow(
@@ -373,14 +461,14 @@ private fun ThemeModeRow(
             color = MaterialTheme.colorScheme.onSurface,
         )
         Text(
-            text = "Midnight is the default. Day is the same layout on paper surfaces.",
+            text = "Dark is the default. Light is the same layout on paper surfaces.",
             fontSize = Quartz.RowSubSize,
             color = fluxMutedText(),
         )
         Spacer(Modifier.height(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            QPill("Midnight", normalized == ThemeMode.DARK) { onSelect(ThemeMode.DARK) }
-            QPill("Day", normalized == ThemeMode.LIGHT) { onSelect(ThemeMode.LIGHT) }
+            QPill("Dark", normalized == ThemeMode.DARK) { onSelect(ThemeMode.DARK) }
+            QPill("Light", normalized == ThemeMode.LIGHT) { onSelect(ThemeMode.LIGHT) }
             QPill("System", normalized == ThemeMode.SYSTEM) { onSelect(ThemeMode.SYSTEM) }
         }
     }
@@ -407,13 +495,14 @@ private fun ThemePaletteRow(
             color = MaterialTheme.colorScheme.onSurface,
         )
         Text(
-            text = "Used for buttons, selected tabs and highlights.",
+            text = "Scheme follows the selected identity; the others tint primary controls.",
             fontSize = Quartz.RowSubSize,
             color = fluxMutedText(),
             maxLines = 1,
         )
         Spacer(Modifier.height(8.dp))
         Row(
+            modifier = Modifier.horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {

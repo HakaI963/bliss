@@ -2,6 +2,7 @@ package com.ivarna.fluxlinux.core.utils
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.ivarna.fluxlinux.ui.theme.AltarisScheme
 
 enum class ThemeMode {
     LIGHT,
@@ -19,11 +20,13 @@ enum class ThemeMode {
 }
 
 /**
- * Accent skins. Surfaces stay Midnight/Day in every mode; [label] is the
- * user-facing name in Settings. The enum keys are persisted, so they are not
- * renamed even when the visible label changes.
+ * Accent skins. The active Altaris identity owns the surfaces; an accent only
+ * tints the primary controls. [label] is the user-facing name in Settings.
+ * The enum keys are persisted, so they are not renamed even when the visible
+ * label changes.
  */
 enum class ThemePalette(val label: String) {
+    SCHEME("Scheme"),
     CARBON("Mint"),
     SLATE("Glacier"),
     PLUM("Violet"),
@@ -60,6 +63,25 @@ class ThemePreferences(context: Context) {
         prefs.edit()
             .putString("theme_mode", mode.name)
             .putInt("theme_rev", 1)
+            .apply()
+    }
+
+    /**
+     * The active Altaris identity. Persisted under "scheme"; unknown values
+     * fall back to the default identity so a downgrade never breaks the UI.
+     */
+    fun getScheme(): AltarisScheme {
+        val name = prefs.getString("scheme", AltarisScheme.AURORA_NEON.name)
+        return try {
+            AltarisScheme.valueOf(name ?: AltarisScheme.AURORA_NEON.name)
+        } catch (e: IllegalArgumentException) {
+            AltarisScheme.AURORA_NEON
+        }
+    }
+
+    fun setScheme(scheme: AltarisScheme) {
+        prefs.edit()
+            .putString("scheme", scheme.name)
             .apply()
     }
 }

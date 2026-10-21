@@ -124,6 +124,33 @@
             android:enabled="true"
             android:exported="false" />
 
+        <!--
+          Accessibility bridge for the virtual display. The service and its
+          provider share the ":a11y" process: enabling or disabling an
+          accessibility service restarts its host process, and the main app
+          process must survive that.
+        -->
+        <provider
+            android:name=".core.a11y.AltarisA11yProvider"
+            android:authorities="${applicationId}.a11y"
+            android:exported="false"
+            android:multiprocess="false"
+            android:process=":a11y" />
+
+        <service
+            android:name=".core.a11y.AltarisAccessibilityService"
+            android:exported="false"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+            android:process=":a11y">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/altaris_accessibility_service" />
+        </service>
+
         <!-- Desktop / XFCE keep-alive while graphical session is running -->
         <service
             android:name=".core.service.DesktopSessionService"

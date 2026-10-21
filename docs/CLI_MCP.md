@@ -69,6 +69,14 @@ one (`apt install curl`, `apk add curl`, `dnf install curl`, …).
 | GET | `/record/status` | recording state |
 | POST | `/record/start` | `fps`, `width` |
 | POST | `/record/stop` | — |
+| GET | `/uiauto/status` | accessibility service state |
+| GET | `/uiauto` | `display` (optional), `max` (optional) → UI node tree |
+| POST | `/uiauto/click` | `nodeId` |
+| POST | `/uiauto/text` | `nodeId`, `text` |
+| POST | `/uiauto/scroll` | `nodeId`, optional `forward` |
+| POST | `/uiauto/tap-text` | `text`, optional `exact`, optional `display` |
+| POST | `/uiauto/gesture` | `x1`,`y1`,`x2`,`y2`, optional `ms`, optional `display` |
+| POST | `/uiauto/enable` | — (enables the service with root) |
 | POST | `/mcp` | JSON-RPC 2.0 MCP request |
 
 Recordings are written to
@@ -95,7 +103,8 @@ Tools: `bliss_status`, `bliss_clones`, `bliss_apps`, `bliss_install_apk`,
 `bliss_uninstall_clone`, `bliss_launch_clone`, `bliss_stop_clone`,
 `bliss_screenshot`, `bliss_logs`, `bliss_tap`, `bliss_swipe`, `bliss_text`,
 `bliss_key`, `bliss_ocr`, `bliss_record_start`, `bliss_record_stop`,
-`bliss_record_status`.
+`bliss_record_status`, `bliss_ui_tree`, `bliss_ui_click`, `bliss_ui_type`,
+`bliss_ui_scroll`, `bliss_ui_tap_text`, `bliss_ui_enable`.
 
 `bliss_screenshot` returns an MCP `image` content block. The rest return text
 JSON so agents can reason about results without parsing a custom protocol.
@@ -121,6 +130,26 @@ returns the full text plus per-block and per-line boxes (`x`, `y`, `w`, `h`,
 `cx`, `cy`). An agent can OCR, choose a box centre, then call `bliss_tap`.
 `bliss_screenshot` and coordinate input work even when the app is not showing
 the clone viewer.
+
+## Accessibility tree (UI automation)
+
+Altaris ships an `AccessibilityService` that runs in its own `:a11y` process.
+When it is enabled it exposes the real node tree of the virtual display, so a
+clone can be driven by element name instead of by pixel coordinates.
+
+- `POST /uiauto/enable` (or `bliss_ui_enable`) enables the service with root:
+  it writes `enabled_accessibility_services` and `accessibility_enabled` for
+  the running application id and verifies the result. Without root the service
+  has to be enabled from Android settings.
+- `GET /uiauto?display=<id>` returns `{"ok":true,"display":id,
+  "source":"accessibility","nodes":[...]}`; every node carries `id`, `class`,
+  `text`, `desc`, `package`, `bounds`, `winBounds`, `clickable`, `editable`,
+  `scrollable`, `focusable`, `enabled`, `visible`, `checked`, `actions`,
+  `childCount` and `depth`.
+- `nodeId` values are only valid inside one snapshot: read the tree again
+  after every navigation step.
+- Canvas and game UIs expose no nodes; OCR and pixel mode stay the fallback
+  for them. The clone viewer shows the same list under **Elements**.
 
 ## Clone compatibility
 

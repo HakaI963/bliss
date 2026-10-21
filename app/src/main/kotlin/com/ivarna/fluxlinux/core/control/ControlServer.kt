@@ -3,6 +3,7 @@ package com.ivarna.fluxlinux.core.control
 import android.content.Context
 import android.graphics.BitmapFactory
 import android.util.Base64
+import com.ivarna.fluxlinux.core.a11y.A11yBridge
 import com.ivarna.fluxlinux.core.clone.HeadlessCloneEngine
 import kotlinx.coroutines.runBlocking
 import org.json.JSONArray
@@ -225,6 +226,14 @@ object ControlServer {
                   GET  /record/status
                   POST /record/start   {"fps":6,"width":720}
                   POST /record/stop
+                  GET  /uiauto/status
+                  GET  /uiauto?display=<id>&max=<n>
+                  POST /uiauto/click   {"nodeId":123}
+                  POST /uiauto/text    {"nodeId":123,"text":"hello"}
+                  POST /uiauto/scroll  {"nodeId":123,"forward":true}
+                  POST /uiauto/tap-text {"text":"Sign in","exact":false,"display":75}
+                  POST /uiauto/gesture {"x1":100,"y1":300,"x2":100,"y2":900,"ms":300,"display":75}
+                  POST /uiauto/enable
                   POST /mcp            JSON-RPC 2.0 (MCP tools)
                 """.trimIndent()
             )
@@ -269,6 +278,47 @@ object ControlServer {
         }
         if (method == "GET" && path == "/record/status") {
             return json(200, CloneRecorder.status())
+        }
+        if (method == "GET" && path == "/uiauto/status") {
+            val ctx = appContext
+                ?: return json(503, JSONObject().put("ok", false).put("error", "App context is not ready"))
+            val service = a11yJson(A11yBridge.status(ctx))
+            val display = HeadlessCloneEngine.displayId.value
+            if (!service.optBoolean("serviceRunning", false)) {
+                return json(
+                    200,
+                    JSONObject()
+                        .put("ok", false)
+                        .put("display", display)
+                        .put("error", "accessibility service not enabled")
+                        .put("hint", "POST /uiauto/enable")
+                        .put("service", service),
+                )
+            }
+            return json(
+                200,
+                JSONObject()
+                    .put("ok", true)
+                    .put("display", display)
+                    .put("connected", service.optBoolean("connected", false))
+                    .put("serviceRunning", true)
+                    .put("windows", service.optInt("windows", 0))
+                    .put("service", service),
+            )
+        }
+        if (method == "GET" && path == "/uiauto") {
+            val ctx = appContext
+                ?: return json(503, JSONObject().put("ok", false).put("error", "App context is not ready"))
+            val display = query["display"]?.toIntOrNull() ?: HeadlessCloneEngine.displayId.value
+            val max = query["max"]?.toIntOrNull()?.coerceIn(10, 2000) ?: 600
+            if (display < 0) {
+                return json(
+                    409,
+                    JSONObject().put("ok", false).put("error", "no virtual display is running"),
+                )
+            }
+            val payload = uiautoPayload(A11yBridge.tree(ctx, display, max))
+            return json(if (payload.optString("error").contains("not enabled")) 503 else 200, payload)
         }
         if (method == "GET" && path == "/logs") {
             val pkg = query["package"].orEmpty()
@@ -356,8 +406,105 @@ object ControlServer {
                 else json(200, CloneRecorder.start(ctx, obj.optInt("fps", 6), obj.optInt("width", 720)))
             }
             "/record/stop" -> json(200, CloneRecorder.stop())
+            "/uiauto/click" -> {
+                val ctx = appContext
+                val nodeId = obj.optLong("nodeId", -1L)
+                when {
+                    ctx == null -> json(503, JSONObject().put("ok", false).put("error", "App context is not ready"))
+                    nodeId < 0L -> json(400, JSONObject().put("ok", false).put("error", "nodeId is required"))
+                    else -> uiautoResponse(A11yBridge.click(ctx, nodeId))
+                }
+            }
+            "/uiauto/text" -> {
+                val ctx = appContext
+                val nodeId = obj.optLong("nodeId", -1L)
+                val text = obj.optString("text")
+                when {
+                    ctx == null -> json(503, JSONObject().put("ok", false).put("error", "App context is not ready"))
+                    nodeId < 0L -> json(400, JSONObject().put("ok", false).put("error", "nodeId is required"))
+                    text.isEmpty() -> json(400, JSONObject().put("ok", false).put("error", "text is required"))
+                    else -> uiautoResponse(A11yBridge.setText(ctx, nodeId, text))
+                }
+            }
+            "/uiauto/scroll" -> {
+                val ctx = appContext
+                val nodeId = obj.optLong("nodeId", -1L)
+                when {
+                    ctx == null -> json(503, JSONObject().put("ok", false).put("error", "App context is not ready"))
+                    nodeId < 0L -> json(400, JSONObject().put("ok", false).put("error", "nodeId is required"))
+                    else -> uiautoResponse(A11yBridge.scroll(ctx, nodeId, obj.optBoolean("forward", true)))
+                }
+            }
+            "/uiauto/tap-text" -> {
+                val ctx = appContext
+                val text = obj.optString("text")
+                when {
+                    ctx == null -> json(503, JSONObject().put("ok", false).put("error", "App context is not ready"))
+                    text.isBlank() -> json(400, JSONObject().put("ok", false).put("error", "text is required"))
+                    else -> {
+                        val display = obj.optInt("display", HeadlessCloneEngine.displayId.value)
+                        uiautoResponse(
+                            A11yBridge.tapText(ctx, display, text, obj.optBoolean("exact", false)),
+                        )
+                    }
+                }
+            }
+            "/uiauto/gesture" -> {
+                val ctx = appContext
+                when {
+                    ctx == null -> json(503, JSONObject().put("ok", false).put("error", "App context is not ready"))
+                    else -> {
+                        val display = obj.optInt("display", HeadlessCloneEngine.displayId.value)
+                        uiautoResponse(
+                            A11yBridge.gesture(
+                                ctx,
+                                display,
+                                obj.optDouble("x1", 0.0).toFloat(),
+                                obj.optDouble("y1", 0.0).toFloat(),
+                                obj.optDouble("x2", 0.0).toFloat(),
+                                obj.optDouble("y2", 0.0).toFloat(),
+                                obj.optLong("ms", 300L),
+                            ),
+                        )
+                    }
+                }
+            }
+            "/uiauto/enable" -> {
+                val ctx = appContext
+                if (ctx == null) {
+                    json(503, JSONObject().put("ok", false).put("error", "App context is not ready"))
+                } else {
+                    val payload = a11yJson(A11yBridge.ensureEnabled(ctx))
+                    json(if (payload.optBoolean("ok", false)) 200 else 409, payload)
+                }
+            }
             else -> json(404, JSONObject().put("ok", false).put("error", "Unknown endpoint"))
         }
+    }
+
+    /** Parse a bridge reply, never throws. */
+    private fun a11yJson(raw: String): JSONObject =
+        runCatching { JSONObject(raw) }.getOrElse {
+            JSONObject().put("ok", false).put("error", it.message ?: it.javaClass.simpleName)
+        }
+
+    /** Normalise bridge errors so callers always see the enable hint. */
+    private fun uiautoPayload(raw: String): JSONObject {
+        val obj = a11yJson(raw)
+        if (!obj.optBoolean("ok", false)) {
+            val error = obj.optString("error")
+            if (error.contains("not running") || error.contains("not enabled")) {
+                obj.put("error", "accessibility service not enabled")
+                    .put("hint", "POST /uiauto/enable")
+            }
+        }
+        return obj
+    }
+
+    /** HTTP reply for one UI automation action. */
+    private fun uiautoResponse(raw: String): Response {
+        val payload = uiautoPayload(raw)
+        return json(if (payload.optString("error").contains("not enabled")) 503 else 200, payload)
     }
 
     private fun keyCode(value: String): Int? {
