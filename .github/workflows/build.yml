@@ -88,6 +88,6 @@ jobs:
           APK=app/build/outputs/apk/bliss/debug/app-bliss-debug.apk
           TAG="bliss-debug-${GITHUB_SHA::7}"
           SHA=$(sha256sum "$APK" | awk '{print $1}')
-          gh release create "$TAG" --title "Altaris 3.19.0 — universal shell, hidden control plane, polished UI" \
-            --notes "Altaris 3.19 is a universal update for every distro: bundled libnghttp3/libngtcp2 runtime repair for the host curl, one zsh shell profile (suggestions, green/red command validation, anime launch sticker) across proot and chroot families, no persistent control-plane notification, desktop-only agent scanning, the MP4 capture menu removed from Tools, and a premium Midnight UI pass with press-scale feedback and a softer aurora backdrop. The CLI is now `altaris` with a `bliss` compatibility alias. APK SHA-256: $SHA" || true
+          gh release create "$TAG" --title "Altaris 3.20.0 — accessibility navigation and the Iridescent identity" \
+            --notes "Altaris 3.20 replaces screenshot+OCR navigation with a real accessibility node tree: an AccessibilityService in its own process reads the UI of the clone display, so elements can be tapped, typed into and scrolled by name (new /uiauto endpoints and bliss_ui_* MCP tools, plus an Elements panel in the clone viewer). The identity system is new as well: five bright schemes with dark and light variants, an animated AGSL aurora backdrop and spring press feedback, with Iridescent as the default. It also keeps the 3.19 work: universal shell profile, bundled nghttp3/ngtcp2 runtime repair, hidden control plane, desktop-only agent scanning, `altaris` CLI with a `bliss` alias. APK SHA-256: $SHA" || true
           gh release upload "$TAG" "$APK" --clobber

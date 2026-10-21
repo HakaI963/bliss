@@ -1469,11 +1469,24 @@ private fun loadElements(context: Context, displayId: Int): ElementsSnapshot {
         )
     }
     val tree = runCatching { A11yBridge.tree(context, displayId, 600) }.getOrDefault("{}")
-    val nodes = A11yNodes.parse(tree)
+    val all = A11yNodes.parse(tree)
+    // Plain containers are noise: keep the elements a person would target —
+    // anything with a label, plus everything clickable, editable or
+    // scrollable — and order them by usefulness.
+    val useful = all.filter { node ->
+        node.label.isNotBlank() || node.clickable || node.editable || node.scrollable
+    }
+    val nodes = (if (useful.isEmpty()) all else useful)
+        .sortedWith(
+            compareByDescending<A11yNode> { it.label.isNotBlank() }
+                .thenByDescending { it.clickable }
+                .thenBy { it.depth },
+        )
+        .take(120)
     return ElementsSnapshot(
         running = true,
         nodes = nodes,
-        note = if (nodes.isEmpty()) {
+        note = if (all.isEmpty()) {
             "This app paints its UI on a canvas, so OCR and pixel taps are still used for it."
         } else {
             null
