@@ -10,6 +10,9 @@ Bliss local clone control
 
   bliss status
   bliss clones
+  bliss apps
+  bliss list
+  bliss ps
   bliss install /sdcard/Download/app.apk [label]
   bliss install https://example.com/app.apk [label]
   bliss uninstall <clone-package>
@@ -72,13 +75,31 @@ jesc() {
   printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
 }
 
+# The app cannot read every guest path (/emulated, chroot /root, …).
+# Copy a local APK into shared storage first; the app always sees /sdcard.
+stage_apk() {
+  src="$1"
+  [ -f "$src" ] || { printf '%s' "$src"; return; }
+  for dir in /sdcard/Download /storage/emulated/0/Download /emulated/Download; do
+    if [ -d "$dir" ] && [ -w "$dir" ]; then
+      dst="$dir/.bliss-upload-$$-$(basename "$src")"
+      if cp "$src" "$dst" 2>/dev/null; then
+        printf '%s' "$dst"
+        return
+      fi
+    fi
+  done
+  printf '%s' "$src"
+}
+
 cmd="$1"
 [ -n "$cmd" ] || { usage; exit 1; }
 shift 2>/dev/null || true
 
 case "$cmd" in
   status) get /status ;;
-  clones) get /clones ;;
+  clones|list|ps) get /clones ;;
+  apps) get /apps ;;
   endpoint) echo "$BASE" ;;
   mcp) echo "$BASE/mcp" ;;
   install)
@@ -89,7 +110,10 @@ case "$cmd" in
       http://*|https://*)
         post /install "{\"url\":\"$(jesc "$src")\",\"label\":\"$(jesc "$label")\"}" ;;
       *)
-        post /install "{\"path\":\"$(jesc "$src")\",\"label\":\"$(jesc "$label")\"}" ;;
+        src=$(stage_apk "$src")
+        result=$(post /install "{\"path\":\"$(jesc "$src")\",\"label\":\"$(jesc "$label")\"}")
+        case "$src" in */.bliss-upload-*) rm -f "$src" ;; esac
+        printf '%s\n' "$result" ;;
     esac
     ;;
   uninstall)

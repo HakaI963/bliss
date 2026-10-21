@@ -12,6 +12,8 @@ import com.android.apksig.ApkSigner;
 import com.reandroid.apk.ApkModule;
 import com.reandroid.archive.ByteInputSource;
 import com.reandroid.archive.InputSource;
+import com.reandroid.arsc.chunk.PackageBlock;
+import com.reandroid.arsc.chunk.TableBlock;
 import com.reandroid.arsc.chunk.xml.AndroidManifestBlock;
 import com.reandroid.arsc.chunk.xml.ResXmlAttribute;
 import com.reandroid.arsc.chunk.xml.ResXmlElement;
@@ -132,7 +134,7 @@ final class CloneManager {
     }
 
     private void saveRecord(String clonePackage, String originalPackage, String label,
-                            String activity, String source, String origin) {
+                            String activity, String source, String origin, int parts) {
         synchronized (lock) {
             JSONArray array = readRegistry();
             JSONArray fresh = new JSONArray();
@@ -151,10 +153,29 @@ final class CloneManager {
                 record.put("source", source);
                 record.put("origin", origin == null ? "" : origin);
                 record.put("created", System.currentTimeMillis());
+                record.put("last_opened", 0L);
+                record.put("parts", parts);
                 fresh.put(record);
             } catch (Throwable ignored) {
             }
             writeRegistry(fresh);
+        }
+    }
+
+    private void touchRecord(String clonePackage) {
+        synchronized (lock) {
+            JSONArray array = readRegistry();
+            for (int i = 0; i < array.length(); i++) {
+                JSONObject record = array.optJSONObject(i);
+                if (record != null && clonePackage.equals(record.optString("package"))) {
+                    try {
+                        record.put("last_opened", System.currentTimeMillis());
+                    } catch (Throwable ignored) {
+                    }
+                    break;
+                }
+            }
+            writeRegistry(array);
         }
     }
 
@@ -421,7 +442,13 @@ final class CloneManager {
                 return Jsons.error("install failed: " + installLog);
             }
             copyObb(originalPackage, clonePackage);
-            saveRecord(clonePackage, originalPackage, label, activity, source, origin);
+            int installedParts = installedPartCount(clonePackage);
+            engine.log("installed parts for " + clonePackage + ": " + installedParts
+                    + " (expected " + signed.size() + ")");
+            if (installedParts > 0 && installedParts < signed.size()) {
+                engine.log("WARNING: split resources may be incomplete; re-clone the source app");
+            }
+            saveRecord(clonePackage, originalPackage, label, activity, source, origin, sources.size());
             engine.log("clone ready: " + label + " (" + clonePackage + ")");
             return Jsons.ok("clone created: " + label + " · " + clonePackage);
         } catch (Throwable e) {
@@ -468,6 +495,7 @@ final class CloneManager {
                         + " component=" + component.flattenToShortString()
                         + " exit=" + result.exit + " " + oneLine(result.output));
                 if (result.ok() && !result.output.contains("Error:")) {
+                    touchRecord(clone);
                     return Jsons.ok(oneLine(result.output));
                 }
                 // Fallback: some ROMs want activity start-activity form.
@@ -475,6 +503,7 @@ final class CloneManager {
                         + " -f 0x10000000 -n " + quote(component.flattenToShortString());
                 AppCatalog.CommandResult second = AppCatalog.run(command, 60);
                 if (second.ok() && !second.output.contains("Error:")) {
+                    touchRecord(clone);
                     return Jsons.ok(oneLine(second.output));
                 }
                 return Jsons.error("launch failed: " + oneLine(result.output));
@@ -562,6 +591,12 @@ final class CloneManager {
                 patchTableStrings(apk, authorityPatches, originalPackage);
                 patchDexStrings(apk, authorityPatches, originalPackage);
             }
+            // Dynamic resource lookups (Resources.getIdentifier, BuildConfig
+            // identity checks) use the package name, not just resource IDs.
+            // Keep the resource table and exact identity strings in sync with
+            // the cloned manifest; this is what fixes apps such as Alight
+            // Motion that resolve shape strings at runtime.
+            patchPackageIdentity(apk, originalPackage, newPackage);
             apk.keepManifestChanges();
             apk.writeApk(output);
         } finally {
@@ -731,6 +766,58 @@ final class CloneManager {
             }
         }
         return patches;
+    }
+
+    private static void patchPackageIdentity(ApkModule apk, String oldPackage,
+                                             String newPackage) {
+        try {
+            TableBlock table = apk.getTableBlock();
+            if (table != null) {
+                for (PackageBlock pkg : table.listPackages()) {
+                    if (pkg != null && oldPackage.equals(pkg.getName())) {
+                        pkg.setName(newPackage);
+                    }
+                }
+                apk.keepTableBlockChanges();
+            }
+            for (InputSource source : new ArrayList<>(apk.listInputSources())) {
+                String name = source.getName();
+                if (name == null || !name.matches("classes[0-9]*\\.dex")) {
+                    continue;
+                }
+                byte[] original;
+                try (InputStream in = source.openStream()) {
+                    original = readAllBytes(in);
+                }
+                DexFile dex = DexFile.read(original);
+                boolean changed = false;
+                try {
+                    Iterator<StringId> items = (Iterator<StringId>)
+                            (Iterator<?>) dex.getRootRepository().getItems(SectionType.STRING_ID);
+                    while (items != null && items.hasNext()) {
+                        StringId id = items.next();
+                        if (id != null && oldPackage.equals(id.getString())) {
+                            id.setString(newPackage);
+                            changed = true;
+                        }
+                    }
+                    if (!changed) {
+                        continue;
+                    }
+                    dex.refreshFull();
+                    byte[] patched = dex.getBytes();
+                    apk.removeInputSource(name);
+                    apk.add(new ByteInputSource(patched, name));
+                } finally {
+                    try {
+                        dex.close();
+                    } catch (Throwable ignored) {
+                    }
+                }
+            }
+        } catch (Throwable e) {
+            Log.w(TAG, "package identity patch failed", e);
+        }
     }
 
     private static void patchTableStrings(ApkModule apk, Map<String, String> patches,
@@ -960,6 +1047,20 @@ final class CloneManager {
                     + " exit=" + result.exit);
         } catch (Throwable e) {
             Log.w(TAG, "OBB copy failed", e);
+        }
+    }
+
+    private int installedPartCount(String clonePackage) {
+        try {
+            AppCatalog.CommandResult paths = AppCatalog.run("pm path " + quote(clonePackage), 30);
+            if (!paths.ok()) return 0;
+            int count = 0;
+            for (String line : paths.output.split("\\n")) {
+                if (line.trim().startsWith("package:")) count++;
+            }
+            return count;
+        } catch (Throwable ignored) {
+            return 0;
         }
     }
 

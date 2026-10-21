@@ -12,8 +12,12 @@ installed proot/chroot rootfs. Open a terminal in a distro and run:
 
 ```sh
 bliss status
-bliss clones
+bliss clones          # package, label, status, created, last_opened, parts
+bliss apps            # installed source apps available for cloning
+bliss list            # alias for clones
+bliss ps              # currently running clones
 bliss install /sdcard/Download/app.apk "My app"
+bliss install /emulated/SomeApp.apk "My app"   # staged via shared storage
 bliss install https://example.com/app.apk "My app"
 bliss launch com.nopiece.hclone.hXXXX
 bliss shot /sdcard/Download/state.jpg
@@ -37,7 +41,8 @@ one (`apt install curl`, `apk add curl`, `dnf install curl`, …).
 | Method | Path | Body / query |
 |---|---|---|
 | GET | `/status` | engine, display and active clone state |
-| GET | `/clones` | installed clone registry |
+| GET | `/clones` | installed clone registry (created, last_opened, parts) |
+| GET | `/apps` | installed source apps |
 | GET | `/screenshot` | `width`, `quality` → JPEG |
 | GET | `/ocr` | `width` → text + bounding boxes |
 | GET | `/logs` | `package`, `lines` |
@@ -74,7 +79,7 @@ Example OpenCode config:
 }
 ```
 
-Tools: `bliss_status`, `bliss_clones`, `bliss_install_apk`,
+Tools: `bliss_status`, `bliss_clones`, `bliss_apps`, `bliss_install_apk`,
 `bliss_uninstall_clone`, `bliss_launch_clone`, `bliss_stop_clone`,
 `bliss_screenshot`, `bliss_logs`, `bliss_tap`, `bliss_swipe`, `bliss_text`,
 `bliss_key`, `bliss_ocr`, `bliss_record_start`, `bliss_record_stop`,
@@ -82,6 +87,17 @@ Tools: `bliss_status`, `bliss_clones`, `bliss_install_apk`,
 
 `bliss_screenshot` returns an MCP `image` content block. The rest return text
 JSON so agents can reason about results without parsing a custom protocol.
+A ready-to-use agent brief lives in `docs/AI_AGENT.md` and in
+Tools → AI agents → Copy agent brief.
+
+## Viewer and agent coexistence
+
+`bliss_launch_clone` is idempotent while a clone already owns the display: it
+returns `already_running` instead of restarting the app. Opening the viewer
+for that clone attaches to the existing display, so an agent's in-app state is
+not lost. The viewer's ACTIONS strip logs agent taps, swipes, text, keys and
+launches with timestamps. Logs auto-scroll and have copy/clear controls.
+The viewer also supports PiP and resizable display/log panes.
 
 ## OCR / UI automation
 
@@ -90,3 +106,12 @@ returns the full text plus per-block and per-line boxes (`x`, `y`, `w`, `h`,
 `cx`, `cy`). An agent can OCR, choose a box centre, then call `bliss_tap`.
 `bliss_screenshot` and coordinate input work even when the app is not showing
 the clone viewer.
+
+## Clone compatibility
+
+Cloned apps are re-signed with the Bliss clone key, so signature checks remain
+unsupported. The engine now also rewrites the resource-table package identity
+and verifies installed split parts; re-clone an app after updating so it is
+built by the current pipeline. For apps such as Alight Motion that resolve
+shape strings dynamically, this identity sync is required. If it still fails,
+capture `bliss logs <clone-package> 300` before stopping the clone.

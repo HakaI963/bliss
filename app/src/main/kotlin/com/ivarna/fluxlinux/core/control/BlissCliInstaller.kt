@@ -16,7 +16,7 @@ import java.io.File
  */
 object BlissCliInstaller {
     private const val TAG = "BlissCli"
-    private const val MARKER = ".bliss-cli-v3"
+    private const val MARKER = ".bliss-cli-v4"
     private const val ASSET = "scripts/bliss-cli.sh"
 
     fun ensureHost(ctx: Context) {
@@ -90,7 +90,7 @@ object BlissCliInstaller {
         target.parentFile?.mkdirs()
         target.writeText(script)
         runCatching { target.setExecutable(true, false) }
-        if (marker != null) runCatching { marker.writeText("3") }
+        if (marker != null) runCatching { marker.writeText("4") }
     }
 
     private fun readAsset(ctx: Context): String? = runCatching {

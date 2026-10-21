@@ -69,7 +69,8 @@ object McpProtocol {
 
     private fun tools(): JSONArray = JSONArray().apply {
         put(tool("bliss_status", "Get shell/display/clone engine status.", JSONObject()))
-        put(tool("bliss_clones", "List installed clones.", JSONObject()))
+        put(tool("bliss_clones", "List installed clones with package, created and last-opened metadata.", JSONObject()))
+        put(tool("bliss_apps", "List installed source apps available for cloning.", JSONObject()))
         put(
             tool(
                 "bliss_install_apk",
@@ -224,6 +225,7 @@ object McpProtocol {
     private fun callTool(name: String, args: JSONObject): JSONObject = when (name) {
         "bliss_status" -> textResult(runBlocking { HeadlessCloneEngine.apiStatus() })
         "bliss_clones" -> textResult(runBlocking { HeadlessCloneEngine.apiClones() })
+        "bliss_apps" -> textResult(runBlocking { HeadlessCloneEngine.apiApps() })
         "bliss_install_apk" -> textResult(
             runBlocking {
                 HeadlessCloneEngine.apiInstall(

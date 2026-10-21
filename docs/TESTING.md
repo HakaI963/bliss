@@ -1,4 +1,4 @@
-# Bliss 3.16.0 test checklist
+# Bliss 3.17.0 test checklist
 
 Install over the previous Bliss build (same `com.nopiece.bliss` package).
 
@@ -6,39 +6,46 @@ Install over the previous Bliss build (same `com.nopiece.bliss` package).
 - [ ] First launch is **Midnight** (near-black, mint accents), even if the old build was in Light mode.
 - [ ] Settings → Appearance → **Day** and **Midnight** both render cleanly; switching back is preserved.
 - [ ] Bottom dock is a floating rounded bar; Home / Distros / Apps / Tools all use the same short fade-scale motion.
-- [ ] Apps `Installed ↔ Preference` pills look like one control, not two old underline tabs.
 
-## Clone viewer
-- [ ] Apps → Installed → folder → **View** opens the display.
-- [ ] **Live** turns preview off/on; touch is disabled while paused.
-- [ ] **Leave** (Home icon) and the system Back gesture hide the viewer; the clone keeps running.
-- [ ] Apps shows a “Still running in the background” card with Resume / Stop.
-- [ ] Top bar shows **CLONE** while the clone is alive; tapping it returns to Apps.
-- [ ] **Stop** ends the clone, releases the display, and removes the running card.
-- [ ] No back action opens the clone fullscreen or crashes.
+## Clone management
+- [ ] Apps has three sections: **Installed**, **Running**, **Preference**.
+- [ ] A clone card shows its full package name, created time, last-opened time and split-part count.
+- [ ] A stopped clone shows **View**; a running clone shows **Resume** and **Stop**.
+- [ ] No resume card appears above the Apps list after **Leave**; Resume lives only in the app folder and Running tab.
+- [ ] Running tab shows every live clone with Resume / Stop / Logs.
+
+## Viewer / agent coexistence
+- [ ] View opens the display; switch to Tools or another bottom tab and come back — the same viewer is still open.
+- [ ] Start a clone from an agent (`bliss launch ...`), then tap **View** — it must show the existing display, not relaunch the app.
+- [ ] Back or **Leave** hides the viewer and keeps the clone/display alive.
+- [ ] **Stop** ends the clone and releases the display.
+- [ ] **PiP** puts the viewer into a floating window (device/ROM support permitting).
+- [ ] **Layout** adjusts display height, display width and log height; the thin divider can also be dragged.
+- [ ] The ACTIONS strip shows user and agent taps, swipes, text, keys and launches as they happen.
+- [ ] Live logs auto-scroll to the newest line; **copy** and **clear** buttons work.
 
 ## Alight Motion
-- [ ] Clone Alight Motion from **Installed apps** (not a split APK file).
-- [ ] Launch it in View; if it still crashes, open Apps → folder → Customise → **View logs** and copy the last package lines.
-- The split-name preservation + OBB copy pass is included. A clone cannot keep the original signature; apps that verify their signing certificate will still reject the clone.
+- [ ] Re-clone Alight Motion after installing 3.17.0 (old clones were built by the previous engine).
+- [ ] Clone it from **Installed apps**, not from a split APK file.
+- [ ] If it still crashes, copy the last clone log lines. The 3.17.0 engine now syncs the resource-table package identity and verifies installed split parts; signature-verification failures remain unfixable.
 
-## Terminal
-- [ ] Terminal is dark and readable in both Midnight and Day.
-- [ ] New tabs use the mint/teal palette, not a white background.
-- [ ] `bliss help` works in the host shell and in a distro tab.
-
-## Local control / MCP
-- [ ] Tools shows **Control server online** and `http://127.0.0.1:47831`.
+## CLI / MCP
+- [ ] Tools is now a folder list: Control server, AI agents, Clone CLI, MCP tools, OCR & input, Recording.
+- [ ] AI agents → **Detect agents** finds OpenCode / Pi / Claude / Codex / Hermes / Alpha or similar installed apps and host binaries.
+- [ ] **Copy agent brief** explains the MCP protocol, command set and coordinate workflow.
 - [ ] In a distro terminal:
   - `bliss status`
-  - `bliss clones`
+  - `bliss clones`, `bliss apps`, `bliss list`, `bliss ps`
+  - `bliss install /emulated/OpenCodeMobile-v1.0.0.apk` (guest paths are staged through shared storage)
+  - `bliss install /sdcard/Download/app.apk "Label"`
   - `bliss launch <clone-package>`
   - `bliss shot /sdcard/Download/shot.jpg`
-  - `bliss ocr /sdcard/Download/ocr.json`
+  - `bliss ocr`
   - `bliss tap 540 1200`
   - `bliss record start 6 720` then `bliss record stop`
   - `bliss stop <clone-package>`
-- [ ] Copy the MCP config from Tools into your agent; `bliss_screenshot` returns an image and `bliss_ocr` returns boxes.
+- [ ] MCP `bliss_apps` lists source apps; `bliss_clones` includes created / last-opened / parts.
+- [ ] `bliss_screenshot` returns an image and `bliss_ocr` returns boxes.
 - [ ] Recordings appear under `/sdcard/Android/data/com.nopiece.bliss/files/recordings/`.
 
 Report the exact command + result, and the clone log lines for any app that still crashes.

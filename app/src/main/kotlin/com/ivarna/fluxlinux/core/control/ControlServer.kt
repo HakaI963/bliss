@@ -147,6 +147,7 @@ object ControlServer {
                   GET  /health
                   GET  /status
                   GET  /clones
+                  GET  /apps
                   GET  /screenshot?width=900&quality=90
                   GET  /ocr?width=900
                   GET  /logs?package=com.nopiece.hclone.x&lines=300
@@ -182,6 +183,9 @@ object ControlServer {
         }
         if (method == "GET" && path == "/clones") {
             return json(200, runBlocking { HeadlessCloneEngine.apiClones() })
+        }
+        if (method == "GET" && path == "/apps") {
+            return json(200, runBlocking { HeadlessCloneEngine.apiApps() })
         }
         if (method == "GET" && path == "/screenshot") {
             val width = query["width"]?.toIntOrNull()?.coerceIn(200, 2160) ?: 900

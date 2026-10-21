@@ -1,11 +1,18 @@
 package com.ivarna.fluxlinux.ui.screens
 
+import android.app.Activity
+import android.app.PictureInPictureParams
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
+import android.content.ContextWrapper
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.hardware.display.DisplayManager
+import android.util.Rational
 import android.view.Display
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -15,6 +22,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -31,7 +39,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -39,8 +50,12 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.filled.Android
+import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.PictureInPictureAlt
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Tune
@@ -102,12 +117,15 @@ import com.ivarna.fluxlinux.ui.components.QToolButton
 import com.ivarna.fluxlinux.ui.components.Quartz
 import com.ivarna.fluxlinux.ui.theme.fluxMutedText
 import kotlinx.coroutines.delay
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import kotlinx.coroutines.isActive
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 
-private enum class AppsSection { PREFERENCE, INSTALLED }
+private enum class AppsSection { INSTALLED, RUNNING, PREFERENCE }
 
 private data class CloneGroup(
     val key: String,
@@ -123,6 +141,13 @@ private data class ViewerSession(
     val touch: Boolean,
 )
 
+/** Viewer/folder state survives tab changes; a running clone must not be relaunched. */
+private object CloneUiState {
+    val section = mutableStateOf(AppsSection.INSTALLED)
+    val groupKey = mutableStateOf<String?>(null)
+    val viewing = mutableStateOf<ViewerSession?>(null)
+}
+
 /**
  * Apps tab. Two compact sections: Preference (Shizuku + clone/display options)
  * and Installed (source-app folders). Opening View stays inside this tab:
@@ -131,6 +156,7 @@ private data class ViewerSession(
 @Composable
 fun ClonedAppsScreen(startOnPreference: Boolean = false) {
     val context = LocalContext.current
+    val activity = remember(context) { context.findActivity() }
     val shizukuInstalled by HeadlessCloneEngine.shizukuInstalled.collectAsState()
     val shizukuRunning by HeadlessCloneEngine.shizukuRunning.collectAsState()
     val permission by HeadlessCloneEngine.hasPermission.collectAsState()
@@ -150,11 +176,12 @@ fun ClonedAppsScreen(startOnPreference: Boolean = false) {
     val maxFps = remember(context) { maxRefreshRate(context) }
     val fpsValue = displayFps.coerceIn(10, maxFps)
 
-    var section by rememberSaveable {
-        mutableStateOf(if (startOnPreference) AppsSection.PREFERENCE else AppsSection.INSTALLED)
+    var section by CloneUiState.section
+    var groupKey by CloneUiState.groupKey
+    var viewing by CloneUiState.viewing
+    LaunchedEffect(Unit) {
+        if (startOnPreference) CloneUiState.section.value = AppsSection.PREFERENCE
     }
-    var groupKey by rememberSaveable { mutableStateOf<String?>(null) }
-    var viewing by remember { mutableStateOf<ViewerSession?>(null) }
     var customiseClone by remember { mutableStateOf<CloneApp?>(null) }
     var showInstalledPicker by remember { mutableStateOf(false) }
 
@@ -173,6 +200,19 @@ fun ClonedAppsScreen(startOnPreference: Boolean = false) {
             HeadlessCloneEngine.refreshDeviceApps()
         }
     }
+    LaunchedEffect(clones) {
+        val current = viewing ?: return@LaunchedEffect
+        if (clones.isNotEmpty() && clones.none { it.packageName == current.clone.packageName }) {
+            viewing = null
+        }
+    }
+    LaunchedEffect(section, connected) {
+        if (section != AppsSection.RUNNING || !connected) return@LaunchedEffect
+        while (isActive) {
+            HeadlessCloneEngine.refreshClones()
+            delay(2500)
+        }
+    }
 
     val groups = remember(clones) {
         clones.groupBy { it.originalPackage.ifBlank { it.packageName } }
@@ -182,10 +222,20 @@ fun ClonedAppsScreen(startOnPreference: Boolean = false) {
                     label = items.firstOrNull()?.originalLabel
                         ?.ifBlank { items.firstOrNull()?.label.orEmpty() }
                         ?: key,
-                    clones = items.sortedBy { it.label.lowercase() },
+                    clones = items.sortedWith(
+                        compareByDescending<CloneApp> { it.lastOpened }
+                            .thenByDescending { it.createdAt }
+                            .thenBy { it.label.lowercase() }
+                    ),
                 )
             }
-            .sortedBy { it.label.lowercase() }
+            .sortedWith(
+                compareByDescending<CloneGroup> {
+                    it.clones.maxOfOrNull { clone -> clone.lastOpened } ?: 0L
+                }.thenByDescending {
+                    it.clones.maxOfOrNull { clone -> clone.createdAt } ?: 0L
+                }.thenBy { it.label.lowercase() }
+            )
     }
     val selectedGroup = groups.firstOrNull { it.key == groupKey }
 
@@ -223,7 +273,15 @@ fun ClonedAppsScreen(startOnPreference: Boolean = false) {
         val height = if (perApp.customSize) perApp.height else defaultSize.second
         val fps = (perApp.fps.takeIf { it > 0 } ?: fpsValue)
             .coerceIn(10, maxFps.coerceAtLeast(10))
-        val resumeLive = activeClonePackage == clone.packageName && displayReady
+        // The engine owns the display. If this package already owns it, never
+        // call launch again — that would restart the app and lose agent state.
+        val resumeLive = activeClonePackage == clone.packageName
+        if (resumeLive) {
+            viewing = ViewerSession(
+                clone = clone, width = width, height = height, fps = fps, touch = touchEnabled,
+            )
+            return
+        }
         if (!resumeLive) {
             HeadlessCloneEngine.clearPreview()
             HeadlessCloneEngine.clearCloneLogs()
@@ -256,8 +314,8 @@ fun ClonedAppsScreen(startOnPreference: Boolean = false) {
         Spacer(Modifier.height(8.dp))
         SectionSwitch(
             selected = section,
+            runningCount = clones.count { it.status == "running" },
             onSelect = {
-                if (viewing != null) closeViewer()
                 section = it
                 if (it == AppsSection.INSTALLED) {
                     HeadlessCloneEngine.refreshClones()
@@ -290,66 +348,30 @@ fun ClonedAppsScreen(startOnPreference: Boolean = false) {
         }
         Spacer(Modifier.height(8.dp))
 
-        val runningClone = clones.firstOrNull { it.packageName == activeClonePackage }
-        if (viewing == null && activeClonePackage != null) {
-            QCard(modifier = Modifier.padding(bottom = 2.dp)) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = Quartz.CardPad, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(7.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primary)
-                    )
-                    Spacer(Modifier.width(9.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            runningClone?.label ?: "Clone running",
-                            fontSize = 13.5.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        Text(
-                            "Still running in the background",
-                            fontSize = 11.5.sp,
-                            color = fluxMutedText(),
-                        )
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        QToolButton(
-                            "Resume",
-                            Icons.Default.PlayArrow,
-                            active = true,
-                        ) {
-                            val clone = runningClone
-                            if (clone != null) openViewer(clone)
-                        }
-                        QToolButton(
-                            "Stop",
-                            Icons.Default.Stop,
-                            destructive = true,
-                        ) {
-                            val pkg = activeClonePackage
-                            if (pkg != null) HeadlessCloneEngine.stopClone(pkg)
-                        }
-                    }
-                }
-            }
-            Spacer(Modifier.height(8.dp))
-        }
-
         when {
             viewing != null -> CloneViewPage(
                 modifier = Modifier.weight(1f),
                 session = viewing!!,
                 onLeave = ::closeViewer,
                 onStop = ::stopViewer,
+                onPip = {
+                    runCatching {
+                        val session = viewing
+                        val params = PictureInPictureParams.Builder().apply {
+                            if (session != null && session.width > 0 && session.height > 0) {
+                                setAspectRatio(Rational(session.width, session.height))
+                            }
+                        }.build()
+                        activity?.enterPictureInPictureMode(params)
+                    }
+                },
+            )
+
+            section == AppsSection.RUNNING -> RunningSection(
+                modifier = Modifier.weight(1f),
+                clones = clones.filter { it.status == "running" },
+                connected = connected,
+                onView = ::openViewer,
             )
 
             section == AppsSection.PREFERENCE -> PreferenceSection(
@@ -441,7 +463,11 @@ fun ClonedAppsScreen(startOnPreference: Boolean = false) {
 // ---------------------------------------------------------------- sections
 
 @Composable
-private fun SectionSwitch(selected: AppsSection, onSelect: (AppsSection) -> Unit) {
+private fun SectionSwitch(
+    selected: AppsSection,
+    runningCount: Int,
+    onSelect: (AppsSection) -> Unit,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -453,13 +479,16 @@ private fun SectionSwitch(selected: AppsSection, onSelect: (AppsSection) -> Unit
         horizontalArrangement = Arrangement.spacedBy(3.dp),
     ) {
         SectionTab(
-            label = "Installed",
-            selected = selected == AppsSection.INSTALLED,
+            label = "Installed", selected = selected == AppsSection.INSTALLED,
             modifier = Modifier.weight(1f),
         ) { onSelect(AppsSection.INSTALLED) }
         SectionTab(
-            label = "Preference",
-            selected = selected == AppsSection.PREFERENCE,
+            label = if (runningCount > 0) "Running $runningCount" else "Running",
+            selected = selected == AppsSection.RUNNING,
+            modifier = Modifier.weight(1f),
+        ) { onSelect(AppsSection.RUNNING) }
+        SectionTab(
+            label = "Preference", selected = selected == AppsSection.PREFERENCE,
             modifier = Modifier.weight(1f),
         ) { onSelect(AppsSection.PREFERENCE) }
     }
@@ -497,6 +526,76 @@ private fun SectionTab(
             color = if (selected) MaterialTheme.colorScheme.primary
             else MaterialTheme.colorScheme.onSurfaceVariant,
         )
+    }
+}
+
+@Composable
+private fun RunningSection(
+    modifier: Modifier,
+    clones: List<CloneApp>,
+    connected: Boolean,
+    onView: (CloneApp) -> Unit,
+) {
+    if (clones.isEmpty()) {
+        Box(modifier = modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
+            QCard {
+                QEmptyState(
+                    "Nothing running",
+                    "Open a clone from Installed, or launch one from an agent. Running clones stay here.",
+                )
+            }
+        }
+        return
+    }
+    LazyColumn(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        contentPadding = PaddingValues(bottom = 108.dp),
+    ) {
+        items(clones, key = { it.packageName }) { clone ->
+            QCard {
+                QRow(
+                    title = clone.label,
+                    subtitle = clone.packageName,
+                    leading = { QIconTile(clone.icon, size = 38.dp) },
+                    trailing = {
+                        Box(
+                            Modifier.size(8.dp).clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.primary)
+                        )
+                    },
+                )
+                Text(
+                    cloneMeta(clone),
+                    fontSize = 10.5.sp,
+                    lineHeight = 14.sp,
+                    color = fluxMutedText(),
+                    modifier = Modifier.padding(
+                        start = Quartz.CardPad, end = Quartz.CardPad, bottom = 5.dp,
+                    ),
+                )
+                Row(
+                    modifier = Modifier.padding(
+                        start = Quartz.CardPad, end = Quartz.CardPad, bottom = 8.dp,
+                    ),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    QPrimaryButton(
+                        "Resume",
+                        enabled = connected,
+                        icon = Icons.Default.PlayArrow,
+                    ) { onView(clone) }
+                    QSecondaryButton(
+                        "Stop",
+                        icon = Icons.Default.Stop,
+                    ) { HeadlessCloneEngine.stopClone(clone.packageName) }
+                    QSecondaryButton(
+                        "Logs",
+                        icon = Icons.Default.List,
+                    ) { onView(clone) }
+                }
+            }
+        }
     }
 }
 
@@ -672,6 +771,16 @@ private fun InstalledFolders(
         verticalArrangement = Arrangement.spacedBy(8.dp),
         contentPadding = PaddingValues(bottom = 108.dp),
     ) {
+        if (groups.isNotEmpty()) {
+            item {
+                Text(
+                    "Recently used first · package, created and last-opened time",
+                    fontSize = 10.sp,
+                    color = fluxMutedText(),
+                    modifier = Modifier.padding(start = 4.dp, bottom = 1.dp),
+                )
+            }
+        }
         if (groups.isEmpty()) {
             item {
                 QCard {
@@ -778,7 +887,7 @@ private fun CloneFolder(
             QCard {
                 QRow(
                     title = clone.label,
-                    subtitle = "${clone.status} · ${clone.packageName.takeLast(10)}",
+                    subtitle = clone.packageName,
                     leading = {
                         QIconTile(
                             bitmap = clone.icon,
@@ -797,6 +906,15 @@ private fun CloneFolder(
                         }
                     },
                 )
+                Text(
+                    cloneMeta(clone),
+                    fontSize = 10.5.sp,
+                    lineHeight = 14.sp,
+                    color = fluxMutedText(),
+                    modifier = Modifier.padding(
+                        start = Quartz.CardPad, end = Quartz.CardPad, bottom = 5.dp,
+                    ),
+                )
                 Row(
                     modifier = Modifier.padding(
                         start = Quartz.CardPad,
@@ -806,10 +924,16 @@ private fun CloneFolder(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     QPrimaryButton(
-                        "View",
+                        if (clone.status == "running") "Resume" else "View",
                         enabled = connected,
                         icon = Icons.Default.PlayArrow,
                     ) { onView(clone) }
+                    if (clone.status == "running") {
+                        QSecondaryButton(
+                            "Stop",
+                            icon = Icons.Default.Stop,
+                        ) { HeadlessCloneEngine.stopClone(clone.packageName) }
+                    }
                     QSecondaryButton(
                         "Customise",
                         icon = Icons.Default.Tune,
@@ -818,6 +942,17 @@ private fun CloneFolder(
             }
         }
     }
+}
+
+private fun cloneMeta(clone: CloneApp): String {
+    val created = clone.createdAt.takeIf { it > 0 }?.let {
+        SimpleDateFormat("MMM d, HH:mm", Locale.getDefault()).format(Date(it))
+    } ?: "unknown"
+    val opened = clone.lastOpened.takeIf { it > 0 }?.let {
+        SimpleDateFormat("MMM d, HH:mm", Locale.getDefault()).format(Date(it))
+    } ?: "never"
+    val parts = if (clone.parts > 0) " · ${clone.parts} parts" else ""
+    return "${clone.status} · created $created · last $opened$parts"
 }
 
 private fun folderSubtitle(group: CloneGroup): String {
@@ -836,14 +971,29 @@ private fun CloneViewPage(
     session: ViewerSession,
     onLeave: () -> Unit,
     onStop: () -> Unit,
+    onPip: () -> Unit,
 ) {
+    val context = LocalContext.current
     val connected by HeadlessCloneEngine.connected.collectAsState()
     val displayReady by HeadlessCloneEngine.displayReady.collectAsState()
     val preview by HeadlessCloneEngine.preview.collectAsState()
     val previewError by HeadlessCloneEngine.previewError.collectAsState()
     val lastError by HeadlessCloneEngine.lastError.collectAsState()
     val lines by HeadlessCloneEngine.cloneLogs.collectAsState()
+    val actions by HeadlessCloneEngine.actionLog.collectAsState()
     var live by rememberSaveable { mutableStateOf(true) }
+    var showLayout by rememberSaveable { mutableStateOf(false) }
+    var split by rememberSaveable { mutableStateOf(0.58f) }
+    var displayScale by rememberSaveable { mutableStateOf(1f) }
+    val logState = rememberLazyListState()
+    val actionState = rememberLazyListState()
+
+    LaunchedEffect(lines.size) {
+        if (lines.isNotEmpty()) logState.animateScrollToItem(lines.lastIndex)
+    }
+    LaunchedEffect(actions.size) {
+        if (actions.isNotEmpty()) actionState.animateScrollToItem(minOf(actions.size, 40) - 1)
+    }
 
     LaunchedEffect(connected, displayReady, session.fps, live) {
         if (!connected || !live) return@LaunchedEffect
@@ -871,7 +1021,7 @@ private fun CloneViewPage(
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxWidth()
-                .weight(1f),
+                .weight(split.coerceIn(0.3f, 0.8f)),
             contentAlignment = Alignment.Center,
         ) {
             val aspect = preview?.let {
@@ -882,7 +1032,8 @@ private fun CloneViewPage(
                 9f / 16f
             }
             val maxWindowHeight = min(maxHeight.value, 330f)
-            val windowWidth = min(maxWidth.value, maxWindowHeight * aspect)
+            val baseWidth = min(maxWidth.value, maxWindowHeight * aspect)
+            val windowWidth = (baseWidth * displayScale).coerceIn(160f, maxWidth.value)
             val windowHeight = windowWidth / aspect
             val shape = RoundedCornerShape(8.dp)
 
@@ -947,6 +1098,26 @@ private fun CloneViewPage(
             }
         }
 
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(13.dp)
+                .pointerInput(Unit) {
+                    detectDragGestures { _, dragAmount ->
+                        split = (split + dragAmount.y / 650f).coerceIn(0.3f, 0.8f)
+                    }
+                },
+            contentAlignment = Alignment.Center,
+        ) {
+            Box(
+                Modifier
+                    .width(42.dp)
+                    .height(3.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(MaterialTheme.colorScheme.outlineVariant)
+            )
+        }
+
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -961,6 +1132,8 @@ private fun CloneViewPage(
                 if (live) Icons.Default.Visibility else Icons.Default.VisibilityOff,
                 active = live,
             ) { live = !live }
+            QToolButton("PiP", Icons.Default.PictureInPictureAlt) { onPip() }
+            QToolButton("Layout", Icons.Default.Tune, active = showLayout) { showLayout = !showLayout }
             Spacer(Modifier.weight(1f))
             QToolButton(
                 "Stop",
@@ -969,10 +1142,44 @@ private fun CloneViewPage(
             ) { onStop() }
         }
 
+        if (showLayout) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(Quartz.CardShape)
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, Quartz.CardShape)
+                    .padding(horizontal = 12.dp, vertical = 4.dp),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Display height", fontSize = 11.sp, color = fluxMutedText())
+                    Slider(
+                        value = split, onValueChange = { split = it },
+                        valueRange = 0.3f..0.8f, modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+                    )
+                    Text("${(split * 100).roundToInt()}%", fontSize = 10.5.sp, color = fluxMutedText())
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Display width ", fontSize = 11.sp, color = fluxMutedText())
+                    Slider(
+                        value = displayScale, onValueChange = { displayScale = it },
+                        valueRange = 0.55f..1f, modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+                    )
+                    Text("${(displayScale * 100).roundToInt()}%", fontSize = 10.5.sp, color = fluxMutedText())
+                }
+                Text(
+                    "Tap Layout again to close. Drag the display area with the height control.",
+                    fontSize = 10.sp, color = fluxMutedText(), modifier = Modifier.padding(bottom = 5.dp),
+                )
+            }
+        }
+
+        ActionStrip(actions, actionState)
+
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .weight(0.82f)
+                .weight(1f - split.coerceIn(0.3f, 0.8f))
                 .clip(Quartz.CardShape)
                 .background(MaterialTheme.colorScheme.surface)
                 .border(1.dp, MaterialTheme.colorScheme.outlineVariant, Quartz.CardShape),
@@ -995,6 +1202,18 @@ private fun CloneViewPage(
                     fontSize = 11.sp,
                     color = fluxMutedText(),
                 )
+                IconButton(
+                    onClick = { copyText(context, lines.joinToString("\n"), "Logs copied") },
+                    modifier = Modifier.size(28.dp),
+                ) {
+                    Icon(Icons.Default.ContentCopy, "Copy logs", tint = fluxMutedText(), modifier = Modifier.size(15.dp))
+                }
+                IconButton(
+                    onClick = { HeadlessCloneEngine.clearCloneLogs() },
+                    modifier = Modifier.size(28.dp),
+                ) {
+                    Icon(Icons.Default.Clear, "Clear logs", tint = fluxMutedText(), modifier = Modifier.size(16.dp))
+                }
             }
             HorizontalDivider(
                 thickness = 0.75.dp,
@@ -1013,10 +1232,11 @@ private fun CloneViewPage(
                 }
             } else {
                 LazyColumn(
+                    state = logState,
                     modifier = Modifier.weight(1f).fillMaxWidth(),
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                 ) {
-                    items(lines.asReversed()) { line ->
+                    items(lines) { line ->
                         Text(
                             line,
                             fontSize = 9.5.sp,
@@ -1030,6 +1250,64 @@ private fun CloneViewPage(
             }
         }
     }
+}
+
+@Composable
+private fun ActionStrip(actions: List<String>, state: LazyListState) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(11.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.38f))
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(11.dp))
+            .padding(horizontal = 9.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            "ACTIONS", fontSize = 9.sp, fontWeight = FontWeight.SemiBold,
+            letterSpacing = 1.sp, color = MaterialTheme.colorScheme.primary,
+        )
+        Spacer(Modifier.width(7.dp))
+        if (actions.isEmpty()) {
+            Text("No agent or touch actions yet", fontSize = 10.sp, color = fluxMutedText())
+        } else {
+            LazyRow(
+                state = state,
+                modifier = Modifier.weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                items(actions.takeLast(40)) { action ->
+                    val agent = action.contains("  agent  ")
+                    Text(
+                        action,
+                        fontSize = 9.2.sp,
+                        fontFamily = FontFamily.Monospace,
+                        color = if (agent) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(7.dp))
+                            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.75f))
+                            .padding(horizontal = 7.dp, vertical = 3.dp),
+                    )
+                }
+            }
+        }
+        if (actions.isNotEmpty()) {
+            IconButton(
+                onClick = { HeadlessCloneEngine.clearActionLog() },
+                modifier = Modifier.size(24.dp),
+            ) {
+                Icon(Icons.Default.Clear, "Clear actions", tint = fluxMutedText(), modifier = Modifier.size(13.dp))
+            }
+        }
+    }
+}
+
+private fun copyText(context: Context, text: String, label: String) {
+    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    clipboard.setPrimaryClip(ClipData.newPlainText("Bliss", text))
+    Toast.makeText(context, label, Toast.LENGTH_SHORT).show()
 }
 
 @Composable
@@ -1442,4 +1720,14 @@ private fun cloneUsesLandscape(context: Context, clone: CloneApp): Boolean {
 
         else -> context.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
     }
+}
+
+
+private fun Context.findActivity(): Activity? {
+    var current: Context? = this
+    while (current is ContextWrapper) {
+        if (current is Activity) return current
+        current = current.baseContext
+    }
+    return current as? Activity
 }

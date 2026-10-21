@@ -66,6 +66,9 @@ object HeadlessCloneEngine {
         val status: String,
         val orientation: Int,
         val icon: Bitmap?,
+        val createdAt: Long = 0L,
+        val lastOpened: Long = 0L,
+        val parts: Int = 0,
     )
 
     enum class Quality(val key: String, val label: String, val jpeg: Int) {
@@ -108,6 +111,15 @@ object HeadlessCloneEngine {
     val previewError = MutableStateFlow<String?>(null)
     /** Clone package currently owning the virtual display, if any. */
     val activeClonePackage = MutableStateFlow<String?>(null)
+    /** Recent user/agent actions, newest last. Shown in the viewer. */
+    val actionLog = MutableStateFlow<List<String>>(emptyList())
+
+    fun noteAction(action: String, source: String = "user") {
+        val stamp = SimpleDateFormat("HH:mm:ss", Locale.US).format(Date())
+        actionLog.value = (actionLog.value + "$stamp  $source  $action").takeLast(80)
+    }
+
+    fun clearActionLog() { actionLog.value = emptyList() }
 
     // User defaults
     val displayFps = MutableStateFlow(60)
@@ -426,6 +438,10 @@ object HeadlessCloneEngine {
     }
 
     fun launchClone(packageName: String, width: Int = 0, height: Int = 0, fps: Int = 0) {
+        if (activeClonePackage.value == packageName) {
+            setNotice("Already running; resuming view")
+            return
+        }
         val saved = perAppDisplay(packageName)
         val w = width.takeIf { it > 0 } ?: saved.width
         val h = height.takeIf { it > 0 } ?: saved.height
@@ -496,6 +512,7 @@ object HeadlessCloneEngine {
                     setNotice("App stopped")
                 }
                 if (activeClonePackage.value == packageName) activeClonePackage.value = null
+                noteAction("stop $packageName")
                 runCatching { c.releaseDisplay() }
                 preview.value = null
                 previewError.value = null
@@ -535,6 +552,7 @@ object HeadlessCloneEngine {
     fun tap(x: Int, y: Int) {
         val c = client ?: return
         if (!connected.value || !displayReady.value) return
+        noteAction("tap ($x, $y)")
         scope.launch {
             runCatching { c.tap(x, y) }.onFailure { Log.w(TAG, "tap failed", it) }
         }
@@ -543,6 +561,7 @@ object HeadlessCloneEngine {
     fun swipe(x1: Int, y1: Int, x2: Int, y2: Int, durationMs: Int = 260) {
         val c = client ?: return
         if (!connected.value || !displayReady.value) return
+        noteAction("swipe ($x1,$y1) → ($x2,$y2)")
         scope.launch {
             runCatching { c.swipe(x1, y1, x2, y2, durationMs) }
                 .onFailure { Log.w(TAG, "swipe failed", it) }
@@ -552,6 +571,7 @@ object HeadlessCloneEngine {
     fun key(keyCode: Int) {
         val c = client ?: return
         if (!connected.value || !displayReady.value) return
+        noteAction("key $keyCode")
         scope.launch {
             runCatching { c.key(keyCode) }.onFailure { Log.w(TAG, "key failed", it) }
         }
@@ -560,6 +580,7 @@ object HeadlessCloneEngine {
     fun text(value: String) {
         val c = client ?: return
         if (!connected.value || !displayReady.value || value.isEmpty()) return
+        noteAction("text \"${value.take(60)}\"")
         scope.launch {
             runCatching { c.text(value) }.onFailure { Log.w(TAG, "text failed", it) }
         }
@@ -646,6 +667,18 @@ object HeadlessCloneEngine {
         base
     }
 
+    suspend fun apiApps(): JSONObject = withContext(Dispatchers.IO) {
+        val array = JSONArray()
+        deviceApps.value.forEach { app ->
+            array.put(
+                JSONObject()
+                    .put("package", app.packageName)
+                    .put("label", app.label)
+            )
+        }
+        JSONObject().put("ok", true).put("apps", array)
+    }
+
     suspend fun apiClones(): JSONObject = withContext(Dispatchers.IO) {
         val c = ensureClient()
         if (c == null || !c.isServiceConnected()) {
@@ -683,8 +716,7 @@ object HeadlessCloneEngine {
                         f
                     }
                     !path.isNullOrBlank() -> {
-                        val clean = path.removePrefix("file://")
-                        File(clean)
+                        resolveInstallFile(path.removePrefix("file://"), ctx)
                     }
                     else -> return@withContext JSONObject()
                         .put("ok", false)
@@ -702,6 +734,7 @@ object HeadlessCloneEngine {
                     JSONObject().put("ok", false).put("error", "Engine returned invalid JSON")
                 }
                 if (result.optBoolean("ok", false)) {
+                    noteAction("install ${file.name}", "agent")
                     refreshClonesInternal(c)
                 }
                 result
@@ -737,6 +770,11 @@ object HeadlessCloneEngine {
 
     suspend fun apiLaunch(packageName: String, width: Int = 0, height: Int = 0, fps: Int = 0): JSONObject =
         withContext(Dispatchers.IO) {
+            if (activeClonePackage.value == packageName) {
+                return@withContext JSONObject().put("ok", true)
+                    .put("already_running", true)
+                    .put("package", packageName)
+            }
             val c = ensureClient()
             if (c == null || !c.isServiceConnected()) {
                 return@withContext JSONObject().put("ok", false).put("error", "Shell engine is not connected")
@@ -765,6 +803,7 @@ object HeadlessCloneEngine {
                     return@withContext JSONObject().put("ok", false).put("error", launchError)
                 }
                 activeClonePackage.value = packageName
+                noteAction("launch $packageName", "agent")
                 parseStatus(c.status())
                 refreshClonesInternal(c)
                 JSONObject()
@@ -792,6 +831,7 @@ object HeadlessCloneEngine {
                 displayReady.value = false
                 preview.value = null
             }
+            noteAction("stop $packageName", "agent")
             if (error != null) {
                 JSONObject().put("ok", false).put("error", error)
             } else {
@@ -832,6 +872,7 @@ object HeadlessCloneEngine {
         }
 
     suspend fun apiTap(x: Int, y: Int): JSONObject = withContext(Dispatchers.IO) {
+        noteAction("tap ($x, $y)", "agent")
         val c = ensureClient()
         if (c == null || !c.isServiceConnected()) {
             return@withContext JSONObject().put("ok", false).put("error", "Shell engine is not connected")
@@ -842,6 +883,7 @@ object HeadlessCloneEngine {
 
     suspend fun apiSwipe(x1: Int, y1: Int, x2: Int, y2: Int, durationMs: Int): JSONObject =
         withContext(Dispatchers.IO) {
+            noteAction("swipe ($x1,$y1) → ($x2,$y2)", "agent")
             val c = ensureClient()
             if (c == null || !c.isServiceConnected()) {
                 return@withContext JSONObject().put("ok", false).put("error", "Shell engine is not connected")
@@ -851,6 +893,7 @@ object HeadlessCloneEngine {
         }
 
     suspend fun apiText(value: String): JSONObject = withContext(Dispatchers.IO) {
+        noteAction("text \"${value.take(60)}\"", "agent")
         val c = ensureClient()
         if (c == null || !c.isServiceConnected()) {
             return@withContext JSONObject().put("ok", false).put("error", "Shell engine is not connected")
@@ -860,6 +903,7 @@ object HeadlessCloneEngine {
     }
 
     suspend fun apiKey(keyCode: Int): JSONObject = withContext(Dispatchers.IO) {
+        noteAction("key $keyCode", "agent")
         val c = ensureClient()
         if (c == null || !c.isServiceConnected()) {
             return@withContext JSONObject().put("ok", false).put("error", "Shell engine is not connected")
@@ -943,6 +987,7 @@ object HeadlessCloneEngine {
                     fail(error)
                 } else {
                     activeClonePackage.value = activePackage
+                    if (activePackage != null) noteAction("launch $activePackage")
                     setNotice("Launch requested")
                 }
                 refreshClonesInternal(c)
@@ -1029,11 +1074,15 @@ object HeadlessCloneEngine {
                             status = item.optString("status", "installed"),
                             orientation = orientation,
                             icon = iconFor(original.ifBlank { pkg }),
+                            createdAt = item.optLong("created", 0L),
+                            lastOpened = item.optLong("last_opened", 0L),
+                            parts = item.optInt("parts", 0),
                         )
                     )
                 }
                 clones.value = list.sortedWith(
-                    compareBy<CloneApp> { it.originalLabel.lowercase(Locale.ROOT) }
+                    compareByDescending<CloneApp> { it.lastOpened }
+                        .thenByDescending { it.createdAt }
                         .thenBy { it.label.lowercase(Locale.ROOT) }
                 )
             } catch (t: Throwable) {
@@ -1131,6 +1180,30 @@ object HeadlessCloneEngine {
             drawable.draw(canvas)
             bitmap
         }.getOrNull()
+    }
+
+    private fun resolveInstallFile(raw: String, ctx: Context): File {
+        val clean = raw.trim()
+        val candidates = ArrayList<File>()
+        candidates.add(File(clean))
+        val emulated = when {
+            clean.startsWith("/emulated/") -> clean.removePrefix("/emulated/")
+            clean.startsWith("/sdcard/") -> clean.removePrefix("/sdcard/")
+            clean.startsWith("/storage/emulated/0/") -> clean.removePrefix("/storage/emulated/0/")
+            else -> null
+        }
+        if (emulated != null) {
+            candidates.add(File("/storage/emulated/0/$emulated"))
+            candidates.add(File("/sdcard/$emulated"))
+            candidates.add(File("/emulated/$emulated"))
+        }
+        if (clean.startsWith("/sdcard/")) {
+            candidates.add(File("/storage/emulated/0/${clean.removePrefix("/sdcard/")}"))
+        }
+        if (clean.startsWith("/storage/emulated/0/")) {
+            candidates.add(File("/sdcard/${clean.removePrefix("/storage/emulated/0/")}"))
+        }
+        return candidates.firstOrNull { it.isFile && it.canRead() } ?: candidates.first()
     }
 
     private fun downloadTo(url: String, destination: File) {
