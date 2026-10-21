@@ -1,4 +1,4 @@
-# Bliss 3.17.1 test checklist
+# Bliss 3.18.0 test checklist
 
 Install over the previous Bliss build (same `com.nopiece.bliss` package).
 
@@ -6,6 +6,12 @@ Install over the previous Bliss build (same `com.nopiece.bliss` package).
 - [ ] First launch is **Midnight** (near-black, mint accents), even if the old build was in Light mode.
 - [ ] Settings → Appearance → **Day** and **Midnight** both render cleanly; switching back is preserved.
 - [ ] Bottom dock is a floating rounded bar; Home / Distros / Apps / Tools all use the same short fade-scale motion.
+
+## Install speed / progress
+- [ ] Install a small distro with **Terminal base** selected. It must not install Mesa, icon themes, VNC or XFCE packages; Alpine terminal base should finish in well under a minute on a warm network.
+- [ ] The install bar must change to **Installed ✓** and auto-hide. A 100% bar must not remain stuck for minutes.
+- [ ] Install a desktop distro separately; XFCE packages are only downloaded for that selection.
+- [ ] During a terminal-base install, `apk` / `apt` output should show only shell and user tooling (no X11/Mesa packages).
 
 ## Clone management
 - [ ] Apps has three sections: **Installed**, **Running**, **Preference**.
@@ -49,5 +55,7 @@ Install over the previous Bliss build (same `com.nopiece.bliss` package).
 - [ ] MCP `bliss_apps` lists source apps; `bliss_clones` includes created / last-opened / parts.
 - [ ] `bliss_screenshot` returns an image and `bliss_ocr` returns boxes.
 - [ ] Recordings appear under `/sdcard/Android/data/com.nopiece.bliss/files/recordings/`.
+- [ ] Start a recording, wait at least 2 seconds, stop it: the MP4 must be playable, larger than a header-only 585-byte file, and `bliss record status` must report a non-zero frame count while recording.
+- [ ] Start then stop immediately: the MP4 should still contain one frame and play (no empty/corrupt file).
 
 Report the exact command + result, and the clone log lines for any app that still crashes.

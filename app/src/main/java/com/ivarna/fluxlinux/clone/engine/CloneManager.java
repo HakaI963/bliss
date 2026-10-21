@@ -348,6 +348,121 @@ final class CloneManager {
         }
     }
 
+    /**
+     * Clone an APK addressed by a path the *shell* process can read.
+     *
+     * <p>The app process is scoped-storage limited (and cannot traverse
+     * /data/local/tmp on recent Android builds), while the Shizuku service
+     * usually runs as root/UID 2000. Resolve common guest/Android aliases here
+     * instead of asking the CLI to guess. This is what makes
+     * {@code bliss install /emulated/…}, {@code /sdcard/…} and
+     * {@code /root/…} work from inside a proot guest.
+     */
+    String createFromPath(String rawPath, String requestedLabel) {
+        String clean = rawPath == null ? "" : rawPath.trim();
+        if (clean.startsWith("file://")) {
+            clean = clean.substring("file://".length());
+        }
+        if (clean.isEmpty()) {
+            return Jsons.error("missing APK path");
+        }
+        File resolved = resolveShellReadableFile(clean);
+        if (resolved == null) {
+            return Jsons.error("APK path is not readable: " + clean);
+        }
+        try {
+            engine.log("cloning APK path " + resolved.getAbsolutePath());
+            ParcelFileDescriptor descriptor = ParcelFileDescriptor.open(
+                    resolved, ParcelFileDescriptor.MODE_READ_ONLY);
+            return createFromApk(descriptor, requestedLabel);
+        } catch (Throwable e) {
+            Log.w(TAG, "createFromPath failed: " + resolved.getAbsolutePath(), e);
+            return Jsons.error("cannot open APK: " + resolved.getAbsolutePath()
+                    + " (" + (e.getMessage() == null ? e.getClass().getSimpleName()
+                    : e.getMessage()) + ")");
+        }
+    }
+
+    /** Candidate paths for common shared-storage / chroot aliases. */
+    private File resolveShellReadableFile(String clean) {
+        List<String> candidates = new ArrayList<>();
+        addCandidate(candidates, clean);
+
+        String emulated = null;
+        if (clean.startsWith("/emulated/")) {
+            emulated = clean.substring("/emulated/".length());
+        } else if (clean.startsWith("/sdcard/")) {
+            emulated = clean.substring("/sdcard/".length());
+        } else if (clean.startsWith("/storage/emulated/0/")) {
+            emulated = clean.substring("/storage/emulated/0/".length());
+        }
+        if (emulated != null) {
+            addCandidate(candidates, "/storage/emulated/0/" + emulated);
+            addCandidate(candidates, "/sdcard/" + emulated);
+            addCandidate(candidates, "/data/media/0/" + emulated);
+        }
+
+        // Guest-visible paths on this device: the agent/Kali chroot is exposed
+        // under /data/local/tmp/chrootKali, while Bliss proot containers live
+        // under the app's files/usr tree.
+        String base = clean.startsWith("/") ? clean : "/" + clean;
+        String name = new File(base).getName();
+        addCandidate(candidates, "/data/local/tmp/chrootKali" + base);
+        addCandidate(candidates, "/data/local/tmp/chrootKali/emulated" + base);
+        addCandidate(candidates, "/data/local/tmp/chrootKali/" + name);
+        addCandidate(candidates, "/data/local/tmp/chrootKali/emulated/" + name);
+        addCandidate(candidates, "/data/local/tmp/" + name);
+
+        File tmp = new File("/data/local/tmp");
+        File[] tmpDirs = tmp.listFiles();
+        if (tmpDirs != null) {
+            for (File dir : tmpDirs) {
+                if (dir == null || !dir.isDirectory()) continue;
+                addCandidate(candidates, dir.getAbsolutePath() + base);
+                addCandidate(candidates, dir.getAbsolutePath() + "/emulated" + base);
+                addCandidate(candidates, dir.getAbsolutePath() + "/" + name);
+            }
+        }
+
+        File containers = new File(context.getFilesDir(),
+                "usr/var/lib/proot-distro/containers");
+        File[] containerDirs = containers.listFiles();
+        if (containerDirs != null) {
+            for (File container : containerDirs) {
+                if (container == null || !container.isDirectory()) continue;
+                addCandidate(candidates, container.getAbsolutePath() + "/rootfs" + base);
+                addCandidate(candidates, container.getAbsolutePath() + "/rootfs/root/" + name);
+            }
+        }
+
+        File chroots = new File("/data/local/bliss/chroots");
+        File[] chrootDirs = chroots.listFiles();
+        if (chrootDirs != null) {
+            for (File chroot : chrootDirs) {
+                if (chroot == null || !chroot.isDirectory()) continue;
+                addCandidate(candidates, chroot.getAbsolutePath() + base);
+                addCandidate(candidates, chroot.getAbsolutePath() + "/root/" + name);
+            }
+        }
+
+        for (String candidate : candidates) {
+            if (candidate == null || candidate.isEmpty()) continue;
+            File file = new File(candidate);
+            if (file.isFile() && file.canRead()) {
+                if (!candidate.equals(clean)) {
+                    engine.log("APK path alias " + clean + " → " + candidate);
+                }
+                return file;
+            }
+        }
+        return null;
+    }
+
+    private static void addCandidate(List<String> candidates, String path) {
+        if (path == null || path.isEmpty()) return;
+        if (!candidates.contains(path)) candidates.add(path);
+    }
+
     String createFromApk(ParcelFileDescriptor descriptor, String requestedLabel) {
         synchronized (lock) {
             if (descriptor == null) {

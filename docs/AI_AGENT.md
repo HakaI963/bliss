@@ -50,7 +50,9 @@ bliss_apps            # installed source apps available for cloning
 
 Use `bliss_install_apk` with either a shared-storage `path` (e.g.
 `/sdcard/Download/app.apk`) or a direct `url`. Guest paths such as
-`/emulated/...` are staged through shared storage by the CLI.
+`/emulated/...` and `/root/...` are streamed by the CLI; if the guest cannot
+see the path, the shell service resolves it (including `/sdcard`,
+`/storage/emulated/0`, `/data/local/tmp` and proot/chroot rootfs aliases).
 
 After install, pick the clone package from `bliss_clones`, then:
 

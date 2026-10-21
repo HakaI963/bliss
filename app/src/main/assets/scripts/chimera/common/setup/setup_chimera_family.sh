@@ -97,8 +97,10 @@ case " $DESKTOPS " in *" kde "*) _norm="${_norm}${_norm:+ }kde" ;; esac
 DESKTOPS="$_norm"
 unset _norm
 
-# Shared Mesa — needed by any desktop (best-effort; names may differ on Chimera).
-apk add mesa mesa-dri 2>/dev/null || true
+# Shared Mesa — desktop-only payload (best-effort; names may differ on Chimera).
+if [ "$DESKTOPS" != "none" ]; then
+    apk add mesa mesa-dri 2>/dev/null || true
+fi
 
 if [ -z "${DESKTOPS##*xfce*}" ]; then
     _flux_log "Installing XFCE4 (targeted — never the xfce4 metapackage)..."

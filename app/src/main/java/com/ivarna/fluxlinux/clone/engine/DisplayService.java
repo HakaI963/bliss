@@ -54,7 +54,7 @@ public class DisplayService extends Binder {
     protected boolean onTransact(int code, Parcel data, Parcel reply, int flags)
             throws RemoteException {
         if (code != Protocol.CMD_STATUS && code != Protocol.CMD_SHUTDOWN
-                && (code < Protocol.CMD_CREATE || code > Protocol.CMD_AUTH)) {
+                && (code < Protocol.CMD_CREATE || code > Protocol.CMD_CLONE_FROM_PATH)) {
             return super.onTransact(code, data, reply, flags);
         }
         try {
@@ -199,6 +199,12 @@ public class DisplayService extends Binder {
                 String clonePackage = data.readString();
                 int maxLines = data.readInt();
                 reply.writeString(local.cloneLogs(clonePackage, maxLines));
+                return;
+            }
+            case Protocol.CMD_CLONE_FROM_PATH: {
+                String path = data.readString();
+                String name = data.readString();
+                reply.writeString(local.cloneFromPath(path, name));
                 return;
             }
             case Protocol.CMD_AUTH: {

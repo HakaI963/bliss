@@ -51,7 +51,9 @@ class ClonePipActivity : ComponentActivity() {
             val connected by HeadlessCloneEngine.connected.collectAsState()
             LaunchedEffect(connected, fps) {
                 if (!connected) return@LaunchedEffect
-                val frameDelay = (1000 / fps.coerceAtLeast(10)).coerceAtLeast(16).toLong()
+                // PiP is a small surface: 24 fps is enough and leaves the CPU
+                // headroom for the cloned app and the rest of the UI.
+                val frameDelay = (1000 / fps.coerceIn(10, 24)).coerceAtLeast(42).toLong()
                 while (isActive) {
                     HeadlessCloneEngine.capturePreview()
                     delay(frameDelay)

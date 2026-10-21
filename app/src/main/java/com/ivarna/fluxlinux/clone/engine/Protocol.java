@@ -11,7 +11,7 @@ final class Protocol {
     private Protocol() {
     }
 
-    static final int VERSION = 3;
+    static final int VERSION = 4;
 
     static final int CMD_STATUS = 1;
     static final int CMD_CREATE = 2;
@@ -35,9 +35,15 @@ final class Protocol {
     static final int CMD_CLONE_DELETE = 25;
     static final int CMD_CLONE_LOGS = 26;
     static final int CMD_AUTH = 27;
+    /**
+     * Clone from a path visible to the shell service (root/UID 2000), not the
+     * app process. This is the fallback for /sdcard, /data/local/tmp and other
+     * locations the scoped-storage app cannot read directly.
+     */
+    static final int CMD_CLONE_FROM_PATH = 28;
 
     /** Class instantiated by Shizuku inside the shell process. Must stay public. */
     static final String SERVICE_CLASS = "com.ivarna.fluxlinux.clone.engine.DisplayService";
     static final String SERVICE_TAG = "bliss-engine";
-    static final int SERVICE_VERSION = 3;
+    static final int SERVICE_VERSION = 4;
 }

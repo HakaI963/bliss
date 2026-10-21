@@ -107,16 +107,23 @@ case " $DESKTOPS " in *" kde "*) _norm="${_norm}${_norm:+ }kde" ;; esac
 DESKTOPS="$_norm"
 unset _norm
 
-# Shared fonts + Mesa — needed by any desktop (and by text rendering alone).
-apk add --no-cache \
-    adwaita-icon-theme \
-    ttf-dejavu \
-    mesa-dri-gallium \
-    mesa-gl \
-    || {
-        echo "Bliss: base graphics package install failed"
-        exit 1
-    }
+# Desktop-only graphics stack. A terminal base does not need Mesa, icon
+# themes or X11 clients; installing them anyway was the main reason a
+# "terminal only" Alpine install still felt like a desktop install.
+if [ "$DESKTOPS" != "none" ]; then
+    apk add --no-cache \
+        adwaita-icon-theme \
+        ttf-dejavu \
+        mesa-dri-gallium \
+        mesa-gl \
+        || {
+            echo "Bliss: base graphics package install failed"
+            exit 1
+        }
+else
+    # Keep a small font for TUIs; no Mesa/X11 payload.
+    apk add --no-cache ttf-dejavu 2>/dev/null || true
+fi
 
 # XFCE desktop (always include xfce4-session for failsafe session name)
 if [ -z "${DESKTOPS##*xfce*}" ]; then
@@ -147,13 +154,18 @@ if [ -z "${DESKTOPS##*xfce*}" ]; then
 fi
 
 # Named Pulse *client* only — do not pull the xfce4 metapackage for audio.
-apk add --no-cache libpulse pulseaudio-utils 2>/dev/null || true
-if [ -z "${DESKTOPS##*xfce*}" ]; then
-    apk add --no-cache xfce4-pulseaudio 2>/dev/null || true
+# Terminal-only installs keep the small pulse client config written below but
+# skip the GUI payload.
+if [ "$DESKTOPS" != "none" ]; then
+    apk add --no-cache libpulse pulseaudio-utils 2>/dev/null || true
+    if [ -z "${DESKTOPS##*xfce*}" ]; then
+        apk add --no-cache xfce4-pulseaudio 2>/dev/null || true
+    fi
 fi
 
 # Glycin image loaders invoke bubblewrap; real bwrap fails under proot and aborts
 # GTK (exit 134). Install a shim that drops sandbox flags but keeps --dbus-fd.
+if [ "$DESKTOPS" != "none" ]; then
 echo "Bliss: Installing proot-safe bwrap shim for glycin loaders..."
 apk add --no-cache glycin-image-rs glycin-svg gdk-pixbuf 2>/dev/null || true
 if [ -x /usr/bin/bwrap ] && [ ! -e /usr/bin/bwrap.real ] && \
@@ -176,6 +188,7 @@ done
 exit 127
 BWRAP_EOF
 chmod 755 /usr/bin/bwrap
+fi
 
 # 5. User flux (prefer uid 1000 when free — matches common XFCE defaults)
 if ! id flux >/dev/null 2>&1; then

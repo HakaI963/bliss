@@ -712,6 +712,7 @@ object HeadlessCloneEngine {
                 ?: return@withContext JSONObject().put("ok", false).put("error", "App context is not ready")
             var downloaded: File? = null
             try {
+                val cleanLabel = label?.trim()?.takeIf { name -> name.isNotEmpty() }
                 val file = when {
                     !url.isNullOrBlank() -> {
                         val dir = File(ctx.cacheDir, "clone-inbox").apply { mkdirs() }
@@ -727,13 +728,22 @@ object HeadlessCloneEngine {
                         .put("ok", false)
                         .put("error", "Provide path or url")
                 }
-                if (!file.isFile || !file.canRead() || file.length() < 8L) {
+
+                // A path the app can read is fastest. When scoped storage or
+                // an unreadable guest directory blocks us, hand the path to
+                // the shell service, which runs as root/UID 2000 and knows the
+                // common /sdcard, /emulated and chroot aliases.
+                val raw = if (file.isFile && file.canRead() && file.length() >= 8L) {
+                    ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY).use {
+                        c.cloneFromApk(it, cleanLabel)
+                    }
+                } else if (!path.isNullOrBlank()) {
+                    val shellPath = path.removePrefix("file://")
+                    c.cloneFromPath(shellPath, cleanLabel)
+                } else {
                     return@withContext JSONObject()
                         .put("ok", false)
                         .put("error", "APK path is not readable: ${file.absolutePath}")
-                }
-                val raw = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY).use {
-                    c.cloneFromApk(it, label?.trim()?.takeIf { name -> name.isNotEmpty() })
                 }
                 val result = runCatching { JSONObject(raw) }.getOrElse {
                     JSONObject().put("ok", false).put("error", "Engine returned invalid JSON")
@@ -848,11 +858,17 @@ object HeadlessCloneEngine {
         }
     }
 
-    suspend fun apiCapture(maxWidth: Int = 900, jpeg: Int = 90): ByteArray? =
+    suspend fun apiCapture(
+        maxWidth: Int = 900,
+        jpeg: Int = 90,
+        timeoutMs: Int = 5_000,
+    ): ByteArray? =
         withContext(Dispatchers.IO) {
             val c = ensureClient() ?: return@withContext null
             if (!c.isServiceConnected()) return@withContext null
-            val frame = runCatching { c.capture(5000, jpeg.coerceIn(30, 100)) }.getOrNull()
+            val frame = runCatching {
+                c.capture(timeoutMs.coerceIn(500, 30_000), jpeg.coerceIn(30, 100))
+            }.getOrNull()
             if (frame != null && frame.ok()) frame.jpeg else null
         }
 

@@ -142,16 +142,28 @@ _flux_opensuse_protect_zypper
 
 _flux_ensure_dbus
 
-# Shared fonts + Mesa — needed by any desktop.
-zypper --non-interactive install --no-recommends --auto-agree-with-licenses \
-    adwaita-icon-theme \
-    Mesa-dri Mesa-libGL1 \
-    || {
-        echo "Bliss: base graphics package install failed"
-        exit 1
-    }
-zypper --non-interactive install --no-recommends --auto-agree-with-licenses \
-    dejavu-fonts Mesa-libEGL1 2>/dev/null || true
+# Resolve desktop choice before graphics so a terminal base skips Mesa/icons.
+DESKTOPS="${FLUX_DESKTOPS:-${FLUX_DESKTOP:-${FLUX_DESKTOP_ENV:-xfce}}}"
+DESKTOPS=$(printf '%s' "$DESKTOPS" | tr ',' ' ')
+DESKTOPS=$(printf '%s' "$DESKTOPS" | tr -s '[:space:]' ' ')
+case " $DESKTOPS " in *" xfce "*|*" xfce4 "*) _norm="xfce" ;; *) _norm="" ;; esac
+case " $DESKTOPS " in *" kde "*) _norm="${_norm}${_norm:+ }kde" ;; esac
+[ -n "$_norm" ] || _norm="none"
+DESKTOPS="$_norm"
+unset _norm
+
+# Shared fonts + Mesa — desktop-only payload.
+if [ "$DESKTOPS" != "none" ]; then
+    zypper --non-interactive install --no-recommends --auto-agree-with-licenses \
+        adwaita-icon-theme \
+        Mesa-dri Mesa-libGL1 \
+        || {
+            echo "Bliss: base graphics package install failed"
+            exit 1
+        }
+    zypper --non-interactive install --no-recommends --auto-agree-with-licenses \
+        dejavu-fonts Mesa-libEGL1 2>/dev/null || true
+fi
 _flux_opensuse_protect_zypper
 
 # Desktop contract: FLUX_DESKTOPS (space/comma separated) = xfce | kde | none;

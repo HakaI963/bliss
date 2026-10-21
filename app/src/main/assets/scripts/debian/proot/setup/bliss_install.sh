@@ -521,7 +521,14 @@ if [ -n "$SETUP_MODE" ]; then
         # Alpine minirootfs has only ash until family installs bash — prefer sh then bash.
         echo "Bliss: Running setup inside proot (shared-tmp)…"
         echo "Bliss: PD_PROOT_BIN=$PD_PROOT_BIN PROOT_LOADER=$PROOT_LOADER"
-        GUEST_RUN='export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin; unset LD_LIBRARY_PATH LD_PRELOAD PROOT_TMP_DIR; export TMPDIR=/tmp; if [ -x /bin/bash ]; then exec /bin/bash /tmp/'"$SETUP_GUEST_NAME"' '"$DISTRO"'; else exec /bin/sh /tmp/'"$SETUP_GUEST_NAME"' '"$DISTRO"'; fi'
+        # proot-distro's login wrapper starts the guest with `env -i`, so
+        # host-side FLUX_DESKTOPS/FLUX_DESKTOP would silently disappear and
+        # every install would fall back to XFCE (the slow path). Re-export the
+        # desktop contract inside the guest command.
+        # Default xfce for the one-click path; onboarding always passes a
+        # concrete value (including "none" for a terminal base).
+        GUEST_ENV="export FLUX_DESKTOPS='${FLUX_DESKTOPS:-xfce}'; export FLUX_DESKTOP='${FLUX_DESKTOP:-xfce}'; export FLUX_DESKTOP_ENV='${FLUX_DESKTOP_ENV:-xfce}';"
+        GUEST_RUN="$GUEST_ENV"'export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin; unset LD_LIBRARY_PATH LD_PRELOAD PROOT_TMP_DIR; export TMPDIR=/tmp; if [ -x /bin/bash ]; then exec /bin/bash /tmp/'"$SETUP_GUEST_NAME"' '"$DISTRO"'; else exec /bin/sh /tmp/'"$SETUP_GUEST_NAME"' '"$DISTRO"'; fi'
         "$PYTHON" "$PROOT_DISTRO" login "$DISTRO" --shared-tmp -- \
             /bin/sh -c "$GUEST_RUN"
         SETUP_EXIT=$?

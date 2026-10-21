@@ -386,6 +386,10 @@ final class DisplayEngine {
         return clones.createFromApk(descriptor, name);
     }
 
+    String cloneFromPath(String path, String name) {
+        return clones.createFromPath(path, name);
+    }
+
     String cloneLaunch(String clonePackage) {
         return clones.launch(clonePackage);
     }

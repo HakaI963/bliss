@@ -38,8 +38,11 @@ bliss uninstall com.nopiece.hclone.hXXXX
 For a local APK, the helper **streams the bytes directly to Bliss** over
 `/install-upload`. The Android app never has to see the guest path, so
 `/emulated/...`, `/OpenCode...`, chroot `/root/...` and any other readable guest
-path work. It still falls back to staging through shared storage if raw upload
-is unavailable.
+path work. When the path is not visible inside the guest, `/install` hands the
+path to the shell service, which resolves common `/sdcard`, `/storage/emulated/0`,
+`/emulated`, `/data/local/tmp` and proot/root aliases without needing the app's
+scoped-storage permission. It still falls back to staging through shared storage
+if raw upload is unavailable.
 
 The helper uses `curl` or `wget` from the guest. If neither is installed, install
 one (`apt install curl`, `apk add curl`, `dnf install curl`, …).

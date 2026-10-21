@@ -34,7 +34,9 @@ data class InstallationState(
     val overallPercent: Int = -1,
     val detail: String = "",
     val failed: Boolean = false,
-    val done: Boolean = false
+    val done: Boolean = false,
+    /** Wall-clock time of the last runner tick; used to retire a stale 100% bar. */
+    val updatedAtMillis: Long = 0L
 )
 
 object InstallationQueueManager {
@@ -126,7 +128,8 @@ object InstallationQueueManager {
             detail = detail,
             failed = failed,
             done = done,
-            cancelledByUser = false
+            cancelledByUser = false,
+            updatedAtMillis = System.currentTimeMillis()
         )
     }
 
@@ -134,6 +137,22 @@ object InstallationQueueManager {
     fun dismissTerminalState() {
         if (_installState.value.isInstalling) return
         _installState.value = InstallationState()
+    }
+
+    /**
+     * Retire a bar that reached 100% but never received its terminal tick
+     * (e.g. a superseded runner whose postSuccess was filtered out). Only the
+     * exact snapshot that has been idle is dismissed, so a live finalization
+     * tick always restarts the grace period.
+     */
+    fun dismissCompletedIfStale(expectedUpdatedAtMillis: Long) {
+        val current = _installState.value
+        if (current.isInstalling &&
+            current.overallPercent >= 100 &&
+            current.updatedAtMillis == expectedUpdatedAtMillis
+        ) {
+            _installState.value = InstallationState()
+        }
     }
 
     fun peek(): InstallTask? = queue.firstOrNull()

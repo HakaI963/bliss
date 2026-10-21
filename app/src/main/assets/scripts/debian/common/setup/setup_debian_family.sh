@@ -28,7 +28,6 @@ echo "Bliss: Configuring ${DISTRO_NAME} (Debian Family)..."
 # 1. Update and Install Core Packages
 export DEBIAN_FRONTEND=noninteractive
 apt update -y || exit 1
-apt install -y sudo dbus-x11 tigervnc-standalone-server || exit 1
 # Desktop contract: FLUX_DESKTOPS (space/comma separated) = xfce | kde | none;
 # legacy FLUX_DESKTOP / FLUX_DESKTOP_ENV remain valid single values. Unset/empty
 # → xfce (backward compat). Normalized to the canonical "xfce kde" order;
@@ -43,8 +42,22 @@ case " $DESKTOPS " in *" kde "*) _norm="${_norm}${_norm:+ }kde" ;; esac
 [ -n "$_norm" ] || _norm="none"
 DESKTOPS="$_norm"
 unset _norm
+
+# tigervnc/dbus-x11 are GUI infrastructure. A terminal base installs only
+# the shell/user plumbing, which removes a multi-hundred-MB download.
+if [ "$DESKTOPS" = "none" ]; then
+    apt install -y --no-install-recommends sudo || exit 1
+else
+    apt install -y sudo dbus-x11 tigervnc-standalone-server || exit 1
+fi
 if [ -z "${DESKTOPS##*xfce*}" ]; then
-    if ! _flux_retry_pkg apt install -y xfce4 xfce4-goodies; then
+    # Targeted list + --no-install-recommends: the xfce4 goodies metapackage
+    # pulls document viewers, games and extra daemons we do not ship.
+    if ! _flux_retry_pkg apt-get install -y --no-install-recommends \
+        xfce4-session xfce4-panel xfce4-settings xfce4-terminal \
+        xfdesktop4 xfwm4 thunar \
+        adwaita-icon-theme fonts-dejavu-core \
+        libgl1-mesa-dri libegl1 mesa-utils; then
         echo "Bliss: XFCE package install failed after 3 tries — check your network, then tap Retry Setup."
         exit 1
     fi
@@ -57,19 +70,21 @@ if [ -z "${DESKTOPS##*xfce*}" ]; then
         xfce4-battery-plugin xfce4-netload-plugin 2>/dev/null || true
 fi
 # Named Pulse *client* only — do not treat xfce4 as the audio path.
-DEBIAN_FRONTEND=noninteractive apt install -y --no-install-recommends \
-    libpulse0 pulseaudio-utils || true
-if [ -z "${DESKTOPS##*xfce*}" ]; then
+if [ "$DESKTOPS" != "none" ]; then
     DEBIAN_FRONTEND=noninteractive apt install -y --no-install-recommends \
-        xfce4-pulseaudio-plugin || true
-fi
+        libpulse0 pulseaudio-utils || true
+    if [ -z "${DESKTOPS##*xfce*}" ]; then
+        DEBIAN_FRONTEND=noninteractive apt install -y --no-install-recommends \
+            xfce4-pulseaudio-plugin || true
+    fi
 
-# Stock Mesa for first XFCE paint. hw-accel may replace this with Turnip later.
-DEBIAN_FRONTEND=noninteractive apt install -y --no-install-recommends \
-    mesa-utils libgl1-mesa-dri libegl1 mesa-vulkan-drivers \
-    || DEBIAN_FRONTEND=noninteractive apt install -y --no-install-recommends \
-        mesa-utils libgl1-mesa-dri libegl1 \
-    || true
+    # Stock Mesa for first XFCE paint. hw-accel may replace this with Turnip later.
+    DEBIAN_FRONTEND=noninteractive apt install -y --no-install-recommends \
+        mesa-utils libgl1-mesa-dri libegl1 mesa-vulkan-drivers \
+        || DEBIAN_FRONTEND=noninteractive apt install -y --no-install-recommends \
+            mesa-utils libgl1-mesa-dri libegl1 \
+        || true
+fi
 [ -d /etc/fluxlinux ] && [ ! -e /etc/bliss ] && mv /etc/fluxlinux /etc/bliss 2>/dev/null || true
 mkdir -p /etc/bliss
 printf '%s\n' virgl > /etc/bliss/gpu_mode

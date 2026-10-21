@@ -107,15 +107,27 @@ $DNF $DNF_OPTS install dbus-daemon dbus-x11 2>/dev/null || true
 
 _flux_ensure_dbus
 
-# Shared fonts, GTK schemas + Mesa — needed by any desktop.
-_flux_retry_pkg $DNF $DNF_OPTS install \
-    adwaita-icon-theme dejavu-sans-fonts \
-    gsettings-desktop-schemas \
-    mesa-dri-drivers mesa-libGL mesa-libEGL \
-    || {
-        echo "Bliss: base graphics package install failed"
-        exit 1
-    }
+# Resolve desktop choice before graphics so a terminal base skips Mesa/icons.
+DESKTOPS="${FLUX_DESKTOPS:-${FLUX_DESKTOP:-${FLUX_DESKTOP_ENV:-xfce}}}"
+DESKTOPS=$(printf '%s' "$DESKTOPS" | tr ',' ' ')
+DESKTOPS=$(printf '%s' "$DESKTOPS" | tr -s '[:space:]' ' ')
+case " $DESKTOPS " in *" xfce "*|*" xfce4 "*) _norm="xfce" ;; *) _norm="" ;; esac
+case " $DESKTOPS " in *" kde "*) _norm="${_norm}${_norm:+ }kde" ;; esac
+[ -n "$_norm" ] || _norm="none"
+DESKTOPS="$_norm"
+unset _norm
+
+# Shared fonts, GTK schemas + Mesa — desktop-only payload.
+if [ "$DESKTOPS" != "none" ]; then
+    _flux_retry_pkg $DNF $DNF_OPTS install \
+        adwaita-icon-theme dejavu-sans-fonts \
+        gsettings-desktop-schemas \
+        mesa-dri-drivers mesa-libGL mesa-libEGL \
+        || {
+            echo "Bliss: base graphics package install failed"
+            exit 1
+        }
+fi
 
 # Desktop contract: FLUX_DESKTOPS (space/comma separated) = xfce | kde | none;
 # legacy FLUX_DESKTOP / FLUX_DESKTOP_ENV remain valid single values. Unset/empty
@@ -186,6 +198,7 @@ if [ -z "${DESKTOPS##*xfce*}" ]; then
     # (best-effort; the panel writer adds them only when the .so exists).
     $DNF $DNF_OPTS install xfce4-battery-plugin xfce4-netload-plugin 2>/dev/null || true
 fi
+if [ "$DESKTOPS" != "none" ]; then
 $DNF $DNF_OPTS install mesa-vulkan-drivers 2>/dev/null || true
 $DNF $DNF_OPTS install gdk-pixbuf2-modules librsvg2 2>/dev/null || true
 
@@ -220,6 +233,7 @@ chmod 755 /usr/bin/bwrap
 if [ -f /tmp/bwrap-proot-shim ] && [ "$(stat -c %s /tmp/bwrap-proot-shim 2>/dev/null || echo 0)" -gt 20000 ]; then
     cp -f /tmp/bwrap-proot-shim /usr/bin/bwrap
     chmod 755 /usr/bin/bwrap
+fi
 fi
 
 # Container image ships only C.utf8. Launchers export en_US.UTF-8.

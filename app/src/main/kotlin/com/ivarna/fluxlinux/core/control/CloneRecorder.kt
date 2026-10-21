@@ -63,7 +63,10 @@ object CloneRecorder {
             var muxerStarted = false
             var frameIndex = 0L
             try {
-                val first = capture(maxWidth)
+                // The first capture initialises the display capture path and
+                // can take several seconds. Do not let a 5 s timeout turn a
+                // valid recording into an empty MP4.
+                val first = capture(maxWidth, timeoutMs = 15_000)
                     ?: throw IllegalStateException("No display frame to record")
                 val size = evenSize(first.width, first.height, maxWidth)
                 val width = size.first
@@ -84,23 +87,28 @@ object CloneRecorder {
                 val mux = MediaMuxer(file.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
                 muxer = mux
                 val info = MediaCodec.BufferInfo()
-                var bitmap: Bitmap? = first
-                while (isActive && !stopRequested) {
-                    val frame = bitmap ?: capture(maxWidth)
+                var pending: Bitmap? = first
+                // Always encode at least one frame, even when the user taps
+                // Stop while the codec is still initialising. After that,
+                // honour the stop request immediately.
+                while (isActive && (!stopRequested || frameIndex == 0L)) {
+                    val frame = pending ?: capture(maxWidth)
+                    pending = null
                     if (frame == null) {
+                        if (stopRequested) break
                         delay(1000L / rate)
                         continue
                     }
-                    if (frame.width != width || frame.height != height) {
-                        bitmap = Bitmap.createScaledBitmap(frame, width, height, true)
+                    val scaled = if (frame.width != width || frame.height != height) {
+                        Bitmap.createScaledBitmap(frame, width, height, true)
                     } else {
-                        bitmap = frame
+                        frame
                     }
                     val inputIndex = encoder.dequeueInputBuffer(10_000)
                     if (inputIndex >= 0) {
                         val image = encoder.getInputImage(inputIndex)
                         if (image != null) {
-                            fillYuv(image, bitmap!!)
+                            fillYuv(image, scaled)
                             val pts = frameIndex * 1_000_000L / rate
                             encoder.queueInputBuffer(inputIndex, 0, 0, pts, 0)
                             frameIndex++
@@ -108,7 +116,8 @@ object CloneRecorder {
                             encoder.queueInputBuffer(inputIndex, 0, 0, 0, 0)
                         }
                     }
-                    var drained = false
+                    if (scaled !== frame) scaled.recycle()
+                    frame.recycle()
                     while (true) {
                         val outIndex = encoder.dequeueOutputBuffer(info, 0)
                         if (outIndex == MediaCodec.INFO_TRY_AGAIN_LATER) {
@@ -127,15 +136,11 @@ object CloneRecorder {
                                 mux.writeSampleData(trackIndex, buffer, info)
                             }
                             encoder.releaseOutputBuffer(outIndex, false)
-                            drained = true
                             if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) break
                         }
                     }
                     state.value = state.value.copy(frames = frameIndex.toInt())
                     delay((1000L / rate).coerceAtLeast(66L))
-                    if (drained) {
-                        // keep the loop responsive to stop()
-                    }
                 }
                 // End of stream
                 val eosIndex = encoder.dequeueInputBuffer(20_000)
@@ -209,8 +214,8 @@ object CloneRecorder {
         .put("fps", state.value.fps)
         .put("error", state.value.error ?: JSONObject.NULL)
 
-    private suspend fun capture(maxWidth: Int): Bitmap? {
-        val bytes = HeadlessCloneEngine.apiCapture(maxWidth, 88) ?: return null
+    private suspend fun capture(maxWidth: Int, timeoutMs: Int = 5_000): Bitmap? {
+        val bytes = HeadlessCloneEngine.apiCapture(maxWidth, 88, timeoutMs) ?: return null
         return BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
     }
 

@@ -79,6 +79,16 @@ fun InstallTaskBar(
         }
     }
 
+    // Safety net for a superseded runner that reached 100% but never emitted
+    // its terminal tick. The timeout resets whenever updatedAtMillis changes,
+    // so an actively finalizing install is not hidden.
+    LaunchedEffect(state.isInstalling, state.overallPercent, state.updatedAtMillis) {
+        if (state.isInstalling && state.overallPercent >= 100) {
+            delay(12_000L)
+            InstallationQueueManager.dismissCompletedIfStale(state.updatedAtMillis)
+        }
+    }
+
     val openDetails: () -> Unit = {
         val distroId = state.currentDistroId
         if (distroId != null) onOpenProgress(distroId) else onOpenTroubleshooting()

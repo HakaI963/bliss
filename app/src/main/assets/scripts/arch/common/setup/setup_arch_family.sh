@@ -160,16 +160,27 @@ if ! pacman -Sy --noconfirm; then
     exit 1
 fi
 
+# Resolve the desktop choice before base packages: Mesa/icon themes are a
+# desktop-only payload and must not be pulled into a terminal base.
+DESKTOPS="${FLUX_DESKTOPS:-${FLUX_DESKTOP:-${FLUX_DESKTOP_ENV:-xfce}}}"
+DESKTOPS=$(printf '%s' "$DESKTOPS" | tr ',' ' ')
+DESKTOPS=$(printf '%s' "$DESKTOPS" | tr -s '[:space:]' ' ')
+case " $DESKTOPS " in *" xfce "*|*" xfce4 "*) _norm="xfce" ;; *) _norm="" ;; esac
+case " $DESKTOPS " in *" kde "*) _norm="${_norm}${_norm:+ }kde" ;; esac
+[ -n "$_norm" ] || _norm="none"
+DESKTOPS="$_norm"
+unset _norm
+
 _flux_log "Installing base packages..."
-if ! pacman -S --noconfirm --needed \
-    sudo \
-    git zsh python sed gzip \
-    ttf-dejavu adwaita-icon-theme \
-    mesa mesa-utils \
-    dbus xz; then
+_BASE_PKGS="sudo git zsh python sed gzip dbus xz"
+if [ "$DESKTOPS" != "none" ]; then
+    _BASE_PKGS="$_BASE_PKGS ttf-dejavu adwaita-icon-theme mesa mesa-utils"
+fi
+if ! pacman -S --noconfirm --needed $_BASE_PKGS; then
     echo "Bliss: base package install failed"
     exit 1
 fi
+unset _BASE_PKGS
 
 # Desktop contract: FLUX_DESKTOPS (space/comma separated) = xfce | kde | none;
 # legacy FLUX_DESKTOP / FLUX_DESKTOP_ENV remain valid single values. Unset/empty

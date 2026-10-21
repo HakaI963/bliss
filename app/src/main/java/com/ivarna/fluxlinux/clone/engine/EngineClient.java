@@ -382,6 +382,14 @@ public final class EngineClient {
         });
     }
 
+    /** APK path resolved and opened by the shell service (root/UID 2000). */
+    public String cloneFromPath(String path, String name) {
+        return callJson(Protocol.CMD_CLONE_FROM_PATH, parcel -> {
+            parcel.writeString(path);
+            parcel.writeString(name == null ? "" : name);
+        });
+    }
+
     public String cloneLaunch(String clonePackage) {
         return callJson(Protocol.CMD_CLONE_LAUNCH,
                 parcel -> parcel.writeString(clonePackage));

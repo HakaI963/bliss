@@ -101,8 +101,10 @@ if [ -z "${DESKTOPS##*xfce*}" ]; then
     # (best-effort; the panel writer adds them only when the .so exists).
     xbps-install -y xfce4-battery-plugin xfce4-netload-plugin 2>/dev/null || true
 fi
-# Shared fonts + Mesa — needed by any desktop (best-effort).
-xbps-install -y adwaita-icon-theme dejavu-fonts-ttf mesa mesa-dri 2>/dev/null || true
+# Shared fonts + Mesa — desktop-only payload (best-effort).
+if [ "$DESKTOPS" != "none" ]; then
+    xbps-install -y adwaita-icon-theme dejavu-fonts-ttf mesa mesa-dri 2>/dev/null || true
+fi
 
 if ! ls /usr/lib/locale 2>/dev/null | grep -qi 'en_US'; then
     xbps-install -y glibc-locales 2>/dev/null || true

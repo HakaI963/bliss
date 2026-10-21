@@ -99,10 +99,12 @@ if [ -z "${DESKTOPS##*xfce*}" ]; then
     DEBIAN_FRONTEND=noninteractive apt install -y --no-install-recommends \
         xfce4-battery-plugin xfce4-netload-plugin 2>/dev/null || true
 else
-    # Shared fonts + Mesa for non-XFCE desktops (best-effort).
-    apt-get install -y --no-install-recommends \
-        adwaita-icon-theme fonts-dejavu-core \
-        libgl1-mesa-dri libegl1 mesa-utils 2>/dev/null || true
+    # Desktop-only graphics payload: keep terminal-only installs lean.
+    if [ "$DESKTOPS" != "none" ]; then
+        apt-get install -y --no-install-recommends \
+            adwaita-icon-theme fonts-dejavu-core \
+            libgl1-mesa-dri libegl1 mesa-utils 2>/dev/null || true
+    fi
 fi
 
 _flux_ensure_en_us_locale || exit 1

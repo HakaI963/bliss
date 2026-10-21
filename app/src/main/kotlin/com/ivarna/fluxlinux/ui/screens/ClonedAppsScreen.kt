@@ -990,15 +990,20 @@ private fun CloneViewPage(
     val actionState = rememberLazyListState()
 
     LaunchedEffect(lines.lastOrNull()) {
-        if (lines.isNotEmpty()) logState.animateScrollToItem(lines.lastIndex)
+        // Follow the tail without an animation on every log tick: animating a
+        // 300-line list at each 900 ms refresh visibly janks the viewer.
+        if (lines.isNotEmpty()) logState.scrollToItem(lines.lastIndex)
     }
     LaunchedEffect(actions.lastOrNull()) {
-        if (actions.isNotEmpty()) actionState.animateScrollToItem(minOf(actions.size, 40) - 1)
+        if (actions.isNotEmpty()) actionState.scrollToItem(minOf(actions.size, 40) - 1)
     }
 
     LaunchedEffect(connected, displayReady, session.fps, live) {
         if (!connected || !live) return@LaunchedEffect
-        val frameDelay = (1000 / session.fps.coerceAtLeast(10)).coerceAtLeast(16).toLong()
+        // The virtual display can run at 80–120 fps; the JPEG preview cannot.
+        // Cap the UI stream at 24 fps so a high display rate does not starve
+        // input/rendering and make the viewer feel heavy.
+        val frameDelay = (1000 / session.fps.coerceIn(10, 24)).coerceAtLeast(42).toLong()
         while (isActive) {
             if (displayReady) HeadlessCloneEngine.capturePreview()
             delay(frameDelay)
