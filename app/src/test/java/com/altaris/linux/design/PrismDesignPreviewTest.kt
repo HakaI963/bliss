@@ -82,14 +82,12 @@ class PrismDesignPreviewTest {
                             onOpenSettings = {},
                         )
                         HomeHero(
-                            artRes = com.altaris.linux.R.drawable.splash_art_catgirl,
+                            artRes = com.altaris.linux.R.drawable.altaris_scene_1,
                             title = "Altaris",
-                            subtitle = "Your Linux environments",
-                            trailing = { PrismChip("Distros", MaterialTheme.colorScheme.primary) {} },
                         )
                         AltarisTitle(
                             "Home",
-                            "Your Linux environments",
+                            null,
                             MaterialTheme.colorScheme.primary,
                         )
                         PrismCard(accent = MaterialTheme.colorScheme.primary) {
