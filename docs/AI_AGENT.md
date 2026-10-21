@@ -29,6 +29,32 @@ Protocol: JSON-RPC 2.0 over HTTP. Send `initialize`, then `tools/list`, then
 The same operations are available in any distro terminal through the `altaris`
 helper, and over HTTP at `http://127.0.0.1:47831`.
 
+## Navigating a clone (accessibility tree)
+
+Screenshots plus OCR are the slow path. Altaris 3.20 reads the real UI tree of
+the clone's virtual display through an accessibility service, so an element can
+be addressed by name instead of by pixel.
+
+- `GET /uiauto?display=<id>` returns the node tree of the display:
+  `{"ok":true,"display":75,"source":"accessibility","nodes":[...]}` where each
+  node carries `id` (its path in the tree, e.g. `"r.0.2"`), `class`, `text`,
+  `desc`, `bounds`, `clickable`, `editable`, `scrollable`, `visible`.
+- `POST /uiauto/tap-text {"text":"Projects"}` taps the first element whose text
+  or content description matches — the shortest way to drive a UI.
+- `POST /uiauto/click {"nodeId":"r.0.2"}` clicks a node from the last tree.
+- `POST /uiauto/text {"nodeId":"...","text":"hello"}` types into an editable node.
+- `POST /uiauto/scroll {"nodeId":"...","forward":true}` scrolls a node.
+- `POST /uiauto/gesture {"x1":..,"y1":..,"x2":..,"y2":..}` swipes on the display.
+- `POST /uiauto/enable` turns the service on with root (no user prompt needed);
+  the same is available in the clone viewer under **Elements**.
+
+MCP mirrors these as `bliss_ui_tree`, `bliss_ui_tap_text`, `bliss_ui_click`,
+`bliss_ui_type`, `bliss_ui_scroll` and `bliss_ui_enable`.
+
+Node ids are only valid inside one snapshot — read the tree again after every
+navigation step. Canvas and game UIs expose no nodes; OCR and pixel taps stay
+the fallback for them.
+
 ## Mental model
 
 - A **source app** is installed on the phone and can be cloned.
