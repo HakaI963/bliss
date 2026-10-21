@@ -57,18 +57,38 @@ object AgentDetector {
             }
         }
         val bin = File(TermuxHostPaths.BIN)
-        if (bin.isDirectory) {
-            for (name in names) {
-                val f = File(bin, name)
-                if (f.isFile && f.canExecute()) {
-                    found["cli:$name"] = DetectedAgent(
-                        name = name,
-                        detail = f.absolutePath,
-                        kind = "cli",
-                    )
-                }
+        if (bin.isDirectory) scanBinDir(bin, found, "host cli")
+        val hostHome = File(TermuxHostPaths.HOME)
+        scanBinDir(File(hostHome, ".local/bin"), found, "host cli")
+        scanBinDir(File(hostHome, ".opencode/bin"), found, "host cli")
+        scanBinDir(File(hostHome, ".npm-global/bin"), found, "host cli")
+        val containers = File(context.filesDir, "usr/var/lib/proot-distro/containers")
+        containers.listFiles()?.forEach { container ->
+            val rootfs = File(container, "rootfs")
+            if (!rootfs.isDirectory) return@forEach
+            scanBinDir(File(rootfs, "usr/local/bin"), found, "guest cli")
+            scanBinDir(File(rootfs, "usr/bin"), found, "guest cli")
+            scanBinDir(File(rootfs, "root/.local/bin"), found, "guest cli")
+            scanBinDir(File(rootfs, "root/.opencode/bin"), found, "guest cli")
+            File(rootfs, "home").listFiles()?.forEach { home ->
+                scanBinDir(File(home, ".local/bin"), found, "guest cli")
+                scanBinDir(File(home, ".opencode/bin"), found, "guest cli")
             }
         }
         return found.values.sortedWith(compareBy({ it.kind }, { it.name.lowercase() }))
+    }
+
+    private fun scanBinDir(dir: File, found: MutableMap<String, DetectedAgent>, kind: String) {
+        if (!dir.isDirectory) return
+        for (name in names) {
+            val file = File(dir, name)
+            if (file.isFile && file.canExecute()) {
+                found["cli:$kind:${file.absolutePath}"] = DetectedAgent(
+                    name = name,
+                    detail = file.absolutePath,
+                    kind = kind,
+                )
+            }
+        }
     }
 }

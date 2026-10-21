@@ -311,7 +311,7 @@ private fun AgentsCard(context: Context) {
     QSectionHeader("Auto-detect")
     QCard {
         Column(Modifier.padding(horizontal = Quartz.CardPad, vertical = 12.dp)) {
-            Text("Scans Android packages and host binaries for OpenCode, Pi, Alpha, Hermes, Claude, Codex, Aider, Gemini and similar runtimes.", fontSize = 12.sp, color = fluxMutedText())
+            Text("Scans Android packages, host binaries and proot/chroot bin paths for OpenCode, Pi, Alpha, Hermes, Claude, Codex, Aider, Gemini and similar runtimes.", fontSize = 12.sp, color = fluxMutedText())
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 QPrimaryButton("Detect agents", icon = Icons.Default.Refresh) { tick++ }
