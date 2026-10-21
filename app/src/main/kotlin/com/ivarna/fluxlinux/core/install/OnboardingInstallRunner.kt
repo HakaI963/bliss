@@ -1353,8 +1353,15 @@ class OnboardingInstallRunner(private val ctx: Context) {
     private fun publishLive(progress: Progress) {
         val distroId = sessionDistroId ?: return
         // A superseded instance (newer start() elsewhere) must never clobber the
-        // shared task-bar/live state with its stale ticks.
-        if (activeInstance !== this) return
+        // shared task-bar/live state with its stale ticks. Its *terminal* tick
+        // is still allowed through when it is the task the bar is showing, so
+        // a completed/aborted runner cannot leave a 100% bar behind forever.
+        if (activeInstance !== this) {
+            val shared = InstallationQueueManager.installState.value
+            val sameTask = shared.currentDistroId == distroId &&
+                shared.currentTaskName == sessionTaskName
+            if (!sameTask || !(progress.finished || progress.failed)) return
+        }
         progress.logLine?.let { appendSessionLog(it) }
         _live.value = LiveInstall(
             distroId = distroId,
