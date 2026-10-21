@@ -71,9 +71,9 @@ one (`apt install curl`, `apk add curl`, `dnf install curl`, …).
 | POST | `/record/stop` | — |
 | GET | `/uiauto/status` | accessibility service state |
 | GET | `/uiauto` | `display` (optional), `max` (optional) → UI node tree |
-| POST | `/uiauto/click` | `nodeId` |
-| POST | `/uiauto/text` | `nodeId`, `text` |
-| POST | `/uiauto/scroll` | `nodeId`, optional `forward` |
+| POST | `/uiauto/click` | `nodeId` (node path) |
+| POST | `/uiauto/text` | `nodeId` (node path), `text` |
+| POST | `/uiauto/scroll` | `nodeId` (node path), optional `forward` |
 | POST | `/uiauto/tap-text` | `text`, optional `exact`, optional `display` |
 | POST | `/uiauto/gesture` | `x1`,`y1`,`x2`,`y2`, optional `ms`, optional `display` |
 | POST | `/uiauto/enable` | — (enables the service with root) |
@@ -146,8 +146,9 @@ clone can be driven by element name instead of by pixel coordinates.
   `text`, `desc`, `package`, `bounds`, `winBounds`, `clickable`, `editable`,
   `scrollable`, `focusable`, `enabled`, `visible`, `checked`, `actions`,
   `childCount` and `depth`.
-- `nodeId` values are only valid inside one snapshot: read the tree again
-  after every navigation step.
+- `nodeId` is the node path inside the tree (`"r.0.2"`), not a platform id;
+  it is only valid inside one snapshot, so read the tree again after every
+  navigation step.
 - Canvas and game UIs expose no nodes; OCR and pixel mode stay the fallback
   for them. The clone viewer shows the same list under **Elements**.
 

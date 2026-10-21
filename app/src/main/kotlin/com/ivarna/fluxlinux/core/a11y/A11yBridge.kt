@@ -59,7 +59,7 @@ object A11yBridge {
      * Click a node. Falls back to an engine tap at the node centre when the
      * node itself is not clickable.
      */
-    fun click(context: Context, nodeId: Long): String {
+    fun click(context: Context, nodeId: String): String {
         val raw = call(context, "click", nodeId.toString(), null)
         val obj = runCatching { JSONObject(raw) }.getOrNull() ?: return raw
         if (obj.optBoolean("ok", false)) return raw
@@ -79,7 +79,7 @@ object A11yBridge {
     }
 
     /** Type [text] into an editable node. */
-    fun setText(context: Context, nodeId: Long, text: String): String =
+    fun setText(context: Context, nodeId: String, text: String): String =
         call(
             context,
             "text",
@@ -88,7 +88,7 @@ object A11yBridge {
         )
 
     /** Scroll a node forward (true) or backward (false). */
-    fun scroll(context: Context, nodeId: Long, forward: Boolean): String =
+    fun scroll(context: Context, nodeId: String, forward: Boolean): String =
         call(
             context,
             "scroll",
@@ -139,8 +139,8 @@ object A11yBridge {
                 exact -> label.equals(needle, true) || desc.equals(needle, true)
                 else -> label.contains(needle, true) || desc.contains(needle, true)
             }
-            if (!hit) continue
-            val nodeId = node.optLong("id", -1L)
+            if (!hit || nodeId.isBlank()) continue
+            val nodeId = node.optString("id")
             val clickResult = runCatching { JSONObject(click(context, nodeId)) }.getOrNull()
             val ok = clickResult?.optBoolean("ok", false) ?: false
             return JSONObject()

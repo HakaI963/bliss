@@ -408,30 +408,30 @@ object ControlServer {
             "/record/stop" -> json(200, CloneRecorder.stop())
             "/uiauto/click" -> {
                 val ctx = appContext
-                val nodeId = obj.optLong("nodeId", -1L)
+                val nodeId = obj.opt("nodeId")?.toString().orEmpty()
                 when {
                     ctx == null -> json(503, JSONObject().put("ok", false).put("error", "App context is not ready"))
-                    nodeId < 0L -> json(400, JSONObject().put("ok", false).put("error", "nodeId is required"))
+                    nodeId.isBlank() -> json(400, JSONObject().put("ok", false).put("error", "nodeId is required"))
                     else -> uiautoResponse(A11yBridge.click(ctx, nodeId))
                 }
             }
             "/uiauto/text" -> {
                 val ctx = appContext
-                val nodeId = obj.optLong("nodeId", -1L)
+                val nodeId = obj.opt("nodeId")?.toString().orEmpty()
                 val text = obj.optString("text")
                 when {
                     ctx == null -> json(503, JSONObject().put("ok", false).put("error", "App context is not ready"))
-                    nodeId < 0L -> json(400, JSONObject().put("ok", false).put("error", "nodeId is required"))
+                    nodeId.isBlank() -> json(400, JSONObject().put("ok", false).put("error", "nodeId is required"))
                     text.isEmpty() -> json(400, JSONObject().put("ok", false).put("error", "text is required"))
                     else -> uiautoResponse(A11yBridge.setText(ctx, nodeId, text))
                 }
             }
             "/uiauto/scroll" -> {
                 val ctx = appContext
-                val nodeId = obj.optLong("nodeId", -1L)
+                val nodeId = obj.opt("nodeId")?.toString().orEmpty()
                 when {
                     ctx == null -> json(503, JSONObject().put("ok", false).put("error", "App context is not ready"))
-                    nodeId < 0L -> json(400, JSONObject().put("ok", false).put("error", "nodeId is required"))
+                    nodeId.isBlank() -> json(400, JSONObject().put("ok", false).put("error", "nodeId is required"))
                     else -> uiautoResponse(A11yBridge.scroll(ctx, nodeId, obj.optBoolean("forward", true)))
                 }
             }

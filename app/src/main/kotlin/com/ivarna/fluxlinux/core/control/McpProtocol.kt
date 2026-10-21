@@ -196,14 +196,14 @@ object McpProtocol {
             tool(
                 "bliss_ui_click",
                 "Click a UI node by the id from the last bliss_ui_tree snapshot.",
-                schema("nodeId" to "integer: node id from bliss_ui_tree")
+                schema("nodeId" to "string: node id (path) from bliss_ui_tree")
             )
         )
         put(
             tool(
                 "bliss_ui_type",
                 "Type text into an editable UI node.",
-                schema("nodeId" to "integer: node id from bliss_ui_tree", "text" to "string: text to enter")
+                schema("nodeId" to "string: node id (path) from bliss_ui_tree", "text" to "string: text to enter")
             )
         )
         put(
@@ -211,7 +211,7 @@ object McpProtocol {
                 "bliss_ui_scroll",
                 "Scroll a UI node forward or backward.",
                 schema(
-                    "nodeId" to "integer: node id from bliss_ui_tree",
+                    "nodeId" to "string: node id (path) from bliss_ui_tree",
                     "forward" to "boolean: optional, default true"
                 )
             )
@@ -373,16 +373,16 @@ object McpProtocol {
         }
         "bliss_ui_click" -> {
             val ctx = ControlServer.context() ?: throw IllegalStateException("App context unavailable")
-            textResult(a11yObject(A11yBridge.click(ctx, args.optLong("nodeId", -1L))))
+            textResult(a11yObject(A11yBridge.click(ctx, args.opt("nodeId")?.toString().orEmpty())))
         }
         "bliss_ui_type" -> {
             val ctx = ControlServer.context() ?: throw IllegalStateException("App context unavailable")
-            textResult(a11yObject(A11yBridge.setText(ctx, args.optLong("nodeId", -1L), args.optString("text"))))
+            textResult(a11yObject(A11yBridge.setText(ctx, args.opt("nodeId")?.toString().orEmpty(), args.optString("text"))))
         }
         "bliss_ui_scroll" -> {
             val ctx = ControlServer.context() ?: throw IllegalStateException("App context unavailable")
             textResult(
-                a11yObject(A11yBridge.scroll(ctx, args.optLong("nodeId", -1L), args.optBoolean("forward", true)))
+                a11yObject(A11yBridge.scroll(ctx, args.opt("nodeId")?.toString().orEmpty(), args.optBoolean("forward", true)))
             )
         }
         "bliss_ui_tap_text" -> {

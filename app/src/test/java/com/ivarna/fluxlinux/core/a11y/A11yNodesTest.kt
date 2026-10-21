@@ -11,7 +11,7 @@ class A11yNodesTest {
     fun parsesTreePayload() {
         val nodes = A11yNodes.parse(TREE)
         assertEquals(2, nodes.size)
-        assertEquals(11L, nodes[0].id)
+        assertEquals("r.0", nodes[0].id)
         assertEquals("Sign in", nodes[0].label)
         assertEquals("Button", nodes[0].type)
         assertEquals("10,20 → 110,60", nodes[0].boundsLabel)
@@ -29,11 +29,11 @@ class A11yNodesTest {
 
     private companion object {
         const val TREE = """{"ok":true,"display":75,"source":"accessibility","nodes":[
-            {"id":11,"class":"android.widget.Button","text":"Sign in","desc":"",
+            {"id":"r.0","class":"android.widget.Button","text":"Sign in","desc":"",
              "package":"com.example.app","bounds":[10,20,110,60],"winBounds":[10,20,110,60],
              "clickable":true,"editable":false,"scrollable":false,"focusable":true,
              "enabled":true,"visible":true,"checked":false,"actions":[16],"childCount":0,"depth":3},
-            {"id":12,"class":"android.widget.EditText","text":"","desc":"Email",
+            {"id":"r.1","class":"android.widget.EditText","text":"","desc":"Email",
              "package":"com.example.app","bounds":[0,0,10,10],"winBounds":[0,0,10,10],
              "clickable":false,"editable":true,"scrollable":false,"focusable":true,
              "enabled":true,"visible":true,"checked":false,"actions":[32],"childCount":0,"depth":4}]}"""

@@ -7,7 +7,8 @@ import org.json.JSONObject
  * One accessibility node of the virtual display, as listed in the viewer.
  */
 data class A11yNode(
-    val id: Long,
+    /** Path of the node in the tree, e.g. "r.0.2". */
+    val id: String,
     val className: String,
     val text: String,
     val description: String,
@@ -53,7 +54,7 @@ object A11yNodes {
             val node = array.optJSONObject(i) ?: continue
             out.add(
                 A11yNode(
-                    id = node.optLong("id", -1L),
+                    id = node.optString("id"),
                     className = node.optString("class"),
                     text = node.optString("text"),
                     description = node.optString("desc"),

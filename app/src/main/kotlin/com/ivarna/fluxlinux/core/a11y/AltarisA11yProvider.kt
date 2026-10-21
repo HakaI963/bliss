@@ -59,13 +59,13 @@ class AltarisA11yProvider : ContentProvider() {
                     arg?.toIntOrNull() ?: -1,
                     extras?.getInt("max", 600) ?: 600,
                 )
-                "click" -> service.clickDetailed(arg?.toLongOrNull() ?: -1L)
+                "click" -> service.clickDetailed(arg.orEmpty())
                 "text" -> service.setTextDetailed(
-                    arg?.toLongOrNull() ?: -1L,
+                    arg.orEmpty(),
                     extras?.getString("text").orEmpty(),
                 )
                 "scroll" -> service.scrollDetailed(
-                    arg?.toLongOrNull() ?: -1L,
+                    arg.orEmpty(),
                     extras?.getBoolean("forward", true) ?: true,
                 )
                 "gesture" -> service.gestureDetailed(

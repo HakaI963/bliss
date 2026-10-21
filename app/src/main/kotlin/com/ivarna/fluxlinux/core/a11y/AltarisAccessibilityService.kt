@@ -5,12 +5,14 @@ import android.accessibilityservice.AccessibilityServiceInfo
 import android.accessibilityservice.GestureDescription
 import android.content.Intent
 import android.graphics.Path
+import android.graphics.Rect
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.view.Display
+import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
 import org.json.JSONArray
@@ -27,6 +29,10 @@ import java.util.concurrent.TimeUnit
  * the main Altaris process. The app talks to it synchronously through
  * [AltarisA11yProvider], which lives in the same process.
  *
+ * Nodes are addressed by their path in the tree ("r.0.2"), not by a platform
+ * id: the platform id APIs changed across releases, while a path stays valid
+ * for as long as the tree itself does.
+ *
  * Every entry point is safe to call from a binder thread and never throws:
  * failures come back as a JSON error payload.
  */
@@ -37,6 +43,9 @@ class AltarisAccessibilityService : AccessibilityService() {
 
         /** Max tree depth walked for a snapshot. */
         private const val MAX_DEPTH = 40
+
+        /** Path of the root node. */
+        private const val ROOT_PATH = "r"
 
         /** Fully qualified class name of the service (source package is stable). */
         const val CLASS_NAME = "com.ivarna.fluxlinux.core.a11y.AltarisAccessibilityService"
@@ -59,6 +68,14 @@ class AltarisAccessibilityService : AccessibilityService() {
             AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS
         serviceInfo = info
         Log.i(TAG, "accessibility service connected")
+    }
+
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        // The tree is read on demand; events only tell us the app changed.
+    }
+
+    override fun onInterrupt() {
+        // No spoken feedback is produced by this service.
     }
 
     override fun onDestroy() {
@@ -115,31 +132,31 @@ class AltarisAccessibilityService : AccessibilityService() {
             .toString()
     }.getOrElse { errorJson("snapshot failed: ${it.message}") }
 
-    /** Click the node with [nodeId] (ids are only valid inside one snapshot). */
-    fun click(nodeId: Long): Boolean =
-        runCatching { performClick(nodeId).optBoolean("ok", false) }.getOrDefault(false)
+    /** Click the node at [path] (paths are only valid inside one snapshot). */
+    fun click(path: String): Boolean =
+        runCatching { performClick(path).optBoolean("ok", false) }.getOrDefault(false)
 
     /** Detailed click result (JSON) used by the app-side bridge. */
-    fun clickDetailed(nodeId: Long): String =
-        runCatching { performClick(nodeId).toString() }.getOrElse { errorJson("click failed: ${it.message}") }
+    fun clickDetailed(path: String): String =
+        runCatching { performClick(path).toString() }.getOrElse { errorJson("click failed: ${it.message}") }
 
     /** Set the text of an editable node. */
-    fun setText(nodeId: Long, text: String): Boolean =
-        runCatching { performSetText(nodeId, text).optBoolean("ok", false) }.getOrDefault(false)
+    fun setText(path: String, text: String): Boolean =
+        runCatching { performSetText(path, text).optBoolean("ok", false) }.getOrDefault(false)
 
     /** Detailed set-text result (JSON) used by the app-side bridge. */
-    fun setTextDetailed(nodeId: Long, text: String): String =
-        runCatching { performSetText(nodeId, text).toString() }
-            .getOrElse { errorJson("set text failed: ${it.message}") }
+    fun setTextDetailed(path: String, text: String): String = runCatching {
+        performSetText(path, text).toString()
+    }.getOrElse { errorJson("set text failed: ${it.message}") }
 
     /** Scroll a node forward or backward. */
-    fun scroll(nodeId: Long, forward: Boolean): Boolean =
-        runCatching { performScroll(nodeId, forward).optBoolean("ok", false) }.getOrDefault(false)
+    fun scroll(path: String, forward: Boolean): Boolean =
+        runCatching { performScroll(path, forward).optBoolean("ok", false) }.getOrDefault(false)
 
     /** Detailed scroll result (JSON) used by the app-side bridge. */
-    fun scrollDetailed(nodeId: Long, forward: Boolean): String =
-        runCatching { performScroll(nodeId, forward).toString() }
-            .getOrElse { errorJson("scroll failed: ${it.message}") }
+    fun scrollDetailed(path: String, forward: Boolean): String = runCatching {
+        performScroll(path, forward).toString()
+    }.getOrElse { errorJson("scroll failed: ${it.message}") }
 
     /** Dispatch a single stroke gesture on [displayId]. */
     fun gesture(displayId: Int, x1: Float, y1: Float, x2: Float, y2: Float, ms: Long): Boolean =
@@ -165,29 +182,26 @@ class AltarisAccessibilityService : AccessibilityService() {
 
     // ---------------------------------------------------------------- actions
 
-    private fun performClick(nodeId: Long): JSONObject {
-        val node = resolveNode(nodeId)
+    private fun performClick(path: String): JSONObject {
+        val node = resolveNode(path)
             ?: return JSONObject()
                 .put("ok", false)
-                .put("nodeId", nodeId)
-                .put("error", "node $nodeId not found — the tree changed, read it again")
+                .put("nodeId", path)
+                .put("error", "node $path not found — the tree changed, read it again")
         val performed = runCatching {
             node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
         }.getOrDefault(false)
         if (performed) {
-            return JSONObject().put("ok", true).put("nodeId", nodeId).put("method", "action_click")
+            return JSONObject().put("ok", true).put("nodeId", path).put("method", "action_click")
         }
-        val bounds = runCatching { node.getBoundsInScreen() }.getOrNull()
+        val bounds = boundsInScreen(node)
         val payload = JSONObject()
             .put("ok", false)
-            .put("nodeId", nodeId)
+            .put("nodeId", path)
             .put("reason", "not_clickable")
             .put("error", "node is not clickable")
         if (bounds != null) {
-            payload.put(
-                "bounds",
-                JSONArray().put(bounds.left).put(bounds.top).put(bounds.right).put(bounds.bottom),
-            )
+            payload.put("bounds", rectJson(bounds))
             // The clone engine input path lives in the app process; it is only
             // reachable here when the service runs in that same process.
             val fallback = A11yEngineFallback.tap
@@ -198,7 +212,7 @@ class AltarisAccessibilityService : AccessibilityService() {
                 if (tapped) {
                     return JSONObject()
                         .put("ok", true)
-                        .put("nodeId", nodeId)
+                        .put("nodeId", path)
                         .put("method", "engine_tap")
                         .put("x", cx)
                         .put("y", cy)
@@ -208,16 +222,16 @@ class AltarisAccessibilityService : AccessibilityService() {
         return payload
     }
 
-    private fun performSetText(nodeId: Long, text: String): JSONObject {
-        val node = resolveNode(nodeId)
+    private fun performSetText(path: String, text: String): JSONObject {
+        val node = resolveNode(path)
             ?: return JSONObject()
                 .put("ok", false)
-                .put("nodeId", nodeId)
-                .put("error", "node $nodeId not found — the tree changed, read it again")
+                .put("nodeId", path)
+                .put("error", "node $path not found — the tree changed, read it again")
         if (!node.isEditable) {
             return JSONObject()
                 .put("ok", false)
-                .put("nodeId", nodeId)
+                .put("nodeId", path)
                 .put("reason", "not_editable")
                 .put("error", "node is not editable")
         }
@@ -229,17 +243,17 @@ class AltarisAccessibilityService : AccessibilityService() {
         }.getOrDefault(false)
         return JSONObject()
             .put("ok", done)
-            .put("nodeId", nodeId)
+            .put("nodeId", path)
             .put("text", text)
             .apply { if (!done) put("error", "set-text action was rejected") }
     }
 
-    private fun performScroll(nodeId: Long, forward: Boolean): JSONObject {
-        val node = resolveNode(nodeId)
+    private fun performScroll(path: String, forward: Boolean): JSONObject {
+        val node = resolveNode(path)
             ?: return JSONObject()
                 .put("ok", false)
-                .put("nodeId", nodeId)
-                .put("error", "node $nodeId not found — the tree changed, read it again")
+                .put("nodeId", path)
+                .put("error", "node $path not found — the tree changed, read it again")
         val action = if (forward) {
             AccessibilityNodeInfo.ACTION_SCROLL_FORWARD
         } else {
@@ -248,7 +262,7 @@ class AltarisAccessibilityService : AccessibilityService() {
         val done = runCatching { node.performAction(action) }.getOrDefault(false)
         return JSONObject()
             .put("ok", done)
-            .put("nodeId", nodeId)
+            .put("nodeId", path)
             .put("forward", forward)
             .apply { if (!done) put("error", "scroll action was rejected") }
     }
@@ -338,7 +352,7 @@ class AltarisAccessibilityService : AccessibilityService() {
             ?.let { return it.window }
         return pool.maxByOrNull { ref ->
             val root = runCatching { ref.window.root }.getOrNull() ?: return@maxByOrNull 0
-            val bounds = runCatching { root.getBoundsInScreen() }.getOrNull() ?: return@maxByOrNull 0
+            val bounds = boundsInScreen(root) ?: return@maxByOrNull 0
             bounds.width() * bounds.height()
         }?.window
     }
@@ -347,25 +361,30 @@ class AltarisAccessibilityService : AccessibilityService() {
     private fun walk(root: AccessibilityNodeInfo, maxNodes: Int): JSONArray {
         val out = JSONArray()
         val queue = ArrayDeque<Pair<AccessibilityNodeInfo, Int>>()
-        queue.addLast(root to 0)
+        val paths = ArrayDeque<String>()
+        queue.addLast(root)
+        paths.addLast(ROOT_PATH)
         while (queue.isNotEmpty() && out.length() < maxNodes) {
-            val (node, depth) = queue.removeFirst()
-            out.put(nodeJson(node, depth))
+            val node = queue.removeFirst()
+            val path = paths.removeFirst()
+            val depth = path.count { it == '.' }
+            out.put(nodeJson(node, path, depth))
             if (depth >= MAX_DEPTH) continue
             val count = runCatching { node.childCount }.getOrDefault(0)
             for (i in 0 until count) {
                 val child = runCatching { node.getChild(i) }.getOrNull() ?: continue
-                queue.addLast(child to depth + 1)
+                queue.addLast(child)
+                paths.addLast("$path.$i")
             }
         }
         return out
     }
 
-    private fun nodeJson(node: AccessibilityNodeInfo, depth: Int): JSONObject {
-        val screen = runCatching { node.getBoundsInScreen() }.getOrNull()
-        val window = runCatching { node.getBoundsInWindow() }.getOrNull()
+    private fun nodeJson(node: AccessibilityNodeInfo, path: String, depth: Int): JSONObject {
+        val screen = boundsInScreen(node)
+        val window = boundsInWindow(node)
         return JSONObject()
-            .put("id", node.getId().toLong())
+            .put("id", path)
             .put("class", node.className?.toString().orEmpty())
             .put("text", node.text?.toString().orEmpty())
             .put("desc", node.contentDescription?.toString().orEmpty())
@@ -384,7 +403,21 @@ class AltarisAccessibilityService : AccessibilityService() {
             .put("depth", depth)
     }
 
-    private fun rectJson(rect: android.graphics.Rect?): JSONArray {
+    /** Screen bounds of a node. The no-argument getter is gone on API 34+. */
+    private fun boundsInScreen(node: AccessibilityNodeInfo): Rect? {
+        val rect = Rect()
+        val ok = runCatching { node.getBoundsInScreen(rect) }.getOrDefault(false)
+        return if (ok) rect else null
+    }
+
+    /** Window bounds of a node. */
+    private fun boundsInWindow(node: AccessibilityNodeInfo): Rect? {
+        val rect = Rect()
+        val ok = runCatching { node.getBoundsInWindow(rect) }.getOrDefault(false)
+        return if (ok) rect else null
+    }
+
+    private fun rectJson(rect: Rect?): JSONArray {
         if (rect == null) return JSONArray()
         return JSONArray().put(rect.left).put(rect.top).put(rect.right).put(rect.bottom)
     }
@@ -392,7 +425,7 @@ class AltarisAccessibilityService : AccessibilityService() {
     private fun actionIds(node: AccessibilityNodeInfo): JSONArray {
         val ids = JSONArray()
         val declared: List<Int> = runCatching {
-            node.getActions().map { action -> action.id }
+            node.actionList.map { action -> action.id }
         }.getOrDefault(emptyList())
         declared.forEach { ids.put(it) }
         if (declared.isEmpty()) {
@@ -414,23 +447,20 @@ class AltarisAccessibilityService : AccessibilityService() {
         return ids
     }
 
-    /** Node ids are only valid inside one snapshot, so always re-resolve them. */
-    private fun resolveNode(nodeId: Long): AccessibilityNodeInfo? {
+    /** Paths are only valid inside one snapshot, so always re-resolve them. */
+    private fun resolveNode(path: String): AccessibilityNodeInfo? {
         val windows = windowsFor(-1)
         val root = pickAppWindow(windows)?.root ?: return null
-        return findById(root, nodeId, 0)
-    }
-
-    private fun findById(node: AccessibilityNodeInfo, nodeId: Long, depth: Int): AccessibilityNodeInfo? {
-        if (depth > MAX_DEPTH) return null
-        if (runCatching { node.getId().toLong() }.getOrDefault(-1L) == nodeId) return node
-        val count = runCatching { node.childCount }.getOrDefault(0)
-        for (i in 0 until count) {
-            val child = runCatching { node.getChild(i) }.getOrNull() ?: continue
-            val found = findById(child, nodeId, depth + 1)
-            if (found != null) return found
+        val parts = path.trim().split('.').filter { it.isNotEmpty() }
+        if (parts.isEmpty() || parts.first() != ROOT_PATH) return null
+        var node = root
+        for (index in parts.drop(1)) {
+            val position = index.toIntOrNull() ?: return null
+            val count = runCatching { node.childCount }.getOrDefault(0)
+            if (position < 0 || position >= count) return null
+            node = runCatching { node.getChild(position) }.getOrNull() ?: return null
         }
-        return null
+        return node
     }
 
     private fun errorJson(message: String): String =
