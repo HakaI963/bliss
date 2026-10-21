@@ -73,7 +73,7 @@ private fun onAccentFor(palette: ThemePalette, dark: Boolean): Color = when (pal
  * colours from here, so a scheme change restyles the whole app at once.
  */
 val LocalAltarisPalette = staticCompositionLocalOf {
-    AltarisPalettes.of(AltarisScheme.AURORA_NEON, dark = true)
+    AltarisPalettes.of(AltarisScheme.IRIDESCENT, dark = true)
 }
 
 /**
@@ -206,14 +206,14 @@ private fun applyLegacyTokens(palette: AltarisPalette, accent: ThemePalette) {
 fun FolioTheme(
     themeMode: ThemeMode = ThemeMode.DARK,
     dynamicColor: Boolean = false,
-    scheme: AltarisScheme = AltarisScheme.AURORA_NEON,
+    scheme: AltarisScheme? = null,
     accent: ThemePalette? = null,
     content: @Composable () -> Unit
 ) {
     val context = LocalContext.current
     remember(context) {
         runCatching { StateManager.getScheme(context) }
-            .getOrDefault(AltarisScheme.AURORA_NEON)
+            .getOrDefault(AltarisScheme.IRIDESCENT)
     }
     remember(context) {
         runCatching { StateManager.getThemePalette(context) }
@@ -227,9 +227,8 @@ fun FolioTheme(
         ThemeMode.DARK -> true
         else -> isSystemInDarkTheme()
     }
-    // An explicit non-default scheme wins; otherwise the persisted one does.
-    val activeScheme =
-        if (scheme != AltarisScheme.AURORA_NEON) scheme else persistedScheme
+    // An explicit scheme wins; otherwise the persisted one does.
+    val activeScheme = scheme ?: persistedScheme
     val activeAccent = accent ?: persistedAccent
     val palette = remember(activeScheme, darkTheme) {
         AltarisPalettes.of(activeScheme, darkTheme)
@@ -264,7 +263,7 @@ fun FolioTheme(
 fun FluxLinuxTheme(
     themeMode: ThemeMode = ThemeMode.DARK,
     dynamicColor: Boolean = false,
-    scheme: AltarisScheme = AltarisScheme.AURORA_NEON,
+    scheme: AltarisScheme? = null,
     accent: ThemePalette? = null,
     content: @Composable () -> Unit
 ) {

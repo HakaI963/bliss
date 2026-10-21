@@ -56,20 +56,20 @@ object StateManager {
     // Persisted under the "scheme" key of the same "theme_prefs" file (see
     // ThemePreferences.getScheme/setScheme). The observable lets FolioTheme
     // and the Settings picker restyle the app with no extra plumbing.
-    private val _scheme = MutableStateFlow(AltarisScheme.AURORA_NEON)
+    private val _scheme = MutableStateFlow(AltarisScheme.IRIDESCENT)
     val scheme: StateFlow<AltarisScheme> = _scheme.asStateFlow()
 
     /**
-     * Read the persisted identity (defaults to AURORA_NEON) and hydrate the
+     * Read the persisted identity (defaults to IRIDESCENT) and hydrate the
      * flow.
      */
     fun getScheme(context: Context): AltarisScheme {
         val prefs = context.getSharedPreferences("theme_prefs", Context.MODE_PRIVATE)
-        val schemeName = prefs.getString("scheme", AltarisScheme.AURORA_NEON.name)
+        val schemeName = prefs.getString("scheme", AltarisScheme.IRIDESCENT.name)
         val scheme = try {
-            AltarisScheme.valueOf(schemeName ?: AltarisScheme.AURORA_NEON.name)
+            AltarisScheme.valueOf(schemeName ?: AltarisScheme.IRIDESCENT.name)
         } catch (e: IllegalArgumentException) {
-            AltarisScheme.AURORA_NEON
+            AltarisScheme.IRIDESCENT
         }
         _scheme.value = scheme
         return scheme

@@ -71,11 +71,11 @@ class ThemePreferences(context: Context) {
      * fall back to the default identity so a downgrade never breaks the UI.
      */
     fun getScheme(): AltarisScheme {
-        val name = prefs.getString("scheme", AltarisScheme.AURORA_NEON.name)
+        val name = prefs.getString("scheme", AltarisScheme.IRIDESCENT.name)
         return try {
-            AltarisScheme.valueOf(name ?: AltarisScheme.AURORA_NEON.name)
+            AltarisScheme.valueOf(name ?: AltarisScheme.IRIDESCENT.name)
         } catch (e: IllegalArgumentException) {
-            AltarisScheme.AURORA_NEON
+            AltarisScheme.IRIDESCENT
         }
     }
 

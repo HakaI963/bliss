@@ -14,32 +14,32 @@ import com.ivarna.fluxlinux.core.utils.ThemePalette
 // Observable top-level tokens keep legacy Frost/Quartz call sites in sync with
 // the active identity. New code should use MaterialTheme.colorScheme directly.
 
-var FolioBackground by mutableStateOf(Color(0xFF070A1C))
+var FolioBackground by mutableStateOf(Color(0xFF0E0F13))
     internal set
-var FolioSurface by mutableStateOf(Color(0xFF0E1430))
+var FolioSurface by mutableStateOf(Color(0xFF191B22))
     internal set
-var FolioCard by mutableStateOf(Color(0xFF161E42))
+var FolioCard by mutableStateOf(Color(0xFF23262F))
     internal set
-var FrostSurface by mutableStateOf(Color(0xFF0E1430))
+var FrostSurface by mutableStateOf(Color(0xFF191B22))
     internal set
-var FrostSurfaceElevated by mutableStateOf(Color(0xFF161E42))
+var FrostSurfaceElevated by mutableStateOf(Color(0xFF23262F))
     internal set
-var FrostHairline by mutableStateOf(Color(0xFF1B2440))
+var FrostHairline by mutableStateOf(Color(0xFF22252C))
     internal set
 var FrostTopSheen by mutableStateOf(Color.White.copy(alpha = 0.26f))
     internal set
 
-var TextPrimary by mutableStateOf(Color(0xFFF2F5FF))
+var TextPrimary by mutableStateOf(Color(0xFFFAFAFF))
     internal set
-var TextSecondary by mutableStateOf(Color(0xFFA9B2D6))
+var TextSecondary by mutableStateOf(Color(0xFFA9A9B8))
     internal set
-var TextMuted by mutableStateOf(Color(0xFF2A3358))
+var TextMuted by mutableStateOf(Color(0xFF2E313C))
     internal set
-var PrimaryAction by mutableStateOf(Color(0xFF5EE7FF))
+var PrimaryAction by mutableStateOf(Color(0xFFE9E7FF))
     internal set
-var OnPrimaryAction by mutableStateOf(Color(0xFF00202B))
+var OnPrimaryAction by mutableStateOf(Color(0xFF16141F))
     internal set
-var StatusDot by mutableStateOf(Color(0xFF5EE7FF))
+var StatusDot by mutableStateOf(Color(0xFFE9E7FF))
     internal set
 var FolioDanger by mutableStateOf(Color(0xFFFF8A80))
     internal set
@@ -47,15 +47,15 @@ var FolioDangerContainer by mutableStateOf(Color(0xFF4A1512))
     internal set
 
 // Frost switch tokens, kept for the existing switch call sites.
-var FolioSwitchCheckedTrack by mutableStateOf(Color(0xFF5EE7FF))
+var FolioSwitchCheckedTrack by mutableStateOf(Color(0xFFE9E7FF))
     internal set
-var FolioSwitchCheckedThumb by mutableStateOf(Color(0xFF00202B))
+var FolioSwitchCheckedThumb by mutableStateOf(Color(0xFF16141F))
     internal set
-var FolioSwitchUncheckedTrack by mutableStateOf(Color(0xFF161E42))
+var FolioSwitchUncheckedTrack by mutableStateOf(Color(0xFF23262F))
     internal set
-var FolioSwitchUncheckedThumb by mutableStateOf(Color(0xFF2A3358))
+var FolioSwitchUncheckedThumb by mutableStateOf(Color(0xFF2E313C))
     internal set
-var FolioSwitchUncheckedBorder by mutableStateOf(Color(0xFF2A3358))
+var FolioSwitchUncheckedBorder by mutableStateOf(Color(0xFF2E313C))
     internal set
 
 /**
@@ -64,10 +64,10 @@ var FolioSwitchUncheckedBorder by mutableStateOf(Color(0xFF2A3358))
  */
 var HeroGradientStops by mutableStateOf(
     listOf(
-        Color(0xFF22D3EE),
-        Color(0xFF6366F1),
-        Color(0xFFA855F7),
-        Color(0xFFF472B6),
+        Color(0xFFFFD6F5),
+        Color(0xFFD9C8FF),
+        Color(0xFFBFE9FF),
+        Color(0xFFC9FFE6),
     )
 )
     internal set
@@ -75,9 +75,9 @@ var HeroGradientStops by mutableStateOf(
 /** Tight accent gradient (three stops) used by primary actions. */
 var AccentGradientStops by mutableStateOf(
     listOf(
-        Color(0xFF5EE7FF),
-        Color(0xFFA78BFA),
-        Color(0xFFFF5FD2),
+        Color(0xFFE9E7FF),
+        Color(0xFF9BE7FF),
+        Color(0xFFFFC0F0),
     )
 )
     internal set
