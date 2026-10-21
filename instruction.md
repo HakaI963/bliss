@@ -2,7 +2,7 @@
 
 Updated: 2026-10-20 · Repo: `HakaI963/bliss` (branch `main`) · Local working copy: `/tmp/opencode/folio` · Upstream reference clone: `/tmp/opencode/fluxlinux-src`
 
-## 0. Current clone engine (v3.17.0)
+## 0. Current clone engine (v3.17.1)
 
 The repo was renamed **folio → bliss**. The retired BlackBox/virtual-app engine, its
 `Bcore`/`black-reflection`/`compiler` modules, relay receiver, proxy manifest and
@@ -53,9 +53,9 @@ Quick facts:
 | App id / brand | `com.nopiece.bliss` / **"Bliss"** (renamed from "Foila Linux" in round 5; functional ids keep `folio`/`flux` internals) |
 | Source package | `com.ivarna.fluxlinux` |
 | Branch | `main` |
-| Latest green CI | run `39536093283` (commit `76a8e9b`, v3.17.0 clone workflow + agent tooling); screenshots `39536093251` |
-| Released APK | [`bliss-debug-76a8e9b`](https://github.com/HakaI963/bliss/releases/tag/bliss-debug-76a8e9b) `app-bliss-debug.apk` (184,670,927 B) |
-| APK sha256 | `2817316116a6c08e67acf9270c467294c79ad82fa3cb934439222aeb6aa905cb` |
+| Latest green CI | run `39541242466` (commit `370a0cd`, v3.17.1 upload/PiP/tools fixes); screenshots `39541242459` |
+| Released APK | [`bliss-debug-370a0cd`](https://github.com/HakaI963/bliss/releases/tag/bliss-debug-370a0cd) `app-bliss-debug.apk` (184,681,211 B) |
+| APK sha256 | `cb1462931ae7c4b71340fa45b1fc01c1badff4fb5e641e108778eed17a1ca9ef` |
 | Verify APK proof | package `com.nopiece.bliss`, `targetSdkVersion 28`, `assets/bootstrap.tar` packaged, libbash/libproot/libloader*.so packaged, `assets/clone.keystore` packaged |
 | Signing | stable debug keystore (updates over 3.12.0 install in place) |
 | CI gate | `.github/workflows/build.yml` compiles **main sources only** (`assembleBlissDebug` + bootstrap assembly + Verify APK). Unit tests are not part of the gate. |
