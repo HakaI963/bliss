@@ -1,16 +1,15 @@
 package com.ivarna.fluxlinux.ui.screens
 
 import android.app.Activity
-import android.app.PictureInPictureParams
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.ContextWrapper
+import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.hardware.display.DisplayManager
-import android.util.Rational
 import android.view.Display
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
@@ -316,6 +315,9 @@ fun ClonedAppsScreen(startOnPreference: Boolean = false) {
             selected = section,
             runningCount = clones.count { it.status == "running" },
             onSelect = {
+                // Switching between Installed / Running / Preference must
+                // actually show that section. The clone keeps running.
+                if (viewing != null) closeViewer()
                 section = it
                 if (it == AppsSection.INSTALLED) {
                     HeadlessCloneEngine.refreshClones()
@@ -355,14 +357,13 @@ fun ClonedAppsScreen(startOnPreference: Boolean = false) {
                 onLeave = ::closeViewer,
                 onStop = ::stopViewer,
                 onPip = {
-                    runCatching {
-                        val session = viewing
-                        val params = PictureInPictureParams.Builder().apply {
-                            if (session != null && session.width > 0 && session.height > 0) {
-                                setAspectRatio(Rational(session.width, session.height))
-                            }
-                        }.build()
-                        activity?.enterPictureInPictureMode(params)
+                    val session = viewing
+                    if (session != null) {
+                        val intent = Intent(context, com.ivarna.fluxlinux.ClonePipActivity::class.java)
+                            .putExtra("width", session.width)
+                            .putExtra("height", session.height)
+                            .putExtra("fps", session.fps)
+                        runCatching { context.startActivity(intent) }
                     }
                 },
             )

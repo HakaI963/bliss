@@ -1,4 +1,4 @@
-# Bliss 3.17.0 test checklist
+# Bliss 3.17.1 test checklist
 
 Install over the previous Bliss build (same `com.nopiece.bliss` package).
 
@@ -30,13 +30,15 @@ Install over the previous Bliss build (same `com.nopiece.bliss` package).
 - [ ] If it still crashes, copy the last clone log lines. The 3.17.0 engine now syncs the resource-table package identity and verifies installed split parts; signature-verification failures remain unfixable.
 
 ## CLI / MCP
-- [ ] Tools is now a folder list: Control server, AI agents, Clone CLI, MCP tools, OCR & input, Recording.
-- [ ] AI agents → **Detect agents** finds OpenCode / Pi / Claude / Codex / Hermes / Alpha or similar installed apps and host binaries.
+- [ ] Tools has **one Clone folder** containing server/API, MCP, CLI, agent scan, OCR/input and recording.
+- [ ] **Scan installed distros** shows a per-distro matrix: each installed proot/chroot distro with the agents found inside it and its own **MCP** button.
+- [ ] Host binaries and Android agent apps appear under Host / Android agents.
 - [ ] **Copy agent brief** explains the MCP protocol, command set and coordinate workflow.
 - [ ] In a distro terminal:
   - `bliss status`
   - `bliss clones`, `bliss apps`, `bliss list`, `bliss ps`
-  - `bliss install /emulated/OpenCodeMobile-v1.0.0.apk` (guest paths are staged through shared storage)
+  - `bliss install /emulated/OpenCodeMobile-v1.0.0.apk` (APK bytes stream directly; no shared path needed)
+  - `bliss install /OpenCodeMobile-v1.0.0.apk` (same)
   - `bliss install /sdcard/Download/app.apk "Label"`
   - `bliss launch <clone-package>`
   - `bliss shot /sdcard/Download/shot.jpg`

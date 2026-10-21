@@ -17,7 +17,9 @@ bliss apps            # installed source apps available for cloning
 bliss list            # alias for clones
 bliss ps              # currently running clones
 bliss install /sdcard/Download/app.apk "My app"
-bliss install /emulated/SomeApp.apk "My app"   # staged via shared storage
+bliss install /emulated/SomeApp.apk "My app"
+bliss install /OpenCodeMobile-v1.0.0.apk "My app"
+bliss install /root/app.apk "My app"
 bliss install https://example.com/app.apk "My app"
 bliss launch com.nopiece.hclone.hXXXX
 bliss shot /sdcard/Download/state.jpg
@@ -33,6 +35,12 @@ bliss stop com.nopiece.hclone.hXXXX
 bliss uninstall com.nopiece.hclone.hXXXX
 ```
 
+For a local APK, the helper **streams the bytes directly to Bliss** over
+`/install-upload`. The Android app never has to see the guest path, so
+`/emulated/...`, `/OpenCode...`, chroot `/root/...` and any other readable guest
+path work. It still falls back to staging through shared storage if raw upload
+is unavailable.
+
 The helper uses `curl` or `wget` from the guest. If neither is installed, install
 one (`apt install curl`, `apk add curl`, `dnf install curl`, …).
 
@@ -47,6 +55,7 @@ one (`apt install curl`, `apk add curl`, `dnf install curl`, …).
 | GET | `/ocr` | `width` → text + bounding boxes |
 | GET | `/logs` | `package`, `lines` |
 | POST | `/install` | `path` or `url`, optional `label` |
+| POST | `/install-upload` | raw APK bytes; headers `X-Bliss-Filename`, `X-Bliss-Label` |
 | POST | `/uninstall` | `package` |
 | POST | `/launch` | `package`, optional `width`,`height`,`fps` |
 | POST | `/stop` | `package` |
@@ -88,7 +97,10 @@ Tools: `bliss_status`, `bliss_clones`, `bliss_apps`, `bliss_install_apk`,
 `bliss_screenshot` returns an MCP `image` content block. The rest return text
 JSON so agents can reason about results without parsing a custom protocol.
 A ready-to-use agent brief lives in `docs/AI_AGENT.md` and in
-Tools → AI agents → Copy agent brief.
+Tools → Clone → Copy agent brief. Tools has one **Clone** folder containing the
+server/API, MCP, CLI, per-distro agent scan, OCR/input and recording. The agent
+scan checks every installed proot/chroot distro and gives each one its own MCP
+config button.
 
 ## Viewer and agent coexistence
 

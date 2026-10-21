@@ -75,8 +75,33 @@ jesc() {
   printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
 }
 
-# The app cannot read every guest path (/emulated, chroot /root, …).
-# Copy a local APK into shared storage first; the app always sees /sdcard.
+# Stream the APK straight into Bliss. This is the reliable path: it works for
+# /emulated, /OpenCode..., chroot /root and any other path the guest can read,
+# without requiring the Android app to see the guest filesystem.
+upload_apk() {
+  src="$1"
+  label="$2"
+  need_tool
+  safe_name=$(basename "$src" | tr -d '\r\n' | sed 's/[^A-Za-z0-9._-]/_/g')
+  safe_label=$(printf '%s' "$label" | tr -d '\r\n')
+  if [ "$HTTP_TOOL" = curl ]; then
+    curl -fsS -X POST \
+      -H 'Content-Type: application/octet-stream' \
+      -H "X-Bliss-Filename: $safe_name" \
+      -H "X-Bliss-Label: $safe_label" \
+      --data-binary @"$src" \
+      "$BASE/install-upload"
+  else
+    wget -qO- \
+      --header='Content-Type: application/octet-stream' \
+      --header="X-Bliss-Filename: $safe_name" \
+      --header="X-Bliss-Label: $safe_label" \
+      --post-file="$src" \
+      "$BASE/install-upload"
+  fi
+}
+
+# Fallback for older guest wget builds that cannot post a file.
 stage_apk() {
   src="$1"
   [ -f "$src" ] || { printf '%s' "$src"; return; }
@@ -110,6 +135,13 @@ case "$cmd" in
       http://*|https://*)
         post /install "{\"url\":\"$(jesc "$src")\",\"label\":\"$(jesc "$label")\"}" ;;
       *)
+        if [ -f "$src" ]; then
+          result=$(upload_apk "$src" "$label" 2>/dev/null)
+          if [ -n "$result" ]; then
+            printf '%s\n' "$result"
+            exit 0
+          fi
+        fi
         src=$(stage_apk "$src")
         result=$(post /install "{\"path\":\"$(jesc "$src")\",\"label\":\"$(jesc "$label")\"}")
         case "$src" in */.bliss-upload-*) rm -f "$src" ;; esac

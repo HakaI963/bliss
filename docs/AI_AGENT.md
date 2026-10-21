@@ -98,7 +98,9 @@ Recordings are stored at
 
 ## CLI equivalents
 
-The installed `bliss` helper uses the same API:
+The installed `bliss` helper uses the same API. For local files it streams the
+APK bytes to `/install-upload`, so any path the distro can read works, including
+`/emulated`, `/OpenCode...` and chroot `/root`.
 
 ```sh
 bliss status
@@ -107,6 +109,7 @@ bliss apps
 bliss list
 bliss ps
 bliss install /sdcard/Download/app.apk "My app"
+bliss install /emulated/SomeApp.apk "My app"   # bytes uploaded; no shared path needed
 bliss launch com.nopiece.hclone.hXXXX 720 1280 30
 bliss shot /sdcard/Download/state.jpg
 bliss ocr
@@ -122,5 +125,7 @@ bliss uninstall com.nopiece.hclone.hXXXX
 ```
 
 If `curl`/`wget` is missing in a guest, install one (`apt install curl`,
-`apk add curl`, `dnf install curl`, …). The Tools → AI agents page can detect
-installed agent apps and host binaries, and can copy this brief to the clipboard.
+`apk add curl`, `dnf install curl`, …). Tools → Clone scans every installed
+distro for supported agent binaries and gives each distro its own MCP config
+button; it also detects host binaries and Android agent apps, and can copy this
+brief to the clipboard.

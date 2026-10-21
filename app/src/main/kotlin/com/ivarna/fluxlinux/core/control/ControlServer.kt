@@ -8,7 +8,10 @@ import kotlinx.coroutines.runBlocking
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedInputStream
+import java.io.BufferedOutputStream
 import java.io.ByteArrayOutputStream
+import java.io.File
+import java.io.FileOutputStream
 import java.io.OutputStream
 import java.net.InetSocketAddress
 import java.net.ServerSocket
@@ -113,7 +116,18 @@ object ControlServer {
                     if (i <= 0) null else line.substring(0, i).trim().lowercase() to line.substring(i + 1).trim()
                 }
                 .toMap()
-            val contentLength = headers["content-length"]?.toIntOrNull()?.coerceIn(0, 32 * 1024 * 1024) ?: 0
+            val declaredLength = headers["content-length"]?.toLongOrNull() ?: 0L
+            if (path == "/install-upload") {
+                val response = try {
+                    handleUpload(method, input, declaredLength, headers)
+                } catch (t: Throwable) {
+                    android.util.Log.w(TAG, "upload failed", t)
+                    json(500, JSONObject().put("ok", false).put("error", t.message ?: t.javaClass.simpleName))
+                }
+                write(socket.getOutputStream(), response)
+                return
+            }
+            val contentLength = declaredLength.coerceIn(0L, 32L * 1024 * 1024).toInt()
             val body = if (contentLength > 0) {
                 val bytes = ByteArray(contentLength)
                 var read = 0
@@ -137,6 +151,53 @@ object ControlServer {
         }
     }
 
+    private fun handleUpload(
+        method: String,
+        input: BufferedInputStream,
+        length: Long,
+        headers: Map<String, String>,
+    ): Response {
+        if (method != "POST") {
+            return json(405, JSONObject().put("ok", false).put("error", "Method not allowed"))
+        }
+        if (length <= 0L) {
+            return json(400, JSONObject().put("ok", false).put("error", "Missing Content-Length"))
+        }
+        if (length > 512L * 1024 * 1024) {
+            return json(413, JSONObject().put("ok", false).put("error", "APK exceeds 512 MB"))
+        }
+        val ctx = appContext
+            ?: return json(503, JSONObject().put("ok", false).put("error", "App context is not ready"))
+        val dir = File(ctx.cacheDir, "apk-uploads").apply { mkdirs() }
+        val requested = headers["x-bliss-filename"]?.substringAfterLast('/')?.substringAfterLast('\\')
+            ?.take(80)?.ifBlank { "upload.apk" } ?: "upload.apk"
+        val safeName = requested.replace(Regex("[^A-Za-z0-9._-]"), "_").ifBlank { "upload.apk" }
+        val file = File(dir, "upload-${System.currentTimeMillis()}-$safeName")
+        try {
+            BufferedOutputStream(FileOutputStream(file)).use { out ->
+                val buffer = ByteArray(128 * 1024)
+                var remaining = length
+                while (remaining > 0L) {
+                    val read = input.read(buffer, 0, minOf(buffer.size.toLong(), remaining).toInt())
+                    if (read <= 0) break
+                    out.write(buffer, 0, read)
+                    remaining -= read
+                }
+                out.flush()
+                if (remaining != 0L) {
+                    return json(400, JSONObject().put("ok", false).put("error", "Upload ended early"))
+                }
+            }
+            val label = headers["x-bliss-label"]?.take(120)?.trim()?.takeIf { it.isNotEmpty() }
+            val result = runBlocking {
+                HeadlessCloneEngine.apiInstall(path = file.absolutePath, url = null, label = label)
+            }
+            return json(200, result)
+        } finally {
+            runCatching { file.delete() }
+        }
+    }
+
     private fun route(method: String, path: String, query: Map<String, String>, body: String): Response {
         if (method == "OPTIONS") return Response(204, "text/plain", ByteArray(0))
         if (method == "GET" && (path == "/" || path == "/help")) {
@@ -152,6 +213,7 @@ object ControlServer {
                   GET  /ocr?width=900
                   GET  /logs?package=com.nopiece.hclone.x&lines=300
                   POST /install        {"path":"/sdcard/Download/app.apk"} or {"url":"https://…"}
+                  POST /install-upload  raw APK bytes; headers X-Bliss-Filename / X-Bliss-Label
                   POST /uninstall      {"package":"com.nopiece.hclone.x"}
                   POST /launch         {"package":"com.nopiece.hclone.x","width":720,"height":1280,"fps":60}
                   POST /stop           {"package":"com.nopiece.hclone.x"}

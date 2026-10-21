@@ -55,6 +55,7 @@ import com.ivarna.fluxlinux.core.control.CloneControlService
 import com.ivarna.fluxlinux.core.control.CloneRecorder
 import com.ivarna.fluxlinux.core.control.ControlServer
 import com.ivarna.fluxlinux.core.control.DetectedAgent
+import com.ivarna.fluxlinux.core.control.DistroAgentReport
 import com.ivarna.fluxlinux.ui.components.QCard
 import com.ivarna.fluxlinux.ui.components.QDivider
 import com.ivarna.fluxlinux.ui.components.QPrimaryButton
@@ -69,7 +70,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
-private enum class ToolsPage { HOME, CONTROL, AGENTS, CLI, MCP, AUTOMATION, RECORDING }
+private enum class ToolsPage { HOME, CLONE }
 
 private const val MCP_CONFIG = """{
   "mcp": {
@@ -140,23 +141,17 @@ fun ToolsScreen() {
     BackHandler(enabled = page != ToolsPage.HOME) { page = ToolsPage.HOME }
 
     when (page) {
-        ToolsPage.HOME -> ToolsHome(onOpen = { page = it })
-        ToolsPage.CONTROL -> ToolsDetail("Control server", "HTTP, CLI and MCP endpoints", page, { page = ToolsPage.HOME }) {
+        ToolsPage.HOME -> ToolsHome(onOpen = { page = ToolsPage.CLONE })
+        ToolsPage.CLONE -> ToolsDetail(
+            "Clone",
+            "Server, MCP, CLI, agents, OCR/input and recording",
+            { page = ToolsPage.HOME },
+        ) {
             ControlCard(context, running, error) { running = ControlServer.isRunning() }
-        }
-        ToolsPage.AGENTS -> ToolsDetail("AI agents", "Detect installed runtimes and copy the MCP brief", page, { page = ToolsPage.HOME }) {
             AgentsCard(context)
-        }
-        ToolsPage.CLI -> ToolsDetail("Clone CLI", "Commands installed in the host and every distro", page, { page = ToolsPage.HOME }) {
-            CliCard(context)
-        }
-        ToolsPage.MCP -> ToolsDetail("MCP tools", "What an agent can do", page, { page = ToolsPage.HOME }) {
             McpCard(context)
-        }
-        ToolsPage.AUTOMATION -> ToolsDetail("OCR & input", "See the display, then tap what it sees", page, { page = ToolsPage.HOME }) {
+            CliCard(context)
             AutomationCard(context)
-        }
-        ToolsPage.RECORDING -> ToolsDetail("Recording", "Capture the virtual display to MP4", page, { page = ToolsPage.HOME }) {
             RecordingCard()
         }
     }
@@ -173,19 +168,13 @@ private fun ToolsHome(onOpen: (ToolsPage) -> Unit) {
     ) {
         QScreenTitle("Tools", "Folders for clone automation, agents and local control.")
         Spacer(Modifier.height(8.dp))
-        QSectionHeader("Folders")
+        QSectionHeader("Folder")
         QCard {
-            CategoryRow("Control server", "Server status, endpoints, MCP config", Icons.Default.Settings) { onOpen(ToolsPage.CONTROL) }
-            QDivider()
-            CategoryRow("AI agents", "Auto-detect installed agents + agent brief", Icons.Default.Android) { onOpen(ToolsPage.AGENTS) }
-            QDivider()
-            CategoryRow("Clone CLI", "bliss commands for every distro", Icons.Default.Terminal) { onOpen(ToolsPage.CLI) }
-            QDivider()
-            CategoryRow("MCP tools", "Tool names, schemas and results", Icons.Default.Build) { onOpen(ToolsPage.MCP) }
-            QDivider()
-            CategoryRow("OCR & input", "Screenshots, OCR boxes, taps and swipes", Icons.Default.List) { onOpen(ToolsPage.AUTOMATION) }
-            QDivider()
-            CategoryRow("Recording", "MP4 capture of the virtual display", Icons.Default.PlayArrow) { onOpen(ToolsPage.RECORDING) }
+            CategoryRow(
+                "Clone",
+                "Server/API · MCP · CLI · agent scan · OCR/input · recording",
+                Icons.Default.Build,
+            ) { onOpen(ToolsPage.CLONE) }
         }
     }
 }
@@ -212,7 +201,6 @@ private fun CategoryRow(title: String, subtitle: String, icon: androidx.compose.
 private fun ToolsDetail(
     title: String,
     subtitle: String,
-    page: ToolsPage,
     onBack: () -> Unit,
     content: @Composable () -> Unit,
 ) {
@@ -302,39 +290,109 @@ private fun ControlCard(context: Context, running: Boolean, error: String?, onSt
 @Composable
 private fun AgentsCard(context: Context) {
     var tick by remember { mutableIntStateOf(0) }
-    var agents by remember { mutableStateOf<List<DetectedAgent>>(emptyList()) }
+    var reports by remember { mutableStateOf<List<DistroAgentReport>>(emptyList()) }
+    var hostAgents by remember { mutableStateOf<List<DetectedAgent>>(emptyList()) }
     var scanned by remember { mutableStateOf(false) }
+
     LaunchedEffect(tick) {
-        agents = withContext(Dispatchers.IO) { AgentDetector.scan(context) }
+        val result = withContext(Dispatchers.IO) {
+            val distros = AgentDetector.scanDistros(context)
+            val host = AgentDetector.scan(context).filter { it.kind != "guest cli" }
+            distros to host
+        }
+        reports = result.first
+        hostAgents = result.second
         scanned = true
     }
-    QSectionHeader("Auto-detect")
+
+    QSectionHeader("AI agents by installed distro")
     QCard {
         Column(Modifier.padding(horizontal = Quartz.CardPad, vertical = 12.dp)) {
-            Text("Scans Android packages, host binaries and proot/chroot bin paths for OpenCode, Pi, Alpha, Hermes, Claude, Codex, Aider, Gemini and similar runtimes.", fontSize = 12.sp, color = fluxMutedText())
+            Text(
+                "Checks the host and every installed proot/chroot distro for OpenCode, Pi, Alpha, Hermes, Claude, Codex, Aider, Gemini and similar. Each distro gets its own MCP button.",
+                fontSize = 12.sp,
+                color = fluxMutedText(),
+            )
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                QPrimaryButton("Detect agents", icon = Icons.Default.Refresh) { tick++ }
-                QSecondaryButton("Copy agent brief", icon = Icons.Default.ContentCopy) { copy(context, AGENT_BRIEF, "Agent brief copied") }
+                QPrimaryButton("Scan installed distros", icon = Icons.Default.Refresh) { tick++ }
+                QSecondaryButton("Copy agent brief", icon = Icons.Default.ContentCopy) {
+                    copy(context, AGENT_BRIEF, "Agent brief copied")
+                }
             }
         }
         QDivider()
         if (!scanned) {
-            Text("Scanning…", fontSize = 12.sp, color = fluxMutedText(), modifier = Modifier.padding(Quartz.CardPad))
-        } else if (agents.isEmpty()) {
-            Text("No agent apps or host binaries found. You can still connect any MCP client to the endpoint.", fontSize = 12.sp, color = fluxMutedText(), modifier = Modifier.padding(Quartz.CardPad))
+            Text("Scanning distro filesystems…", fontSize = 12.sp, color = fluxMutedText(), modifier = Modifier.padding(Quartz.CardPad))
+        } else if (reports.isEmpty()) {
+            Text("No installed proot/chroot distros found.", fontSize = 12.sp, color = fluxMutedText(), modifier = Modifier.padding(Quartz.CardPad))
         } else {
-            agents.forEachIndexed { index, agent ->
+            reports.forEachIndexed { index, report ->
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = Quartz.CardPad, vertical = 9.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(report.name, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            "${report.method} · ${report.agents.size} agent${if (report.agents.size == 1) "" else "s"}",
+                            fontSize = 11.sp,
+                            color = fluxMutedText(),
+                        )
+                    }
+                    QSecondaryButton("MCP", icon = Icons.Default.ContentCopy) {
+                        copy(context, MCP_CONFIG, "${report.name} MCP config copied")
+                    }
+                }
+                if (report.agents.isEmpty()) {
+                    Text(
+                        "No supported agent binary found",
+                        fontSize = 10.5.sp,
+                        color = fluxMutedText(),
+                        modifier = Modifier.padding(start = Quartz.CardPad + 4.dp, end = Quartz.CardPad, bottom = 8.dp),
+                    )
+                } else {
+                    report.agents.forEach { agent ->
+                        Text(
+                            "• ${agent.name}  ${agent.detail}",
+                            fontSize = 10.sp,
+                            lineHeight = 14.sp,
+                            fontFamily = FontFamily.Monospace,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.fillMaxWidth().padding(
+                                start = Quartz.CardPad + 4.dp,
+                                end = Quartz.CardPad,
+                                bottom = 3.dp,
+                            ),
+                        )
+                    }
+                    Spacer(Modifier.height(4.dp))
+                }
+                if (index != reports.lastIndex) QDivider()
+            }
+        }
+    }
+
+    Spacer(Modifier.height(6.dp))
+    QSectionHeader("Host / Android agents")
+    QCard {
+        if (!scanned) {
+            Text("Scanning…", fontSize = 12.sp, color = fluxMutedText(), modifier = Modifier.padding(Quartz.CardPad))
+        } else if (hostAgents.isEmpty()) {
+            Text("No host binaries or Android agent apps found.", fontSize = 12.sp, color = fluxMutedText(), modifier = Modifier.padding(Quartz.CardPad))
+        } else {
+            hostAgents.forEachIndexed { index, agent ->
                 QStatusRow(
                     "${agent.name}  ·  ${agent.kind}",
                     agent.detail,
                     MaterialTheme.colorScheme.primary,
                 )
-                if (index != agents.lastIndex) QDivider()
+                if (index != hostAgents.lastIndex) QDivider()
             }
         }
     }
-    Spacer(Modifier.height(8.dp))
+
+    Spacer(Modifier.height(6.dp))
     QSectionHeader("Agent brief")
     QCard { CodeBlock(AGENT_BRIEF) }
 }
