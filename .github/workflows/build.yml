@@ -88,6 +88,6 @@ jobs:
           APK=app/build/outputs/apk/bliss/debug/app-bliss-debug.apk
           TAG="bliss-debug-${GITHUB_SHA::7}"
           SHA=$(sha256sum "$APK" | awk '{print $1}')
-          gh release create "$TAG" --title "Bliss 3.16.0 — Midnight UI, clone automation, MCP" \
-            --notes "Midnight teal/mint UI with one motion language across the dock, a clone viewer with Leave/Stop/Live controls, readable dark terminal, split-aware clone installs + OBB copy, and a localhost CLI/MCP control plane with OCR, input, screenshots and MP4 recording. APK SHA-256: $SHA" || true
+          gh release create "$TAG" --title "Bliss 3.17.0 — clone viewer, metadata, agent tooling" \
+            --notes "Clone viewer state survives tab switches; View attaches to an already-running agent clone instead of relaunching it. New Running tab, package/created/last-opened/parts metadata, guest APK path staging, log auto-scroll + copy/clear, agent action feed, PiP/resizable panes, Tools folders, agent auto-detection, resource-identity patch for dynamic-resource apps, and expanded MCP/CLI tools. APK SHA-256: $SHA" || true
           gh release upload "$TAG" "$APK" --clobber

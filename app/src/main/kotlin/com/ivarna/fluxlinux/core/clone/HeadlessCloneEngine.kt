@@ -113,6 +113,7 @@ object HeadlessCloneEngine {
     val activeClonePackage = MutableStateFlow<String?>(null)
     /** Recent user/agent actions, newest last. Shown in the viewer. */
     val actionLog = MutableStateFlow<List<String>>(emptyList())
+    private val clearedLogLines = java.util.Collections.synchronizedSet(LinkedHashSet<String>())
 
     fun noteAction(action: String, source: String = "user") {
         val stamp = SimpleDateFormat("HH:mm:ss", Locale.US).format(Date())
@@ -471,7 +472,7 @@ object HeadlessCloneEngine {
                 val lines = ArrayList<String>(array.length())
                 for (i in 0 until array.length()) {
                     val line = array.optString(i)
-                    if (line.isNotBlank()) lines.add(line)
+                    if (line.isNotBlank() && !clearedLogLines.contains(line)) lines.add(line)
                 }
                 cloneLogs.value = lines
             } catch (t: Throwable) {
@@ -483,6 +484,10 @@ object HeadlessCloneEngine {
     }
 
     fun clearCloneLogs() {
+        clearedLogLines.addAll(cloneLogs.value)
+        if (clearedLogLines.size > 4000) {
+            clearedLogLines.clear()
+        }
         cloneLogs.value = emptyList()
     }
 

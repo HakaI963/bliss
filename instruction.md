@@ -2,7 +2,7 @@
 
 Updated: 2026-10-20 · Repo: `HakaI963/bliss` (branch `main`) · Local working copy: `/tmp/opencode/folio` · Upstream reference clone: `/tmp/opencode/fluxlinux-src`
 
-## 0. Current clone engine (v3.16.0)
+## 0. Current clone engine (v3.17.0)
 
 The repo was renamed **folio → bliss**. The retired BlackBox/virtual-app engine, its
 `Bcore`/`black-reflection`/`compiler` modules, relay receiver, proxy manifest and
@@ -19,6 +19,18 @@ cards, a floating dock, one fade/scale motion for every dock destination, and
 a dark terminal regardless of the app theme. The in-tab clone viewer now has
 **Leave running**, **Live preview** and **Stop** controls; Back leaves the clone
 alive instead of releasing or fullscreening it. Visible branding is **Bliss**.
+
+**v3.17.0 clone workflow:** the open viewer and app folder survive bottom-tab
+switches. View/Resume attaches to a clone that already owns the display instead
+of relaunching it, so an agent mid-task is not interrupted. Apps now has a
+**Running** section, cards show full package + created/last-opened/part metadata,
+guest APK paths such as `/emulated/...` are staged through shared storage, logs
+auto-scroll with copy/clear, and the viewer has PiP + resizable display/log
+panes. Tools is organized into folders (Control server, AI agents, CLI, MCP,
+OCR/input, Recording); AI agents can be auto-detected and copied a complete
+MCP/CLI brief. The clone engine now syncs the resource-table package identity
+and logs installed split parts, which fixes dynamic resource lookups such as
+Alight Motion's live-shape strings (re-clone old apps).
 
 **v3.16.0 automation:** a loopback-only control server at `127.0.0.1:47831`
 serves the `bliss` CLI (host + every proot/chroot distro), a JSON HTTP API and
@@ -41,9 +53,9 @@ Quick facts:
 | App id / brand | `com.nopiece.bliss` / **"Bliss"** (renamed from "Foila Linux" in round 5; functional ids keep `folio`/`flux` internals) |
 | Source package | `com.ivarna.fluxlinux` |
 | Branch | `main` |
-| Latest green CI | run `39489250492` (commit `4ad7947`, v3.16.0 Midnight UI + clone automation/MCP) |
-| Released APK | [`bliss-debug-4ad7947`](https://github.com/HakaI963/bliss/releases/tag/bliss-debug-4ad7947) `app-bliss-debug.apk` (184,613,063 B) |
-| APK sha256 | `11711e55e52429b32e1f2a2b0be0e16982f7344a824187b02228a7c1aa2144c8` |
+| Latest green CI | run `39535258846` (commit `9f6b111`, v3.17.0 clone workflow + agent tooling) |
+| Released APK | [`bliss-debug-9f6b111`](https://github.com/HakaI963/bliss/releases/tag/bliss-debug-9f6b111) `app-bliss-debug.apk` (184,669,383 B) |
+| APK sha256 | `c9092c887e76dca3726b9d18e096182254687019df23d388904cd24ed2b1f7c8` |
 | Verify APK proof | package `com.nopiece.bliss`, `targetSdkVersion 28`, `assets/bootstrap.tar` packaged, libbash/libproot/libloader*.so packaged, `assets/clone.keystore` packaged |
 | Signing | stable debug keystore (updates over 3.12.0 install in place) |
 | CI gate | `.github/workflows/build.yml` compiles **main sources only** (`assembleBlissDebug` + bootstrap assembly + Verify APK). Unit tests are not part of the gate. |

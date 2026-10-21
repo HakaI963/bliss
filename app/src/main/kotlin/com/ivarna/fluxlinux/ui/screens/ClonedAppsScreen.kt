@@ -988,10 +988,10 @@ private fun CloneViewPage(
     val logState = rememberLazyListState()
     val actionState = rememberLazyListState()
 
-    LaunchedEffect(lines.size) {
+    LaunchedEffect(lines.lastOrNull()) {
         if (lines.isNotEmpty()) logState.animateScrollToItem(lines.lastIndex)
     }
-    LaunchedEffect(actions.size) {
+    LaunchedEffect(actions.lastOrNull()) {
         if (actions.isNotEmpty()) actionState.animateScrollToItem(minOf(actions.size, 40) - 1)
     }
 
