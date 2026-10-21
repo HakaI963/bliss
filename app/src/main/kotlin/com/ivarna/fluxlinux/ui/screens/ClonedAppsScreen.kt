@@ -1438,12 +1438,33 @@ private fun ElementsSheet(
                             subtitle = elementSubtitle(node),
                             onClick = {
                                 scope.launch {
-                                    val result = withContext(Dispatchers.IO) {
+                                    var result = withContext(Dispatchers.IO) {
                                         A11yBridge.click(context, node.id)
                                     }
-                                    val obj = runCatching { JSONObject(result) }.getOrNull()
+                                    var obj = runCatching { JSONObject(result) }.getOrNull()
+                                    // Node paths are only valid inside one tree.
+                                    // When the clone changed underneath us, resolve
+                                    // the same label again and retry once.
+                                    if (obj?.optBoolean("ok", false) != true &&
+                                        obj?.optString("error").orEmpty().contains("not found") &&
+                                        node.label.isNotBlank()
+                                    ) {
+                                        val fresh = withContext(Dispatchers.IO) {
+                                            loadElements(context, displayId)
+                                        }
+                                        val again = fresh.nodes.firstOrNull {
+                                            it.label == node.label && it.id != node.id
+                                        }
+                                        if (again != null) {
+                                            result = withContext(Dispatchers.IO) {
+                                                A11yBridge.click(context, again.id)
+                                            }
+                                            obj = runCatching { JSONObject(result) }.getOrNull()
+                                        }
+                                    }
                                     if (obj?.optBoolean("ok", false) != true) {
-                                        enableNote = obj?.optString("error").orEmpty().ifBlank { "Tap failed" }
+                                        enableNote = obj?.optString("error").orEmpty()
+                                            .ifBlank { "Tap failed" }
                                     }
                                     refresh()
                                 }
