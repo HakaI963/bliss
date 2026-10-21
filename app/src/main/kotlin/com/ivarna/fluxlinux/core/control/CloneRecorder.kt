@@ -7,6 +7,8 @@ import android.media.MediaCodec
 import android.media.MediaCodecInfo
 import android.media.MediaFormat
 import android.media.MediaMuxer
+import android.os.SystemClock
+import android.util.Log
 import com.ivarna.fluxlinux.core.clone.HeadlessCloneEngine
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -29,6 +31,8 @@ import java.util.Locale
  * pinning the CPU.
  */
 object CloneRecorder {
+
+    private const val TAG = "CloneRecorder"
 
     data class State(
         val recording: Boolean = false,
@@ -62,6 +66,7 @@ object CloneRecorder {
             var trackIndex = -1
             var muxerStarted = false
             var frameIndex = 0L
+            var samples = 0
             try {
                 // The first capture initialises the display capture path and
                 // can take several seconds. Do not let a 5 s timeout turn a
@@ -119,7 +124,7 @@ object CloneRecorder {
                     if (scaled !== frame) scaled.recycle()
                     frame.recycle()
                     while (true) {
-                        val outIndex = encoder.dequeueOutputBuffer(info, 0)
+                        val outIndex = encoder.dequeueOutputBuffer(info, 10_000)
                         if (outIndex == MediaCodec.INFO_TRY_AGAIN_LATER) {
                             break
                         } else if (outIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
@@ -127,13 +132,22 @@ object CloneRecorder {
                                 trackIndex = mux.addTrack(encoder.outputFormat)
                                 mux.start()
                                 muxerStarted = true
+                                Log.d(TAG, "muxer started")
                             }
+                        } else if (outIndex == MediaCodec.INFO_OUTPUT_BUFFERS_CHANGED) {
+                            // Deprecated, but some vendor codecs still emit it.
                         } else if (outIndex >= 0) {
                             val buffer = encoder.getOutputBuffer(outIndex)
+                            Log.d(
+                                TAG,
+                                "out=$outIndex size=${info.size} flags=${info.flags} " +
+                                    "mux=$muxerStarted samples=$samples"
+                            )
                             if (buffer != null && info.size > 0 && muxerStarted) {
                                 buffer.position(info.offset)
                                 buffer.limit(info.offset + info.size)
                                 mux.writeSampleData(trackIndex, buffer, info)
+                                samples++
                             }
                             encoder.releaseOutputBuffer(outIndex, false)
                             if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) break
@@ -150,28 +164,42 @@ object CloneRecorder {
                         MediaCodec.BUFFER_FLAG_END_OF_STREAM
                     )
                 }
-                var attempts = 0
-                while (attempts < 100) {
-                    val outIndex = encoder.dequeueOutputBuffer(info, 10_000)
+                // Vendors can return TRY_AGAIN immediately even with a nonzero
+                // timeout. Keep draining against a wall clock, not an attempt
+                // count, so an encoded sample is never discarded by stop().
+                val drainDeadline = SystemClock.uptimeMillis() + 8_000L
+                while (SystemClock.uptimeMillis() < drainDeadline) {
+                    val outIndex = encoder.dequeueOutputBuffer(info, 50_000)
                     if (outIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
                         if (!muxerStarted) {
                             trackIndex = mux.addTrack(encoder.outputFormat)
                             mux.start()
                             muxerStarted = true
+                            Log.d(TAG, "muxer started (drain)")
                         }
+                    } else if (outIndex == MediaCodec.INFO_OUTPUT_BUFFERS_CHANGED) {
+                        // Deprecated no-op.
                     } else if (outIndex >= 0) {
                         val buffer = encoder.getOutputBuffer(outIndex)
+                        Log.d(
+                            TAG,
+                            "drain out=$outIndex size=${info.size} flags=${info.flags} " +
+                                "mux=$muxerStarted samples=$samples"
+                        )
                         if (buffer != null && info.size > 0 && muxerStarted) {
                             buffer.position(info.offset)
                             buffer.limit(info.offset + info.size)
                             mux.writeSampleData(trackIndex, buffer, info)
+                            samples++
                         }
                         encoder.releaseOutputBuffer(outIndex, false)
                         if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) break
+                    } else if (outIndex == MediaCodec.INFO_TRY_AGAIN_LATER) {
+                        SystemClock.sleep(10L)
                     }
-                    attempts++
                 }
                 state.value = state.value.copy(recording = false, path = file.absolutePath)
+                Log.i(TAG, "recorded frames=$frameIndex samples=$samples muxer=$muxerStarted file=${file.length()}B")
             } catch (t: Throwable) {
                 state.value = state.value.copy(
                     recording = false,

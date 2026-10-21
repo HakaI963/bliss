@@ -245,6 +245,13 @@ final class VirtualDisplaySession {
             image = reader.acquireLatestImage();
         } catch (Throwable ignored) {
         }
+        // A static guest stops producing ImageReader buffers after its last
+        // frame. Never make the caller wait the whole timeout in that case:
+        // the cached bitmap is still the current display content. This is
+        // what keeps previews and the 6 fps recorder responsive on idle apps.
+        if (image == null && lastBitmap != null) {
+            return lastBitmap;
+        }
         while (image == null && SystemClock.uptimeMillis() < deadline) {
             SystemClock.sleep(25);
             try {
