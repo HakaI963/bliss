@@ -35,7 +35,9 @@ Screenshots plus OCR are the slow path. Altaris 3.20 reads the real UI tree of
 the clone's virtual display through an accessibility service, so an element can
 be addressed by name instead of by pixel.
 
-- `GET /uiauto?display=<id>` returns the node tree of the display:
+- `GET /uiauto?display=<id>&package=<clone package>` returns the node tree of
+  the display (the package selects the app; without it the running clone is
+  used):
   `{"ok":true,"display":75,"source":"accessibility","nodes":[...]}` where each
   node carries `id` (its path in the tree, e.g. `"79:r.0.2"`), `class`, `text`,
   `desc`, `bounds`, `clickable`, `editable`, `scrollable`, `visible`.

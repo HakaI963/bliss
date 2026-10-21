@@ -70,7 +70,7 @@ one (`apt install curl`, `apk add curl`, `dnf install curl`, …).
 | POST | `/record/start` | `fps`, `width` |
 | POST | `/record/stop` | — |
 | GET | `/uiauto/status` | accessibility service state |
-| GET | `/uiauto` | `display` (optional), `max` (optional) → UI node tree |
+| GET | `/uiauto` | `display` (optional), `max` (optional), `package` (optional) → UI node tree |
 | POST | `/uiauto/click` | `nodeId` (node path) |
 | POST | `/uiauto/text` | `nodeId` (node path), `text` |
 | POST | `/uiauto/scroll` | `nodeId` (node path), optional `forward` |
