@@ -342,38 +342,18 @@ fun HomeScreen(
             HomeHero(
                 artRes = homeArt,
                 title = "Altaris",
-                subtitle = "Your Linux environments",
                 modifier = Modifier
                     .fillMaxWidth()
                     .staggerIn(0, entrance),
-                trailing = {
-                    PrismChip(
-                        text = "Distros",
-                        accent = accent,
-                        onClick = onBrowseDistros,
-                    )
-                },
             )
             Spacer(Modifier.height(Prism.Stack))
             AltarisTitle(
                 "Home",
-                "Your Linux environments",
+                null,
                 accent,
                 Modifier
                     .fillMaxWidth()
                     .staggerIn(1, entrance)
-            )
-        }
-
-        // Quick actions — the same destinations the old navigation rows offered.
-        item(key = "quick-actions") {
-            QuickActions(
-                accent = accent,
-                shellDistro = heroDistro,
-                onOpenTerminal = onShowTerminal,
-                onOpenShell = { heroDistro?.let { openShell(it) } },
-                onBrowseDistros = onBrowseDistros,
-                modifier = Modifier.staggerIn(1, entrance)
             )
         }
 
@@ -782,56 +762,6 @@ fun HomeScreen(
 // ─── Quick actions ───────────────────────────────────────────────────────────
 // Three squircle tiles: the terminal tab, a shell in the primary container and
 // the distro browser. They call the callbacks the old rows called.
-@Composable
-private fun QuickActions(
-    accent: Color,
-    shellDistro: Distro?,
-    onOpenTerminal: () -> Unit,
-    onOpenShell: () -> Unit,
-    onBrowseDistros: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Row(
-        modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(Prism.Stack),
-        verticalAlignment = Alignment.Top
-    ) {
-        QuickActionTile(Icons.Filled.Terminal, "Terminal", accent, onOpenTerminal)
-        if (shellDistro != null) {
-            QuickActionTile(Icons.Filled.PlayArrow, "Shell", accent, onOpenShell)
-        }
-        QuickActionTile(Icons.Filled.Layers, "Distros", accent, onBrowseDistros)
-    }
-}
-
-@Composable
-private fun QuickActionTile(
-    icon: ImageVector,
-    label: String,
-    accent: Color,
-    onClick: () -> Unit
-) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.width(78.dp)
-    ) {
-        PrismIconTile(
-            icon = icon,
-            accent = accent,
-            contentDescription = label,
-            onClick = onClick
-        )
-        Spacer(Modifier.height(6.dp))
-        Text(
-            label,
-            fontSize = 11.sp,
-            color = altarisMutedText(),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-    }
-}
-
 // ─── Active desktop session ──────────────────────────────────────────────────
 // The running desktop owns Open/Stop; the bento below never duplicates it.
 @Composable

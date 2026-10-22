@@ -29,7 +29,7 @@ object StateManager {
     // ── Home artwork ───────────────────────────────────────────────────────
     // The anime art shown in the home banner. Stored as a drawable name so the
     // value survives a resource re-order.
-    private val _homeArt = MutableStateFlow(R.drawable.splash_art_catgirl)
+    private val _homeArt = MutableStateFlow(R.drawable.altaris_scene_1)
     val homeArt: StateFlow<Int> = _homeArt.asStateFlow()
 
     fun getHomeArt(context: Context): Int {
@@ -37,7 +37,7 @@ object StateManager {
         val name = prefs.getString("home_art", null)
         val art = name?.let {
             runCatching { context.resources.getIdentifier(it, "drawable", context.packageName) }.getOrNull()
-        } ?: R.drawable.splash_art_catgirl
+        } ?: R.drawable.altaris_scene_1
         _homeArt.value = art
         return art
     }

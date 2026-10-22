@@ -95,7 +95,6 @@ import com.altaris.linux.core.terminal.AltarisTerminalSessionManager
 import com.altaris.linux.core.terminal.AltarisTerminalSessionManager.SessionOpenResult
 import com.altaris.linux.core.terminal.TerminalPalette
 import com.altaris.linux.core.utils.TerminalPreferences
-import com.altaris.linux.ui.terminal.AnimeSplashArt
 import com.altaris.linux.ui.terminal.ShortcutBarActions
 import com.altaris.linux.ui.terminal.ShortcutBarConfig
 import com.altaris.linux.ui.terminal.ShortcutBarEditorSheet
@@ -105,7 +104,6 @@ import com.altaris.linux.ui.terminal.TerminalExtraKeys
 import com.altaris.linux.ui.terminal.TerminalKeyInjector
 import com.altaris.linux.ui.terminal.TerminalModifierState
 import com.altaris.linux.ui.terminal.TerminalNewSessionPanel
-import com.altaris.linux.ui.terminal.TerminalSessionSplash
 import com.altaris.linux.ui.terminal.TerminalShortcutKey
 import com.altaris.linux.ui.terminal.TerminalToolSelector
 import com.altaris.linux.ui.terminal.TerminalToolsSheet
@@ -209,7 +207,6 @@ private fun TerminalScreenContent(
     var editingShortcutKey by remember { mutableStateOf<TerminalShortcutKey?>(null) }
     // Launch-sticker splash: shown when the screen opens with a live session and
     // whenever a NEW session lands — not on plain switches between existing tabs.
-    var splashArtRes by remember { mutableIntStateOf(0) }
     var splashTitle by remember { mutableStateOf("") }
     // Session count at the last splash; -1 forces the splash on first show.
     var splashBudget by remember { mutableIntStateOf(-1) }
@@ -400,7 +397,6 @@ private fun TerminalScreenContent(
     LaunchedEffect(sessions.size, activeIndex) {
         if (sessions.isNotEmpty() && splashBudget < sessions.size) {
             splashBudget = sessions.size
-            splashArtRes = AnimeSplashArt.random()
             splashTitle = AltarisTerminalSessionManager.activeSession?.title
                 ?: titles.getOrNull(activeIndex)
                 ?: "session"
@@ -644,15 +640,6 @@ private fun TerminalScreenContent(
                 )
             }
 
-            // Launch-sticker splash (random anime art per open); removed once faded
-            // or tapped, so it never intercepts input afterwards.
-            if (splashArtRes != 0) {
-                TerminalSessionSplash(
-                    title = splashTitle,
-                    artRes = splashArtRes,
-                    onFinished = { splashArtRes = 0 }
-                )
-            }
 
             // ── "+" new-session panel: anchored dropdown, dismiss via ×/back/scrim ──
             if (showNewSessionPanel) {

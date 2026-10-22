@@ -33,6 +33,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Layers
@@ -966,12 +967,21 @@ class MainActivity : ComponentActivity() {
                                 topBar = {
                                     if (showChrome) {
                                         Column {
-                                            ShellCommandBar(
-                                                displayLive = session != null,
-                                                cloneRunning = activeClone != null,
-                                                onOpenPalette = { paletteOpen = true },
-                                                onOpenSettings = { currentScreen = Screen.SETTINGS }
-                                            )
+                                            // The bar draws through the status bar
+                                            // area, the content sits below it.
+                                            Column(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .background(MaterialTheme.colorScheme.surface)
+                                                    .statusBarsPadding(),
+                                            ) {
+                                                ShellCommandBar(
+                                                    displayLive = session != null,
+                                                    cloneRunning = activeClone != null,
+                                                    onOpenPalette = { paletteOpen = true },
+                                                    onOpenSettings = { currentScreen = Screen.SETTINGS }
+                                                )
+                                            }
                                             // Live install strip (all tabs while chrome is
                                             // up): keeps downloads observable after the
                                             // user leaves the install screen. Hidden with

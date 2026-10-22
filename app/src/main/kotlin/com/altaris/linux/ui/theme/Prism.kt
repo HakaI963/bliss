@@ -15,46 +15,39 @@ import androidx.compose.ui.unit.dp
  */
 object Prism {
 
-    // ── Geometry ──────────────────────────────────────────────────────────
-    /** Floating dock height. */
-    val DockHeight: Dp = 70.dp
+    // ── Geometry (the reference workspace: small radii, 8 px rhythm) ───────
+    /** Panel radius. */
+    val PanelRadius: Dp = 8.dp
 
-    /** Dock capsule radius (half of the height gives a pill). */
-    val DockRadius: Dp = 34.dp
+    /** Button / chip / nav radius. */
+    val ButtonRadius: Dp = 6.dp
 
-    /** Raised command button inside the dock. */
-    val CommandSize: Dp = 58.dp
+    /** Panel inner padding. */
+    val PanelPad: Dp = 14.dp
 
-    /** Dock icon tile. */
-    val TileSize: Dp = 42.dp
+    /** Row horizontal padding. */
+    val RowPadH: Dp = 10.dp
 
-    /** Large card radius. */
-    val CardRadius: Dp = 26.dp
+    /** Row vertical padding. */
+    val RowPadV: Dp = 9.dp
 
-    /** Small card / tile radius. */
-    val TileRadius: Dp = 20.dp
-
-    /** Chip radius. */
-    val ChipRadius: Dp = 15.dp
-
-    /** Sheet radius. */
-    val SheetRadius: Dp = 30.dp
-
-    /** Floating header radius. */
-    val HeaderRadius: Dp = 24.dp
-
-    // ── Spacing (4/8dp rhythm) ────────────────────────────────────────────
     /** Screen gutter. */
-    val Gutter: Dp = 20.dp
+    val Gutter: Dp = 16.dp
 
     /** Vertical rhythm between blocks. */
-    val Stack: Dp = 14.dp
+    val Stack: Dp = 12.dp
 
     /** Tight rhythm inside a block. */
     val Tight: Dp = 8.dp
 
     /** Minimum touch target. */
     val TouchTarget: Dp = 48.dp
+
+    /** Top bar height (the reference's 46 px workspace bar). */
+    val TopBarHeight: Dp = 46.dp
+
+    /** Bottom navigation height. */
+    val NavBarHeight: Dp = 58.dp
 }
 
 /**

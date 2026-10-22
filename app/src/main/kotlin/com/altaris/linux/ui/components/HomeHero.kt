@@ -4,7 +4,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -31,87 +30,84 @@ import androidx.compose.ui.unit.sp
 import com.altaris.linux.ui.theme.Prism
 
 /**
- * The home banner.
+ * The home artwork.
  *
- * A wide panel at the top of Home that carries the anime artwork — the one
- * piece of colour in the app — next to the wordmark and a short line of
- * context. The artwork can be changed in Settings.
+ * A wide panel that carries the scene as its wallpaper, with the title over a
+ * short scrim so the text stays readable. The artwork can be changed in
+ * Settings.
  */
 @Composable
 fun HomeHero(
     artRes: Int,
     modifier: Modifier = Modifier,
     title: String = "Altaris",
-    subtitle: String = "Your Linux environments",
+    subtitle: String? = null,
     trailing: (@Composable () -> Unit)? = null,
 ) {
     val scheme = MaterialTheme.colorScheme
-    val shape = RoundedCornerShape(Prism.CardRadius)
-    Row(
+    val shape = RoundedCornerShape(Prism.PanelRadius)
+    Box(
         modifier = modifier
             .fillMaxWidth()
+            .height(150.dp)
             .clip(shape)
-            .background(scheme.surface)
-            .border(1.dp, scheme.outline, shape)
-            .padding(start = Prism.Gutter, end = 10.dp, top = Prism.Gutter, bottom = Prism.Gutter),
-        verticalAlignment = Alignment.CenterVertically,
+            .background(scheme.surfaceVariant)
+            .border(1.dp, scheme.outline, shape),
     ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title.uppercase(),
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 2.6.sp,
-                color = scheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.height(6.dp))
-            Text(
-                text = subtitle,
-                fontSize = 21.sp,
-                lineHeight = 26.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = (-0.5).sp,
-                color = scheme.onSurface,
-            )
-            Spacer(Modifier.height(12.dp))
-            if (trailing != null) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    trailing()
-                }
-            }
-        }
-        Spacer(Modifier.width(10.dp))
-        // The artwork sits in its own well so it never touches the text.
+        Image(
+            painter = painterResource(artRes),
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxWidth().height(150.dp),
+        )
+        // A scrim only where the text sits, so the picture stays clean.
         Box(
             modifier = Modifier
-                .size(104.dp)
-                .clip(RoundedCornerShape(20.dp))
+                .fillMaxWidth()
+                .height(150.dp)
                 .background(
                     Brush.verticalGradient(
-                        listOf(
-                            scheme.surfaceVariant,
-                            scheme.surface,
-                        )
+                        0f to Color.Black.copy(alpha = 0.55f),
+                        0.45f to Color.Black.copy(alpha = 0.12f),
+                        1f to Color.Black.copy(alpha = 0.30f),
                     )
                 )
-                .border(1.dp, scheme.outline, RoundedCornerShape(20.dp)),
-            contentAlignment = Alignment.Center,
+        )
+        Row(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .fillMaxWidth()
+                .padding(horizontal = Prism.Gutter, vertical = Prism.Tight + 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Image(
-                painter = painterResource(artRes),
-                contentDescription = "Altaris artwork",
-                contentScale = ContentScale.Fit,
-                modifier = Modifier
-                    .size(88.dp)
-                    .clip(RoundedCornerShape(18.dp)),
-            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    fontSize = 19.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = (-0.3).sp,
+                    color = Color.White,
+                    maxLines = 1,
+                )
+                if (!subtitle.isNullOrBlank()) {
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = subtitle,
+                        fontSize = 11.5.sp,
+                        color = Color.White.copy(alpha = 0.78f),
+                        maxLines = 1,
+                    )
+                }
+            }
+            if (trailing != null) {
+                Spacer(Modifier.width(10.dp))
+                trailing()
+            }
         }
     }
 }
 
-/**
- * A small artwork well used by the Settings picker.
- */
+/** A small artwork well used by the Settings picker. */
 @Composable
 fun ArtworkThumb(
     artRes: Int,
@@ -120,10 +116,10 @@ fun ArtworkThumb(
     onClick: () -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
-    val shape = RoundedCornerShape(16.dp)
+    val shape = RoundedCornerShape(Prism.ButtonRadius)
     Box(
         modifier = modifier
-            .size(64.dp)
+            .size(58.dp)
             .clip(shape)
             .background(scheme.surfaceVariant)
             .border(
@@ -143,18 +139,17 @@ fun ArtworkThumb(
         Image(
             painter = painterResource(artRes),
             contentDescription = null,
-            contentScale = ContentScale.Fit,
-            modifier = Modifier.size(48.dp),
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.size(52.dp),
         )
     }
 }
 
-/** The anime artwork the home banner can show. */
+/** The scenes the home artwork can show. */
 val ArtworkThumbs: List<Int> = listOf(
-    com.altaris.linux.R.drawable.splash_art_catgirl,
-    com.altaris.linux.R.drawable.splash_art_mecha,
-    com.altaris.linux.R.drawable.splash_art_shonen,
-    com.altaris.linux.R.drawable.splash_art_kitsune,
-    com.altaris.linux.R.drawable.splash_art_magical,
-    com.altaris.linux.R.drawable.splash_art_chibi,
+    com.altaris.linux.R.drawable.altaris_scene_1,
+    com.altaris.linux.R.drawable.altaris_scene_2,
+    com.altaris.linux.R.drawable.altaris_scene_3,
+    com.altaris.linux.R.drawable.altaris_scene_4,
+    com.altaris.linux.R.drawable.altaris_scene_5,
 )
