@@ -48,7 +48,7 @@ else
       export PULSE_SERVER=tcp:127.0.0.1
       export XDG_RUNTIME_DIR=/tmp
       export VTEST_SOCKET_NAME=/tmp/.virgl_test
-      su - flux -c "
+      su - altaris -c "
         export DISPLAY=:0
         export PULSE_SERVER=tcp:127.0.0.1
         export XDG_RUNTIME_DIR=/tmp

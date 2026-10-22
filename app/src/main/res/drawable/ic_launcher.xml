@@ -5,7 +5,7 @@
     <item android:drawable="@drawable/ic_launcher_background" />
     <item>
         <inset
-            android:drawable="@drawable/ic_bliss_mark"
+            android:drawable="@drawable/ic_altaris_mark"
             android:insetLeft="22dp"
             android:insetRight="22dp"
             android:insetTop="22dp"

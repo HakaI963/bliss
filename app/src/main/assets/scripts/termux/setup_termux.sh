@@ -3,18 +3,18 @@
 # Core initialization script for Altaris
 # Installs necessary dependencies in Termux
 
-MARKER_FILE="$HOME/.fluxlinux/setup_termux.done"
-mkdir -p "$HOME/.fluxlinux"
+MARKER_FILE="$HOME/.altarislinux/setup_termux.done"
+mkdir -p "$HOME/.altarislinux"
 
 if [ -f "$MARKER_FILE" ]; then
     echo "Altaris: Termux Setup already completed. Skipping."
-    am start -a android.intent.action.VIEW -d "fluxlinux://callback?result=success&name=setup_termux"
+    am start -a android.intent.action.VIEW -d "altaris://callback?result=success&name=setup_termux"
     exit 0
 fi
 
 # Trap errors
 set -e
-trap 'am start -a android.intent.action.VIEW -d "fluxlinux://callback?result=failure&name=setup_termux"' ERR
+trap 'am start -a android.intent.action.VIEW -d "altaris://callback?result=failure&name=setup_termux"' ERR
 
 echo "Altaris: Initializing Termux Environment..."
 
@@ -77,7 +77,7 @@ fi
 
 # 4. (Scripts now deployed separately via app logic)
 # - start_gui.sh (Specific to distro family)
-# - bliss_install.sh (Common installer)
+# - altaris_install.sh (Common installer)
 
 # 5. Configure Termux Permissions (Critical for App Communication)
 # REMOVED: User must manually configure 'allow-external-apps = true' in ~/.termux/termux.properties
@@ -90,4 +90,4 @@ echo "📝 Optional: Run 'bash ~/termux_tweaks.sh' for enhanced terminal experie
 
 # Create marker file to track initialization
 touch "$MARKER_FILE"
-am start -a android.intent.action.VIEW -d "fluxlinux://callback?result=success&name=setup_termux"
+am start -a android.intent.action.VIEW -d "altaris://callback?result=success&name=setup_termux"

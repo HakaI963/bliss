@@ -116,8 +116,8 @@ update_shell_path() {
 }
 
 echo "Altaris: Setting up General Software Engineering Environment..."
-TARGET_USER="flux"
-TARGET_GROUP=$(id -gn $TARGET_USER 2>/dev/null || echo "flux")
+TARGET_USER="altaris"
+TARGET_GROUP=$(id -gn $TARGET_USER 2>/dev/null || echo "altaris")
 
 # 1. Install System Dependencies & C/C++ Stack
 echo "Altaris: Installing System Dependencies & C/C++ Tools..."

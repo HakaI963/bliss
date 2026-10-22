@@ -87,7 +87,7 @@ update_shell_path() {
 }
 
 echo "Altaris: Setting up Data Science & AI Environment..."
-TARGET_USER="flux"
+TARGET_USER="altaris"
 TARGET_GROUP="users"
 
 # 1. System Dependencies

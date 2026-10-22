@@ -5,15 +5,15 @@
 # Based on LinuxDroidMaster/Termux-Desktops Guide
 
 # Global Variables
-DEBIANPATH="/data/local/bliss/chroots/debian"
-USERNAME="flux"
-[ -d /data/local/folio ] && [ ! -e /data/local/bliss ] && mv /data/local/folio /data/local/bliss 2>/dev/null || true
+DEBIANPATH="/data/local/altaris/chroots/debian"
+USERNAME="altaris"
+[ -d /data/local/altaris ] && [ ! -e /data/local/altaris ] && mv /data/local/altaris /data/local/altaris 2>/dev/null || true
 
-# Desktop contract: FLUX_DESKTOPS (space/comma separated) = xfce | kde | none;
-# legacy FLUX_DESKTOP / FLUX_DESKTOP_ENV remain valid single values. Unset/empty
+# Desktop contract: ALTARIS_DESKTOPS (space/comma separated) = xfce | kde | none;
+# legacy ALTARIS_DESKTOP / ALTARIS_DESKTOP_ENV remain valid single values. Unset/empty
 # → xfce (backward compat). Normalized to the canonical "xfce kde" order;
 # unknown tokens are ignored and "none" installs neither desktop.
-DESKTOPS="${FLUX_DESKTOPS:-${FLUX_DESKTOP:-${FLUX_DESKTOP_ENV:-xfce}}}"
+DESKTOPS="${ALTARIS_DESKTOPS:-${ALTARIS_DESKTOP:-${ALTARIS_DESKTOP_ENV:-xfce}}}"
 DESKTOPS=$(printf '%s' "$DESKTOPS" | tr ',' ' ')
 DESKTOPS=$(printf '%s' "$DESKTOPS" | tr -s '[:space:]' ' ')
 DESKTOPS="${DESKTOPS# }"
@@ -29,8 +29,8 @@ PKG="${TERMUX_APP__PACKAGE_NAME:-com.ivarna.fluxlinux}"
 APP_HOME="${TERMUX__HOME:-/data/data/${PKG}/files/home}"
 APP_PREFIX="${TERMUX__PREFIX:-/data/data/${PKG}/files/usr}"
 ROOTFS_NAME="debian_13_rootfs.tar.xz"
-ROOTFS_URL="${FLUX_ROOTFS_URL:-https://github.com/HakaI963/bliss/releases/download/rootfs/debian_13_rootfs.tar.xz}"
-ROOTFS_SHA256="${FLUX_ROOTFS_SHA256:-13e29f6099c3b805e84694507ede460c03886ffb364c03317272691cf84e6803}"
+ROOTFS_URL="${ALTARIS_ROOTFS_URL:-https://github.com/HakaI963/altaris/releases/download/rootfs/debian_13_rootfs.tar.xz}"
+ROOTFS_SHA256="${ALTARIS_ROOTFS_SHA256:-13e29f6099c3b805e84694507ede460c03886ffb364c03317272691cf84e6803}"
 
 # Function to show progress message
 progress() {
@@ -70,13 +70,13 @@ goodbye() {
     exit 1
 }
 
-# Resolve app-packaged / manual / download rootfs (same file as bliss_install.sh)
+# Resolve app-packaged / manual / download rootfs (same file as altaris_install.sh)
 resolve_rootfs_archive() {
     ROOTFS_ARCHIVE=""
 
-    if [ -n "${FLUX_ROOTFS_PATH:-}" ] && [ -f "$FLUX_ROOTFS_PATH" ] && [ -s "$FLUX_ROOTFS_PATH" ]; then
-        ROOTFS_ARCHIVE="$FLUX_ROOTFS_PATH"
-        progress "rootfs from FLUX_ROOTFS_PATH=$ROOTFS_ARCHIVE"
+    if [ -n "${ALTARIS_ROOTFS_PATH:-}" ] && [ -f "$ALTARIS_ROOTFS_PATH" ] && [ -s "$ALTARIS_ROOTFS_PATH" ]; then
+        ROOTFS_ARCHIVE="$ALTARIS_ROOTFS_PATH"
+        progress "rootfs from ALTARIS_ROOTFS_PATH=$ROOTFS_ARCHIVE"
         return 0
     fi
 
@@ -306,7 +306,7 @@ configure_debian_chroot() {
         groupadd storage 2>/dev/null
         groupadd wheel 2>/dev/null
         id -u $USERNAME >/dev/null 2>&1 || useradd -m -g users -G wheel,audio,video,storage,aid_inet -s /bin/bash $USERNAME
-        echo '$USERNAME:flux' | chpasswd
+        echo '$USERNAME:altaris' | chpasswd
     " || goodbye
 
     progress "Configuring Sudoers..."
@@ -337,17 +337,17 @@ configure_debian_chroot() {
             apt-get install -y --no-install-recommends xfce4-whiskermenu-plugin xfce4-screenshooter 2>/dev/null || true
         ' || goodbye
     else
-        progress "Skipping XFCE4 install (FLUX_DESKTOPS=$DESKTOPS)"
+        progress "Skipping XFCE4 install (ALTARIS_DESKTOPS=$DESKTOPS)"
     fi
 
-    touch "$DEBIANPATH/.bliss_configured"
+    touch "$DEBIANPATH/.altaris_configured"
     success "Debian Environment Configured!"
 
     # Root-staged launchers live in the Altaris helpers dir (idempotent).
-    mkdir -p /data/local/bliss/helpers
+    mkdir -p /data/local/altaris/helpers
 
     # --- GENERATE GUI LAUNCH SCRIPT (thin → SSOT GUI / helper) ---
-    LAUNCH_SCRIPT="/data/local/bliss/helpers/start_debian13.sh"
+    LAUNCH_SCRIPT="/data/local/altaris/helpers/start_debian13.sh"
     progress "Creating thin GUI launch script at $LAUNCH_SCRIPT..."
 
     # Select the guest session command at generation time (xfce default; kde aware).
@@ -360,25 +360,25 @@ configure_debian_chroot() {
     cat <<EOF > "$LAUNCH_SCRIPT"
 #!/system/bin/sh
 # Compat one-shot GUI → prefer start_debian13_gui.sh (app SSOT) else helper mount --x11 + desktop session
-GUI=/data/local/bliss/helpers/start_debian13_gui.sh
-HELPER=/data/local/bliss/helpers/bliss_chroot.sh
-DEBIANPATH="\${DEBIANPATH:-/data/local/bliss/chroots/debian}"
+GUI=/data/local/altaris/helpers/start_debian13_gui.sh
+HELPER=/data/local/altaris/helpers/altaris_chroot.sh
+DEBIANPATH="\${DEBIANPATH:-/data/local/altaris/chroots/debian}"
 TARGET_PREFIX="\${TARGET_PREFIX:-$APP_PREFIX}"
-USERNAME="\${USERNAME:-flux}"
-export FLUX_PACKAGE="$PKG"
+USERNAME="\${USERNAME:-altaris}"
+export ALTARIS_PACKAGE="$PKG"
 
 if [ -f "\$GUI" ]; then
   exec sh "\$GUI"
 fi
 
 if [ ! -f "\$HELPER" ]; then
-  echo "bliss_chroot.sh missing — open app chroot session or re-run setup" >&2
+  echo "altaris_chroot.sh missing — open app chroot session or re-run setup" >&2
   exit 127
 fi
 
-export FLUX_CHROOT="\$DEBIANPATH"
-export FLUX_PREFIX="\$TARGET_PREFIX"
-export FLUX_HOST_TMP="\${TARGET_PREFIX}/tmp"
+export ALTARIS_CHROOT="\$DEBIANPATH"
+export ALTARIS_PREFIX="\$TARGET_PREFIX"
+export ALTARIS_HOST_TMP="\${TARGET_PREFIX}/tmp"
 sh "\$HELPER" mount --x11 || true
 sh "\$HELPER" sh --user root -- \\
   "killall -9 xfce4-session xfwm4 xfdesktop xfce4-panel plasmashell kwin_x11 startplasma-x11 plasma_session ksmserver dbus-launch dbus-daemon 2>/dev/null; true" \\
@@ -392,7 +392,7 @@ EOF
     success "GUI Launch script created (SSOT thin wrapper)."
 
     # Prefer asset SSOT stop when present under app home (redeployed by app)
-    STOP_LAUNCHER="/data/local/bliss/helpers/stop_debian13_gui.sh"
+    STOP_LAUNCHER="/data/local/altaris/helpers/stop_debian13_gui.sh"
     progress "Creating GUI Stop Script at $STOP_LAUNCHER..."
     APP_STOP="$APP_HOME/stop_debian13_gui.sh"
     if [ -f "$APP_STOP" ]; then
@@ -402,7 +402,7 @@ EOF
     else
     cat <<EOF > "$STOP_LAUNCHER"
 #!/bin/sh
-DEBIANPATH="/data/local/bliss/chroots/debian"
+DEBIANPATH="/data/local/altaris/chroots/debian"
 BB="$BB"
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH
 TARGET_TERMUX_PREFIX="$APP_PREFIX"
@@ -422,19 +422,19 @@ EOF
     # Also stage full root GUI launcher from app home if present (Settings SSOT)
     APP_START_GUI="$APP_HOME/start_debian13_gui.sh"
     if [ -f "$APP_START_GUI" ]; then
-        cp -f "$APP_START_GUI" /data/local/bliss/helpers/start_debian13_gui.sh
-        chmod +x /data/local/bliss/helpers/start_debian13_gui.sh
+        cp -f "$APP_START_GUI" /data/local/altaris/helpers/start_debian13_gui.sh
+        chmod +x /data/local/altaris/helpers/start_debian13_gui.sh
         success "Staged start_debian13_gui.sh from app assets"
     fi
 
     # --- SSOT helper + thin compat wrappers ---
-    HELPER="/data/local/bliss/helpers/bliss_chroot.sh"
+    HELPER="/data/local/altaris/helpers/altaris_chroot.sh"
     progress "Installing chroot SSOT helper at $HELPER..."
     HELPER_SRC=""
     for cand in \
-        "$APP_HOME/bliss_chroot.sh" \
-        "$(dirname "$APP_HOME")/staged_scripts/bliss_chroot.sh" \
-        "$(dirname "$0")/bliss_chroot.sh"
+        "$APP_HOME/altaris_chroot.sh" \
+        "$(dirname "$APP_HOME")/staged_scripts/altaris_chroot.sh" \
+        "$(dirname "$0")/altaris_chroot.sh"
     do
         if [ -f "$cand" ]; then
             HELPER_SRC="$cand"
@@ -446,17 +446,17 @@ EOF
         chmod 755 "$HELPER"
         success "SSOT helper installed from $HELPER_SRC"
     else
-        error "bliss_chroot.sh not found in app home/staged — app ensureHelperScript will stage on first session"
+        error "altaris_chroot.sh not found in app home/staged — app ensureHelperScript will stage on first session"
     fi
 
-    ROOT_RUNNER="/data/local/bliss/helpers/run_debian13_root.sh"
+    ROOT_RUNNER="/data/local/altaris/helpers/run_debian13_root.sh"
     progress "Creating thin root runner → SSOT at $ROOT_RUNNER..."
     cat <<'EOF' > "$ROOT_RUNNER"
 #!/system/bin/sh
-# Compat wrapper → bliss_chroot.sh exec --user root
-HELPER=/data/local/bliss/helpers/bliss_chroot.sh
+# Compat wrapper → altaris_chroot.sh exec --user root
+HELPER=/data/local/altaris/helpers/altaris_chroot.sh
 if [ ! -f "$HELPER" ]; then
-  echo "bliss_chroot.sh missing — open a chroot session once or re-run setup" >&2
+  echo "altaris_chroot.sh missing — open a chroot session once or re-run setup" >&2
   exit 127
 fi
 if [ "$#" -lt 1 ]; then
@@ -468,26 +468,26 @@ EOF
     chmod 755 "$ROOT_RUNNER"
     success "Root runner created (SSOT wrapper)."
 
-    CLI_SCRIPT="/data/local/bliss/helpers/enter_debian13.sh"
+    CLI_SCRIPT="/data/local/altaris/helpers/enter_debian13.sh"
     progress "Creating thin CLI launcher at $CLI_SCRIPT..."
     cat <<'EOF' > "$CLI_SCRIPT"
 #!/system/bin/sh
-# Compat → bliss_chroot.sh login --user flux
-HELPER=/data/local/bliss/helpers/bliss_chroot.sh
-[ -f "$HELPER" ] || { echo "bliss_chroot.sh missing" >&2; exit 127; }
+# Compat → altaris_chroot.sh login --user altaris
+HELPER=/data/local/altaris/helpers/altaris_chroot.sh
+[ -f "$HELPER" ] || { echo "altaris_chroot.sh missing" >&2; exit 127; }
 echo "Entering Debian 13 Chroot (CLI)..."
-exec sh "$HELPER" login --user flux --shell zsh
+exec sh "$HELPER" login --user altaris --shell zsh
 EOF
     chmod 755 "$CLI_SCRIPT"
     success "CLI Launcher created: $CLI_SCRIPT"
 
-    ROOT_CLI_SCRIPT="/data/local/bliss/helpers/enter_debian13_root.sh"
+    ROOT_CLI_SCRIPT="/data/local/altaris/helpers/enter_debian13_root.sh"
     progress "Creating thin root CLI launcher at $ROOT_CLI_SCRIPT..."
     cat <<'EOF' > "$ROOT_CLI_SCRIPT"
 #!/system/bin/sh
-# Compat → bliss_chroot.sh login --user root
-HELPER=/data/local/bliss/helpers/bliss_chroot.sh
-[ -f "$HELPER" ] || { echo "bliss_chroot.sh missing" >&2; exit 127; }
+# Compat → altaris_chroot.sh login --user root
+HELPER=/data/local/altaris/helpers/altaris_chroot.sh
+[ -f "$HELPER" ] || { echo "altaris_chroot.sh missing" >&2; exit 127; }
 echo "Entering Debian 13 Chroot as ROOT..."
 exec sh "$HELPER" login --user root --shell bash
 EOF
@@ -498,7 +498,7 @@ EOF
     success "NativeCode: Chroot Setup Complete!"
 
     # Notify NativeCode app (non-fatal: often fails under pure root / no app context)
-    am start -a android.intent.action.VIEW -d "fluxlinux://callback?result=success&name=distro_install_debian13_chroot" >/dev/null 2>&1 || true
+    am start -a android.intent.action.VIEW -d "altaris://callback?result=success&name=distro_install_debian13_chroot" >/dev/null 2>&1 || true
     return 0
 }
 
@@ -513,9 +513,9 @@ main() {
 # resolve root BusyBox (manager built-in; NDK module not required)
 _rr=""
 for _c in \
-  "${FLUX_RESOLVE_BB:-}" \
+  "${ALTARIS_RESOLVE_BB:-}" \
   "$(dirname "$0")/resolve_bb.sh" \
-  /data/local/bliss/helpers/bliss_resolve_bb.sh
+  /data/local/altaris/helpers/altaris_resolve_bb.sh
 do
   [ -n "$_c" ] && [ -f "$_c" ] && _rr="$_c" && break
 done
@@ -526,11 +526,11 @@ if [ -n "$_rr" ]; then
 fi
 if [ -z "${BB:-}" ]; then
   # sidecar missing (desktop/uninstall/staged setup) — same B1 walk as resolve_bb
-  if [ -n "${FLUX_BB:-}" ] && [ -x "$FLUX_BB" ] &&
-     "$FLUX_BB" --list >/dev/null 2>&1; then BB="$FLUX_BB"; fi
-  if [ -z "${BB:-}" ] && [ -x /data/local/bliss/busybox/bliss_busybox ] &&
-     /data/local/bliss/busybox/bliss_busybox --list >/dev/null 2>&1; then
-    BB=/data/local/bliss/busybox/bliss_busybox
+  if [ -n "${ALTARIS_BB:-}" ] && [ -x "$ALTARIS_BB" ] &&
+     "$ALTARIS_BB" --list >/dev/null 2>&1; then BB="$ALTARIS_BB"; fi
+  if [ -z "${BB:-}" ] && [ -x /data/local/altaris/busybox/altaris_busybox ] &&
+     /data/local/altaris/busybox/altaris_busybox --list >/dev/null 2>&1; then
+    BB=/data/local/altaris/busybox/altaris_busybox
   fi
   if [ -z "${BB:-}" ]; then
     for path in \
@@ -556,17 +556,17 @@ fi
 
     progress "Using Root Busybox: $BB"
 
-    DEBIANPATH="/data/local/bliss/chroots/debian"
+    DEBIANPATH="/data/local/altaris/chroots/debian"
 
     # Already installed: marker and/or a real shell binary (app cannot always see this path).
-    if [ -f "$DEBIANPATH/.bliss_configured" ] || [ -f "$DEBIANPATH/.flux_configured" ] || [ -e "$DEBIANPATH/bin/sh" ] || [ -e "$DEBIANPATH/usr/bin/bash" ]; then
+    if [ -f "$DEBIANPATH/.altaris_configured" ] || [ -f "$DEBIANPATH/.altaris_configured" ] || [ -e "$DEBIANPATH/bin/sh" ] || [ -e "$DEBIANPATH/usr/bin/bash" ]; then
         success "Debian 13 Chroot already installed."
         progress "Skipping installation (rootfs at $DEBIANPATH)..."
         # Ensure marker exists for future probes
-        touch "$DEBIANPATH/.bliss_configured" 2>/dev/null || true
+        touch "$DEBIANPATH/.altaris_configured" 2>/dev/null || true
         # Print probe lines the app can match in logs
         progress "VERIFY: chroot present (bin/sh or bash + marker)"
-        am start -a android.intent.action.VIEW -d "fluxlinux://callback?result=success&name=distro_install_debian13_chroot" >/dev/null 2>&1 || true
+        am start -a android.intent.action.VIEW -d "altaris://callback?result=success&name=distro_install_debian13_chroot" >/dev/null 2>&1 || true
         exit 0
     fi
 
@@ -575,7 +575,7 @@ fi
         success "Created directory: $DEBIANPATH"
     fi
 
-    # Prefer app-deployed rootfs (same as bliss_install / assets/rootfs/)
+    # Prefer app-deployed rootfs (same as altaris_install / assets/rootfs/)
     if resolve_rootfs_archive; then
         :
     else

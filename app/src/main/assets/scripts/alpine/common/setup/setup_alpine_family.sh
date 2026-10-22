@@ -1,16 +1,16 @@
 #!/bin/sh
 # setup_alpine_family.sh
 # Post-install base desktop for Alpine (proot + chroot). apk + musl.
-# Creates user flux, installs XFCE4. Must run as root inside the guest.
+# Creates user altaris, installs XFCE4. Must run as root inside the guest.
 
-# Helpers live in bliss_guest_common.sh (prepended by bliss_install /
+# Helpers live in altaris_guest_common.sh (prepended by altaris_install /
 # familySetupPayload). Source it only when this file is run standalone.
-if ! command -v _flux_setup_pulse >/dev/null 2>&1; then
+if ! command -v _altaris_setup_pulse >/dev/null 2>&1; then
     _here=$(CDPATH= cd -- "$(dirname -- "$0")" 2>/dev/null && pwd)
     for _common in \
-        "${_here}/bliss_guest_common.sh" \
-        "${HOME:-}/bliss_guest_common.sh" \
-        /tmp/bliss_guest_common.sh
+        "${_here}/altaris_guest_common.sh" \
+        "${HOME:-}/altaris_guest_common.sh" \
+        /tmp/altaris_guest_common.sh
     do
         if [ -f "$_common" ]; then
             # shellcheck source=/dev/null
@@ -20,7 +20,7 @@ if ! command -v _flux_setup_pulse >/dev/null 2>&1; then
     done
 fi
 # Degraded standalone run without the shared helpers: plain install (no retry).
-command -v _flux_retry_pkg >/dev/null 2>&1 || _flux_retry_pkg() { "$@"; }
+command -v _altaris_retry_pkg >/dev/null 2>&1 || _altaris_retry_pkg() { "$@"; }
 
 DISTRO_NAME="${1:-alpine}"
 
@@ -92,11 +92,11 @@ if [ ! -e /var/lib/dbus/machine-id ]; then
     fi
 fi
 
-# Desktop contract: FLUX_DESKTOPS (space/comma separated) = xfce | kde | none;
-# legacy FLUX_DESKTOP / FLUX_DESKTOP_ENV remain valid single values. Unset/empty
+# Desktop contract: ALTARIS_DESKTOPS (space/comma separated) = xfce | kde | none;
+# legacy ALTARIS_DESKTOP / ALTARIS_DESKTOP_ENV remain valid single values. Unset/empty
 # → xfce (backward compat). Normalized to the canonical "xfce kde" order;
 # unknown tokens are ignored and "none" installs neither desktop.
-DESKTOPS="${FLUX_DESKTOPS:-${FLUX_DESKTOP:-${FLUX_DESKTOP_ENV:-xfce}}}"
+DESKTOPS="${ALTARIS_DESKTOPS:-${ALTARIS_DESKTOP:-${ALTARIS_DESKTOP_ENV:-xfce}}}"
 DESKTOPS=$(printf '%s' "$DESKTOPS" | tr ',' ' ')
 DESKTOPS=$(printf '%s' "$DESKTOPS" | tr -s '[:space:]' ' ')
 DESKTOPS="${DESKTOPS# }"
@@ -128,7 +128,7 @@ fi
 # XFCE desktop (always include xfce4-session for failsafe session name)
 if [ -z "${DESKTOPS##*xfce*}" ]; then
     echo "Altaris: Installing XFCE4..."
-    if ! _flux_retry_pkg apk add --no-cache \
+    if ! _altaris_retry_pkg apk add --no-cache \
         xfce4 \
         xfce4-session \
         xfce4-settings \
@@ -169,12 +169,12 @@ if [ "$DESKTOPS" != "none" ]; then
 echo "Altaris: Installing proot-safe bwrap shim for glycin loaders..."
 apk add --no-cache glycin-image-rs glycin-svg gdk-pixbuf 2>/dev/null || true
 if [ -x /usr/bin/bwrap ] && [ ! -e /usr/bin/bwrap.real ] && \
-   ! grep -q 'FluxLinux proot' /usr/bin/bwrap 2>/dev/null; then
+   ! grep -q 'AltarisLinux proot' /usr/bin/bwrap 2>/dev/null; then
     cp -a /usr/bin/bwrap /usr/bin/bwrap.real 2>/dev/null || true
 fi
 cat > /usr/bin/bwrap <<'BWRAP_EOF'
 #!/bin/sh
-# FluxLinux proot: skip sandbox; run glycin loader (regular file only — not /).
+# AltarisLinux proot: skip sandbox; run glycin loader (regular file only — not /).
 while [ $# -gt 0 ]; do
   case "$1" in
     /*)
@@ -190,31 +190,31 @@ BWRAP_EOF
 chmod 755 /usr/bin/bwrap
 fi
 
-# 5. User flux (prefer uid 1000 when free — matches common XFCE defaults)
-if ! id flux >/dev/null 2>&1; then
-    echo "Altaris: Creating user flux..."
+# 5. User altaris (prefer uid 1000 when free — matches common XFCE defaults)
+if ! id altaris >/dev/null 2>&1; then
+    echo "Altaris: Creating user altaris..."
     if command -v useradd >/dev/null 2>&1; then
         if ! id -u 1000 >/dev/null 2>&1; then
-            useradd -m -u 1000 -s /bin/bash flux 2>/dev/null \
-                || useradd -m -s /bin/bash flux 2>/dev/null \
-                || useradd -m -s /bin/sh flux
+            useradd -m -u 1000 -s /bin/bash altaris 2>/dev/null \
+                || useradd -m -s /bin/bash altaris 2>/dev/null \
+                || useradd -m -s /bin/sh altaris
         else
-            useradd -m -s /bin/bash flux 2>/dev/null || useradd -m -s /bin/sh flux
+            useradd -m -s /bin/bash altaris 2>/dev/null || useradd -m -s /bin/sh altaris
         fi
     else
-        adduser -D -s /bin/sh flux
+        adduser -D -s /bin/sh altaris
     fi
-    echo "flux:flux" | chpasswd 2>/dev/null || true
+    echo "altaris:altaris" | chpasswd 2>/dev/null || true
 fi
 
 # Groups (best-effort — names differ slightly across Alpine releases)
 for g in wheel audio video netdev input; do
-    addgroup flux "$g" 2>/dev/null || true
+    addgroup altaris "$g" 2>/dev/null || true
 done
 
 # 6. Sudo NOPASSWD
 mkdir -p /etc/sudoers.d
-echo "flux ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/flux
+echo "altaris ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/flux
 chmod 0440 /etc/sudoers.d/flux
 # Alpine ships @includedir; re-assert if a minimal sudoers was replaced
 if [ -f /etc/sudoers ] && ! grep -qE '@includedir[[:space:]]+/etc/sudoers\.d' /etc/sudoers 2>/dev/null; then
@@ -223,7 +223,7 @@ fi
 chmod 4755 /usr/bin/sudo 2>/dev/null || true
 
 # 7. Optional VNC xstartup parity with Debian family (desktop-aware)
-if id flux >/dev/null 2>&1; then
+if id altaris >/dev/null 2>&1; then
     mkdir -p /home/flux/.vnc
     _xs_de="startxfce4"
     if [ -z "${DESKTOPS##*kde*}" ] && [ -n "${DESKTOPS##*xfce*}" ]; then
@@ -238,12 +238,12 @@ EOF
     unset _xs_de
     chmod +x /home/flux/.vnc/xstartup
 fi
-if command -v _flux_write_pulse_client >/dev/null 2>&1; then
-    _flux_write_pulse_client
+if command -v _altaris_write_pulse_client >/dev/null 2>&1; then
+    _altaris_write_pulse_client
 else
     mkdir -p /etc/profile.d /etc/pulse/client.conf.d
-    printf 'export PULSE_SERVER=tcp:127.0.0.1\n' > /etc/profile.d/flux-pulse.sh
-    chmod 644 /etc/profile.d/flux-pulse.sh 2>/dev/null || true
+    printf 'export PULSE_SERVER=tcp:127.0.0.1\n' > /etc/profile.d/altaris-pulse.sh
+    chmod 644 /etc/profile.d/altaris-pulse.sh 2>/dev/null || true
     if [ -f /etc/environment ]; then
         if grep -q '^PULSE_SERVER=' /etc/environment 2>/dev/null; then
             sed -i 's|^PULSE_SERVER=.*|PULSE_SERVER=tcp:127.0.0.1|' /etc/environment
@@ -253,23 +253,23 @@ else
     else
         printf 'PULSE_SERVER=tcp:127.0.0.1\n' > /etc/environment
     fi
-    cat > /etc/pulse/client.conf.d/99-bliss.conf <<'EOF'
+    cat > /etc/pulse/client.conf.d/99-altaris.conf <<'EOF'
 default-server = tcp:127.0.0.1
 autospawn = no
 EOF
 fi
 
 # Ensure home ownership / writability.
-# Proot: host process is the Android app uid; chown to flux's guest uid (e.g.
+# Proot: host process is the Android app uid; chown to altaris's guest uid (e.g.
 # 10302) can make mode-700 dirs unwritable on disk → xfconfd failsafe.
-# Prefer matching /home owner (app uid under proot), then best-effort flux:flux.
+# Prefer matching /home owner (app uid under proot), then best-effort altaris:altaris.
 if [ -d /home/flux ]; then
     _home_uid=$(stat -c %u /home 2>/dev/null || true)
     _home_gid=$(stat -c %g /home 2>/dev/null || true)
     if [ -n "$_home_uid" ]; then
         chown -R "$_home_uid:$_home_gid" /home/flux 2>/dev/null || true
     fi
-    chown -R flux:flux /home/flux 2>/dev/null || true
+    chown -R altaris:altaris /home/flux 2>/dev/null || true
     chmod 755 /home/flux 2>/dev/null || true
     mkdir -p /home/flux/.config /home/flux/.cache /home/flux/.local/share
     chmod -R u+rwX /home/flux/.config /home/flux/.cache /home/flux/.local 2>/dev/null || true
@@ -281,7 +281,7 @@ export LANG="${LANG:-C}"
 # Proot: host process is the Android app uid. If apk db/lock were written as
 # real host root (uid 0), guest "root"/sudo still cannot lock the DB →
 # "Unable to lock database: Permission denied" on `sudo apk`.
-_flux_fix_apk_writable() {
+_altaris_fix_apk_writable() {
     _ref_u=$(stat -c %u /etc 2>/dev/null || true)
     _ref_g=$(stat -c %g /etc 2>/dev/null || true)
     [ -n "$_ref_u" ] || return 0
@@ -297,24 +297,24 @@ _flux_fix_apk_writable() {
     chmod 666 /var/log/apk.log 2>/dev/null || true
 }
 echo "Altaris: Ensuring apk database is writable (proot-safe)…"
-_flux_fix_apk_writable
+_altaris_fix_apk_writable
 
-[ -d /etc/fluxlinux ] && [ ! -e /etc/bliss ] && mv /etc/fluxlinux /etc/bliss 2>/dev/null || true
-mkdir -p /etc/bliss
-printf '%s\n' virgl > /etc/bliss/gpu_mode
+[ -d /etc/altarislinux ] && [ ! -e /etc/altaris ] && mv /etc/altarislinux /etc/altaris 2>/dev/null || true
+mkdir -p /etc/altaris
+printf '%s\n' virgl > /etc/altaris/gpu_mode
 echo "Altaris: gpu_mode=virgl (first-paint; hw-accel may upgrade)"
 
 # Phone-compact XFCE defaults (30px mono top panel, DPI 96, wallpaper,
-# Home-only desktop icons, shortcuts). Helper ships in bliss_guest_common.sh;
+# Home-only desktop icons, shortcuts). Helper ships in altaris_guest_common.sh;
 # guarded so a standalone run without it is a no-op and never fails install.
-if [ -z "${DESKTOPS##*xfce*}" ] && command -v _flux_xfce_compact_defaults >/dev/null 2>&1; then
-    _flux_xfce_compact_defaults || true
+if [ -z "${DESKTOPS##*xfce*}" ] && command -v _altaris_xfce_compact_defaults >/dev/null 2>&1; then
+    _altaris_xfce_compact_defaults || true
 fi
 
 
 # Altaris universal interactive shell: zsh suggestions, syntax colors, sticker.
-if command -v _flux_setup_altaris_shell >/dev/null 2>&1; then
-    _flux_setup_altaris_shell || true
+if command -v _altaris_setup_altaris_shell >/dev/null 2>&1; then
+    _altaris_setup_altaris_shell || true
 fi
 
 echo "Altaris: ${DISTRO_NAME} Alpine setup complete!"

@@ -35,10 +35,10 @@ echo ""
 
 # ── Read GPU config / auto-detect ────────────────────────
 GPU_BACKEND="virgl"
-GPU_CONFIG="$HOME/.fluxlinux/gpu_config"
+GPU_CONFIG="$HOME/.altarislinux/gpu_config"
 if [ -f "$GPU_CONFIG" ]; then
     source "$GPU_CONFIG"
-    GPU_BACKEND="${FLUX_GPU_BACKEND:-virgl}"
+    GPU_BACKEND="${ALTARIS_GPU_BACKEND:-virgl}"
 else
     # gpu_config not found — auto-detect now
     echo "Altaris: gpu_config not found, auto-detecting GPU..."
@@ -53,8 +53,8 @@ else
         GPU_BACKEND="turnip"
     fi
     # Save result so next launch skips detection
-    mkdir -p "$HOME/.fluxlinux"
-    echo "FLUX_GPU_BACKEND=$GPU_BACKEND" > "$GPU_CONFIG"
+    mkdir -p "$HOME/.altarislinux"
+    echo "ALTARIS_GPU_BACKEND=$GPU_BACKEND" > "$GPU_CONFIG"
     echo "Altaris: Auto-detected GPU backend: [$GPU_BACKEND] (saved to gpu_config)"
 fi
 echo "Altaris: GPU backend [$GPU_BACKEND]"
@@ -166,8 +166,8 @@ echo "  │  Open the Termux:X11 app to see desktop │"
 echo "  └─────────────────────────────────────────┘"
 echo ""
 
-KDE_LOG="$HOME/.fluxlinux/kde_session.log"
-mkdir -p "$HOME/.fluxlinux"
+KDE_LOG="$HOME/.altarislinux/kde_session.log"
+mkdir -p "$HOME/.altarislinux"
 
 echo "✅ KDE Plasma is starting (GPU: $GPU_BACKEND)"
 echo "   Session log: $KDE_LOG"

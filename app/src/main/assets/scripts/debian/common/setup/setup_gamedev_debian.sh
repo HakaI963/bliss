@@ -95,7 +95,7 @@ update_shell_path() {
 }
 
 echo "Altaris: Setting up Game Development Environment..."
-TARGET_USER="flux"
+TARGET_USER="altaris"
 TARGET_GROUP="users"
 
 # 1. Install System Dependencies & Build Tools

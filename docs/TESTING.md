@@ -52,8 +52,8 @@ Install over the previous Altaris build (same `com.nopiece.bliss` package).
   - `altaris tap 540 1200`
   - `altaris record start 6 720` then `altaris record stop`
   - `altaris stop <clone-package>`
-- [ ] MCP `bliss_apps` lists source apps; `bliss_clones` includes created / last-opened / parts.
-- [ ] `bliss_screenshot` returns an image and `bliss_ocr` returns boxes.
+- [ ] MCP `altaris_apps` lists source apps; `altaris_clones` includes created / last-opened / parts.
+- [ ] `altaris_screenshot` returns an image and `altaris_ocr` returns boxes.
 - [ ] Recordings appear under `/sdcard/Android/data/com.nopiece.bliss/files/recordings/`.
 - [ ] Start a recording, wait at least 2 seconds, stop it: the MP4 must be playable, larger than a header-only 585-byte file, and `altaris record status` must report a non-zero frame count while recording.
 - [ ] Start then stop immediately: the MP4 should still contain one frame and play (no empty/corrupt file).
@@ -63,7 +63,7 @@ Report the exact command + result, and the clone log lines for any app that stil
 ## 3.19 additions
 - [ ] Open a Parrot zsh terminal: the prompt is `altaris@<host>`, suggestions appear, and a valid command is green while a bogus command is red.
 - [ ] Open a Debian/Alpine bash terminal: ble.sh supplies the same green/red syntax coloring and inline suggestions.
-- [ ] In any proot terminal run `altaris status` and `bliss status`; both resolve the loopback server.
+- [ ] In any proot terminal run `altaris status` and `altaris status`; both resolve the loopback server.
 - [ ] Confirm the notification shade has no persistent Altaris/clone-control notification.
 - [ ] Tools → Clone scans only host/guest Linux agent binaries; Android apps are absent.
 - [ ] Tools → Clone has no MP4 capture card.

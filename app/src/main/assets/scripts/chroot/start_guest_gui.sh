@@ -1,22 +1,22 @@
 #!/system/bin/sh
 # start_guest_gui.sh — root: mount guest chroot + launch XFCE4
 # Called by start_gui_chroot.sh after host Pulse/VirGL/X11 are up.
-# Paths: app package via FLUX_PACKAGE / TARGET_PREFIX (ivarna or zenithblue). Sticky guest /tmp preserved.
+# Paths: app package via ALTARIS_PACKAGE / TARGET_PREFIX (ivarna or zenithblue). Sticky guest /tmp preserved.
 
-CHROOT_ROOT="${CHROOT_ROOT:-${FLUX_CHROOT:-/data/local/bliss/chroots/guest}}"
-[ -d /data/local/folio ] && [ ! -e /data/local/bliss ] && mv /data/local/folio /data/local/bliss 2>/dev/null || true
+CHROOT_ROOT="${CHROOT_ROOT:-${ALTARIS_CHROOT:-/data/local/altaris/chroots/guest}}"
+[ -d /data/local/altaris ] && [ ! -e /data/local/altaris ] && mv /data/local/altaris /data/local/altaris 2>/dev/null || true
 if [ -z "${TARGET_PREFIX:-}" ]; then
-  if [ -n "${FLUX_PREFIX:-}" ]; then
-    TARGET_PREFIX="$FLUX_PREFIX"
-  elif [ -n "${FLUX_PACKAGE:-}" ]; then
-    TARGET_PREFIX="/data/data/${FLUX_PACKAGE}/files/usr"
+  if [ -n "${ALTARIS_PREFIX:-}" ]; then
+    TARGET_PREFIX="$ALTARIS_PREFIX"
+  elif [ -n "${ALTARIS_PACKAGE:-}" ]; then
+    TARGET_PREFIX="/data/data/${ALTARIS_PACKAGE}/files/usr"
   elif [ -d /data/data/com.zenithblue.fluxlinux/files/usr ]; then
     TARGET_PREFIX="/data/data/com.zenithblue.fluxlinux/files/usr"
   else
     TARGET_PREFIX="/data/data/com.ivarna.fluxlinux/files/usr"
   fi
 fi
-USERNAME="${USERNAME:-flux}"
+USERNAME="${USERNAME:-altaris}"
 
 echo "========================================"
 echo "Altaris: Chroot XFCE (root stage)"
@@ -26,9 +26,9 @@ echo "========================================"
 # resolve root BusyBox (manager built-in; NDK module not required)
 _rr=""
 for _c in \
-  "${FLUX_RESOLVE_BB:-}" \
+  "${ALTARIS_RESOLVE_BB:-}" \
   "$(dirname "$0")/resolve_bb.sh" \
-  /data/local/bliss/helpers/bliss_resolve_bb.sh
+  /data/local/altaris/helpers/altaris_resolve_bb.sh
 do
   [ -n "$_c" ] && [ -f "$_c" ] && _rr="$_c" && break
 done
@@ -39,11 +39,11 @@ if [ -n "$_rr" ]; then
 fi
 if [ -z "${BB:-}" ]; then
   # sidecar missing (desktop/uninstall/staged setup) — same B1 walk as resolve_bb
-  if [ -n "${FLUX_BB:-}" ] && [ -x "$FLUX_BB" ] &&
-     "$FLUX_BB" --list >/dev/null 2>&1; then BB="$FLUX_BB"; fi
-  if [ -z "${BB:-}" ] && [ -x /data/local/bliss/busybox/bliss_busybox ] &&
-     /data/local/bliss/busybox/bliss_busybox --list >/dev/null 2>&1; then
-    BB=/data/local/bliss/busybox/bliss_busybox
+  if [ -n "${ALTARIS_BB:-}" ] && [ -x "$ALTARIS_BB" ] &&
+     "$ALTARIS_BB" --list >/dev/null 2>&1; then BB="$ALTARIS_BB"; fi
+  if [ -z "${BB:-}" ] && [ -x /data/local/altaris/busybox/altaris_busybox ] &&
+     /data/local/altaris/busybox/altaris_busybox --list >/dev/null 2>&1; then
+    BB=/data/local/altaris/busybox/altaris_busybox
   fi
   if [ -z "${BB:-}" ]; then
     for path in \
@@ -77,7 +77,7 @@ if [ ! -e "$CHROOT_ROOT/usr/bin/startxfce4" ] && [ ! -e "$CHROOT_ROOT/usr/sbin/s
   exit 1
 fi
 
-# Soft SELinux (HyperOS / enforcing) — flux pattern; fail soft
+# Soft SELinux (HyperOS / enforcing) — altaris pattern; fail soft
 if command -v getenforce >/dev/null 2>&1; then
   SELINUX_STATUS=$(getenforce 2>/dev/null || true)
   echo "Altaris: SELinux=$SELINUX_STATUS"
@@ -96,7 +96,7 @@ if command -v chcon >/dev/null 2>&1; then
 fi
 restorecon -RF "$TARGET_PREFIX/tmp" 2>/dev/null || true
 
-HELPER="${HELPER:-/data/local/bliss/helpers/bliss_chroot.sh}"
+HELPER="${HELPER:-/data/local/altaris/helpers/altaris_chroot.sh}"
 echo "[1/5] Mounts (SSOT if available)..."
 # Wait for host Loader to create X0 before --x11 bind
 mkdir -p "$TARGET_PREFIX/tmp/.X11-unix" 2>/dev/null || true
@@ -115,15 +115,15 @@ if [ ! -S "$TARGET_PREFIX/tmp/.X11-unix/X0" ]; then
 fi
 
 if [ -f "$HELPER" ]; then
-  export FLUX_CHROOT="$CHROOT_ROOT"
-  export FLUX_PREFIX="$TARGET_PREFIX"
-  export FLUX_HOST_TMP="${TARGET_PREFIX}/tmp"
+  export ALTARIS_CHROOT="$CHROOT_ROOT"
+  export ALTARIS_PREFIX="$TARGET_PREFIX"
+  export ALTARIS_HOST_TMP="${TARGET_PREFIX}/tmp"
   # Legacy aliases (if an older helper still reads NC_*)
   export NC_CHROOT="$CHROOT_ROOT"
   export NC_PREFIX="$TARGET_PREFIX"
   export NC_HOST_TMP="${TARGET_PREFIX}/tmp"
   sh "$HELPER" mount --x11 || true
-  echo "[2/5] X11 via bliss_chroot mount --x11"
+  echo "[2/5] X11 via altaris_chroot mount --x11"
 else
   /system/bin/mount -o remount,dev,suid /data 2>/dev/null \
     || $BB mount -o remount,dev,suid /data 2>/dev/null || true
@@ -161,7 +161,7 @@ else
     >/dev/null 2>&1
 fi
 
-# su/sudo need suid on /data (KernelSU guests live under /data/local/bliss/chroots).
+# su/sudo need suid on /data (KernelSU guests live under /data/local/altaris/chroots).
 /system/bin/mount -o remount,dev,suid /data 2>/dev/null || true
 # TW minirootfs can ship an empty /etc/machine-id; dbus-broker then refuses.
 _midf="$CHROOT_ROOT/etc/machine-id"
@@ -209,7 +209,7 @@ chmod 755 "$_bwrap" 2>/dev/null || true
 # Guest script: sticky /tmp X11 + host-tmp VirGL + gpu_mode file
 $BB chroot "$CHROOT_ROOT" /bin/sh -c "
 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-[ -d /etc/fluxlinux ] && [ ! -e /etc/bliss ] && mv /etc/fluxlinux /etc/bliss 2>/dev/null || true
+[ -d /etc/altarislinux ] && [ ! -e /etc/altaris ] && mv /etc/altarislinux /etc/altaris 2>/dev/null || true
 export TMPDIR=/tmp
 # Clear host-leaked bus; failsafe needs XDG_CONFIG_DIRS including /etc
 unset DBUS_SESSION_BUS_ADDRESS DBUS_SESSION_BUS_PID DBUS_SESSION_BUS_WINDOWID
@@ -233,16 +233,16 @@ if [ ! -e /var/lib/dbus/machine-id ]; then
   ln -sf /etc/machine-id /var/lib/dbus/machine-id 2>/dev/null || \
     cp -f /etc/machine-id /var/lib/dbus/machine-id 2>/dev/null || true
 fi
-FLUX_SU_SHELL=/bin/bash
+ALTARIS_SU_SHELL=/bin/bash
 if [ ! -x /bin/bash ] && [ ! -x /usr/bin/bash ]; then
-  FLUX_SU_SHELL=/bin/sh
+  ALTARIS_SU_SHELL=/bin/sh
 fi
 # openSUSE su can fail with 'cannot set groups' inside a /data chroot.
 # runuser (util-linux) switches uid from root without that setgroups path.
 if command -v runuser >/dev/null 2>&1; then
-  _runas() { runuser -u $USERNAME -- \"\$FLUX_SU_SHELL\" -c \"\$1\"; }
+  _runas() { runuser -u $USERNAME -- \"\$ALTARIS_SU_SHELL\" -c \"\$1\"; }
 else
-  _runas() { su -s \"\$FLUX_SU_SHELL\" - $USERNAME -c \"\$1\"; }
+  _runas() { su -s \"\$ALTARIS_SU_SHELL\" - $USERNAME -c \"\$1\"; }
 fi
 _runas '
   unset DBUS_SESSION_BUS_ADDRESS DBUS_SESSION_BUS_PID DBUS_SESSION_BUS_WINDOWID
@@ -262,13 +262,13 @@ _runas '
   unset GDK_DEBUG
   export GSK_RENDERER=cairo
 
-  if [ -r /usr/local/lib/fluxlinux/apply_gpu_env.sh ]; then
-    . /usr/local/lib/fluxlinux/apply_gpu_env.sh
-    flux_gpu_apply_runtime
+  if [ -r /usr/local/lib/altarislinux/apply_gpu_env.sh ]; then
+    . /usr/local/lib/altarislinux/apply_gpu_env.sh
+    altaris_gpu_apply_runtime
   else
     GPU_MODE=virgl
-    if [ -r /etc/bliss/gpu_mode ]; then
-      GPU_MODE=\$(tr -d \"[:space:]\" </etc/bliss/gpu_mode)
+    if [ -r /etc/altaris/gpu_mode ]; then
+      GPU_MODE=\$(tr -d \"[:space:]\" </etc/altaris/gpu_mode)
     fi
     case \"\$GPU_MODE\" in turnip|virgl) ;; *) GPU_MODE=virgl ;; esac
     if [ \"\$GPU_MODE\" = turnip ]; then

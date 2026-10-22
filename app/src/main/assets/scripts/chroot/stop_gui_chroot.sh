@@ -1,15 +1,15 @@
 #!/data/data/com.ivarna.fluxlinux/files/usr/bin/bash
 # stop_gui_chroot.sh — app-uid: stop X11/VirGL + root stop_*_gui.sh (Pulse stays up)
-# Arg1 / FLUX_CHROOT_DISTRO: debian13_chroot|alpine_chroot|fedora_chroot|void_chroot|opensuse_chroot|deepin_chroot|chimera_chroot|manjaro_chroot|ubuntu_chroot|kali_chroot|parrot_chroot|archlinux_chroot.
+# Arg1 / ALTARIS_CHROOT_DISTRO: debian13_chroot|alpine_chroot|fedora_chroot|void_chroot|opensuse_chroot|deepin_chroot|chimera_chroot|manjaro_chroot|ubuntu_chroot|kali_chroot|parrot_chroot|archlinux_chroot.
 # Does NOT pkill proot.
 
-DISTRO_HINT="${1:-${FLUX_CHROOT_DISTRO:-debian13_chroot}}"
+DISTRO_HINT="${1:-${ALTARIS_CHROOT_DISTRO:-debian13_chroot}}"
 
 PKG="${TERMUX_APP__PACKAGE_NAME:-com.ivarna.fluxlinux}"
-_HOST_ENV="${TERMUX__PREFIX:-/data/data/${PKG}/files/usr}/etc/bliss-host.env"
-[ -r "$_HOST_ENV" ] || _HOST_ENV="${_HOST_ENV%/*}/fluxlinux-host.env"
+_HOST_ENV="${TERMUX__PREFIX:-/data/data/${PKG}/files/usr}/etc/altaris-host.env"
+[ -r "$_HOST_ENV" ] || _HOST_ENV="${_HOST_ENV%/*}/altaris-host.env"
 [ -r "$_HOST_ENV" ] && . "$_HOST_ENV"
-[ -d /data/local/folio ] && [ ! -e /data/local/bliss ] && mv /data/local/folio /data/local/bliss 2>/dev/null || true
+[ -d /data/local/altaris ] && [ ! -e /data/local/altaris ] && mv /data/local/altaris /data/local/altaris 2>/dev/null || true
 
 PKG="${TERMUX_APP__PACKAGE_NAME:-$PKG}"
 TERMUX_PREFIX="${TERMUX__PREFIX:-/data/data/$PKG/files/usr}"
@@ -19,58 +19,58 @@ export PATH="$TERMUX_PREFIX/bin:$TERMUX_PREFIX/bin/applets:/system/bin:/system/x
 
 case "$DISTRO_HINT" in
   alpine|alpine_chroot)
-    CHROOT_PATH="${CHROOT_PATH:-/data/local/bliss/chroots/alpine}"
+    CHROOT_PATH="${CHROOT_PATH:-/data/local/altaris/chroots/alpine}"
     ROOT_STOP_NAME="${ROOT_STOP_NAME:-stop_alpine_gui.sh}"
     ;;
   fedora|fedora_chroot)
-    CHROOT_PATH="${CHROOT_PATH:-/data/local/bliss/chroots/fedora}"
+    CHROOT_PATH="${CHROOT_PATH:-/data/local/altaris/chroots/fedora}"
     ROOT_STOP_NAME="${ROOT_STOP_NAME:-stop_guest_gui.sh}"
     ;;
   void|void_chroot)
-    CHROOT_PATH="${CHROOT_PATH:-/data/local/bliss/chroots/void}"
+    CHROOT_PATH="${CHROOT_PATH:-/data/local/altaris/chroots/void}"
     ROOT_STOP_NAME="${ROOT_STOP_NAME:-stop_guest_gui.sh}"
     ;;
   opensuse|opensuse_chroot)
-    CHROOT_PATH="${CHROOT_PATH:-/data/local/bliss/chroots/opensuse}"
+    CHROOT_PATH="${CHROOT_PATH:-/data/local/altaris/chroots/opensuse}"
     ROOT_STOP_NAME="${ROOT_STOP_NAME:-stop_guest_gui.sh}"
     ;;
   deepin|deepin_chroot)
-    CHROOT_PATH="${CHROOT_PATH:-/data/local/bliss/chroots/deepin}"
+    CHROOT_PATH="${CHROOT_PATH:-/data/local/altaris/chroots/deepin}"
     ROOT_STOP_NAME="${ROOT_STOP_NAME:-stop_guest_gui.sh}"
     ;;
   chimera|chimera_chroot)
-    CHROOT_PATH="${CHROOT_PATH:-/data/local/bliss/chroots/chimera}"
+    CHROOT_PATH="${CHROOT_PATH:-/data/local/altaris/chroots/chimera}"
     ROOT_STOP_NAME="${ROOT_STOP_NAME:-stop_guest_gui.sh}"
     ;;
   manjaro|manjaro_chroot)
-    CHROOT_PATH="${CHROOT_PATH:-/data/local/bliss/chroots/manjaro}"
+    CHROOT_PATH="${CHROOT_PATH:-/data/local/altaris/chroots/manjaro}"
     ROOT_STOP_NAME="${ROOT_STOP_NAME:-stop_guest_gui.sh}"
     ;;
   ubuntu|ubuntu_chroot)
-    CHROOT_PATH="${CHROOT_PATH:-/data/local/bliss/chroots/ubuntu}"
+    CHROOT_PATH="${CHROOT_PATH:-/data/local/altaris/chroots/ubuntu}"
     ROOT_STOP_NAME="${ROOT_STOP_NAME:-stop_guest_gui.sh}"
     ;;
   kali|kali_chroot)
-    CHROOT_PATH="${CHROOT_PATH:-/data/local/bliss/chroots/kali}"
+    CHROOT_PATH="${CHROOT_PATH:-/data/local/altaris/chroots/kali}"
     ROOT_STOP_NAME="${ROOT_STOP_NAME:-stop_guest_gui.sh}"
     ;;
   parrot|parrot_chroot)
-    CHROOT_PATH="${CHROOT_PATH:-/data/local/bliss/chroots/parrot}"
+    CHROOT_PATH="${CHROOT_PATH:-/data/local/altaris/chroots/parrot}"
     ROOT_STOP_NAME="${ROOT_STOP_NAME:-stop_guest_gui.sh}"
     ;;
   archlinux|archlinux_chroot)
-    CHROOT_PATH="${CHROOT_PATH:-/data/local/bliss/chroots/archlinux}"
+    CHROOT_PATH="${CHROOT_PATH:-/data/local/altaris/chroots/archlinux}"
     ROOT_STOP_NAME="${ROOT_STOP_NAME:-stop_guest_gui.sh}"
     ;;
   *)
-    CHROOT_PATH="${CHROOT_PATH:-/data/local/bliss/chroots/debian}"
+    CHROOT_PATH="${CHROOT_PATH:-/data/local/altaris/chroots/debian}"
     ROOT_STOP_NAME="${ROOT_STOP_NAME:-stop_debian13_gui.sh}"
     ;;
 esac
 ROOT_STOP_SCRIPT="$TERMUX_HOME/$ROOT_STOP_NAME"
-ROOT_STOP_TMP="/data/local/bliss/helpers/$ROOT_STOP_NAME"
+ROOT_STOP_TMP="/data/local/altaris/helpers/$ROOT_STOP_NAME"
 RESOLVER_SRC="$TERMUX_HOME/resolve_bb.sh"
-RESOLVER_TMP="/data/local/bliss/helpers/bliss_resolve_bb.sh"
+RESOLVER_TMP="/data/local/altaris/helpers/altaris_resolve_bb.sh"
 
 echo "========================================"
 echo "Altaris: STOP XFCE (chroot mode)"
@@ -84,13 +84,13 @@ else
   for s in /system/bin/su /system/xbin/su /sbin/su; do
     if [ -x "$s" ]; then SU_BIN="$s"; break; fi
   done
-  "$SU_BIN" -c "mkdir -p '/data/local/bliss/helpers'; \
+  "$SU_BIN" -c "mkdir -p '/data/local/altaris/helpers'; \
     cp -f '$ROOT_STOP_SCRIPT' '$ROOT_STOP_TMP' 2>/dev/null; \
     [ -f '$RESOLVER_SRC' ] && cp -f '$RESOLVER_SRC' '$RESOLVER_TMP' 2>/dev/null; \
     chmod 755 '$ROOT_STOP_TMP' '$RESOLVER_TMP' 2>/dev/null; \
-    DEBIANPATH='$CHROOT_PATH' CHROOT_ROOT='$CHROOT_PATH' FLUX_CHROOT='$CHROOT_PATH' \
+    DEBIANPATH='$CHROOT_PATH' CHROOT_ROOT='$CHROOT_PATH' ALTARIS_CHROOT='$CHROOT_PATH' \
     TARGET_PREFIX='$TERMUX_PREFIX' \
-    FLUX_BB='${FLUX_BB:-}' FLUX_RESOLVE_BB='$RESOLVER_TMP' sh '$ROOT_STOP_TMP'"
+    ALTARIS_BB='${ALTARIS_BB:-}' ALTARIS_RESOLVE_BB='$RESOLVER_TMP' sh '$ROOT_STOP_TMP'"
 fi
 
 echo "Stopping VirGL (app uid; Pulse stays running)..."

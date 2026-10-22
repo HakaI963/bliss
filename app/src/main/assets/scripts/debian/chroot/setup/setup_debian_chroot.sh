@@ -5,15 +5,15 @@
 # Based on LinuxDroidMaster/Termux-Desktops Guide
 
 # Global Variables
-DEBIANPATH="/data/local/bliss/chroots/debian"
-USERNAME="flux"
-[ -d /data/local/folio ] && [ ! -e /data/local/bliss ] && mv /data/local/folio /data/local/bliss 2>/dev/null || true
+DEBIANPATH="/data/local/altaris/chroots/debian"
+USERNAME="altaris"
+[ -d /data/local/altaris ] && [ ! -e /data/local/altaris ] && mv /data/local/altaris /data/local/altaris 2>/dev/null || true
 
-# Desktop contract: FLUX_DESKTOPS (space/comma separated) = xfce | kde | none;
-# legacy FLUX_DESKTOP / FLUX_DESKTOP_ENV remain valid single values. Unset/empty
+# Desktop contract: ALTARIS_DESKTOPS (space/comma separated) = xfce | kde | none;
+# legacy ALTARIS_DESKTOP / ALTARIS_DESKTOP_ENV remain valid single values. Unset/empty
 # → xfce (backward compat). Normalized to the canonical "xfce kde" order;
 # unknown tokens are ignored and "none" installs neither desktop.
-DESKTOPS="${FLUX_DESKTOPS:-${FLUX_DESKTOP:-${FLUX_DESKTOP_ENV:-xfce}}}"
+DESKTOPS="${ALTARIS_DESKTOPS:-${ALTARIS_DESKTOP:-${ALTARIS_DESKTOP_ENV:-xfce}}}"
 DESKTOPS=$(printf '%s' "$DESKTOPS" | tr ',' ' ')
 DESKTOPS=$(printf '%s' "$DESKTOPS" | tr -s '[:space:]' ' ')
 DESKTOPS="${DESKTOPS# }"
@@ -170,8 +170,8 @@ configure_debian_chroot() {
         groupadd wheel
         # Guide: useradd -m -g users -G wheel,audio,video,storage,aid_inet -s /bin/bash USER
         id -u $USERNAME >/dev/null 2>&1 || useradd -m -g users -G wheel,audio,video,storage,aid_inet -s /bin/bash $USERNAME
-        # Set default password to 'flux' (Guide uses passwd interactive, we default it for automation)
-        echo '$USERNAME:flux' | chpasswd
+        # Set default password to 'altaris' (Guide uses passwd interactive, we default it for automation)
+        echo '$USERNAME:altaris' | chpasswd
     " || goodbye
 
     # --- SUDOERS ---
@@ -201,13 +201,13 @@ configure_debian_chroot() {
             apt install -y --no-install-recommends xfce4-whiskermenu-plugin xfce4-screenshooter 2>/dev/null || true
         ' || goodbye
     else
-        progress "Skipping XFCE4 install (FLUX_DESKTOPS=$DESKTOPS)"
+        progress "Skipping XFCE4 install (ALTARIS_DESKTOPS=$DESKTOPS)"
     fi
 
     success "Debian Environment Configured!"
 
     # --- LAUNCH SCRIPT GENERATION ---
-    LAUNCH_SCRIPT="/data/local/bliss/helpers/start_debian.sh"
+    LAUNCH_SCRIPT="/data/local/altaris/helpers/start_debian.sh"
     progress "Creating launch script at $LAUNCH_SCRIPT..."
     
     # Matches the guide's 'start_debian.sh' content
@@ -215,7 +215,7 @@ configure_debian_chroot() {
 #!/bin/sh
 
 # Path of DEBIAN rootfs
-DEBIANPATH="/data/local/bliss/chroots/debian"
+DEBIANPATH="/data/local/altaris/chroots/debian"
 BB="$BB"
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH
 
@@ -261,9 +261,9 @@ main() {
 # resolve root BusyBox (manager built-in; NDK module not required)
 _rr=""
 for _c in \
-  "${FLUX_RESOLVE_BB:-}" \
+  "${ALTARIS_RESOLVE_BB:-}" \
   "$(dirname "$0")/resolve_bb.sh" \
-  /data/local/bliss/helpers/bliss_resolve_bb.sh
+  /data/local/altaris/helpers/altaris_resolve_bb.sh
 do
   [ -n "$_c" ] && [ -f "$_c" ] && _rr="$_c" && break
 done
@@ -274,11 +274,11 @@ if [ -n "$_rr" ]; then
 fi
 if [ -z "${BB:-}" ]; then
   # sidecar missing (desktop/uninstall/staged setup) — same B1 walk as resolve_bb
-  if [ -n "${FLUX_BB:-}" ] && [ -x "$FLUX_BB" ] &&
-     "$FLUX_BB" --list >/dev/null 2>&1; then BB="$FLUX_BB"; fi
-  if [ -z "${BB:-}" ] && [ -x /data/local/bliss/busybox/bliss_busybox ] &&
-     /data/local/bliss/busybox/bliss_busybox --list >/dev/null 2>&1; then
-    BB=/data/local/bliss/busybox/bliss_busybox
+  if [ -n "${ALTARIS_BB:-}" ] && [ -x "$ALTARIS_BB" ] &&
+     "$ALTARIS_BB" --list >/dev/null 2>&1; then BB="$ALTARIS_BB"; fi
+  if [ -z "${BB:-}" ] && [ -x /data/local/altaris/busybox/altaris_busybox ] &&
+     /data/local/altaris/busybox/altaris_busybox --list >/dev/null 2>&1; then
+    BB=/data/local/altaris/busybox/altaris_busybox
   fi
   if [ -z "${BB:-}" ]; then
     for path in \
@@ -309,10 +309,10 @@ fi
          progress "Using Root Busybox: $BB"
     fi
 
-    DEBIANPATH="/data/local/bliss/chroots/debian"
+    DEBIANPATH="/data/local/altaris/chroots/debian"
 
     # Root-staged launchers live in the Altaris helpers dir (idempotent).
-    mkdir -p /data/local/bliss/helpers
+    mkdir -p /data/local/altaris/helpers
 
     # --- CHECK EXISTING INSTALLATION ---
     if [ -f "$DEBIANPATH/bin/bash" ]; then
@@ -324,12 +324,12 @@ fi
         # Just creating the launch scripts again to be safe.
         
         # --- RE-GENERATE LAUNCH SCRIPT (Core) ---
-        LAUNCH_SCRIPT="/data/local/bliss/helpers/start_debian.sh"
+        LAUNCH_SCRIPT="/data/local/altaris/helpers/start_debian.sh"
         cat <<EOF > "$LAUNCH_SCRIPT"
 #!/bin/sh
 
 # Path of DEBIAN rootfs
-DEBIANPATH="/data/local/bliss/chroots/debian"
+DEBIANPATH="/data/local/altaris/chroots/debian"
 BB="$BB"
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH
 
@@ -389,7 +389,7 @@ EOF
         configure_debian_chroot
 
         # --- LAUNCH SCRIPT GENERATION ---
-        LAUNCH_SCRIPT="/data/local/bliss/helpers/start_debian.sh"
+        LAUNCH_SCRIPT="/data/local/altaris/helpers/start_debian.sh"
         progress "Creating launch script at $LAUNCH_SCRIPT..."
         
         # Matches the guide's 'start_debian.sh' content
@@ -397,7 +397,7 @@ EOF
 #!/bin/sh
 
 # Path of DEBIAN rootfs
-DEBIANPATH="/data/local/bliss/chroots/debian"
+DEBIANPATH="/data/local/altaris/chroots/debian"
 BB="$BB"
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH
 
@@ -430,7 +430,7 @@ EOF
     fi
 
     # --- GENERATE GUI LAUNCHER (For X11 from Root) ---
-    GUI_LAUNCHER="/data/local/bliss/helpers/start_debian_gui.sh"
+    GUI_LAUNCHER="/data/local/altaris/helpers/start_debian_gui.sh"
     progress "Creating X11 GUI Launcher at $GUI_LAUNCHER..."
     
     TARGET_TERMUX_PREFIX="$APP_PREFIX"
@@ -473,13 +473,13 @@ echo "Starting PulseAudio..."
 
 # 6. Launch Chroot (Requires Root for Mounts)
 echo "Entering Chroot..."
-su -c "sh /data/local/bliss/helpers/start_debian.sh"
+su -c "sh /data/local/altaris/helpers/start_debian.sh"
 EOF
     chmod +x "$GUI_LAUNCHER"
     success "GUI Launcher created: $GUI_LAUNCHER"
     
     # --- GENERATE CLI LAUNCHER (Shell Only) ---
-    CLI_SCRIPT="/data/local/bliss/helpers/enter_debian.sh"
+    CLI_SCRIPT="/data/local/altaris/helpers/enter_debian.sh"
     progress "Creating CLI Launcher at $CLI_SCRIPT..."
     
     cat <<EOF > "$CLI_SCRIPT"
@@ -487,7 +487,7 @@ EOF
 # CLI Entry for Debian Chroot
 
 # Path of DEBIAN rootfs
-DEBIANPATH="/data/local/bliss/chroots/debian"
+DEBIANPATH="/data/local/altaris/chroots/debian"
 BB="$BB"
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH
 
@@ -518,7 +518,7 @@ EOF
     
     # --- NOTIFY APP ---
     progress "Notifying Altaris App..."
-    am start -a android.intent.action.VIEW -d "fluxlinux://callback?result=success&name=distro_install_debian_chroot" >/dev/null 2>&1
+    am start -a android.intent.action.VIEW -d "altaris://callback?result=success&name=distro_install_debian_chroot" >/dev/null 2>&1
 }
 
 main

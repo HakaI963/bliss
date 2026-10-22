@@ -2,14 +2,14 @@
 # setup_debian_family.sh
 # Generic Post-install configuration for Debian-based Distros (Debian, Ubuntu, Kali, etc.)
 
-# Helpers live in bliss_guest_common.sh (prepended by bliss_install /
+# Helpers live in altaris_guest_common.sh (prepended by altaris_install /
 # familySetupPayload). Source it only when this file is run standalone.
-if ! command -v _flux_setup_pulse >/dev/null 2>&1; then
+if ! command -v _altaris_setup_pulse >/dev/null 2>&1; then
     _here=$(CDPATH= cd -- "$(dirname -- "$0")" 2>/dev/null && pwd)
     for _common in \
-        "${_here}/bliss_guest_common.sh" \
-        "${HOME:-}/bliss_guest_common.sh" \
-        /tmp/bliss_guest_common.sh
+        "${_here}/altaris_guest_common.sh" \
+        "${HOME:-}/altaris_guest_common.sh" \
+        /tmp/altaris_guest_common.sh
     do
         if [ -f "$_common" ]; then
             # shellcheck source=/dev/null
@@ -19,7 +19,7 @@ if ! command -v _flux_setup_pulse >/dev/null 2>&1; then
     done
 fi
 # Degraded standalone run without the shared helpers: plain install (no retry).
-command -v _flux_retry_pkg >/dev/null 2>&1 || _flux_retry_pkg() { "$@"; }
+command -v _altaris_retry_pkg >/dev/null 2>&1 || _altaris_retry_pkg() { "$@"; }
 
 DISTRO_NAME="${1:-debian}"
 
@@ -28,11 +28,11 @@ echo "Altaris: Configuring ${DISTRO_NAME} (Debian Family)..."
 # 1. Update and Install Core Packages
 export DEBIAN_FRONTEND=noninteractive
 apt update -y || exit 1
-# Desktop contract: FLUX_DESKTOPS (space/comma separated) = xfce | kde | none;
-# legacy FLUX_DESKTOP / FLUX_DESKTOP_ENV remain valid single values. Unset/empty
+# Desktop contract: ALTARIS_DESKTOPS (space/comma separated) = xfce | kde | none;
+# legacy ALTARIS_DESKTOP / ALTARIS_DESKTOP_ENV remain valid single values. Unset/empty
 # → xfce (backward compat). Normalized to the canonical "xfce kde" order;
 # unknown tokens are ignored and "none" installs neither desktop.
-DESKTOPS="${FLUX_DESKTOPS:-${FLUX_DESKTOP:-${FLUX_DESKTOP_ENV:-xfce}}}"
+DESKTOPS="${ALTARIS_DESKTOPS:-${ALTARIS_DESKTOP:-${ALTARIS_DESKTOP_ENV:-xfce}}}"
 DESKTOPS=$(printf '%s' "$DESKTOPS" | tr ',' ' ')
 DESKTOPS=$(printf '%s' "$DESKTOPS" | tr -s '[:space:]' ' ')
 DESKTOPS="${DESKTOPS# }"
@@ -53,7 +53,7 @@ fi
 if [ -z "${DESKTOPS##*xfce*}" ]; then
     # Targeted list + --no-install-recommends: the xfce4 goodies metapackage
     # pulls document viewers, games and extra daemons we do not ship.
-    if ! _flux_retry_pkg apt-get install -y --no-install-recommends \
+    if ! _altaris_retry_pkg apt-get install -y --no-install-recommends \
         xfce4-session xfce4-panel xfce4-settings xfce4-terminal \
         xfdesktop4 xfwm4 thunar \
         adwaita-icon-theme fonts-dejavu-core \
@@ -85,22 +85,22 @@ if [ "$DESKTOPS" != "none" ]; then
             mesa-utils libgl1-mesa-dri libegl1 \
         || true
 fi
-[ -d /etc/fluxlinux ] && [ ! -e /etc/bliss ] && mv /etc/fluxlinux /etc/bliss 2>/dev/null || true
-mkdir -p /etc/bliss
-printf '%s\n' virgl > /etc/bliss/gpu_mode
+[ -d /etc/altarislinux ] && [ ! -e /etc/altaris ] && mv /etc/altarislinux /etc/altaris 2>/dev/null || true
+mkdir -p /etc/altaris
+printf '%s\n' virgl > /etc/altaris/gpu_mode
 echo "Altaris: gpu_mode=virgl (first-paint; hw-accel may upgrade)"
 
-# 2. Create User 'flux'
-if ! id "flux" &>/dev/null; then
-    useradd -m -s /bin/bash flux
-    echo "flux:flux" | chpasswd
-    usermod -aG sudo flux
+# 2. Create User 'altaris'
+if ! id "altaris" &>/dev/null; then
+    useradd -m -s /bin/bash altaris
+    echo "altaris:altaris" | chpasswd
+    usermod -aG sudo altaris
 fi
 
 # 3. Configure Sudo
-echo "flux ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/flux
+echo "altaris ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/flux
 
-# 4. Configure VNC for User (session command follows FLUX_DESKTOPS)
+# 4. Configure VNC for User (session command follows ALTARIS_DESKTOPS)
 mkdir -p /home/flux/.vnc
 _xs_de="startxfce4"
 if [ -z "${DESKTOPS##*kde*}" ] && [ -n "${DESKTOPS##*xfce*}" ]; then
@@ -114,14 +114,14 @@ exec $_xs_de
 EOF
 unset _xs_de
 chmod +x /home/flux/.vnc/xstartup
-chown -R flux:flux /home/flux/.vnc
+chown -R altaris:altaris /home/flux/.vnc
 
-if command -v _flux_write_pulse_client >/dev/null 2>&1; then
-    _flux_write_pulse_client
+if command -v _altaris_write_pulse_client >/dev/null 2>&1; then
+    _altaris_write_pulse_client
 else
     mkdir -p /etc/profile.d /etc/pulse/client.conf.d
-    printf 'export PULSE_SERVER=tcp:127.0.0.1\n' > /etc/profile.d/flux-pulse.sh
-    chmod 644 /etc/profile.d/flux-pulse.sh 2>/dev/null || true
+    printf 'export PULSE_SERVER=tcp:127.0.0.1\n' > /etc/profile.d/altaris-pulse.sh
+    chmod 644 /etc/profile.d/altaris-pulse.sh 2>/dev/null || true
     if [ -f /etc/environment ]; then
         if grep -q '^PULSE_SERVER=' /etc/environment 2>/dev/null; then
             sed -i 's|^PULSE_SERVER=.*|PULSE_SERVER=tcp:127.0.0.1|' /etc/environment
@@ -131,7 +131,7 @@ else
     else
         printf 'PULSE_SERVER=tcp:127.0.0.1\n' > /etc/environment
     fi
-    cat > /etc/pulse/client.conf.d/99-bliss.conf <<'EOF'
+    cat > /etc/pulse/client.conf.d/99-altaris.conf <<'EOF'
 default-server = tcp:127.0.0.1
 autospawn = no
 EOF
@@ -150,16 +150,16 @@ EOF
 fi
 
 # Phone-compact XFCE defaults (30px mono top panel, DPI 96, wallpaper,
-# Home-only desktop icons, shortcuts). Helper ships in bliss_guest_common.sh;
+# Home-only desktop icons, shortcuts). Helper ships in altaris_guest_common.sh;
 # guarded so a standalone run without it is a no-op and never fails install.
-if [ -z "${DESKTOPS##*xfce*}" ] && command -v _flux_xfce_compact_defaults >/dev/null 2>&1; then
-    _flux_xfce_compact_defaults || true
+if [ -z "${DESKTOPS##*xfce*}" ] && command -v _altaris_xfce_compact_defaults >/dev/null 2>&1; then
+    _altaris_xfce_compact_defaults || true
 fi
 
 
 # Altaris universal interactive shell: zsh suggestions, syntax colors, sticker.
-if command -v _flux_setup_altaris_shell >/dev/null 2>&1; then
-    _flux_setup_altaris_shell || true
+if command -v _altaris_setup_altaris_shell >/dev/null 2>&1; then
+    _altaris_setup_altaris_shell || true
 fi
 
 echo "Altaris: ${DISTRO_NAME} Setup Complete!"

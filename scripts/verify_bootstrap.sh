@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Verify a FluxLinux native bootstrap.tar for an applicationId.
+# Verify a AltarisLinux native bootstrap.tar for an applicationId.
 # Usage: verify_bootstrap.sh <applicationId> [bootstrap.tar]
 set -euo pipefail
 

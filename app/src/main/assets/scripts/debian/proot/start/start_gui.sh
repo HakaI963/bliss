@@ -1,11 +1,11 @@
 #!/data/data/com.ivarna.fluxlinux/files/usr/bin/bash
 # start_gui.sh - Launch XFCE4 Desktop Environment in PRoot Distro
-# Paths: TermuxHostPaths via bliss-host.env (SSOT)
+# Paths: TermuxHostPaths via altaris-host.env (SSOT)
 
 DISTRO=${1:-debian}
 PKG="${TERMUX_APP__PACKAGE_NAME:-com.ivarna.fluxlinux}"
-_HOST_ENV="${TERMUX__PREFIX:-/data/data/${PKG}/files/usr}/etc/bliss-host.env"
-[ -r "$_HOST_ENV" ] || _HOST_ENV="${_HOST_ENV%/*}/fluxlinux-host.env"
+_HOST_ENV="${TERMUX__PREFIX:-/data/data/${PKG}/files/usr}/etc/altaris-host.env"
+[ -r "$_HOST_ENV" ] || _HOST_ENV="${_HOST_ENV%/*}/altaris-host.env"
 [ -r "$_HOST_ENV" ] && . "$_HOST_ENV"
 
 # Termux paths (from SSOT env, with safe fallbacks)
@@ -155,37 +155,37 @@ sleep 1
 
 # Verify guest setup
 ROOTFS="$TERMUX_PREFIX/var/lib/proot-distro/containers/$DISTRO/rootfs"
-# FLUX_DESKTOP accepts every spelling the app uses:
+# ALTARIS_DESKTOP accepts every spelling the app uses:
 #   install (DesktopChoice.envValue) → xfce | kde | none
 #   runtime (DesktopLauncher.start)  → xfce4 | kde
 # Normalised here so the guest block below only ever sees "kde" / "xfce4".
-FLUX_DESKTOP="${FLUX_DESKTOP:-xfce4}"
-case "$FLUX_DESKTOP" in
+ALTARIS_DESKTOP="${ALTARIS_DESKTOP:-xfce4}"
+case "$ALTARIS_DESKTOP" in
   kde|KDE)
-    DE_CMD=startplasma-x11; FLUX_DESKTOP=kde ;;
+    DE_CMD=startplasma-x11; ALTARIS_DESKTOP=kde ;;
   xfce|xfce4|XFCE)
-    DE_CMD=startxfce4; FLUX_DESKTOP=xfce4 ;;
+    DE_CMD=startxfce4; ALTARIS_DESKTOP=xfce4 ;;
   none|NONE)
-    echo "Altaris: terminal-only install (FLUX_DESKTOP=none) — no desktop to launch."
+    echo "Altaris: terminal-only install (ALTARIS_DESKTOP=none) — no desktop to launch."
     exit 1 ;;
   *)
-    echo "Altaris: unknown FLUX_DESKTOP='$FLUX_DESKTOP' — falling back to XFCE4"
-    DE_CMD=startxfce4; FLUX_DESKTOP=xfce4 ;;
+    echo "Altaris: unknown ALTARIS_DESKTOP='$ALTARIS_DESKTOP' — falling back to XFCE4"
+    DE_CMD=startxfce4; ALTARIS_DESKTOP=xfce4 ;;
 esac
 if [ ! -e "$ROOTFS/usr/bin/$DE_CMD" ] && [ ! -e "$ROOTFS/usr/sbin/$DE_CMD" ]; then
-  echo "Altaris: $FLUX_DESKTOP setup incomplete ($DE_CMD missing). Re-run environment setup."
+  echo "Altaris: $ALTARIS_DESKTOP setup incomplete ($DE_CMD missing). Re-run environment setup."
   exit 1
 fi
 
 echo "Altaris: $DE_CMD=READY"
 
-# Guest GPU mode from setup_hw_accel_debian.sh (/etc/bliss/gpu_mode)
+# Guest GPU mode from setup_hw_accel_debian.sh (/etc/altaris/gpu_mode)
 # turnip → Adreno/Zink; virgl → host virgl_test_server; else softpipe
 GUEST_ROOTFS="$TERMUX_PREFIX/var/lib/proot-distro/containers/$DISTRO/rootfs"
-[ -d "$GUEST_ROOTFS/etc/fluxlinux" ] && [ ! -e "$GUEST_ROOTFS/etc/bliss" ] && mv "$GUEST_ROOTFS/etc/fluxlinux" "$GUEST_ROOTFS/etc/bliss" 2>/dev/null || true
+[ -d "$GUEST_ROOTFS/etc/altarislinux" ] && [ ! -e "$GUEST_ROOTFS/etc/altaris" ] && mv "$GUEST_ROOTFS/etc/altarislinux" "$GUEST_ROOTFS/etc/altaris" 2>/dev/null || true
 GPU_MODE="virgl"
-if [ -r "$GUEST_ROOTFS/etc/bliss/gpu_mode" ]; then
-  GPU_MODE=$(tr -d '[:space:]' <"$GUEST_ROOTFS/etc/bliss/gpu_mode")
+if [ -r "$GUEST_ROOTFS/etc/altaris/gpu_mode" ]; then
+  GPU_MODE=$(tr -d '[:space:]' <"$GUEST_ROOTFS/etc/altaris/gpu_mode")
 fi
 # sanitize for embedding in guest shell
 case "$GPU_MODE" in
@@ -212,7 +212,7 @@ else
     _KGSL_BIND="--bind=/dev/kgsl-3d0"
   fi
   python "$TERMUX_PREFIX/bin/proot-distro" login "$DISTRO" --shared-tmp $_KGSL_BIND -- \
-    env FLUX_DESKTOP="$FLUX_DESKTOP" FLUX_GPU_RUNTIME="${FLUX_GPU_RUNTIME:-}" $GUEST_SHELL -c '
+    env ALTARIS_DESKTOP="$ALTARIS_DESKTOP" ALTARIS_GPU_RUNTIME="${ALTARIS_GPU_RUNTIME:-}" $GUEST_SHELL -c '
     export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
     unset PROOT_TMP_DIR
     export TMPDIR=/tmp
@@ -232,14 +232,14 @@ else
     unset DBUS_SESSION_BUS_ADDRESS DBUS_SESSION_BUS_PID DBUS_SESSION_BUS_WINDOWID
     export XDG_CONFIG_DIRS=/etc/xdg
     export XDG_DATA_DIRS=/usr/local/share:/usr/share
-    # Runtime dir must be 700 *and* writable by flux. /tmp/runtime-flux lives on
-    # --shared-tmp (host PREFIX/tmp, app uid) so guest flux cannot chmod/chown it.
+    # Runtime dir must be 700 *and* writable by altaris. /tmp/runtime-altaris lives on
+    # --shared-tmp (host PREFIX/tmp, app uid) so guest altaris cannot chmod/chown it.
     export XDG_RUNTIME_DIR=/home/flux/.cache/runtime
     mkdir -p "$XDG_RUNTIME_DIR" && chmod 700 "$XDG_RUNTIME_DIR"
     mkdir -p /tmp/.ICE-unix && chmod 1777 /tmp/.ICE-unix
 
     # Proot runs as the Android app uid; guest UIDs on disk that differ (e.g.
-    # flux=10302 while host process is 10301) make mode-700 ~/.config unwritable
+    # altaris=10302 while host process is 10301) make mode-700 ~/.config unwritable
     # → xfconfd "Unable to create configuration directory" → failsafe session.
     # Match /home ownership (app uid). Avoid nested single quotes (this block is
     # already inside proot-distro login ... -c '...' ).
@@ -249,17 +249,17 @@ else
       if [ -n "$_home_uid" ]; then
         chown -R "$_home_uid:$_home_gid" /home/flux 2>/dev/null || true
         if [ "$_home_uid" = "0" ]; then
-          chown -R flux:flux /home/flux 2>/dev/null || true
+          chown -R altaris:altaris /home/flux 2>/dev/null || true
         fi
       fi
       mkdir -p /home/flux/.config /home/flux/.cache /home/flux/.local/share
       chmod 755 /home/flux 2>/dev/null || true
-      # Open perms: host uid vs guest flux uid mismatch is common under proot
+      # Open perms: host uid vs guest altaris uid mismatch is common under proot
       chmod -R 777 /home/flux/.config /home/flux/.cache /home/flux/.local 2>/dev/null || true
     fi
     if [ -d /home/flux/.cache/runtime ]; then
       chmod 700 /home/flux/.cache/runtime 2>/dev/null || true
-      chown flux:flux /home/flux/.cache/runtime 2>/dev/null || true
+      chown altaris:altaris /home/flux/.cache/runtime 2>/dev/null || true
     fi
     # dbus machine-id (session bus soft-depends on it on some builds)
     if command -v dbus-uuidgen >/dev/null 2>&1; then
@@ -271,13 +271,13 @@ else
       fi
     fi
 
-    if [ -r /usr/local/lib/fluxlinux/apply_gpu_env.sh ]; then
-      . /usr/local/lib/fluxlinux/apply_gpu_env.sh
-      flux_gpu_apply_runtime
+    if [ -r /usr/local/lib/altarislinux/apply_gpu_env.sh ]; then
+      . /usr/local/lib/altarislinux/apply_gpu_env.sh
+      altaris_gpu_apply_runtime
     else
       GPU_MODE=virgl
-      if [ -r /etc/bliss/gpu_mode ]; then
-        GPU_MODE=$(tr -d "[:space:]" </etc/bliss/gpu_mode)
+      if [ -r /etc/altaris/gpu_mode ]; then
+        GPU_MODE=$(tr -d "[:space:]" </etc/altaris/gpu_mode)
       fi
       case "$GPU_MODE" in turnip|virgl) ;; *) GPU_MODE=virgl ;; esac
       unset GALLIUM_DRIVER MESA_LOADER_DRIVER_OVERRIDE VK_ICD_FILENAMES
@@ -312,7 +312,7 @@ else
     # Real bubblewrap needs user namespaces (missing under proot) and
     # "chmod a-x bwrap" becomes "Could not spawn bwrap: Permission denied"
     # which aborts xfce4-panel. Install Alpine-style shim instead.
-    if [ ! -f /usr/bin/bwrap ] || ! grep -q "FluxLinux proot" /usr/bin/bwrap 2>/dev/null; then
+    if [ ! -f /usr/bin/bwrap ] || ! grep -q "AltarisLinux proot" /usr/bin/bwrap 2>/dev/null; then
       if [ -x /usr/bin/bwrap ] && [ ! -e /usr/bin/bwrap.real ]; then
         mv /usr/bin/bwrap /usr/bin/bwrap.real 2>/dev/null || true
       fi
@@ -335,18 +335,18 @@ BWRAP_EOF
     fi
     chmod 755 /usr/bin/bwrap /usr/bin/bubblewrap 2>/dev/null || true
     # Use bash login shell for GUI (avoid zshrc noise); fall back to sh.
-    FLUX_DE_CMD=startxfce4
-    FLUX_KDE_ENV=
-    if [ "$FLUX_DESKTOP" = kde ]; then
-      FLUX_DE_CMD=startplasma-x11
+    ALTARIS_DE_CMD=startxfce4
+    ALTARIS_KDE_ENV=
+    if [ "$ALTARIS_DESKTOP" = kde ]; then
+      ALTARIS_DE_CMD=startplasma-x11
       # GPU env for KDE: zink OpenGL compositing on Turnip/PanVK, none on software.
-      mkdir -p /usr/local/lib/fluxlinux
-      cat > /usr/local/lib/fluxlinux/bliss_kde_env.sh << "KDE_EOF"
-# Sourced after flux_gpu_apply_runtime. Plasma 6 kwin_x11: O2 = desktop OpenGL.
-# OPT-IN (touch /etc/bliss/kde_gl): KWin O2 on zink shows a black screen on
+      mkdir -p /usr/local/lib/altarislinux
+      cat > /usr/local/lib/altarislinux/altaris_kde_env.sh << "KDE_EOF"
+# Sourced after altaris_gpu_apply_runtime. Plasma 6 kwin_x11: O2 = desktop OpenGL.
+# OPT-IN (touch /etc/altaris/kde_gl): KWin O2 on zink shows a black screen on
 # PanVK (Xlorie, verified Poco X6 Pro); Turnip unverified. Default stays N.
 
-# ── Session hygiene (runs as flux, inside the dbus-run-session shell) ──────
+# ── Session hygiene (runs as altaris, inside the dbus-run-session shell) ──────
 # Plasma rejects a shared /tmp (mode 1777) as XDG_RUNTIME_DIR and needs a
 # private 0700 dir for its session/kscreen/kdeglobals sockets.
 export XDG_RUNTIME_DIR="${HOME}/.cache/runtime"
@@ -363,7 +363,7 @@ if [ ! -d /tmp/.ICE-unix ]; then
 fi
 
 export QT_QPA_PLATFORMTHEME=kde KWIN_COMPOSE=N
-if [ -e /etc/bliss/kde_gl ]; then case "$GPU_MODE" in turnip|panvk)
+if [ -e /etc/altaris/kde_gl ]; then case "$GPU_MODE" in turnip|panvk)
   export KWIN_COMPOSE=O2
   _icd=/usr/share/vulkan/icd.d/freedreno_icd.aarch64.json
   if [ "$GPU_MODE" = turnip ] && [ "$MESA_LOADER_DRIVER_OVERRIDE" = kgsl ] && [ -r "$_icd" ]; then
@@ -398,13 +398,13 @@ if [ -n "$_kw" ]; then
   fi
 fi
 KDE_EOF
-      FLUX_KDE_ENV=". /usr/local/lib/fluxlinux/bliss_kde_env.sh"
+      ALTARIS_KDE_ENV=". /usr/local/lib/altarislinux/altaris_kde_env.sh"
     fi
-    FLUX_SU_SHELL=/bin/bash
+    ALTARIS_SU_SHELL=/bin/bash
     if [ ! -x /bin/bash ] && [ ! -x /usr/bin/bash ]; then
-      FLUX_SU_SHELL=/bin/sh
+      ALTARIS_SU_SHELL=/bin/sh
     fi
-    su -s "$FLUX_SU_SHELL" - flux -c "
+    su -s "$ALTARIS_SU_SHELL" - altaris -c "
       unset DBUS_SESSION_BUS_ADDRESS DBUS_SESSION_BUS_PID DBUS_SESSION_BUS_WINDOWID
       export DISPLAY=:0
       export PULSE_SERVER=tcp:127.0.0.1
@@ -423,9 +423,9 @@ KDE_EOF
         export GDK_DEBUG=no-glycin
       fi
       export GSK_RENDERER=cairo
-      if [ -r /usr/local/lib/fluxlinux/apply_gpu_env.sh ]; then
-        . /usr/local/lib/fluxlinux/apply_gpu_env.sh
-        flux_gpu_apply_runtime
+      if [ -r /usr/local/lib/altarislinux/apply_gpu_env.sh ]; then
+        . /usr/local/lib/altarislinux/apply_gpu_env.sh
+        altaris_gpu_apply_runtime
       else
         export GPU_MODE=$GPU_MODE
         if [ \"\$GPU_MODE\" = turnip ]; then
@@ -442,15 +442,15 @@ KDE_EOF
           export GALLIUM_DRIVER=llvmpipe
         fi
       fi
-      if [ \"$FLUX_GPU_RUNTIME\" = software ]; then
+      if [ \"$ALTARIS_GPU_RUNTIME\" = software ]; then
         unset MESA_LOADER_DRIVER_OVERRIDE VK_ICD_FILENAMES TU_DEBUG MESA_VK_WSI_DEBUG
         export LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe GPU_MODE=software
       fi
-      $FLUX_KDE_ENV
+      $ALTARIS_KDE_ENV
       if command -v dbus-run-session >/dev/null 2>&1; then
-        exec dbus-run-session -- $FLUX_DE_CMD
+        exec dbus-run-session -- $ALTARIS_DE_CMD
       else
-        exec dbus-launch --exit-with-session $FLUX_DE_CMD
+        exec dbus-launch --exit-with-session $ALTARIS_DE_CMD
       fi
     "
   '

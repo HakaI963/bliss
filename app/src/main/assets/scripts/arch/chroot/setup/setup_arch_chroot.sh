@@ -4,9 +4,9 @@
 # Requires Root (su)
 
 # Global Variables
-ARCHPATH="/data/local/bliss/chroots/archlinux"
-USERNAME="flux"
-[ -d /data/local/folio ] && [ ! -e /data/local/bliss ] && mv /data/local/folio /data/local/bliss 2>/dev/null || true
+ARCHPATH="/data/local/altaris/chroots/archlinux"
+USERNAME="altaris"
+[ -d /data/local/altaris ] && [ ! -e /data/local/altaris ] && mv /data/local/altaris /data/local/altaris 2>/dev/null || true
 # App prefix (embedded Termux-class host; both store flavors via env override)
 PKG="${TERMUX_APP__PACKAGE_NAME:-com.ivarna.fluxlinux}"
 APP_PREFIX="${TERMUX__PREFIX:-/data/data/${PKG}/files/usr}"
@@ -58,9 +58,9 @@ main() {
 # resolve root BusyBox (manager built-in; NDK module not required)
 _rr=""
 for _c in \
-  "${FLUX_RESOLVE_BB:-}" \
+  "${ALTARIS_RESOLVE_BB:-}" \
   "$(dirname "$0")/resolve_bb.sh" \
-  /data/local/bliss/helpers/bliss_resolve_bb.sh
+  /data/local/altaris/helpers/altaris_resolve_bb.sh
 do
   [ -n "$_c" ] && [ -f "$_c" ] && _rr="$_c" && break
 done
@@ -71,11 +71,11 @@ if [ -n "$_rr" ]; then
 fi
 if [ -z "${BB:-}" ]; then
   # sidecar missing (desktop/uninstall/staged setup) — same B1 walk as resolve_bb
-  if [ -n "${FLUX_BB:-}" ] && [ -x "$FLUX_BB" ] &&
-     "$FLUX_BB" --list >/dev/null 2>&1; then BB="$FLUX_BB"; fi
-  if [ -z "${BB:-}" ] && [ -x /data/local/bliss/busybox/bliss_busybox ] &&
-     /data/local/bliss/busybox/bliss_busybox --list >/dev/null 2>&1; then
-    BB=/data/local/bliss/busybox/bliss_busybox
+  if [ -n "${ALTARIS_BB:-}" ] && [ -x "$ALTARIS_BB" ] &&
+     "$ALTARIS_BB" --list >/dev/null 2>&1; then BB="$ALTARIS_BB"; fi
+  if [ -z "${BB:-}" ] && [ -x /data/local/altaris/busybox/altaris_busybox ] &&
+     /data/local/altaris/busybox/altaris_busybox --list >/dev/null 2>&1; then
+    BB=/data/local/altaris/busybox/altaris_busybox
   fi
   if [ -z "${BB:-}" ]; then
     for path in \
@@ -262,11 +262,11 @@ fi
         echo "Creating user $USERNAME..."
         groupadd storage
         groupadd wheel
-        id -u flux >/dev/null 2>&1 || useradd -m -g users -G wheel,audio,video,storage,aid_inet -s /bin/bash flux
-        echo "flux:flux" | chpasswd
+        id -u altaris >/dev/null 2>&1 || useradd -m -g users -G wheel,audio,video,storage,aid_inet -s /bin/bash altaris
+        echo "altaris:altaris" | chpasswd
         
         # Sudoers
-        echo "flux ALL=(ALL:ALL) NOPASSWD:ALL" > /etc/sudoers.d/flux
+        echo "altaris ALL=(ALL:ALL) NOPASSWD:ALL" > /etc/sudoers.d/flux
         chmod 0440 /etc/sudoers.d/flux
         
         # Locales
@@ -293,15 +293,15 @@ fi
     success "Arch Environment Configured!"
     
     # Root-staged launchers live in the Altaris helpers dir (idempotent).
-    mkdir -p /data/local/bliss/helpers
+    mkdir -p /data/local/altaris/helpers
     
     # --- LAUNCH SCRIPTS ---
     
     # 1. CLI Launcher (enter_arch.sh)
-    CLI_SCRIPT="/data/local/bliss/helpers/enter_arch.sh"
+    CLI_SCRIPT="/data/local/altaris/helpers/enter_arch.sh"
     cat <<EOF > "$CLI_SCRIPT"
 #!/bin/sh
-ARCHPATH="/data/local/bliss/chroots/archlinux"
+ARCHPATH="/data/local/altaris/chroots/archlinux"
 BB="$BB"
 
 \$BB mount -o remount,dev,suid /data
@@ -315,13 +315,13 @@ mkdir -p \$ARCHPATH/media/sdcard
 \$BB mount --bind /sdcard \$ARCHPATH/media/sdcard
 
 echo "Entering Arch (CLI)..."
-\$BB chroot \$ARCHPATH /bin/su - flux
+\$BB chroot \$ARCHPATH /bin/su - altaris
 EOF
     chmod +x "$CLI_SCRIPT"
     success "CLI Launcher Created: $CLI_SCRIPT"
 
     # 2. KDE Launcher (start_arch_gui.sh)
-    GUI_SCRIPT="/data/local/bliss/helpers/start_arch_gui.sh"
+    GUI_SCRIPT="/data/local/altaris/helpers/start_arch_gui.sh"
     TERMUX_PREFIX="$APP_PREFIX"
     
     cat <<EOF > "$GUI_SCRIPT"
@@ -336,7 +336,7 @@ killall -9 termux-x11 Xwayland pulseaudio virgl_test_server_android 2>/dev/null
 am start --user 0 -n com.termux.x11/com.termux.x11.MainActivity >/dev/null
 
 # Mount Tmp for VirGL socket sharing
-$BB mount --bind $TERMUX_PREFIX/tmp /data/local/bliss/chroots/archlinux/tmp 2>/dev/null
+$BB mount --bind $TERMUX_PREFIX/tmp /data/local/altaris/chroots/archlinux/tmp 2>/dev/null
 
 # Fix Permissions for VirGL
 chmod -R 1777 $TERMUX_PREFIX/tmp
@@ -359,7 +359,7 @@ sleep 2
 
 # Launch KDE Plasma
 echo "Starting KDE Plasma..."
-$BB chroot /data/local/bliss/chroots/archlinux /bin/su - flux -c '
+$BB chroot /data/local/altaris/chroots/archlinux /bin/su - altaris -c '
     export DISPLAY=:0 
     export PULSE_SERVER=tcp:127.0.0.1
     export GALLIUM_DRIVER=virpipe 
@@ -374,7 +374,7 @@ EOF
     cleanup_mounts
     
     # Notify App
-    am start -a android.intent.action.VIEW -d "fluxlinux://callback?result=success&name=distro_install_arch_chroot" >/dev/null 2>&1
+    am start -a android.intent.action.VIEW -d "altaris://callback?result=success&name=distro_install_arch_chroot" >/dev/null 2>&1
 }
 
 main

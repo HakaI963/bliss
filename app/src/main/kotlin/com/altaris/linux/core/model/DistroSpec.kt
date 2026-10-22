@@ -1,0 +1,147 @@
+package com.altaris.linux.core.model
+
+/**
+ * Family of the Linux Distribution.
+ * Used to group distros that share similar architecture or script requirements.
+ */
+enum class DistroFamily {
+    DEBIAN,
+    ARCH,
+    FEDORA,
+    ALPINE,
+    VOID,
+    SUSE,
+    CHIMERA,
+    OTHER
+}
+
+/**
+ * The primary Package Manager used by the distribution.
+ */
+enum class PackageManager {
+    APT,
+    PACMAN,
+    DNF,
+    APK,
+    XBPS,
+    ZYPPER,
+    OTHER
+}
+
+/**
+ * Release cycle type of the distribution.
+ */
+enum class ReleaseType {
+    FIXED,      // Stable releases (e.g., Debian Stable, Ubuntu LTS)
+    ROLLING,    // Rolling release (e.g., Arch, Void)
+    SEMI_ROLLING // e.g. Fedora (Fixed but fast) or Debian Testing
+}
+
+/**
+ * Pure enum representing supported Linux Distributions.
+ * Each entry maps to its technical classification.
+ */
+enum class SupportedDistro(
+    val id: String, // Internal ID used for proot scripts (e.g. "debian", "ubuntu")
+    val family: DistroFamily,
+    val packageManager: PackageManager,
+    val releaseType: ReleaseType
+) {
+    DEBIAN(
+        id = "debian",
+        family = DistroFamily.DEBIAN,
+        packageManager = PackageManager.APT,
+        releaseType = ReleaseType.FIXED
+    ),
+    
+    UBUNTU(
+        id = "ubuntu",
+        family = DistroFamily.DEBIAN, // Ubuntu is based on Debian
+        packageManager = PackageManager.APT,
+        releaseType = ReleaseType.FIXED
+    ),
+    
+    KALI(
+        id = "kali",
+        family = DistroFamily.DEBIAN,
+        packageManager = PackageManager.APT,
+        releaseType = ReleaseType.ROLLING
+    ),
+
+    PARROT(
+        id = "parrot",
+        family = DistroFamily.DEBIAN,
+        packageManager = PackageManager.APT,
+        releaseType = ReleaseType.ROLLING
+    ),
+
+    ARCH(
+        id = "archlinux",
+        family = DistroFamily.ARCH,
+        packageManager = PackageManager.PACMAN,
+        releaseType = ReleaseType.ROLLING
+    ),
+
+    ALPINE(
+        id = "alpine",
+        family = DistroFamily.ALPINE,
+        packageManager = PackageManager.APK,
+        releaseType = ReleaseType.FIXED
+    ),
+
+    FEDORA(
+        id = "fedora",
+        family = DistroFamily.FEDORA,
+        packageManager = PackageManager.DNF,
+        releaseType = ReleaseType.SEMI_ROLLING
+    ),
+
+    VOID(
+        id = "void",
+        family = DistroFamily.VOID,
+        packageManager = PackageManager.XBPS,
+        releaseType = ReleaseType.ROLLING
+    ),
+
+    OPENSUSE(
+        id = "opensuse",
+        family = DistroFamily.SUSE,
+        packageManager = PackageManager.ZYPPER,
+        releaseType = ReleaseType.ROLLING
+    ),
+
+    DEEPIN(
+        id = "deepin",
+        family = DistroFamily.DEBIAN,
+        packageManager = PackageManager.APT,
+        releaseType = ReleaseType.FIXED
+    ),
+
+    CHIMERA(
+        id = "chimera",
+        family = DistroFamily.CHIMERA,
+        packageManager = PackageManager.APK,
+        releaseType = ReleaseType.ROLLING
+    ),
+
+    MANJARO(
+        id = "manjaro",
+        family = DistroFamily.ARCH,
+        packageManager = PackageManager.PACMAN,
+        releaseType = ReleaseType.ROLLING
+    ),
+
+    ROCKY(
+        id = "rocky",
+        family = DistroFamily.FEDORA, // RHEL-family (dnf/EPEL) grouped with Fedora
+        packageManager = PackageManager.DNF,
+        releaseType = ReleaseType.FIXED
+    ),
+
+    CENTOS_STREAM(
+        id = "centos_stream",
+        family = DistroFamily.FEDORA, // EL9 Stream (dnf/EPEL)
+        packageManager = PackageManager.DNF,
+        releaseType = ReleaseType.SEMI_ROLLING
+    )
+}

@@ -1,12 +1,12 @@
 # Banner art credits
 
-The Altaris terminal launch sticker (`folio-banner`) is rendered from
+The Altaris terminal launch sticker (`altaris-banner`) is rendered from
 **truecolor half-block** versions of the anime-style illustrations below.
 Each source was cropped to a head-and-shoulders composition, downscaled, and
 quantized to `▀` (U+2580) half-block cells with per-cell foreground/background
 RGB (see `scripts/tools/ansi_art_gen.py`). No filters change the artwork's
 meaning; the derived ANSI art (files `01-anime-girl.txt` … `05-catgirl.txt`
-under `~/.config/folio/banner/`) is redistributed under the **same license as
+under `~/.config/altaris/banner/`) is redistributed under the **same license as
 the source image**.
 
 | Ship name | Character / motif | Source (Wikimedia Commons file page) | Author | License |
@@ -41,5 +41,5 @@ The `.txt` output stores escapes as *literal* `\033[38;2;…;48;2;…m` text
 (rendered by the guest with `printf '%b'`), one `▀`/space per cell, with a
 `\033[0m` reset at the end of each line. `--preview` re-parses that exact text
 back to RGB and writes a PNG for visual QA. Both files are byte-checked into
-the six setup scripts (`FOLIO_BANNER_ALL` heredoc) and the Kotlin
+the six setup scripts (`ALTARIS_BANNER_ALL` heredoc) and the Kotlin
 `GuestZshrcRepair.BANNER_FILES` list.

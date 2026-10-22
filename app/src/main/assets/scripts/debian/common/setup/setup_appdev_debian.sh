@@ -87,8 +87,8 @@ handle_error() {
 }
 
 echo "Altaris: Setting up App Development Environment (Android + Flutter + React Native)..."
-# Ensure we set ownership to the 'flux' user (since we verify using sudo/root)
-TARGET_USER="flux"
+# Ensure we set ownership to the 'altaris' user (since we verify using sudo/root)
+TARGET_USER="altaris"
 TARGET_GROUP="users"
 
 # CRITICAL: Remove broken Java packages FIRST (before any apt operations)
@@ -473,7 +473,7 @@ chmod 666 /dev/null 2>/dev/null || true
 # 2. Configure Android SDK (Single requested command)
 echo "Altaris: Setting Flutter Android SDK..."
 
-ACTUAL_USER="flux"
+ACTUAL_USER="altaris"
 USER_GROUP="users"
 
 echo "Altaris: Flutter already installed."

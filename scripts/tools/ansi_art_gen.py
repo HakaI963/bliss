@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""ansi_art_gen.py — dev-only generator for the Bliss launch-sticker art.
+"""ansi_art_gen.py — dev-only generator for the Altaris launch-sticker art.
 
 Turns an image crop into truecolor half-block ANSI text: one terminal cell per
 character U+2580 ("▀") where the foreground color (SGR ``38;2;r;g;b``) is the
@@ -7,7 +7,7 @@ top pixel and the background color (SGR ``48;2;r;g;b``) is the bottom pixel.
 
 Escape sequences are written as *literal* ``\\033[`` text (backslash, zero,
 three, three) exactly like the previous 256-color stickers, because the guest
-``folio-banner-art`` renders the files with ``printf '%b'``.  Never raw ESC
+``altaris-banner-art`` renders the files with ``printf '%b'``.  Never raw ESC
 bytes.
 
 Pipeline (uses ffmpeg for decode/scale, stdlib for everything else):

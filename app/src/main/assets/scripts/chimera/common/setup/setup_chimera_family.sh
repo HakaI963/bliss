@@ -1,13 +1,13 @@
 #!/bin/sh
 
-# Helpers live in bliss_guest_common.sh (prepended by bliss_install /
+# Helpers live in altaris_guest_common.sh (prepended by altaris_install /
 # familySetupPayload). Source it only when this file is run standalone.
-if ! command -v _flux_setup_pulse >/dev/null 2>&1; then
+if ! command -v _altaris_setup_pulse >/dev/null 2>&1; then
     _here=$(CDPATH= cd -- "$(dirname -- "$0")" 2>/dev/null && pwd)
     for _common in \
-        "${_here}/bliss_guest_common.sh" \
-        "${HOME:-}/bliss_guest_common.sh" \
-        /tmp/bliss_guest_common.sh
+        "${_here}/altaris_guest_common.sh" \
+        "${HOME:-}/altaris_guest_common.sh" \
+        /tmp/altaris_guest_common.sh
     do
         if [ -f "$_common" ]; then
             # shellcheck source=/dev/null
@@ -32,8 +32,8 @@ if [ "$(id -u)" -ne 0 ]; then
     exit 1
 fi
 
-_flux_ensure_tmp
-_flux_ensure_dns
+_altaris_ensure_tmp
+_altaris_ensure_dns
 
 if ! command -v apk >/dev/null 2>&1; then
     echo "Altaris: ERROR: apk not found"
@@ -45,18 +45,18 @@ fi
 mkdir -p /etc/apk
 printf 'cache-packages\n' > /etc/apk/config
 
-_flux_log "apk update..."
+_altaris_log "apk update..."
 apk update || {
     echo "Altaris: apk update failed (repos/network)"
     exit 1
 }
 
-_flux_log "Installing base packages (bash/sudo/shadow BEFORE user)..."
+_altaris_log "Installing base packages (bash/sudo/shadow BEFORE user)..."
 # Chimera pkg names: no sudo (opendoas), tar=gtar, wget=wget2, font-dejavu=fonts-dejavu.
 if ! apk add bash shadow opendoas ca-certificates curl wget2 unzip gtar xz \
         git zsh python \
         dbus fonts-dejavu adwaita-icon-theme; then
-    _flux_log "base pkg names differ — retrying via cmd: virtual providers"
+    _altaris_log "base pkg names differ — retrying via cmd: virtual providers"
     apk add cmd:bash cmd:useradd cmd:doas ca-certificates cmd:curl \
         cmd:wget2 cmd:unzip cmd:gtar cmd:xz cmd:git cmd:zsh cmd:python \
         cmd:dbus-run-session \
@@ -78,15 +78,15 @@ if [ ! -e /usr/local/bin/tar ] && [ ! -e /usr/bin/tar ] && command -v gtar >/dev
 fi
 
 # user repo — XFCE lives here, not in main
-_flux_log "Enabling user repo (chimera-repo-user)..."
+_altaris_log "Enabling user repo (chimera-repo-user)..."
 apk add chimera-repo-user 2>/dev/null || true
 apk update || true
 
-# Desktop contract: FLUX_DESKTOPS (space/comma separated) = xfce | kde | none;
-# legacy FLUX_DESKTOP / FLUX_DESKTOP_ENV remain valid single values. Unset/empty
+# Desktop contract: ALTARIS_DESKTOPS (space/comma separated) = xfce | kde | none;
+# legacy ALTARIS_DESKTOP / ALTARIS_DESKTOP_ENV remain valid single values. Unset/empty
 # → xfce (backward compat). Normalized to the canonical "xfce kde" order;
 # unknown tokens are ignored and "none" installs neither desktop.
-DESKTOPS="${FLUX_DESKTOPS:-${FLUX_DESKTOP:-${FLUX_DESKTOP_ENV:-xfce}}}"
+DESKTOPS="${ALTARIS_DESKTOPS:-${ALTARIS_DESKTOP:-${ALTARIS_DESKTOP_ENV:-xfce}}}"
 DESKTOPS=$(printf '%s' "$DESKTOPS" | tr ',' ' ')
 DESKTOPS=$(printf '%s' "$DESKTOPS" | tr -s '[:space:]' ' ')
 DESKTOPS="${DESKTOPS# }"
@@ -103,11 +103,11 @@ if [ "$DESKTOPS" != "none" ]; then
 fi
 
 if [ -z "${DESKTOPS##*xfce*}" ]; then
-    _flux_log "Installing XFCE4 (targeted — never the xfce4 metapackage)..."
-    if ! _flux_retry_pkg apk add xfce4-session xfce4-panel xfce4-settings xfce4-terminal \
+    _altaris_log "Installing XFCE4 (targeted — never the xfce4 metapackage)..."
+    if ! _altaris_retry_pkg apk add xfce4-session xfce4-panel xfce4-settings xfce4-terminal \
             xfdesktop xfwm4 thunar; then
-        _flux_log "XFCE pkg names differ — retrying via cmd: virtual providers"
-        _flux_retry_pkg apk add cmd:startxfce4 cmd:xfce4-panel cmd:xfce4-settings \
+        _altaris_log "XFCE pkg names differ — retrying via cmd: virtual providers"
+        _altaris_retry_pkg apk add cmd:startxfce4 cmd:xfce4-panel cmd:xfce4-settings \
             cmd:xfce4-terminal cmd:xfdesktop cmd:xfwm4 cmd:thunar || {
                 echo "Altaris: XFCE install failed after 3 tries — check your network, then tap Retry Setup."
                 exit 1
@@ -119,14 +119,14 @@ if [ -z "${DESKTOPS##*xfce*}" ]; then
     if [ ! -e /usr/bin/startxfce4 ] && command -v startxfce4 >/dev/null 2>&1; then
         _sx="$(command -v startxfce4)"
         ln -sf "$_sx" /usr/bin/startxfce4 2>/dev/null || true
-        _flux_log "linked startxfce4: $_sx → /usr/bin/startxfce4"
+        _altaris_log "linked startxfce4: $_sx → /usr/bin/startxfce4"
     fi
     # Phone niceties: Whisker panel menu + screenshot tool (best-effort).
     apk add xfce4-whiskermenu-plugin xfce4-screenshooter 2>/dev/null || true
 fi
 
 # dbus machine-id: dbus-uuidgen if present; else write a hex id.
-_flux_ensure_dbus
+_altaris_ensure_dbus
 if [ ! -s /etc/machine-id ] && command -v dbus-uuidgen >/dev/null 2>&1; then
     dbus-uuidgen --ensure=/etc/machine-id 2>/dev/null || true
 fi
@@ -134,7 +134,7 @@ if [ ! -s /etc/machine-id ]; then
     _mid=$(tr -d '-' < /proc/sys/kernel/random/uuid 2>/dev/null | tr -d '\n')
     [ "${#_mid}" = "32" ] || _mid="0123456789abcdef0123456789abcdef"
     printf '%s\n' "$_mid" > /etc/machine-id
-    _flux_log "wrote hex /etc/machine-id"
+    _altaris_log "wrote hex /etc/machine-id"
 fi
 mkdir -p /var/lib/dbus
 if [ ! -e /var/lib/dbus/machine-id ]; then
@@ -143,28 +143,28 @@ if [ ! -e /var/lib/dbus/machine-id ]; then
 fi
 
 if [ -z "${DESKTOPS##*xfce*}" ]; then
-    _flux_require_startxfce4
+    _altaris_require_startxfce4
 fi
-_flux_ensure_groups
-_flux_ensure_user
-_flux_ensure_sudo
-_flux_ensure_home
-_flux_setup_pulse
-_flux_ensure_en_us_locale || exit 1
-_flux_write_gpu_mode virgl
-_flux_fix_pm_writable
+_altaris_ensure_groups
+_altaris_ensure_user
+_altaris_ensure_sudo
+_altaris_ensure_home
+_altaris_setup_pulse
+_altaris_ensure_en_us_locale || exit 1
+_altaris_write_gpu_mode virgl
+_altaris_fix_pm_writable
 
 # Phone-compact XFCE defaults (30px mono top panel, DPI 96, wallpaper,
-# Home-only desktop icons, shortcuts). Helper ships in bliss_guest_common.sh;
+# Home-only desktop icons, shortcuts). Helper ships in altaris_guest_common.sh;
 # guarded so a standalone run without it is a no-op and never fails install.
-if [ -z "${DESKTOPS##*xfce*}" ] && command -v _flux_xfce_compact_defaults >/dev/null 2>&1; then
-    _flux_xfce_compact_defaults || true
+if [ -z "${DESKTOPS##*xfce*}" ] && command -v _altaris_xfce_compact_defaults >/dev/null 2>&1; then
+    _altaris_xfce_compact_defaults || true
 fi
 
 
 # Altaris universal interactive shell: zsh suggestions, syntax colors, sticker.
-if command -v _flux_setup_altaris_shell >/dev/null 2>&1; then
-    _flux_setup_altaris_shell || true
+if command -v _altaris_setup_altaris_shell >/dev/null 2>&1; then
+    _altaris_setup_altaris_shell || true
 fi
 
 echo "Altaris: ${DISTRO_NAME} Chimera setup complete!"

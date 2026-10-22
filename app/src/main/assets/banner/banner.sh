@@ -1,15 +1,15 @@
-# bliss-banner.sh — Altaris launch sticker: truecolor half-block anime art,
+# altaris-banner.sh — Altaris launch sticker: truecolor half-block anime art,
 # one random design per interactive shell, printed exactly ONCE per shell
 # even when several rc files source it or nested shells inherit the
 # environment. Works with zsh, bash and POSIX sh.
-# Opt out at runtime: FLUX_NO_BANNER=1
-# bliss-banner v9
-bliss_banner_art() {
+# Opt out at runtime: ALTARIS_NO_BANNER=1
+# altaris-banner v9
+altaris_banner_art() {
   # zsh: empty glob must not abort the function.
   if [ -n "${ZSH_VERSION:-}" ]; then
     setopt localoptions nullglob nonomatch 2>/dev/null || true
   fi
-  _bb_dir="${HOME:-/root}/.config/bliss/banner"
+  _bb_dir="${HOME:-/root}/.config/altaris/banner"
   [ -d "$_bb_dir" ] || return 0
   _bb_list=""
   _bb_n=0
@@ -35,18 +35,18 @@ bliss_banner_art() {
   fi
   unset _bb_dir _bb_list _bb_n _bb_f _bb_i _bb_pick
 }
-bliss_banner() {
-  [ "${FLUX_NO_BANNER:-0}" = "1" ] && return 0
+altaris_banner() {
+  [ "${ALTARIS_NO_BANNER:-0}" = "1" ] && return 0
   # One sticker per shell process: exported, so nested shells and every
   # re-sourced rc file in the same process skip instantly. A brand-new
   # shell (new tab / new session) always prints exactly one design.
-  [ -z "${_BLISS_BANNER_SHOWN:-}" ] || return 0
+  [ -z "${_ALTARIS_BANNER_SHOWN:-}" ] || return 0
   case $- in
     *i*) ;;
     *) return 0 ;;
   esac
-  export _BLISS_BANNER_SHOWN=1
-  bliss_banner_art
+  export _ALTARIS_BANNER_SHOWN=1
+  altaris_banner_art
   # Header: exactly one line, "altaris@<id>" (distro id only). ID= from
   # /etc/os-release; fallbacks: first word of PRETTY_NAME, then "linux".
   _bb_fid=""
@@ -60,4 +60,4 @@ bliss_banner() {
   printf '%s\n' "altaris@$_bb_fid"
   unset _bb_fid
 }
-bliss_banner
+altaris_banner

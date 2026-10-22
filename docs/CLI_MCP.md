@@ -7,7 +7,7 @@ persistent control-plane notification. Nothing is exposed to the LAN.
 
 ## CLI inside a distro
 
-The app installs a small `altaris` helper (legacy `bliss` alias kept) into the host prefix and into every
+The app installs a small `altaris` helper (legacy `altaris` alias kept) into the host prefix and into every
 installed proot/chroot rootfs. Open a terminal in a distro and run:
 
 ```sh
@@ -90,7 +90,7 @@ Example OpenCode config:
 ```json
 {
   "mcp": {
-    "bliss": {
+    "altaris": {
       "type": "remote",
       "url": "http://127.0.0.1:47831/mcp",
       "enabled": true
@@ -99,14 +99,14 @@ Example OpenCode config:
 }
 ```
 
-Tools: `bliss_status`, `bliss_clones`, `bliss_apps`, `bliss_install_apk`,
-`bliss_uninstall_clone`, `bliss_launch_clone`, `bliss_stop_clone`,
-`bliss_screenshot`, `bliss_logs`, `bliss_tap`, `bliss_swipe`, `bliss_text`,
-`bliss_key`, `bliss_ocr`, `bliss_record_start`, `bliss_record_stop`,
-`bliss_record_status`, `bliss_ui_tree`, `bliss_ui_click`, `bliss_ui_type`,
-`bliss_ui_scroll`, `bliss_ui_tap_text`, `bliss_ui_enable`.
+Tools: `altaris_status`, `altaris_clones`, `altaris_apps`, `altaris_install_apk`,
+`altaris_uninstall_clone`, `altaris_launch_clone`, `altaris_stop_clone`,
+`altaris_screenshot`, `altaris_logs`, `altaris_tap`, `altaris_swipe`, `altaris_text`,
+`altaris_key`, `altaris_ocr`, `altaris_record_start`, `altaris_record_stop`,
+`altaris_record_status`, `altaris_ui_tree`, `altaris_ui_click`, `altaris_ui_type`,
+`altaris_ui_scroll`, `altaris_ui_tap_text`, `altaris_ui_enable`.
 
-`bliss_screenshot` returns an MCP `image` content block. The rest return text
+`altaris_screenshot` returns an MCP `image` content block. The rest return text
 JSON so agents can reason about results without parsing a custom protocol.
 A ready-to-use agent brief lives in `docs/AI_AGENT.md` and in
 Tools → Clone → Copy agent brief. Tools has one **Clone** folder containing the
@@ -116,7 +116,7 @@ config button.
 
 ## Viewer and agent coexistence
 
-`bliss_launch_clone` is idempotent while a clone already owns the display: it
+`altaris_launch_clone` is idempotent while a clone already owns the display: it
 returns `already_running` instead of restarting the app. Opening the viewer
 for that clone attaches to the existing display, so an agent's in-app state is
 not lost. The viewer's ACTIONS strip logs agent taps, swipes, text, keys and
@@ -125,10 +125,10 @@ The viewer also supports PiP and resizable display/log panes.
 
 ## OCR / UI automation
 
-`bliss_ocr` captures the virtual display, runs ML Kit's on-device recognizer and
+`altaris_ocr` captures the virtual display, runs ML Kit's on-device recognizer and
 returns the full text plus per-block and per-line boxes (`x`, `y`, `w`, `h`,
-`cx`, `cy`). An agent can OCR, choose a box centre, then call `bliss_tap`.
-`bliss_screenshot` and coordinate input work even when the app is not showing
+`cx`, `cy`). An agent can OCR, choose a box centre, then call `altaris_tap`.
+`altaris_screenshot` and coordinate input work even when the app is not showing
 the clone viewer.
 
 ## Accessibility tree (UI automation)
@@ -137,7 +137,7 @@ Altaris ships an `AccessibilityService` that runs in its own `:a11y` process.
 When it is enabled it exposes the real node tree of the virtual display, so a
 clone can be driven by element name instead of by pixel coordinates.
 
-- `POST /uiauto/enable` (or `bliss_ui_enable`) enables the service with root:
+- `POST /uiauto/enable` (or `altaris_ui_enable`) enables the service with root:
   it writes `enabled_accessibility_services` and `accessibility_enabled` for
   the running application id and verifies the result. Without root the service
   has to be enabled from Android settings.

@@ -178,7 +178,7 @@ verify_installation
 
 # ── Callback to app ──────────────────────────────────────
 am start -a android.intent.action.VIEW \
-  -d "fluxlinux://callback?result=success&name=${CALLBACK_NAME}" \
+  -d "altaris://callback?result=success&name=${CALLBACK_NAME}" \
   --flags 0x10000000 2>/dev/null || true
 
 echo ""

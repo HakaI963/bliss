@@ -2,7 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Critical for FluxLinux -> Termux Communication -->
+    <!-- Critical for Altaris -> Termux Communication -->
     <uses-permission android:name="com.termux.permission.RUN_COMMAND" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
@@ -24,7 +24,7 @@
     </queries>
 
     <application
-        android:name=".FluxApp"
+        android:name=".AltarisApp"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:extractNativeLibs="true"
@@ -34,7 +34,7 @@
         android:requestLegacyExternalStorage="true"
         android:roundIcon="@mipmap/ic_launcher"
         android:supportsRtl="true"
-        android:theme="@style/Theme.FluxLinux"
+        android:theme="@style/Theme.Altaris"
         android:usesCleartextTraffic="true"
         tools:targetApi="31">
 
@@ -67,7 +67,7 @@
             android:resizeableActivity="true"
             android:supportsPictureInPicture="true"
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden"
-            android:theme="@style/Theme.FluxLinux" />
+            android:theme="@style/Theme.Altaris" />
 
         <activity
             android:name=".MainActivity"
@@ -76,7 +76,7 @@
             android:resizeableActivity="true"
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden"
             android:windowSoftInputMode="adjustResize"
-            android:theme="@style/Theme.FluxLinux">
+            android:theme="@style/Theme.Altaris">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -86,7 +86,7 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="fluxlinux" android:host="callback" />
+                <data android:scheme="altarislinux" android:host="callback" />
             </intent-filter>
         </activity>
 

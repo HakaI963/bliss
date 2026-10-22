@@ -2,7 +2,7 @@
 <!-- Foreground layer: the Altaris mark centred inside the 66dp safe zone
      (22dp inset on each side of the 108dp layer). -->
 <inset xmlns:android="http://schemas.android.com/apk/res/android"
-    android:drawable="@drawable/ic_bliss_mark"
+    android:drawable="@drawable/ic_altaris_mark"
     android:insetLeft="22dp"
     android:insetRight="22dp"
     android:insetTop="22dp"

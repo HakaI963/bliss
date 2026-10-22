@@ -2,12 +2,12 @@
 # stop_debian13_gui.sh — root: stop XFCE in Debian chroot + host X11 sockets
 # Does NOT pkill proot (proot stop is stop_gui.sh only).
 
-DEBIANPATH="${DEBIANPATH:-/data/local/bliss/chroots/debian}"
+DEBIANPATH="${DEBIANPATH:-/data/local/altaris/chroots/debian}"
 if [ -z "${TARGET_PREFIX:-}" ]; then
-  if [ -n "${FLUX_PREFIX:-}" ]; then
-    TARGET_PREFIX="$FLUX_PREFIX"
-  elif [ -n "${FLUX_PACKAGE:-}" ]; then
-    TARGET_PREFIX="/data/data/${FLUX_PACKAGE}/files/usr"
+  if [ -n "${ALTARIS_PREFIX:-}" ]; then
+    TARGET_PREFIX="$ALTARIS_PREFIX"
+  elif [ -n "${ALTARIS_PACKAGE:-}" ]; then
+    TARGET_PREFIX="/data/data/${ALTARIS_PACKAGE}/files/usr"
   elif [ -d /data/data/com.zenithblue.fluxlinux/files/usr ]; then
     TARGET_PREFIX="/data/data/com.zenithblue.fluxlinux/files/usr"
   else
@@ -22,9 +22,9 @@ echo "========================================"
 # resolve root BusyBox (manager built-in; NDK module not required)
 _rr=""
 for _c in \
-  "${FLUX_RESOLVE_BB:-}" \
+  "${ALTARIS_RESOLVE_BB:-}" \
   "$(dirname "$0")/resolve_bb.sh" \
-  /data/local/bliss/helpers/bliss_resolve_bb.sh
+  /data/local/altaris/helpers/altaris_resolve_bb.sh
 do
   [ -n "$_c" ] && [ -f "$_c" ] && _rr="$_c" && break
 done
@@ -35,11 +35,11 @@ if [ -n "$_rr" ]; then
 fi
 if [ -z "${BB:-}" ]; then
   # sidecar missing (desktop/uninstall/staged setup) — same B1 walk as resolve_bb
-  if [ -n "${FLUX_BB:-}" ] && [ -x "$FLUX_BB" ] &&
-     "$FLUX_BB" --list >/dev/null 2>&1; then BB="$FLUX_BB"; fi
-  if [ -z "${BB:-}" ] && [ -x /data/local/bliss/busybox/bliss_busybox ] &&
-     /data/local/bliss/busybox/bliss_busybox --list >/dev/null 2>&1; then
-    BB=/data/local/bliss/busybox/bliss_busybox
+  if [ -n "${ALTARIS_BB:-}" ] && [ -x "$ALTARIS_BB" ] &&
+     "$ALTARIS_BB" --list >/dev/null 2>&1; then BB="$ALTARIS_BB"; fi
+  if [ -z "${BB:-}" ] && [ -x /data/local/altaris/busybox/altaris_busybox ] &&
+     /data/local/altaris/busybox/altaris_busybox --list >/dev/null 2>&1; then
+    BB=/data/local/altaris/busybox/altaris_busybox
   fi
   if [ -z "${BB:-}" ]; then
     for path in \

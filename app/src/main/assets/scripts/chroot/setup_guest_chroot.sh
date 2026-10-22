@@ -4,21 +4,21 @@
 # XFCE is installed later by the family script (onboarding XFCE phase).
 #
 # Env (from DistroInstallProfile / OnboardingInstallRunner):
-#   FLUX_CHROOT, FLUX_ROOTFS_PATH, FLUX_ROOTFS_SHA256, FLUX_ROOTFS_NAME,
-#   FLUX_ROOTFS_URL (GitHub release download fallback)
+#   ALTARIS_CHROOT, ALTARIS_ROOTFS_PATH, ALTARIS_ROOTFS_SHA256, ALTARIS_ROOTFS_NAME,
+#   ALTARIS_ROOTFS_URL (GitHub release download fallback)
 #   TERMUX_APP__PACKAGE_NAME, TERMUX__HOME
 
-GUESTPATH="${FLUX_CHROOT:-/data/local/bliss/chroots/guest}"
-USERNAME="flux"
-[ -d /data/local/folio ] && [ ! -e /data/local/bliss ] && mv /data/local/folio /data/local/bliss 2>/dev/null || true
-DISTRO_LABEL="${FLUX_DISTRO_LABEL:-guest}"
+GUESTPATH="${ALTARIS_CHROOT:-/data/local/altaris/chroots/guest}"
+USERNAME="altaris"
+[ -d /data/local/altaris ] && [ ! -e /data/local/altaris ] && mv /data/local/altaris /data/local/altaris 2>/dev/null || true
+DISTRO_LABEL="${ALTARIS_DISTRO_LABEL:-guest}"
 
 PKG="${TERMUX_APP__PACKAGE_NAME:-com.ivarna.fluxlinux}"
 APP_HOME="${TERMUX__HOME:-/data/data/${PKG}/files/home}"
 APP_PREFIX="${TERMUX__PREFIX:-/data/data/${PKG}/files/usr}"
-ROOTFS_NAME="${FLUX_ROOTFS_NAME:-rootfs.tar.xz}"
-ROOTFS_SHA256="${FLUX_ROOTFS_SHA256:-}"
-ROOTFS_URL="${FLUX_ROOTFS_URL:-}"
+ROOTFS_NAME="${ALTARIS_ROOTFS_NAME:-rootfs.tar.xz}"
+ROOTFS_SHA256="${ALTARIS_ROOTFS_SHA256:-}"
+ROOTFS_URL="${ALTARIS_ROOTFS_URL:-}"
 
 progress() { printf "\033[1;36m[+] %s\033[0m\n" "$1"; }
 success()  { printf "\033[1;32m[✓] %s\033[0m\n" "$1"; }
@@ -46,9 +46,9 @@ goodbye() {
 
 resolve_rootfs_archive() {
     ROOTFS_ARCHIVE=""
-    if [ -n "${FLUX_ROOTFS_PATH:-}" ] && [ -f "$FLUX_ROOTFS_PATH" ] && [ -s "$FLUX_ROOTFS_PATH" ]; then
-        ROOTFS_ARCHIVE="$FLUX_ROOTFS_PATH"
-        progress "rootfs from FLUX_ROOTFS_PATH=$ROOTFS_ARCHIVE"
+    if [ -n "${ALTARIS_ROOTFS_PATH:-}" ] && [ -f "$ALTARIS_ROOTFS_PATH" ] && [ -s "$ALTARIS_ROOTFS_PATH" ]; then
+        ROOTFS_ARCHIVE="$ALTARIS_ROOTFS_PATH"
+        progress "rootfs from ALTARIS_ROOTFS_PATH=$ROOTFS_ARCHIVE"
         return 0
     fi
     for candidate in \
@@ -193,7 +193,7 @@ configure_guest_chroot() {
             if command -v useradd >/dev/null 2>&1; then
                 useradd -m -s /bin/bash $USERNAME 2>/dev/null || useradd -m -s /bin/sh $USERNAME
             fi
-            echo '$USERNAME:flux' | chpasswd 2>/dev/null || true
+            echo '$USERNAME:altaris' | chpasswd 2>/dev/null || true
         fi
         if command -v usermod >/dev/null 2>&1; then
             for g in wheel audio video users aid_inet; do
@@ -205,19 +205,19 @@ configure_guest_chroot() {
         chmod 0440 /etc/sudoers.d/$USERNAME
     " || goodbye
 
-    touch "$GUESTPATH/.bliss_configured"
+    touch "$GUESTPATH/.altaris_configured"
     success "$DISTRO_LABEL environment configured (rootfs + user; XFCE via family phase)!"
 
     # Root-staged helper/launchers live in the Altaris helpers dir (idempotent).
-    mkdir -p /data/local/bliss/helpers
+    mkdir -p /data/local/altaris/helpers
 
-    HELPER="/data/local/bliss/helpers/bliss_chroot.sh"
+    HELPER="/data/local/altaris/helpers/altaris_chroot.sh"
     progress "Installing chroot SSOT helper at $HELPER..."
     HELPER_SRC=""
     for cand in \
-        "/data/data/${PKG}/files/home/bliss_chroot.sh" \
-        "/data/data/${PKG}/files/staged_scripts/bliss_chroot.sh" \
-        "$(dirname "$0")/bliss_chroot.sh"
+        "/data/data/${PKG}/files/home/altaris_chroot.sh" \
+        "/data/data/${PKG}/files/staged_scripts/altaris_chroot.sh" \
+        "$(dirname "$0")/altaris_chroot.sh"
     do
         if [ -f "$cand" ]; then
             HELPER_SRC="$cand"
@@ -229,14 +229,14 @@ configure_guest_chroot() {
         chmod 755 "$HELPER"
         success "SSOT helper installed from $HELPER_SRC"
     else
-        error "bliss_chroot.sh not found — app will stage on first session"
+        error "altaris_chroot.sh not found — app will stage on first session"
     fi
 
     for s in start_guest_gui.sh stop_guest_gui.sh; do
         src="/data/data/${PKG}/files/home/$s"
         if [ -f "$src" ]; then
-            cp -f "$src" "/data/local/bliss/helpers/$s"
-            chmod +x "/data/local/bliss/helpers/$s"
+            cp -f "$src" "/data/local/altaris/helpers/$s"
+            chmod +x "/data/local/altaris/helpers/$s"
             success "Staged $s"
         fi
     done
@@ -245,7 +245,7 @@ configure_guest_chroot() {
     success "Altaris: $DISTRO_LABEL Chroot Setup Complete!"
 
     am start -a android.intent.action.VIEW \
-        -d "fluxlinux://callback?result=success&name=distro_install_${DISTRO_LABEL}_chroot" \
+        -d "altaris://callback?result=success&name=distro_install_${DISTRO_LABEL}_chroot" \
         >/dev/null 2>&1 || true
     return 0
 }
@@ -261,9 +261,9 @@ main() {
 # resolve root BusyBox (manager built-in; NDK module not required)
 _rr=""
 for _c in \
-  "${FLUX_RESOLVE_BB:-}" \
+  "${ALTARIS_RESOLVE_BB:-}" \
   "$(dirname "$0")/resolve_bb.sh" \
-  /data/local/bliss/helpers/bliss_resolve_bb.sh
+  /data/local/altaris/helpers/altaris_resolve_bb.sh
 do
   [ -n "$_c" ] && [ -f "$_c" ] && _rr="$_c" && break
 done
@@ -274,11 +274,11 @@ if [ -n "$_rr" ]; then
 fi
 if [ -z "${BB:-}" ]; then
   # sidecar missing (desktop/uninstall/staged setup) — same B1 walk as resolve_bb
-  if [ -n "${FLUX_BB:-}" ] && [ -x "$FLUX_BB" ] &&
-     "$FLUX_BB" --list >/dev/null 2>&1; then BB="$FLUX_BB"; fi
-  if [ -z "${BB:-}" ] && [ -x /data/local/bliss/busybox/bliss_busybox ] &&
-     /data/local/bliss/busybox/bliss_busybox --list >/dev/null 2>&1; then
-    BB=/data/local/bliss/busybox/bliss_busybox
+  if [ -n "${ALTARIS_BB:-}" ] && [ -x "$ALTARIS_BB" ] &&
+     "$ALTARIS_BB" --list >/dev/null 2>&1; then BB="$ALTARIS_BB"; fi
+  if [ -z "${BB:-}" ] && [ -x /data/local/altaris/busybox/altaris_busybox ] &&
+     /data/local/altaris/busybox/altaris_busybox --list >/dev/null 2>&1; then
+    BB=/data/local/altaris/busybox/altaris_busybox
   fi
   if [ -z "${BB:-}" ]; then
     for path in \
@@ -303,15 +303,15 @@ fi
 
     progress "Using Root Busybox: $BB"
 
-    GUESTPATH="${FLUX_CHROOT:-/data/local/bliss/chroots/guest}"
+    GUESTPATH="${ALTARIS_CHROOT:-/data/local/altaris/chroots/guest}"
 
-    if { [ -f "$GUESTPATH/.bliss_configured" ] || [ -f "$GUESTPATH/.flux_configured" ]; } && \
+    if { [ -f "$GUESTPATH/.altaris_configured" ] || [ -f "$GUESTPATH/.altaris_configured" ]; } && \
        { [ -e "$GUESTPATH/bin/bash" ] || [ -e "$GUESTPATH/usr/bin/bash" ]; } && \
-       grep -q '^flux:' "$GUESTPATH/etc/passwd" 2>/dev/null; then
+       grep -q '^altaris:' "$GUESTPATH/etc/passwd" 2>/dev/null; then
         success "$DISTRO_LABEL Chroot already installed."
         progress "VERIFY: chroot present at $GUESTPATH"
         am start -a android.intent.action.VIEW \
-            -d "fluxlinux://callback?result=success&name=distro_install_${DISTRO_LABEL}_chroot" \
+            -d "altaris://callback?result=success&name=distro_install_${DISTRO_LABEL}_chroot" \
             >/dev/null 2>&1 || true
         exit 0
     fi

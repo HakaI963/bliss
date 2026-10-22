@@ -271,7 +271,7 @@ def copy_to_jni_libs(extract_dir: Path, target_prefix: str, jni_dir: Path) -> No
 
 
 def assert_no_wrong_prefix(extract_dir: Path, package_name: str) -> None:
-    """Ensure archive root is for this package, not another FluxLinux id / termux."""
+    """Ensure archive root is for this package, not another AltarisLinux id / termux."""
     expected = extract_dir / f"data/data/{package_name}/files"
     if not expected.is_dir():
         # list what we got

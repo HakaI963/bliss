@@ -25,7 +25,7 @@ APP_SRC="$ROOT/app/src"
 declare -A FLAVOR_FOR_ID=(
   [com.ivarna.fluxlinux]=ivarna
   [com.zenithblue.fluxlinux]=zenithblue
-  [com.nopiece.bliss]=bliss
+  [com.nopiece.bliss]=altaris
 )
 
 usage() {

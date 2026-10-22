@@ -32,7 +32,7 @@ PKGS=(
 )
 
 # Shared system stack the KDE session needs just like XFCE does (X server, VNC,
-# D-Bus session bus, sudo for the flux user). Installed here too so a KDE-only
+# D-Bus session bus, sudo for the altaris user). Installed here too so a KDE-only
 # install works even when setup_debian_family.sh never ran.
 BASE_PKGS=(
     sudo
@@ -83,8 +83,8 @@ if [ "$1" = "uninstall" ] || [ "$2" = "uninstall" ]; then
 
     # Remove KDE-specific marker and runtime env helper only.
     # Never remove /home/flux/.vnc — that file belongs to the XFCE component too.
-    rm -f /home/flux/.fluxlinux/kde_installed
-    rm -f /usr/local/lib/fluxlinux/bliss_kde_env.sh
+    rm -f /home/flux/.altarislinux/kde_installed
+    rm -f /usr/local/lib/altarislinux/altaris_kde_env.sh
 
     echo "Altaris: KDE Plasma Environment Uninstalled."
     exit 0
@@ -92,14 +92,14 @@ fi
 # ─── END UNINSTALL MODE ──────────────────────────────────────────────────
 
 DISTRO_NAME="${1:-debian}"
-LOG_FILE="/tmp/fluxlinux_kde_install.log"
+LOG_FILE="/tmp/altarislinux_kde_install.log"
 
 # ── Error Handler ────────────────────────────────────────────────────────
 # Never block on stdin: component sessions (GuestSessionFactory) attach a pty,
 # so "[ -t 0 ]" is true and a bare `read` hangs the terminal tab forever and
-# the install never reports completion. Pauses are opt-in (FLUX_INTERACTIVE=1).
-_flux_pause() {
-    if [ "${FLUX_INTERACTIVE:-0}" = "1" ] && [ -t 0 ]; then
+# the install never reports completion. Pauses are opt-in (ALTARIS_INTERACTIVE=1).
+_altaris_pause() {
+    if [ "${ALTARIS_INTERACTIVE:-0}" = "1" ] && [ -t 0 ]; then
         read -p "$1"
     fi
 }
@@ -113,18 +113,18 @@ handle_error() {
     echo ""
     echo "Please copy the log content and send it to the developer:"
     echo "  Email: abhay02delhi@gmail.com"
-    echo "  GitHub: https://github.com/HakaI963/bliss/issues"
+    echo "  GitHub: https://github.com/HakaI963/altaris/issues"
     echo "──────────────────────────────────────────────────────"
-    _flux_pause "Press Enter to acknowledge error and exit..."
+    _altaris_pause "Press Enter to acknowledge error and exit..."
 
     exit 1
 }
 
 # ── Required-package retry (flaky downloads abort xbps/dnf/apt mid-fetch) ──
-# The shared helpers (_flux_retry_pkg in bliss_guest_common.sh) are not
+# The shared helpers (_altaris_retry_pkg in altaris_guest_common.sh) are not
 # prepended to this standalone component, so carry the same guarded helper.
-if ! command -v _flux_pm_refresh >/dev/null 2>&1; then
-    _flux_pm_refresh() {
+if ! command -v _altaris_pm_refresh >/dev/null 2>&1; then
+    _altaris_pm_refresh() {
         if command -v xbps-install >/dev/null 2>&1; then
             xbps-install -Sy
         elif command -v apk >/dev/null 2>&1; then
@@ -144,8 +144,8 @@ if ! command -v _flux_pm_refresh >/dev/null 2>&1; then
         fi
     }
 fi
-if ! command -v _flux_retry_pkg >/dev/null 2>&1; then
-    _flux_retry_pkg() {
+if ! command -v _altaris_retry_pkg >/dev/null 2>&1; then
+    _altaris_retry_pkg() {
         _retry_tries=3
         _retry_n=1
         _retry_rc=0
@@ -158,7 +158,7 @@ if ! command -v _flux_retry_pkg >/dev/null 2>&1; then
             fi
             [ "$_retry_n" -lt "$_retry_tries" ] || break
             echo "Altaris: Package download failed — retrying ($((_retry_n + 1))/$_retry_tries)…"
-            _flux_pm_refresh >/dev/null 2>&1 || true
+            _altaris_pm_refresh >/dev/null 2>&1 || true
             _retry_n=$((_retry_n + 1))
         done
         unset _retry_tries _retry_n
@@ -189,7 +189,7 @@ echo "[2/7] Installing KDE Plasma desktop (full suite)..."
 # Includes: plasmashell, kwin, systemsettings, dolphin, konsole, kate, ark,
 #           gwenview, okular, spectacle, kcalc, kscreen, kinfocenter, and more.
 # Recommends stay enabled — that is what makes the desktop actually usable.
-if ! _flux_retry_pkg apt install -y "${PKGS[@]}" "${BASE_PKGS[@]}"; then
+if ! _altaris_retry_pkg apt install -y "${PKGS[@]}" "${BASE_PKGS[@]}"; then
     echo "Altaris: Package install failed after 3 tries — check your network, then tap Retry Setup."
     handle_error "KDE Plasma package installation"
 fi
@@ -198,12 +198,12 @@ fi
 echo "[3/7] Installing KDE extras..."
 apt install -y --no-install-recommends "${EXTRA_PKGS[@]}" 2>/dev/null || true
 
-# 3. Create user 'flux' (idempotent — setup_debian_family.sh may have made it)
-echo "[4/7] Creating user flux..."
-if ! id "flux" &>/dev/null; then
-    useradd -m -s /bin/bash flux || handle_error "Create user flux"
-    echo "flux:flux" | chpasswd
-    usermod -aG sudo flux 2>/dev/null || true
+# 3. Create user 'altaris' (idempotent — setup_debian_family.sh may have made it)
+echo "[4/7] Creating user altaris..."
+if ! id "altaris" &>/dev/null; then
+    useradd -m -s /bin/bash altaris || handle_error "Create user altaris"
+    echo "altaris:altaris" | chpasswd
+    usermod -aG sudo altaris 2>/dev/null || true
 fi
 
 # 4. Configure Sudo NOPASSWD (mkdir first — /etc/sudoers.d needs the sudo pkg,
@@ -212,7 +212,7 @@ fi
 echo "[5/7] Configuring sudo..."
 mkdir -p /etc/sudoers.d || handle_error "Configure sudo"
 rm -f /etc/sudoers.d/flux 2>/dev/null || true
-echo "flux ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/flux || handle_error "Configure sudo"
+echo "altaris ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/flux || handle_error "Configure sudo"
 chmod 440 /etc/sudoers.d/flux 2>/dev/null || true
 
 # 5. Configure VNC for KDE (xstartup)
@@ -226,10 +226,10 @@ xrdb $HOME/.Xresources 2>/dev/null
 exec startplasma-x11
 VNCEOF
 chmod +x /home/flux/.vnc/xstartup
-chown -R flux:flux /home/flux/.vnc
+chown -R altaris:altaris /home/flux/.vnc
 
 # Compositing + effects off system-wide by default (XFCE parity; GPU accel path).
-# Per-user config is kept in sync at session start (bliss_kde_env.sh).
+# Per-user config is kept in sync at session start (altaris_kde_env.sh).
 mkdir -p /etc/xdg
 [ -e /etc/xdg/kwinrc ] || cat > /etc/xdg/kwinrc << 'KWEOF'
 [Compositing]
@@ -249,9 +249,9 @@ systemctl disable sddm 2>/dev/null || true
 
 # 7. Mark as KDE-capable environment
 echo "[7/7] Marking installation complete..."
-mkdir -p /home/flux/.fluxlinux
-touch /home/flux/.fluxlinux/kde_installed
-chown -R flux:flux /home/flux/.fluxlinux
+mkdir -p /home/flux/.altarislinux
+touch /home/flux/.altarislinux/kde_installed
+chown -R altaris:altaris /home/flux/.altarislinux
 
 echo ""
 echo "✅ Altaris: KDE Plasma base setup for ${DISTRO_NAME} complete!"

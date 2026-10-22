@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # upload_rootfs_release.sh — verify + upload the 12 distro rootfs tarballs to the
-# GitHub release tag `rootfs` (FluxLinux rootfs SSOT host, plan
+# GitHub release tag `rootfs` (AltarisLinux rootfs SSOT host, plan
 # docs/plans/rootfs-github-release-no-apk-bloat.md P0).
 #
 # Usage:
@@ -15,7 +15,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RELEASE_TAG="rootfs"
 ASSET_DIR="$ROOT/assets/rootfs"
-REPO="${FLUX_REPO:-abhay-byte/fluxlinux}"
+REPO="${ALTARIS_REPO:-abhay-byte/altarislinux}"
 BASE_URL="https://github.com/$REPO/releases/download/$RELEASE_TAG"
 
 # <release filename>|<sha256>
@@ -66,7 +66,7 @@ remote_digest() {
     | sed 's/^sha256://' | tr '[:upper:]' '[:lower:]' || true
 }
 
-echo "=== FluxLinux rootfs release verification ($RELEASE_TAG) ==="
+echo "=== AltarisLinux rootfs release verification ($RELEASE_TAG) ==="
 
 FAIL=0
 SUMS_FILE="$(mktemp)"
@@ -179,7 +179,7 @@ gh_upload "$sha256sums_path" --clobber
 
 echo ""
 echo "=== release title ==="
-gh release edit "$RELEASE_TAG" --repo "$REPO" --title "FluxLinux rootfs (12 distros)" 2>/dev/null \
+gh release edit "$RELEASE_TAG" --repo "$REPO" --title "AltarisLinux rootfs (12 distros)" 2>/dev/null \
   || echo "WARN: could not edit release title"
 
 echo ""

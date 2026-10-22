@@ -1,7 +1,7 @@
 #!/bin/sh
 # setup_pulse_guest.sh — one-shot guest Pulse *client* repair (existing installs).
 # Host Pulse stays in the app PREFIX. Do not start a guest daemon / PipeWire-Pulse.
-# Prefers bliss_guest_common.sh when staged next to this script.
+# Prefers altaris_guest_common.sh when staged next to this script.
 
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 unset LD_LIBRARY_PATH
@@ -9,9 +9,9 @@ unset LD_PRELOAD
 
 _here=$(CDPATH= cd -- "$(dirname -- "$0")" 2>/dev/null && pwd)
 for _common in \
-    "${_here}/bliss_guest_common.sh" \
-    /tmp/bliss_guest_common.sh \
-    /usr/local/lib/fluxlinux/bliss_guest_common.sh
+    "${_here}/altaris_guest_common.sh" \
+    /tmp/altaris_guest_common.sh \
+    /usr/local/lib/altarislinux/altaris_guest_common.sh
 do
     if [ -f "$_common" ]; then
         # shellcheck source=/dev/null
@@ -20,13 +20,13 @@ do
     fi
 done
 
-if ! command -v _flux_setup_pulse >/dev/null 2>&1; then
-    echo "Altaris: [AUDIO] ERROR bliss_guest_common.sh not staged — cannot repair guest"
+if ! command -v _altaris_setup_pulse >/dev/null 2>&1; then
+    echo "Altaris: [AUDIO] ERROR altaris_guest_common.sh not staged — cannot repair guest"
     exit 0
 fi
 
-_flux_setup_pulse
-_have=$(_flux_guest_pactl || true)
+_altaris_setup_pulse
+_have=$(_altaris_guest_pactl || true)
 if [ -n "$_have" ]; then
     echo "Altaris: [AUDIO] guest pactl=$_have"
     exit 0

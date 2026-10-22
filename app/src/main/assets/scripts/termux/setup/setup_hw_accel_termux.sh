@@ -20,7 +20,7 @@ CALLBACK_NAME="hw_accel"
 send_callback() {
     RESULT="$1"
     am start -a android.intent.action.VIEW \
-      -d "fluxlinux://callback?result=${RESULT}&name=${CALLBACK_NAME}" \
+      -d "altaris://callback?result=${RESULT}&name=${CALLBACK_NAME}" \
       --flags 0x10000000 2>/dev/null || true
 }
 
@@ -144,8 +144,8 @@ if [ "$VULKAN_OK" -ne 1 ]; then
 fi
 
 # Save detection result for start scripts to use
-mkdir -p "$HOME/.fluxlinux"
-echo "FLUX_GPU_BACKEND=$GPU_BACKEND" > "$HOME/.fluxlinux/gpu_config"
+mkdir -p "$HOME/.altarislinux"
+echo "ALTARIS_GPU_BACKEND=$GPU_BACKEND" > "$HOME/.altarislinux/gpu_config"
 
 case "$GPU_BACKEND" in
     turnip)
@@ -161,14 +161,14 @@ esac
 # ── Step 5: Write GPU config helper ──────────────────────
 echo ""
 echo "===== Writing GPU Config Helper ====="
-cat > "$HOME/.fluxlinux/start_virgl.sh" << 'GPUEOF'
+cat > "$HOME/.altarislinux/start_virgl.sh" << 'GPUEOF'
 #!/bin/bash
 # Altaris GPU Acceleration Starter
 # Auto-sourced by start_xfce4_termux.sh and start_kde_termux.sh
 
-GPU_CONFIG="$HOME/.fluxlinux/gpu_config"
+GPU_CONFIG="$HOME/.altarislinux/gpu_config"
 GPU_BACKEND="virgl"
-[ -f "$GPU_CONFIG" ] && source "$GPU_CONFIG" && GPU_BACKEND="${FLUX_GPU_BACKEND:-virgl}"
+[ -f "$GPU_CONFIG" ] && source "$GPU_CONFIG" && GPU_BACKEND="${ALTARIS_GPU_BACKEND:-virgl}"
 
 # Kill any previous virgl server
 pkill -f "virgl_test_server" 2>/dev/null || true
@@ -207,8 +207,8 @@ export MESA_GLES_VERSION_OVERRIDE=3.2
 
 echo "Altaris: GPU acceleration active [$GPU_BACKEND]"
 GPUEOF
-chmod +x "$HOME/.fluxlinux/start_virgl.sh"
-echo " [✅] GPU config helper written to ~/.fluxlinux/start_virgl.sh"
+chmod +x "$HOME/.altarislinux/start_virgl.sh"
+echo " [✅] GPU config helper written to ~/.altarislinux/start_virgl.sh"
 
 # ── Verification ─────────────────────────────────────────
 verify_installation() {
@@ -232,8 +232,8 @@ verify_installation() {
         echo " [⚠️] Vulkan libraries not found (Turnip may not work)"
     fi
 
-    if [ -f "$HOME/.fluxlinux/gpu_config" ]; then
-        echo " [✅] GPU Config: $(cat $HOME/.fluxlinux/gpu_config)"
+    if [ -f "$HOME/.altarislinux/gpu_config" ]; then
+        echo " [✅] GPU Config: $(cat $HOME/.altarislinux/gpu_config)"
     fi
 
     echo "------------------------------------------------"
@@ -243,7 +243,7 @@ verify_installation() {
     else
         echo "🎉 Hardware acceleration configured!"
         echo "   Backend: $GPU_BACKEND"
-        echo "   Config saved to: ~/.fluxlinux/gpu_config"
+        echo "   Config saved to: ~/.altarislinux/gpu_config"
         return 0
     fi
 }

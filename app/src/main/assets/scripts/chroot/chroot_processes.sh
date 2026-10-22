@@ -9,10 +9,10 @@
 # Exit: list/kill 0; reap 0 if clean, 2 if residual; 1 root/unknown.
 
 CMD="${1:-list}"
-CHROOT_PATH="${2:-/data/local/bliss/chroots/debian}"
+CHROOT_PATH="${2:-/data/local/altaris/chroots/debian}"
 
 case "$CHROOT_PATH" in
-  ""|"/"|"/data"|"/data/"|"/data/local"|"/data/local/"|"/data/local/bliss"|"/data/local/bliss/")
+  ""|"/"|"/data"|"/data/"|"/data/local"|"/data/local/"|"/data/local/altaris"|"/data/local/altaris/")
     printf '%s\n' "# chroot_processes v1"
     printf '%s\n' "# path=$CHROOT_PATH"
     printf '%s\n' "# error=refused_path"

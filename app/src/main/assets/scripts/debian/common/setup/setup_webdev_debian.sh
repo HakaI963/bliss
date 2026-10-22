@@ -176,9 +176,9 @@ chmod +x /usr/local/bin/chromium
 
 # Override system .desktop so the XFCE app menu also uses the wrapper flags
 # User-level overrides take priority over /usr/share/applications/
-FLUX_LOCAL_APPS="/home/flux/.local/share/applications"
-mkdir -p "$FLUX_LOCAL_APPS"
-cat > "$FLUX_LOCAL_APPS/chromium.desktop" << 'EOF'
+ALTARIS_LOCAL_APPS="/home/flux/.local/share/applications"
+mkdir -p "$ALTARIS_LOCAL_APPS"
+cat > "$ALTARIS_LOCAL_APPS/chromium.desktop" << 'EOF'
 [Desktop Entry]
 Name=Chromium Web Browser
 Comment=Access the Internet
@@ -191,7 +191,7 @@ MimeType=text/html;text/xml;application/xhtml+xml;x-scheme-handler/http;x-scheme
 StartupNotify=true
 Categories=Network;WebBrowser;
 EOF
-chown -R flux:users "$FLUX_LOCAL_APPS" 2>/dev/null || true
+chown -R altaris:users "$ALTARIS_LOCAL_APPS" 2>/dev/null || true
 echo "Altaris: Chromium wrapper applied."
 
 
@@ -289,7 +289,7 @@ if ! command -v code &> /dev/null; then
     rm -f /tmp/vscode.tar.gz
     
     # Fix for running VS Code in Proot (--no-sandbox wrapper)
-    # We append the alias to .bashrc for the flux user
+    # We append the alias to .bashrc for the altaris user
     echo "alias code='code --no-sandbox --unity-launch'" >> /home/flux/.bashrc
     
     # Create Desktop Entry (so it appears in the menu)
@@ -327,7 +327,7 @@ cat <<'VSCODE_SETTINGS' > /home/flux/.config/Code/User/settings.json
     "extensions.verifySignature": false
 }
 VSCODE_SETTINGS
-chown -R flux:$(id -gn flux 2>/dev/null || echo "flux") /home/flux/.config
+chown -R altaris:$(id -gn altaris 2>/dev/null || echo "altaris") /home/flux/.config
 
 
 

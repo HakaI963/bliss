@@ -4,7 +4,7 @@
 #
 # Locations (per docs/plans/rootfs-github-release-no-apk-bloat.md §4.1):
 #   1. app/src/main/kotlin/.../DistroInstallProfile.kt (SSOT)
-#   2. app/src/main/assets/scripts/debian/proot/setup/flux_install.sh
+#   2. app/src/main/assets/scripts/debian/proot/setup/altaris_install.sh
 #   3. app/src/main/assets/scripts/chroot/setup_debian13_chroot.sh (debian)
 #   4. app/src/main/assets/scripts/chroot/setup_alpine_chroot.sh   (alpine)
 #   5. scripts/upload_rootfs_release.sh (release mirror)
@@ -14,8 +14,8 @@
 set -u
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-KOTLIN="$ROOT/app/src/main/kotlin/com/ivarna/fluxlinux/core/install/DistroInstallProfile.kt"
-FLUX_INSTALL="$ROOT/app/src/main/assets/scripts/debian/proot/setup/flux_install.sh"
+KOTLIN="$ROOT/app/src/main/kotlin/com/ivarna/altarislinux/core/install/DistroInstallProfile.kt"
+ALTARIS_INSTALL="$ROOT/app/src/main/assets/scripts/debian/proot/setup/altaris_install.sh"
 DEBIAN_CHROOT="$ROOT/app/src/main/assets/scripts/chroot/setup_debian13_chroot.sh"
 ALPINE_CHROOT="$ROOT/app/src/main/assets/scripts/chroot/setup_alpine_chroot.sh"
 UPLOAD="$ROOT/scripts/upload_rootfs_release.sh"
@@ -43,22 +43,22 @@ parse_kotlin() {
   ' "$KOTLIN"
 }
 
-# flux_install.sh: sequential ROOTFS_NAME / ROOTFS_SHA256 pairs per case block.
-parse_flux_install() {
+# altaris_install.sh: sequential ROOTFS_NAME / ROOTFS_SHA256 pairs per case block.
+parse_altaris_install() {
   awk '
-    /ROOTFS_NAME="\$\{FLUX_ROOTFS_NAME:-/ {
-      n = $0; sub(/^.*ROOTFS_NAME="\$\{FLUX_ROOTFS_NAME:-/, "", n); sub(/\}".*$/, "", n)
+    /ROOTFS_NAME="\$\{ALTARIS_ROOTFS_NAME:-/ {
+      n = $0; sub(/^.*ROOTFS_NAME="\$\{ALTARIS_ROOTFS_NAME:-/, "", n); sub(/\}".*$/, "", n)
       names[++cnt] = n
     }
-    /ROOTFS_SHA256="\$\{FLUX_ROOTFS_SHA256:-/ {
-      s = $0; sub(/^.*ROOTFS_SHA256="\$\{FLUX_ROOTFS_SHA256:-/, "", s); sub(/\}".*$/, "", s)
+    /ROOTFS_SHA256="\$\{ALTARIS_ROOTFS_SHA256:-/ {
+      s = $0; sub(/^.*ROOTFS_SHA256="\$\{ALTARIS_ROOTFS_SHA256:-/, "", s); sub(/\}".*$/, "", s)
       shas[++cnt2] = s
     }
     END { for (i = 1; i <= cnt; i++) if (names[i] != "" && shas[i] != "") print names[i] "|" shas[i] }
-  ' "$FLUX_INSTALL"
+  ' "$ALTARIS_INSTALL"
 }
 
-# chroot scripts: ROOTFS_NAME="name" + ROOTFS_SHA256="hex" / ${FLUX_ROOTFS_SHA256:-hex}.
+# chroot scripts: ROOTFS_NAME="name" + ROOTFS_SHA256="hex" / ${ALTARIS_ROOTFS_SHA256:-hex}.
 parse_chroot_script() {
   local f="$1"
   awk '
@@ -67,7 +67,7 @@ parse_chroot_script() {
     }
     /^ROOTFS_SHA256="/ {
       s = $0
-      sub(/^ROOTFS_SHA256="\$\{FLUX_ROOTFS_SHA256:-/, "", s)
+      sub(/^ROOTFS_SHA256="\$\{ALTARIS_ROOTFS_SHA256:-/, "", s)
       sub(/^ROOTFS_SHA256="/, "", s)
       sub(/\}".*$/, "", s)
       if (name != "") print name "|" s
@@ -90,7 +90,7 @@ parse_upload() {
 # --- collect ------------------------------------------------------------------
 
 kotlin_pins="$(parse_kotlin)"
-flux_pins="$(parse_flux_install)"
+altaris_pins="$(parse_altaris_install)"
 debian_pin="$(parse_chroot_script "$DEBIAN_CHROOT")"
 alpine_pin="$(parse_chroot_script "$ALPINE_CHROOT")"
 upload_pins="$(parse_upload)"
@@ -114,7 +114,7 @@ if [ "$(printf '%s' "$kotlin_pins" | grep -c '')" -ne 12 ]; then
   FAIL=1
 fi
 
-check_pairs "flux_install.sh" "$flux_pins" "$kotlin_pins"
+check_pairs "altaris_install.sh" "$altaris_pins" "$kotlin_pins"
 check_pairs "scripts/upload_rootfs_release.sh" "$upload_pins" "$kotlin_pins"
 
 # Dedicated chroot scripts only pin their own distro.

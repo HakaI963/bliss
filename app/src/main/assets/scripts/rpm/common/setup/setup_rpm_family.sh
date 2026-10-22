@@ -1,13 +1,13 @@
 #!/bin/sh
 
-# Helpers live in bliss_guest_common.sh (prepended by bliss_install /
+# Helpers live in altaris_guest_common.sh (prepended by altaris_install /
 # familySetupPayload). Source it only when this file is run standalone.
-if ! command -v _flux_setup_pulse >/dev/null 2>&1; then
+if ! command -v _altaris_setup_pulse >/dev/null 2>&1; then
     _here=$(CDPATH= cd -- "$(dirname -- "$0")" 2>/dev/null && pwd)
     for _common in \
-        "${_here}/bliss_guest_common.sh" \
-        "${HOME:-}/bliss_guest_common.sh" \
-        /tmp/bliss_guest_common.sh
+        "${_here}/altaris_guest_common.sh" \
+        "${HOME:-}/altaris_guest_common.sh" \
+        /tmp/altaris_guest_common.sh
     do
         if [ -f "$_common" ]; then
             # shellcheck source=/dev/null
@@ -17,7 +17,7 @@ if ! command -v _flux_setup_pulse >/dev/null 2>&1; then
     done
 fi
 # Degraded standalone run without the shared helpers: plain install (no retry).
-command -v _flux_retry_pkg >/dev/null 2>&1 || _flux_retry_pkg() { "$@"; }
+command -v _altaris_retry_pkg >/dev/null 2>&1 || _altaris_retry_pkg() { "$@"; }
 
 # setup_rpm_family.sh — Rocky Linux 9 / CentOS Stream 9 base + XFCE (proot).
 # ONE shared RPM-family (dnf/EPEL) setup for both EL9 cards; the os-release ID
@@ -58,9 +58,9 @@ export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin${PATH:
 unset LD_LIBRARY_PATH
 unset LD_PRELOAD
 
-_flux_ensure_tmp
-_flux_ensure_dns
-_flux_disable_guest_selinux
+_altaris_ensure_tmp
+_altaris_ensure_dns
+_altaris_disable_guest_selinux
 
 DNF="dnf"
 if command -v dnf5 >/dev/null 2>&1; then
@@ -87,14 +87,14 @@ if [ ! -e /etc/pki/tls/cert.pem ] && [ -f /etc/pki/ca-trust/extracted/pem/tls-ca
     ln -sfn /etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem /etc/ssl/cert.pem
 fi
 
-_flux_log "dnf makecache ($DNF)..."
-_flux_retry_pkg $DNF -y --setopt=install_weak_deps=False makecache || {
+_altaris_log "dnf makecache ($DNF)..."
+_altaris_retry_pkg $DNF -y --setopt=install_weak_deps=False makecache || {
     echo "Altaris: dnf makecache failed (network / repos)"
     exit 1
 }
 
-_flux_log "Installing base packages..."
-_flux_retry_pkg $DNF $DNF_OPTS install \
+_altaris_log "Installing base packages..."
+_altaris_retry_pkg $DNF $DNF_OPTS install \
     bash sudo shadow-utils util-linux passwd ca-certificates curl wget unzip tar \
     gzip xz tzdata \
     dbus \
@@ -105,10 +105,10 @@ _flux_retry_pkg $DNF $DNF_OPTS install \
 # dbus-daemon / dbus-x11 subpackages vary across EL9 images — best-effort.
 $DNF $DNF_OPTS install dbus-daemon dbus-x11 2>/dev/null || true
 
-_flux_ensure_dbus
+_altaris_ensure_dbus
 
 # Resolve desktop choice before graphics so a terminal base skips Mesa/icons.
-DESKTOPS="${FLUX_DESKTOPS:-${FLUX_DESKTOP:-${FLUX_DESKTOP_ENV:-xfce}}}"
+DESKTOPS="${ALTARIS_DESKTOPS:-${ALTARIS_DESKTOP:-${ALTARIS_DESKTOP_ENV:-xfce}}}"
 DESKTOPS=$(printf '%s' "$DESKTOPS" | tr ',' ' ')
 DESKTOPS=$(printf '%s' "$DESKTOPS" | tr -s '[:space:]' ' ')
 case " $DESKTOPS " in *" xfce "*|*" xfce4 "*) _norm="xfce" ;; *) _norm="" ;; esac
@@ -119,7 +119,7 @@ unset _norm
 
 # Shared fonts, GTK schemas + Mesa — desktop-only payload.
 if [ "$DESKTOPS" != "none" ]; then
-    _flux_retry_pkg $DNF $DNF_OPTS install \
+    _altaris_retry_pkg $DNF $DNF_OPTS install \
         adwaita-icon-theme dejavu-sans-fonts \
         gsettings-desktop-schemas \
         mesa-dri-drivers mesa-libGL mesa-libEGL \
@@ -129,11 +129,11 @@ if [ "$DESKTOPS" != "none" ]; then
         }
 fi
 
-# Desktop contract: FLUX_DESKTOPS (space/comma separated) = xfce | kde | none;
-# legacy FLUX_DESKTOP / FLUX_DESKTOP_ENV remain valid single values. Unset/empty
+# Desktop contract: ALTARIS_DESKTOPS (space/comma separated) = xfce | kde | none;
+# legacy ALTARIS_DESKTOP / ALTARIS_DESKTOP_ENV remain valid single values. Unset/empty
 # → xfce (backward compat). Normalized to the canonical "xfce kde" order;
 # unknown tokens are ignored and "none" installs neither desktop.
-DESKTOPS="${FLUX_DESKTOPS:-${FLUX_DESKTOP:-${FLUX_DESKTOP_ENV:-xfce}}}"
+DESKTOPS="${ALTARIS_DESKTOPS:-${ALTARIS_DESKTOP:-${ALTARIS_DESKTOP_ENV:-xfce}}}"
 DESKTOPS=$(printf '%s' "$DESKTOPS" | tr ',' ' ')
 DESKTOPS=$(printf '%s' "$DESKTOPS" | tr -s '[:space:]' ' ')
 DESKTOPS="${DESKTOPS# }"
@@ -151,10 +151,10 @@ if [ -z "${DESKTOPS##*kde*}" ]; then
 fi
 
 if [ -z "${DESKTOPS##*xfce*}" ]; then
-    _flux_log "Installing XFCE4 (EPEL)..."
+    _altaris_log "Installing XFCE4 (EPEL)..."
     # EPEL carries the Xfce stack on EL9. Retry the repo package so a flaky
     # link cannot abort the desktop install.
-    if ! _flux_retry_pkg $DNF $DNF_OPTS install epel-release; then
+    if ! _altaris_retry_pkg $DNF $DNF_OPTS install epel-release; then
         echo "Altaris: WARNING: epel-release install failed — XFCE packages may be unavailable"
     fi
     # Import the EPEL key explicitly: scriptlets are skipped (tsflags=noscripts)
@@ -166,22 +166,22 @@ if [ -z "${DESKTOPS##*xfce*}" ]; then
     # CRB (CodeReady Builder) provides Xfce dependencies on EL9: disabled by
     # default on Rocky, enabled by default on CentOS Stream. The command is
     # idempotent and tolerant (missing plugin / repo id → no-op).
-    _flux_retry_pkg $DNF $DNF_OPTS install dnf-plugins-core 2>/dev/null || true
+    _altaris_retry_pkg $DNF $DNF_OPTS install dnf-plugins-core 2>/dev/null || true
     $DNF config-manager --set-enabled crb 2>/dev/null || true
 
     XFCE_OK=0
-    if _flux_retry_pkg $DNF $DNF_OPTS groupinstall "Xfce"; then
+    if _altaris_retry_pkg $DNF $DNF_OPTS groupinstall "Xfce"; then
         XFCE_OK=1
     fi
     if [ "$XFCE_OK" -ne 1 ]; then
         echo "Altaris: Xfce group unavailable — trying the @xfce group id"
-        if _flux_retry_pkg $DNF $DNF_OPTS install @xfce; then
+        if _altaris_retry_pkg $DNF $DNF_OPTS install @xfce; then
             XFCE_OK=1
         fi
     fi
     if [ "$XFCE_OK" -ne 1 ]; then
         echo "Altaris: Xfce group unavailable — installing the explicit package set"
-        if _flux_retry_pkg $DNF $DNF_OPTS install \
+        if _altaris_retry_pkg $DNF $DNF_OPTS install \
             xfce4-session xfce4-panel xfce4-settings xfce4-terminal \
             xfdesktop xfwm4 thunar; then
             XFCE_OK=1
@@ -242,38 +242,38 @@ if ! ls /usr/lib/locale 2>/dev/null | grep -qi 'en_US'; then
     localedef -i en_US -f UTF-8 en_US.UTF-8 || true
 fi
 printf 'LANG=en_US.UTF-8\n' > /etc/locale.conf
-if command -v _flux_ensure_en_us_locale >/dev/null 2>&1; then
-    _flux_ensure_en_us_locale || exit 1
+if command -v _altaris_ensure_en_us_locale >/dev/null 2>&1; then
+    _altaris_ensure_en_us_locale || exit 1
 fi
 
 if [ -z "${DESKTOPS##*xfce*}" ]; then
-    _flux_require_startxfce4
+    _altaris_require_startxfce4
 fi
-_flux_ensure_user
-_flux_ensure_sudo
-_flux_ensure_home
-_flux_setup_pulse
-_flux_write_gpu_mode virgl
-_flux_fix_pm_writable
+_altaris_ensure_user
+_altaris_ensure_sudo
+_altaris_ensure_home
+_altaris_setup_pulse
+_altaris_write_gpu_mode virgl
+_altaris_fix_pm_writable
 
 # Terminal-base polish shared with the other families. The helper ships in the
 # customization scripts, not in this payload — guarded no-op when absent.
-if command -v _flux_write_folio_banner >/dev/null 2>&1; then
-    _flux_write_folio_banner /home/flux 2>/dev/null || true
-    _flux_write_folio_banner /root 2>/dev/null || true
+if command -v _altaris_write_altaris_banner >/dev/null 2>&1; then
+    _altaris_write_altaris_banner /home/flux 2>/dev/null || true
+    _altaris_write_altaris_banner /root 2>/dev/null || true
 fi
 
 # Phone-compact XFCE defaults (30px mono top panel, DPI 96, wallpaper,
-# Home-only desktop icons, shortcuts). Helper ships in bliss_guest_common.sh;
+# Home-only desktop icons, shortcuts). Helper ships in altaris_guest_common.sh;
 # guarded so a standalone run without it is a no-op and never fails install.
-if [ -z "${DESKTOPS##*xfce*}" ] && command -v _flux_xfce_compact_defaults >/dev/null 2>&1; then
-    _flux_xfce_compact_defaults || true
+if [ -z "${DESKTOPS##*xfce*}" ] && command -v _altaris_xfce_compact_defaults >/dev/null 2>&1; then
+    _altaris_xfce_compact_defaults || true
 fi
 
 
 # Altaris universal interactive shell: zsh suggestions, syntax colors, sticker.
-if command -v _flux_setup_altaris_shell >/dev/null 2>&1; then
-    _flux_setup_altaris_shell || true
+if command -v _altaris_setup_altaris_shell >/dev/null 2>&1; then
+    _altaris_setup_altaris_shell || true
 fi
 
 echo "Altaris: ${DISTRO_NAME} RPM setup complete!"

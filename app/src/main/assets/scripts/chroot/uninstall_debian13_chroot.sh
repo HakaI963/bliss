@@ -3,8 +3,8 @@
 # Uninstalls Debian 13 (Trixie) Chroot environment (Requires Root)
 
 # Paths (Must match setup_debian13_chroot.sh)
-DEBIANPATH="/data/local/bliss/chroots/debian"
-LAUNCH_SCRIPTS="/data/local/bliss/helpers/start_debian13.sh /data/local/bliss/helpers/start_debian13_gui.sh /data/local/bliss/helpers/enter_debian13.sh /data/local/bliss/helpers/enter_debian13_root.sh /data/local/bliss/helpers/run_debian13_root.sh /data/local/bliss/helpers/stop_debian13_gui.sh /data/local/bliss/helpers/uninstall_debian13_chroot.sh /data/local/bliss/helpers/bliss_chroot.sh"
+DEBIANPATH="/data/local/altaris/chroots/debian"
+LAUNCH_SCRIPTS="/data/local/altaris/helpers/start_debian13.sh /data/local/altaris/helpers/start_debian13_gui.sh /data/local/altaris/helpers/enter_debian13.sh /data/local/altaris/helpers/enter_debian13_root.sh /data/local/altaris/helpers/run_debian13_root.sh /data/local/altaris/helpers/stop_debian13_gui.sh /data/local/altaris/helpers/uninstall_debian13_chroot.sh /data/local/altaris/helpers/altaris_chroot.sh"
 
 # Error Handler
 error() {
@@ -32,9 +32,9 @@ progress "Target: $DEBIANPATH"
 # resolve root BusyBox (manager built-in; NDK module not required)
 _rr=""
 for _c in \
-  "${FLUX_RESOLVE_BB:-}" \
+  "${ALTARIS_RESOLVE_BB:-}" \
   "$(dirname "$0")/resolve_bb.sh" \
-  /data/local/bliss/helpers/bliss_resolve_bb.sh
+  /data/local/altaris/helpers/altaris_resolve_bb.sh
 do
   [ -n "$_c" ] && [ -f "$_c" ] && _rr="$_c" && break
 done
@@ -44,11 +44,11 @@ if [ -n "$_rr" ]; then
   resolve_bb || true
 fi
 if [ -z "${BB:-}" ]; then
-  if [ -n "${FLUX_BB:-}" ] && [ -x "$FLUX_BB" ] &&
-     "$FLUX_BB" --list >/dev/null 2>&1; then BB="$FLUX_BB"; fi
-  if [ -z "${BB:-}" ] && [ -x /data/local/bliss/busybox/bliss_busybox ] &&
-     /data/local/bliss/busybox/bliss_busybox --list >/dev/null 2>&1; then
-    BB=/data/local/bliss/busybox/bliss_busybox
+  if [ -n "${ALTARIS_BB:-}" ] && [ -x "$ALTARIS_BB" ] &&
+     "$ALTARIS_BB" --list >/dev/null 2>&1; then BB="$ALTARIS_BB"; fi
+  if [ -z "${BB:-}" ] && [ -x /data/local/altaris/busybox/altaris_busybox ] &&
+     /data/local/altaris/busybox/altaris_busybox --list >/dev/null 2>&1; then
+    BB=/data/local/altaris/busybox/altaris_busybox
   fi
   if [ -z "${BB:-}" ]; then
     for path in \
@@ -144,4 +144,4 @@ mount -t tracefs tracefs /sys/kernel/tracing 2>/dev/null || true
 
 # 6. Notify NativeCode App
 progress "Notifying NativeCode App..."
-/system/bin/am start -a android.intent.action.VIEW -d "fluxlinux://callback?result=success&name=distro_uninstall_debian13_chroot" >/dev/null 2>&1
+/system/bin/am start -a android.intent.action.VIEW -d "altaris://callback?result=success&name=distro_uninstall_debian13_chroot" >/dev/null 2>&1

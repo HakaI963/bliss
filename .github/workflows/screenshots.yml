@@ -41,7 +41,7 @@ jobs:
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/29.0.14206865" >> "$GITHUB_ENV"
           sdkmanager --list_installed
 
-      - name: Assemble host bootstrap (bliss flavor assets)
+      - name: Assemble host bootstrap (altaris flavor assets)
         run: |
           python3 scripts/assemble_bootstrap.py --package-name com.ivarna.fluxlinux
           chmod +x scripts/repack_bootstrap_for_appid.sh
@@ -51,7 +51,7 @@ jobs:
         run: chmod +x gradlew
 
       - name: Record Paparazzi screenshots
-        run: ./gradlew :app:recordPaparazziBlissDebug --tests 'com.ivarna.fluxlinux.design.*' --stacktrace
+        run: ./gradlew :app:recordPaparazziAltarisDebug --tests 'com.altaris.linux.design.*' --stacktrace
         env:
           ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_HOME }}
 

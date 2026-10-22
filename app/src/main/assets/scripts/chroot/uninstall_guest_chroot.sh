@@ -1,9 +1,9 @@
 #!/bin/sh
 # uninstall_guest_chroot.sh — remove a Altaris guest chroot (Requires Root)
-# Target from FLUX_CHROOT (must be set). Does not remove shared bliss_chroot.sh.
+# Target from ALTARIS_CHROOT (must be set). Does not remove shared altaris_chroot.sh.
 
-GUESTPATH="${FLUX_CHROOT:-}"
-LAUNCH_SCRIPTS="/data/local/bliss/helpers/start_guest_gui.sh /data/local/bliss/helpers/stop_guest_gui.sh"
+GUESTPATH="${ALTARIS_CHROOT:-}"
+LAUNCH_SCRIPTS="/data/local/altaris/helpers/start_guest_gui.sh /data/local/altaris/helpers/stop_guest_gui.sh"
 
 error()    { printf "\033[1;31m[!] %s\033[0m\n" "$1"; }
 success()  { printf "\033[1;32m[✓] %s\033[0m\n" "$1"; }
@@ -15,17 +15,17 @@ if [ "$(id -u)" != "0" ]; then
 fi
 
 if [ -z "$GUESTPATH" ]; then
-    error "FLUX_CHROOT is not set."
+    error "ALTARIS_CHROOT is not set."
     exit 1
 fi
 
 case "$GUESTPATH" in
-    /data/local/bliss/chroots/debian|/data/local/bliss/chroots/alpine|\
-    /data/local/bliss/chroots/fedora|/data/local/bliss/chroots/void|\
-    /data/local/bliss/chroots/opensuse|/data/local/bliss/chroots/deepin|\
-    /data/local/bliss/chroots/chimera|/data/local/bliss/chroots/manjaro|\
-    /data/local/bliss/chroots/ubuntu|/data/local/bliss/chroots/kali|\
-    /data/local/bliss/chroots/parrot|/data/local/bliss/chroots/archlinux) ;;
+    /data/local/altaris/chroots/debian|/data/local/altaris/chroots/alpine|\
+    /data/local/altaris/chroots/fedora|/data/local/altaris/chroots/void|\
+    /data/local/altaris/chroots/opensuse|/data/local/altaris/chroots/deepin|\
+    /data/local/altaris/chroots/chimera|/data/local/altaris/chroots/manjaro|\
+    /data/local/altaris/chroots/ubuntu|/data/local/altaris/chroots/kali|\
+    /data/local/altaris/chroots/parrot|/data/local/altaris/chroots/archlinux) ;;
     *)
         error "Refusing to remove unexpected path: $GUESTPATH"
         exit 1
@@ -38,9 +38,9 @@ progress "Target: $GUESTPATH"
 # resolve root BusyBox (manager built-in; NDK module not required)
 _rr=""
 for _c in \
-  "${FLUX_RESOLVE_BB:-}" \
+  "${ALTARIS_RESOLVE_BB:-}" \
   "$(dirname "$0")/resolve_bb.sh" \
-  /data/local/bliss/helpers/bliss_resolve_bb.sh
+  /data/local/altaris/helpers/altaris_resolve_bb.sh
 do
   [ -n "$_c" ] && [ -f "$_c" ] && _rr="$_c" && break
 done
@@ -50,11 +50,11 @@ if [ -n "$_rr" ]; then
   resolve_bb || true
 fi
 if [ -z "${BB:-}" ]; then
-  if [ -n "${FLUX_BB:-}" ] && [ -x "$FLUX_BB" ] &&
-     "$FLUX_BB" --list >/dev/null 2>&1; then BB="$FLUX_BB"; fi
-  if [ -z "${BB:-}" ] && [ -x /data/local/bliss/busybox/bliss_busybox ] &&
-     /data/local/bliss/busybox/bliss_busybox --list >/dev/null 2>&1; then
-    BB=/data/local/bliss/busybox/bliss_busybox
+  if [ -n "${ALTARIS_BB:-}" ] && [ -x "$ALTARIS_BB" ] &&
+     "$ALTARIS_BB" --list >/dev/null 2>&1; then BB="$ALTARIS_BB"; fi
+  if [ -z "${BB:-}" ] && [ -x /data/local/altaris/busybox/altaris_busybox ] &&
+     /data/local/altaris/busybox/altaris_busybox --list >/dev/null 2>&1; then
+    BB=/data/local/altaris/busybox/altaris_busybox
   fi
   if [ -z "${BB:-}" ]; then
     for path in \
@@ -120,7 +120,7 @@ fi
 
 success "Uninstallation Complete!"
 
-_cb="${FLUX_DISTRO_ID:-guest_chroot}"
+_cb="${ALTARIS_DISTRO_ID:-guest_chroot}"
 am start -a android.intent.action.VIEW \
-    -d "fluxlinux://callback?result=success&name=distro_uninstall_${_cb}" \
+    -d "altaris://callback?result=success&name=distro_uninstall_${_cb}" \
     >/dev/null 2>&1 || true

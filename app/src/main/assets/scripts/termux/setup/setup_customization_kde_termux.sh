@@ -33,7 +33,7 @@ echo ""
 
 # ── Directories ───────────────────────────────────────────
 mkdir -p "$HOME/.icons"
-mkdir -p "$HOME/.fluxlinux/wallpapers"
+mkdir -p "$HOME/.altarislinux/wallpapers"
 mkdir -p "$HOME/.config"
 mkdir -p "$HOME/.local/share/wallpapers"
 mkdir -p "$HOME/.local/share/konsole"
@@ -48,7 +48,7 @@ echo " [✅] Icon theme step complete"
 # ── Step 2: Wallpaper ─────────────────────────────────────
 echo ""
 echo "===== Setting Up Wallpaper ====="
-WALLPAPER_PATH="$HOME/.fluxlinux/wallpapers/flux_dark.jpg"
+WALLPAPER_PATH="$HOME/.altarislinux/wallpapers/altaris_dark.jpg"
 if [ ! -f "$WALLPAPER_PATH" ]; then
     echo " Downloading wallpaper..."
     curl -fsSL \
@@ -66,9 +66,9 @@ fi
 echo " [✅] Wallpaper ready"
 
 # ── Step 3: Theme selection ───────────────────────────────
-if [ -n "$FLUX_THEME" ]; then
-    echo "Altaris: Auto-applying Theme: $FLUX_THEME"
-    if [ "$FLUX_THEME" = "light" ]; then
+if [ -n "$ALTARIS_THEME" ]; then
+    echo "Altaris: Auto-applying Theme: $ALTARIS_THEME"
+    if [ "$ALTARIS_THEME" = "light" ]; then
         THEME_CHOICE="2"
     else
         THEME_CHOICE="1"
@@ -100,8 +100,8 @@ fi
 echo ""
 echo "===== Applying KDE Plasma Settings ====="
 KDE_CONFIG="$HOME/.config"
-WALLPAPER_DESKTOP_PATH="$HOME/.local/share/wallpapers/Folio/contents.jpg"
-mkdir -p "$KDE_CONFIG" "$HOME/.local/share/wallpapers/Folio"
+WALLPAPER_DESKTOP_PATH="$HOME/.local/share/wallpapers/Altaris/contents.jpg"
+mkdir -p "$KDE_CONFIG" "$HOME/.local/share/wallpapers/Altaris"
 cp "$WALLPAPER_PATH" "$WALLPAPER_DESKTOP_PATH" 2>/dev/null || WALLPAPER_DESKTOP_PATH="$WALLPAPER_PATH"
 
 echo "Altaris: Writing kdeglobals..."
@@ -257,7 +257,7 @@ forceFontDPI=192
 EOF
 
 echo "Altaris: Configuring Konsole..."
-cat > "$HOME/.local/share/konsole/bliss.profile" << 'EOF'
+cat > "$HOME/.local/share/konsole/altaris.profile" << 'EOF'
 [Appearance]
 ColorScheme=Breeze
 Font=Noto Sans Mono,12,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
@@ -284,7 +284,7 @@ EOF
 
 cat > "$KDE_CONFIG/konsolerc" << 'EOF'
 [Desktop Entry]
-DefaultProfile=bliss.profile
+DefaultProfile=altaris.profile
 
 [KonsoleWindow]
 RememberWindowSize=true
@@ -316,7 +316,7 @@ echo " [✅] GTK theme configured"
 
 # ── Callback to app ──────────────────────────────────────
 am start -a android.intent.action.VIEW \
-  -d "fluxlinux://callback?result=success&name=${CALLBACK_NAME}" \
+  -d "altaris://callback?result=success&name=${CALLBACK_NAME}" \
   --flags 0x10000000 2>/dev/null || true
 
 echo ""

@@ -4,8 +4,8 @@
 # and installs named Pulse *client* packages when pactl is missing.
 
 PKG="${TERMUX_APP__PACKAGE_NAME:-com.ivarna.fluxlinux}"
-_HOST_ENV="${TERMUX__PREFIX:-/data/data/${PKG}/files/usr}/etc/bliss-host.env"
-[ -r "$_HOST_ENV" ] || _HOST_ENV="${_HOST_ENV%/*}/fluxlinux-host.env"
+_HOST_ENV="${TERMUX__PREFIX:-/data/data/${PKG}/files/usr}/etc/altaris-host.env"
+[ -r "$_HOST_ENV" ] || _HOST_ENV="${_HOST_ENV%/*}/altaris-host.env"
 [ -r "$_HOST_ENV" ] && . "$_HOST_ENV"
 
 PKG="${TERMUX_APP__PACKAGE_NAME:-$PKG}"
@@ -17,7 +17,7 @@ export HOME="${TERMUX__HOME}"
 export TMPDIR="${TMPDIR:-$PREFIX/tmp}"
 export PATH="$PREFIX/bin:$PREFIX/bin/applets:/system/bin:/system/xbin${PATH:+:$PATH}"
 
-COMMON="${HOME}/bliss_guest_common.sh"
+COMMON="${HOME}/altaris_guest_common.sh"
 REPAIR="${HOME}/setup_pulse_guest.sh"
 MODE="${1:-all}"
 
@@ -27,7 +27,7 @@ if [ ! -f "$COMMON" ] || [ ! -f "$REPAIR" ]; then
 fi
 
 mkdir -p "$TMPDIR" 2>/dev/null || true
-cp -f "$COMMON" "$TMPDIR/bliss_guest_common.sh"
+cp -f "$COMMON" "$TMPDIR/altaris_guest_common.sh"
 cp -f "$REPAIR" "$TMPDIR/setup_pulse_guest.sh"
 chmod 755 "$TMPDIR/setup_pulse_guest.sh" 2>/dev/null || true
 
@@ -63,22 +63,22 @@ repair_proot() {
 }
 
 _CHROOT_PATHS="
-/data/local/bliss/chroots/debian
-/data/local/bliss/chroots/alpine
-/data/local/bliss/chroots/fedora
-/data/local/bliss/chroots/void
-/data/local/bliss/chroots/opensuse
-/data/local/bliss/chroots/deepin
-/data/local/bliss/chroots/chimera
-/data/local/bliss/chroots/manjaro
-/data/local/bliss/chroots/ubuntu
-/data/local/bliss/chroots/kali
-/data/local/bliss/chroots/parrot
-/data/local/bliss/chroots/archlinux
+/data/local/altaris/chroots/debian
+/data/local/altaris/chroots/alpine
+/data/local/altaris/chroots/fedora
+/data/local/altaris/chroots/void
+/data/local/altaris/chroots/opensuse
+/data/local/altaris/chroots/deepin
+/data/local/altaris/chroots/chimera
+/data/local/altaris/chroots/manjaro
+/data/local/altaris/chroots/ubuntu
+/data/local/altaris/chroots/kali
+/data/local/altaris/chroots/parrot
+/data/local/altaris/chroots/archlinux
 "
 
 repair_chroot_as_root() {
-  _helper=/data/local/bliss/helpers/bliss_chroot.sh
+  _helper=/data/local/altaris/helpers/altaris_chroot.sh
   if [ ! -f "$_helper" ]; then
     echo "Altaris: [AUDIO] skip chroot repair (helper missing)"
     return 0
@@ -86,11 +86,11 @@ repair_chroot_as_root() {
   for _path in $_CHROOT_PATHS; do
     [ -d "$_path/etc" ] || continue
     mkdir -p "$_path/tmp" 2>/dev/null || true
-    cp -f "$COMMON" "$_path/tmp/bliss_guest_common.sh"
+    cp -f "$COMMON" "$_path/tmp/altaris_guest_common.sh"
     cp -f "$REPAIR" "$_path/tmp/setup_pulse_guest.sh"
     chmod 755 "$_path/tmp/setup_pulse_guest.sh" 2>/dev/null || true
     echo "Altaris: [AUDIO] repair chroot $_path"
-    FLUX_CHROOT="$_path" FLUX_PACKAGE="$PKG" \
+    ALTARIS_CHROOT="$_path" ALTARIS_PACKAGE="$PKG" \
       /system/bin/sh "$_helper" sh --user root -- '/bin/sh /tmp/setup_pulse_guest.sh' \
       || echo "Altaris: [AUDIO] WARN repair failed chroot $_path"
   done

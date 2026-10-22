@@ -9,14 +9,14 @@ if [ "$(id -u)" -ne 0 ]; then
     exit 1
 fi
 
-[ -d /etc/fluxlinux ] && [ ! -e /etc/bliss ] && mv /etc/fluxlinux /etc/bliss 2>/dev/null || true
+[ -d /etc/altarislinux ] && [ ! -e /etc/altaris ] && mv /etc/altarislinux /etc/altaris 2>/dev/null || true
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin${PATH:+:$PATH}"
-mkdir -p /tmp /var/tmp /etc/bliss /usr/local/lib/fluxlinux
+mkdir -p /tmp /var/tmp /etc/altaris /usr/local/lib/altarislinux
 chmod 1777 /tmp /var/tmp 2>/dev/null || true
 
-# Bundle: Kotlin prepends bliss_gpu_common.sh, or runner stages it next to us.
-if ! type flux_gpu_normalize >/dev/null 2>&1; then
-    for _f in /tmp/bliss_gpu_common.sh /usr/local/lib/fluxlinux/bliss_gpu_common.sh; do
+# Bundle: Kotlin prepends altaris_gpu_common.sh, or runner stages it next to us.
+if ! type altaris_gpu_normalize >/dev/null 2>&1; then
+    for _f in /tmp/altaris_gpu_common.sh /usr/local/lib/altarislinux/altaris_gpu_common.sh; do
         if [ -r "$_f" ]; then
             # shellcheck disable=SC1090
             . "$_f"
@@ -24,15 +24,15 @@ if ! type flux_gpu_normalize >/dev/null 2>&1; then
         fi
     done
 fi
-if ! type flux_gpu_normalize >/dev/null 2>&1; then
-    echo "Altaris: bliss_gpu_common.sh missing — writing virgl and exiting 0"
-    printf '%s\n' virgl > /etc/bliss/gpu_mode
+if ! type altaris_gpu_normalize >/dev/null 2>&1; then
+    echo "Altaris: altaris_gpu_common.sh missing — writing virgl and exiting 0"
+    printf '%s\n' virgl > /etc/altaris/gpu_mode
     exit 0
 fi
 
 # Persist common for later Settings re-runs (best-effort).
-if [ -r /tmp/bliss_gpu_common.sh ]; then
-    cp -f /tmp/bliss_gpu_common.sh /usr/local/lib/fluxlinux/bliss_gpu_common.sh 2>/dev/null || true
+if [ -r /tmp/altaris_gpu_common.sh ]; then
+    cp -f /tmp/altaris_gpu_common.sh /usr/local/lib/altarislinux/altaris_gpu_common.sh 2>/dev/null || true
 fi
 
 echo "Altaris: Hardware acceleration (guest)..."
@@ -99,7 +99,7 @@ elif command -v apt-get >/dev/null 2>&1; then
         || _pkg_add mesa-utils libgl1-mesa-dri libegl1 curl || true
 fi
 
-_flux_gpu_fetch() {
+_altaris_gpu_fetch() {
     _url=$1
     _out=$2
     if command -v curl >/dev/null 2>&1; then
@@ -111,7 +111,7 @@ _flux_gpu_fetch() {
     fi
 }
 
-_flux_gpu_pin_mesa() {
+_altaris_gpu_pin_mesa() {
     if command -v apt-get >/dev/null 2>&1; then
         mkdir -p /etc/apt/preferences.d
         cat > /etc/apt/preferences.d/pin-mesa << 'PINEOF'
@@ -157,13 +157,13 @@ PINEOF
 
 # ── mode ─────────────────────────────────────────────────────────────────────
 
-RAW_FLUX_GPU="${FLUX_GPU:-}"
-NORMALIZED=$(flux_gpu_normalize "$RAW_FLUX_GPU")
-VENDOR_HINT="${FLUX_GPU_VENDOR:-unknown}"
+RAW_ALTARIS_GPU="${ALTARIS_GPU:-}"
+NORMALIZED=$(altaris_gpu_normalize "$RAW_ALTARIS_GPU")
+VENDOR_HINT="${ALTARIS_GPU_VENDOR:-unknown}"
 MODE=""
 
 want_menu=0
-case "$RAW_FLUX_GPU" in
+case "$RAW_ALTARIS_GPU" in
     ask|manual) want_menu=1 ;;
 esac
 
@@ -187,7 +187,7 @@ if [ "$want_menu" = 1 ] && [ -t 0 ]; then
             ;;
     esac
 elif [ "$NORMALIZED" = ask ]; then
-    DET=$(flux_gpu_auto_detect)
+    DET=$(altaris_gpu_auto_detect)
     MODE=$(printf '%s' "$DET" | cut -d'|' -f1)
     VENDOR_HINT=$(printf '%s' "$DET" | cut -d'|' -f2)
     DETECT_HINTS=$(printf '%s' "$DET" | cut -d'|' -f3-)
@@ -200,10 +200,10 @@ else
     else
         [ "$VENDOR_HINT" = unknown ] && VENDOR_HINT=env-other
     fi
-    echo "Altaris: FLUX_GPU=${RAW_FLUX_GPU} → mode=$MODE"
+    echo "Altaris: ALTARIS_GPU=${RAW_ALTARIS_GPU} → mode=$MODE"
 fi
 
-ARCH=$(flux_gpu_arch)
+ARCH=$(altaris_gpu_arch)
 if { [ "$MODE" = turnip ] || [ "$MODE" = panvk ]; } && [ "$ARCH" != arm64 ] && [ "$ARCH" != aarch64 ]; then
     echo "Altaris: [WARN] Turnip not available for arch=$ARCH — VirGL."
     MODE=virgl
@@ -212,24 +212,24 @@ fi
 
 # ── turnip tarball ───────────────────────────────────────────────────────────
 
-# The app picked the stable release for this distro (FLUX_TURNIP_1 = latest,
-# FLUX_TURNIP_2 = pinned fallback), each "version url sha256". Marker file =
+# The app picked the stable release for this distro (ALTARIS_TURNIP_1 = latest,
+# ALTARIS_TURNIP_2 = pinned fallback), each "version url sha256". Marker file =
 # installed version. No plan (not Adreno / unsupported / offline) → VirGL.
 
 if [ "$MODE" = turnip ]; then
     TURNIP_OK=""
-    rm -f /etc/bliss/turnip_version
+    rm -f /etc/altaris/turnip_version
     for _n in 1 2; do
-        eval "_spec=\${FLUX_TURNIP_$_n:-}"
+        eval "_spec=\${ALTARIS_TURNIP_$_n:-}"
         [ -n "$_spec" ] || continue
         # shellcheck disable=SC2086
         set -- $_spec
         echo "Altaris: Downloading Mesa/Turnip $1..."
-        if _flux_gpu_fetch "$2" /tmp/turnip.tar.gz \
+        if _altaris_gpu_fetch "$2" /tmp/turnip.tar.gz \
             && [ "$(sha256sum /tmp/turnip.tar.gz | cut -d' ' -f1)" = "$3" ] \
             && tar -zxf /tmp/turnip.tar.gz -C /; then
             command -v ldconfig >/dev/null 2>&1 && ldconfig || true
-            printf '%s\n' "$1" > /etc/bliss/turnip_version
+            printf '%s\n' "$1" > /etc/altaris/turnip_version
             TURNIP_OK=$1
             break
         fi
@@ -238,9 +238,9 @@ if [ "$MODE" = turnip ]; then
     rm -f /tmp/turnip.tar.gz
     if [ -n "$TURNIP_OK" ]; then
         echo "Altaris: Mesa/Turnip $TURNIP_OK installed."
-        _flux_gpu_pin_mesa
+        _altaris_gpu_pin_mesa
     else
-        echo "Altaris: ${FLUX_TURNIP_MSG:-GPU driver download failed — software rendering until you retry}"
+        echo "Altaris: ${ALTARIS_TURNIP_MSG:-GPU driver download failed — software rendering until you retry}"
         MODE=virgl
         VENDOR_HINT="${VENDOR_HINT}+turnip-unavailable"
     fi
@@ -252,7 +252,7 @@ fi
 # NEEDs a shared libSPIRV-Tools.so (distros ship only static) and libwayland
 # 1.24 symbols. On apt guests build a small shim from the static archives (+ inert
 # wayland stubs, X11 WSI never calls them). Returns 0 when the ICD loads.
-_flux_panvk_deps() {
+_altaris_panvk_deps() {
     _l=/usr/local/lib64/libvulkan_panfrost.so
     _bad() { ldd -r "$_l" 2>&1 | grep -E 'not found|undefined symbol'; }
     [ -z "$(_bad)" ] && return 0
@@ -283,69 +283,69 @@ SHIMEOF
     [ -z "$(_bad)" ]
 }
 
-# FLUX_PANVK_1 = latest, FLUX_PANVK_2 = pinned fallback, each
+# ALTARIS_PANVK_1 = latest, ALTARIS_PANVK_2 = pinned fallback, each
 # "version so_url so_sha icd_url icd_sha". glibc .so → /usr/local/lib64 (the
 # path the ICD json names), ICD → /usr/share/vulkan/icd.d. Marker = version.
 if [ "$MODE" = panvk ]; then
     PANVK_OK=""
     PANVK_TOUCHED=""
     if [ -e /lib/ld-musl-aarch64.so.1 ] || [ -e /usr/lib/ld-musl-aarch64.so.1 ]; then
-        FLUX_PANVK_MSG="PanVK needs a glibc distro — software rendering stays"
-        rm -f /etc/bliss/panvk_version
+        ALTARIS_PANVK_MSG="PanVK needs a glibc distro — software rendering stays"
+        rm -f /etc/altaris/panvk_version
     else
         for _n in 1 2; do
-            eval "_spec=\${FLUX_PANVK_$_n:-}"
+            eval "_spec=\${ALTARIS_PANVK_$_n:-}"
             [ -n "$_spec" ] || continue
             # shellcheck disable=SC2086
             set -- $_spec
             echo "Altaris: Downloading PanVK $1..."
-            if _flux_gpu_fetch "$2" /tmp/panvk.so \
+            if _altaris_gpu_fetch "$2" /tmp/panvk.so \
                 && [ "$(sha256sum /tmp/panvk.so | cut -d' ' -f1)" = "$3" ] \
-                && _flux_gpu_fetch "$4" /tmp/panvk.json \
+                && _altaris_gpu_fetch "$4" /tmp/panvk.json \
                 && [ "$(sha256sum /tmp/panvk.json | cut -d' ' -f1)" = "$5" ]; then
                 PANVK_TOUCHED=1
                 mkdir -p /usr/local/lib64 /usr/share/vulkan/icd.d
                 install -m 755 /tmp/panvk.so /usr/local/lib64/libvulkan_panfrost.so
                 install -m 644 /tmp/panvk.json /usr/share/vulkan/icd.d/panfrost_icd.aarch64.json
-                if _flux_panvk_deps; then
-                    printf '%s\n' "$1" > /etc/bliss/panvk_version
+                if _altaris_panvk_deps; then
+                    printf '%s\n' "$1" > /etc/altaris/panvk_version
                     PANVK_OK=$1
                     break
                 fi
-                rm -f /etc/bliss/panvk_version /usr/local/lib64/libvulkan_panfrost.so \
+                rm -f /etc/altaris/panvk_version /usr/local/lib64/libvulkan_panfrost.so \
                     /usr/share/vulkan/icd.d/panfrost_icd.aarch64.json
-                FLUX_PANVK_MSG="PanVK driver cannot load on this distro (missing libs) — software rendering stays"
+                ALTARIS_PANVK_MSG="PanVK driver cannot load on this distro (missing libs) — software rendering stays"
                 continue
             fi
             echo "Altaris: [WARN] PanVK $1 download or sha256 failed."
         done
         # Offline/failed re-run must not break a working install.
-        if [ -z "$PANVK_OK" ] && [ -z "$PANVK_TOUCHED" ] && [ -r /etc/bliss/panvk_version ]; then
-            PANVK_OK=$(tr -d '[:space:]' </etc/bliss/panvk_version)
+        if [ -z "$PANVK_OK" ] && [ -z "$PANVK_TOUCHED" ] && [ -r /etc/altaris/panvk_version ]; then
+            PANVK_OK=$(tr -d '[:space:]' </etc/altaris/panvk_version)
         fi
     fi
     rm -f /tmp/panvk.so /tmp/panvk.json
     if [ -n "$PANVK_OK" ]; then
         echo "Altaris: PanVK $PANVK_OK installed."
     else
-        echo "Altaris: ${FLUX_PANVK_MSG:-GPU driver download failed — software rendering until you retry}"
+        echo "Altaris: ${ALTARIS_PANVK_MSG:-GPU driver download failed — software rendering until you retry}"
         MODE=virgl
         VENDOR_HINT="${VENDOR_HINT}+panvk-unavailable"
     fi
 fi
 
 if [ "$MODE" = turnip ] || [ "$MODE" = panvk ]; then
-    flux_gpu_disable_xfce_compositor
-    flux_gpu_fake_dri
+    altaris_gpu_disable_xfce_compositor
+    altaris_gpu_fake_dri
 fi
 
 if [ "$MODE" = virgl ]; then
     echo "Altaris: VirGL mode — guest uses GALLIUM_DRIVER=virpipe when the socket exists."
 fi
 
-flux_gpu_write_state "$MODE" "$VENDOR_HINT"
-flux_gpu_write_apply_env
-flux_gpu_write_gpu_launch
+altaris_gpu_write_state "$MODE" "$VENDOR_HINT"
+altaris_gpu_write_apply_env
+altaris_gpu_write_gpu_launch
 
 echo ""
 echo "============================================"
@@ -353,6 +353,6 @@ echo "  Hardware Acceleration Setup Complete!"
 echo "============================================"
 echo "Mode:   $MODE"
 echo "Vendor: $VENDOR_HINT"
-echo "State:  /etc/bliss/gpu_mode"
+echo "State:  /etc/altaris/gpu_mode"
 echo "============================================"
 exit 0

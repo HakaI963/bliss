@@ -1,4 +1,4 @@
-# Full host bootstrap packages for FluxLinux native terminal (termux-lib parity).
+# Full host bootstrap packages for AltarisLinux native terminal (termux-lib parity).
 # One package name per line. Comments and blank lines ignored.
 # For *building*: prefer termux-lib-ssot seeds; note subpackages are produced by parents:
 #   curl <- libcurl, xz-utils <- liblzma, libltdl <- libtool

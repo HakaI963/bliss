@@ -42,4 +42,4 @@ done
 
 # Empty scan is success with empty ids (not an error).
 am start -a android.intent.action.VIEW \
-  -d "fluxlinux://callback?result=success&name=legacy_termux_list&ids=${ids}&bytes=${bytes}&layouts=${layouts}"
+  -d "altaris://callback?result=success&name=legacy_termux_list&ids=${ids}&bytes=${bytes}&layouts=${layouts}"

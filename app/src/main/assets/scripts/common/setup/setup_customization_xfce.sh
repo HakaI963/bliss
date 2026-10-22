@@ -3,8 +3,8 @@
 # Altaris XFCE branding for Fedora / Void / openSUSE / Deepin / Chimera / Manjaro.
 # Same theme/icon/font/xfconf path as Alpine; package manager auto-detected.
 
-CUSTOM_USER="flux"
-CUSTOM_GROUP="flux"
+CUSTOM_USER="altaris"
+CUSTOM_GROUP="altaris"
 USER_HOME="/home/$CUSTOM_USER"
 THEME_DIR="/usr/share/themes"
 ICON_DIR="/usr/share/icons"
@@ -36,13 +36,13 @@ chmod 1777 /tmp /var/tmp 2>/dev/null || true
 unset PROOT_TMP_DIR
 export TMPDIR=/tmp
 
-_flux_chown() { chown "$@" 2>/dev/null || true; }
-_flux_chown_r() { chown -R "$@" 2>/dev/null || true; }
+_altaris_chown() { chown "$@" 2>/dev/null || true; }
+_altaris_chown_r() { chown -R "$@" 2>/dev/null || true; }
 
 # Fedora 44 + proot: sudo PAM account fails → "a password is required".
 if command -v sudo >/dev/null 2>&1; then
     mkdir -p /etc/sudoers.d
-    echo "flux ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/flux
+    echo "altaris ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/flux
     chmod 0440 /etc/sudoers.d/flux 2>/dev/null || true
     chmod 0755 /etc/sudoers.d 2>/dev/null || true
     if [ -f /etc/sudoers ]; then
@@ -78,7 +78,7 @@ if [ ! -s /etc/resolv.conf ]; then
     printf 'nameserver 8.8.8.8\nnameserver 1.1.1.1\n' > /etc/resolv.conf
 fi
 
-_flux_pkg_add() {
+_altaris_pkg_add() {
     if grep -q '^ID="chimera"' /usr/lib/os-release 2>/dev/null \
         || grep -q '^ID=chimera' /etc/os-release 2>/dev/null \
         || { [ -d /usr/lib/apk ] && [ ! -d /lib/apk ]; }; then
@@ -104,8 +104,8 @@ _flux_pkg_add() {
         xbps-install -y "$@"
     elif command -v zypper >/dev/null 2>&1; then
         # Restore libcurl-mini if a previous curl install broke zypper.
-        if [ -f /usr/lib64/libcurl.so.4.8.0.flux-mini ]; then
-            cp -f /usr/lib64/libcurl.so.4.8.0.flux-mini /usr/lib64/libcurl.so.4.8.0 2>/dev/null || true
+        if [ -f /usr/lib64/libcurl.so.4.8.0.altaris-mini ]; then
+            cp -f /usr/lib64/libcurl.so.4.8.0.altaris-mini /usr/lib64/libcurl.so.4.8.0 2>/dev/null || true
         fi
         zypper --non-interactive al libcurl-mini4 libcurl4 curl libldap2 2>/dev/null || true
         zypper --non-interactive install --no-recommends --auto-agree-with-licenses "$@"
@@ -120,7 +120,7 @@ _flux_pkg_add() {
     fi
 }
 
-_flux_fetch() {
+_altaris_fetch() {
     _url="$1"
     _out="$2"
     if command -v wget >/dev/null 2>&1; then
@@ -135,16 +135,16 @@ _flux_fetch() {
 echo "Altaris: Installing customization packages..."
 # Never install `curl` on openSUSE — it replaces libcurl-mini and breaks zypper.
 if command -v zypper >/dev/null 2>&1; then
-    _flux_pkg_add wget unzip fontconfig git zsh bash || handle_error "customization deps"
+    _altaris_pkg_add wget unzip fontconfig git zsh bash || handle_error "customization deps"
 else
-    _flux_pkg_add curl wget unzip fontconfig git zsh bash || handle_error "customization deps"
+    _altaris_pkg_add curl wget unzip fontconfig git zsh bash || handle_error "customization deps"
 fi
 # xz for tar -xJf of theme/icon/cursor archives (self-sufficient re-runs on
 # containers whose family pre-dates xz in the base set). Best-effort.
-_flux_pkg_add xz-utils 2>/dev/null || _flux_pkg_add xz 2>/dev/null || true
-_flux_pkg_add xfce4-screenshooter 2>/dev/null || true
-_flux_pkg_add xfce4-whiskermenu-plugin 2>/dev/null || true
-_flux_pkg_add fastfetch 2>/dev/null || _flux_pkg_add neofetch 2>/dev/null || true
+_altaris_pkg_add xz-utils 2>/dev/null || _altaris_pkg_add xz 2>/dev/null || true
+_altaris_pkg_add xfce4-screenshooter 2>/dev/null || true
+_altaris_pkg_add xfce4-whiskermenu-plugin 2>/dev/null || true
+_altaris_pkg_add fastfetch 2>/dev/null || _altaris_pkg_add neofetch 2>/dev/null || true
 
 # Fail closed: guest OMZ + pokemon need git and zsh. Host PREFIX/bin/git is
 # not shipped, so this is the only install path. Retry via the native PM
@@ -160,7 +160,7 @@ if ! command -v git >/dev/null 2>&1 || ! command -v zsh >/dev/null 2>&1; then
     elif command -v pacman >/dev/null 2>&1; then
         pacman -S --noconfirm --needed git zsh || true
     else
-        _flux_pkg_add git zsh || true
+        _altaris_pkg_add git zsh || true
     fi
 fi
 command -v git >/dev/null 2>&1 || handle_error "git missing (required for Oh My Zsh / pokemon)"
@@ -169,17 +169,17 @@ command -v zsh >/dev/null 2>&1 || handle_error "zsh missing (required for Altari
 # pokemon-colorscripts install.sh needs a python interpreter.
 if ! command -v python3 >/dev/null 2>&1 && ! command -v python >/dev/null 2>&1; then
     echo "Altaris: Installing python for pokemon-colorscripts..."
-    _flux_pkg_add python3 2>/dev/null || _flux_pkg_add python 2>/dev/null || true
+    _altaris_pkg_add python3 2>/dev/null || _altaris_pkg_add python 2>/dev/null || true
 fi
 
 # Existing guests: customization-only re-run must materialize a UTF-8 locale
-# so launchers stop printing "cannot change locale" and zsh can paint @flux.
+# so launchers stop printing "cannot change locale" and zsh can paint @altaris.
 # Presence is locale -a only (directory names under /usr/lib/locale lie).
-_flux_pkg_add glibc-langpack-en 2>/dev/null || true
-_flux_pkg_add glibc-locale 2>/dev/null || true
-_flux_pkg_add glibc-locale-base 2>/dev/null || true
-_flux_pkg_add glibc-locales 2>/dev/null || true
-_flux_pkg_add locales 2>/dev/null || true
+_altaris_pkg_add glibc-langpack-en 2>/dev/null || true
+_altaris_pkg_add glibc-locale 2>/dev/null || true
+_altaris_pkg_add glibc-locale-base 2>/dev/null || true
+_altaris_pkg_add glibc-locales 2>/dev/null || true
+_altaris_pkg_add locales 2>/dev/null || true
 if command -v pacman >/dev/null 2>&1; then
     command -v gzip >/dev/null 2>&1 || pacman -S --noconfirm gzip 2>/dev/null || true
     if [ ! -f /usr/share/i18n/locales/en_US ] \
@@ -189,8 +189,8 @@ if command -v pacman >/dev/null 2>&1; then
         pacman -S --noconfirm glibc 2>/dev/null || true
     fi
 fi
-if command -v _flux_ensure_en_us_locale >/dev/null 2>&1; then
-    _flux_ensure_en_us_locale || handle_error "UTF-8 locale"
+if command -v _altaris_ensure_en_us_locale >/dev/null 2>&1; then
+    _altaris_ensure_en_us_locale || handle_error "UTF-8 locale"
 else
     if grep -qE '^ID=.?chimera' /etc/os-release 2>/dev/null \
         || grep -qE '^ID=.?alpine' /etc/os-release 2>/dev/null; then
@@ -208,7 +208,7 @@ else
             && ! locale -a 2>/dev/null | grep -qxFi en_US.UTF-8 \
             && command -v localedef >/dev/null 2>&1; then
             mkdir -p /usr/lib/locale
-            _map=/tmp/flux-UTF-8
+            _map=/tmp/altaris-UTF-8
             if [ -f /usr/share/i18n/charmaps/UTF-8.gz ] && command -v gzip >/dev/null 2>&1; then
                 gzip -dc /usr/share/i18n/charmaps/UTF-8.gz > "$_map" || true
             elif [ -f /usr/share/i18n/charmaps/UTF-8 ]; then
@@ -224,7 +224,7 @@ else
         fi
     fi
     mkdir -p /etc/profile.d
-    cat > /etc/profile.d/bliss-locale.sh <<'EOF'
+    cat > /etc/profile.d/altaris-locale.sh <<'EOF'
 _have=$(locale -a 2>/dev/null || true)
 _pick=""
 for _c in en_US.UTF-8 en_US.utf8 C.UTF-8 C.utf8; do
@@ -239,7 +239,7 @@ else
 fi
 unset _have _c _pick
 EOF
-    . /etc/profile.d/bliss-locale.sh
+    . /etc/profile.d/altaris-locale.sh
     if locale -a 2>/dev/null | grep -qiE 'en_US\.(utf8|UTF-8)|C\.(utf8|UTF-8)'; then
         printf 'LANG=%s\n' "${LANG:-C.UTF-8}" > /etc/locale.conf
     else
@@ -248,10 +248,10 @@ EOF
     fi
 fi
 
-ASSET_REPO="abhay-byte/fluxlinux"
+ASSET_REPO="abhay-byte/altarislinux"
 ASSET_TAG="debian-v1"
 BASE_URL="https://github.com/$ASSET_REPO/releases/download/$ASSET_TAG"
-FLUX_ASSET_DIR="${FLUX_ASSET_DIR:-/tmp/bliss_xfce_assets}"
+ALTARIS_ASSET_DIR="${ALTARIS_ASSET_DIR:-/tmp/altaris_xfce_assets}"
 
 theme_is_installed() {
     _n="$1"
@@ -294,8 +294,8 @@ extract_local_tar() {
 find_asset() {
     _name="$1"
     for f in \
-        "$FLUX_ASSET_DIR/$_name" \
-        "/tmp/bliss_xfce_assets/$_name"
+        "$ALTARIS_ASSET_DIR/$_name" \
+        "/tmp/altaris_xfce_assets/$_name"
     do
         if [ -f "$f" ]; then
             echo "$f"
@@ -313,13 +313,13 @@ download_if_needed() {
     fi
     mkdir -p "$(dirname "$_out")"
     echo " - Downloading $(basename "$_out")..."
-    _flux_fetch "$_url" "$_out" || return 1
+    _altaris_fetch "$_url" "$_out" || return 1
     [ -s "$_out" ]
 }
 
-if [ -n "${FLUX_THEME:-}" ]; then
-    echo "Altaris: Auto-applying Theme: $FLUX_THEME"
-    if [ "$FLUX_THEME" = "light" ]; then
+if [ -n "${ALTARIS_THEME:-}" ]; then
+    echo "Altaris: Auto-applying Theme: $ALTARIS_THEME"
+    if [ "$ALTARIS_THEME" = "light" ]; then
         THEME_CHOICE="2"
     else
         THEME_CHOICE="1"
@@ -336,13 +336,13 @@ ICON_TAR="papirus-dark-only.tar.xz"
 if [ "$THEME_CHOICE" = "2" ]; then
     SEL_THEME="Space-light"
     SEL_CURSOR="Vimix-cursors"
-    SEL_WALLPAPER="bliss-light.png"
+    SEL_WALLPAPER="altaris-light.png"
     THEME_TAR="Space-light.tar.xz"
     CURSOR_TAR="01-Vimix-cursors.tar.xz"
 else
     SEL_THEME="Space-transparency"
     SEL_CURSOR="Vimix-white-cursors"
-    SEL_WALLPAPER="bliss-dark.png"
+    SEL_WALLPAPER="altaris-dark.png"
     THEME_TAR="Space-transparency.tar.xz"
     CURSOR_TAR="02-Vimix-white-cursors.tar.xz"
 fi
@@ -364,7 +364,7 @@ papirus_xfce_ok() {
     return 0
 }
 
-if [ "${FLUX_SKIP_THEME_ICONS:-0}" = "1" ]; then
+if [ "${ALTARIS_SKIP_THEME_ICONS:-0}" = "1" ]; then
     echo "Altaris: Themes/icons pre-installed on host — skip guest extract"
 elif theme_is_installed "$SEL_THEME" && papirus_xfce_ok && cursor_is_installed "$SEL_CURSOR"; then
     echo "Altaris: Theme+icons+cursor already installed — skip extract"
@@ -375,8 +375,8 @@ else
         TFILE="$(find_asset "$THEME_TAR" || true)"
         if [ -z "$TFILE" ]; then
             if download_if_needed "$BASE_URL/theme.zip" "/tmp/theme.zip"; then
-                unzip -q -o /tmp/theme.zip -d /tmp/flux_theme_zip
-                TFILE="$(find /tmp/flux_theme_zip -name "$THEME_TAR" 2>/dev/null | head -1)"
+                unzip -q -o /tmp/theme.zip -d /tmp/altaris_theme_zip
+                TFILE="$(find /tmp/altaris_theme_zip -name "$THEME_TAR" 2>/dev/null | head -1)"
             else
                 echo "Altaris: WARNING: theme download failed — continuing"
             fi
@@ -391,9 +391,9 @@ else
         IFILE="$(find_asset "$ICON_TAR" || find_asset "papirus-dark-only.tar.gz" || true)"
         if [ -z "$IFILE" ]; then
             if download_if_needed "$BASE_URL/icons.zip" "/tmp/icons.zip"; then
-                unzip -q -o /tmp/icons.zip -d /tmp/flux_icons_zip
-                IFILE="$(find /tmp/flux_icons_zip -name "$ICON_TAR" 2>/dev/null | head -1)"
-                [ -n "$IFILE" ] || IFILE="$(find /tmp/flux_icons_zip -name "papirus-dark-only.tar.gz" 2>/dev/null | head -1)"
+                unzip -q -o /tmp/icons.zip -d /tmp/altaris_icons_zip
+                IFILE="$(find /tmp/altaris_icons_zip -name "$ICON_TAR" 2>/dev/null | head -1)"
+                [ -n "$IFILE" ] || IFILE="$(find /tmp/altaris_icons_zip -name "papirus-dark-only.tar.gz" 2>/dev/null | head -1)"
             else
                 echo "Altaris: WARNING: icons download failed — continuing"
             fi
@@ -411,8 +411,8 @@ else
         CFILE="$(find_asset "$CURSOR_TAR" || true)"
         if [ -z "$CFILE" ]; then
             if download_if_needed "$BASE_URL/cursor.zip" "/tmp/cursor.zip"; then
-                unzip -q -o /tmp/cursor.zip -d /tmp/flux_cursor_zip
-                CFILE="$(find /tmp/flux_cursor_zip -name "$CURSOR_TAR" 2>/dev/null | head -1)"
+                unzip -q -o /tmp/cursor.zip -d /tmp/altaris_cursor_zip
+                CFILE="$(find /tmp/altaris_cursor_zip -name "$CURSOR_TAR" 2>/dev/null | head -1)"
             else
                 echo "Altaris: WARNING: cursor download failed — continuing"
             fi
@@ -428,7 +428,7 @@ fi
 # (and guests that never installed papirus-icon-theme) leave those dangling,
 # so mkdir -p / cp print "File exists" / "No such file". Replace the link
 # with a real directory before writing.
-_flux_ensure_dir() {
+_altaris_ensure_dir() {
     _p="$1"
     if [ -L "$_p" ] && [ ! -e "$_p" ]; then
         rm -f "$_p" 2>/dev/null || true
@@ -444,26 +444,26 @@ _flux_ensure_dir() {
 }
 
 # Always repair Papirus-Dark even when extract was skipped (existing guests).
-_flux_fix_papirus_dangling() {
+_altaris_fix_papirus_dangling() {
     for _theme in Papirus-Dark Papirus; do
         [ -e "$ICON_DIR/$_theme" ] || continue
         for _sz in 16x16 22x22 24x24 32x32 48x48 64x64 \
                    16x16@2x 22x22@2x 24x24@2x 32x32@2x 48x48@2x; do
-            _flux_ensure_dir "$ICON_DIR/$_theme/$_sz" || true
+            _altaris_ensure_dir "$ICON_DIR/$_theme/$_sz" || true
             for _ctx in status categories apps; do
-                _flux_ensure_dir "$ICON_DIR/$_theme/$_sz/$_ctx" || true
+                _altaris_ensure_dir "$ICON_DIR/$_theme/$_sz/$_ctx" || true
             done
         done
     done
 }
 
-_flux_rewrite_papirus_inherits() {
+_altaris_rewrite_papirus_inherits() {
     _idx="$ICON_DIR/Papirus-Dark/index.theme"
     [ -f "$_idx" ] || return 0
     _inh="Adwaita,hicolor"
     [ -d /usr/share/icons/AdwaitaLegacy ] && _inh="Adwaita,AdwaitaLegacy,hicolor"
     [ -d /usr/share/icons/adwaita-xfce ] && _inh="${_inh%,hicolor},adwaita-xfce,hicolor"
-    _tmp="${_idx}.flux.$$"
+    _tmp="${_idx}.altaris.$$"
     awk -v inh="$_inh" '
         BEGIN { done=0 }
         /^Inherits=/ { print "Inherits=" inh; done=1; next }
@@ -473,7 +473,7 @@ _flux_rewrite_papirus_inherits() {
     echo "Altaris: Papirus-Dark Inherits=$_inh"
 }
 
-_flux_find_category_icon() {
+_altaris_find_category_icon() {
     # $1 = stem. Prints first matching file path.
     _stem="$1"
     for _c in \
@@ -498,24 +498,24 @@ _flux_find_category_icon() {
     return 1
 }
 
-_flux_seed_papirus_categories() {
+_altaris_seed_papirus_categories() {
     _stems="applications-accessories applications-development applications-games applications-graphics applications-internet applications-multimedia applications-office applications-other applications-science applications-system applications-utilities preferences-desktop preferences-system xfce-settings"
-    _flux_ensure_dir "$ICON_DIR/Papirus-Dark/24x24/categories" || true
-    _flux_ensure_dir "$ICON_DIR/Papirus-Dark/48x48/categories" || true
+    _altaris_ensure_dir "$ICON_DIR/Papirus-Dark/24x24/categories" || true
+    _altaris_ensure_dir "$ICON_DIR/Papirus-Dark/48x48/categories" || true
     for _n in $_stems; do
-        _src="$(_flux_find_category_icon "$_n" || true)"
+        _src="$(_altaris_find_category_icon "$_n" || true)"
         [ -n "$_src" ] || continue
         for _sz in 24x24 48x48; do
             _dest="$ICON_DIR/Papirus-Dark/$_sz/categories"
-            _flux_ensure_dir "$_dest" || continue
+            _altaris_ensure_dir "$_dest" || continue
             _ext="${_src##*.}"
             [ -f "$_dest/$_n.$_ext" ] || cp -f "$_src" "$_dest/$_n.$_ext"
         done
     done
 }
 
-_flux_fix_papirus_dangling
-_flux_rewrite_papirus_inherits
+_altaris_fix_papirus_dangling
+_altaris_rewrite_papirus_inherits
 
 # Overlay XFCE category extras only when the gate is not yet satisfied.
 # Re-extracting onto a root-owned stub hangs some Android tars ("File exists").
@@ -525,16 +525,16 @@ if [ -n "$CATFILE" ] && ! papirus_xfce_ok; then
         || echo "Altaris: WARNING: category extras extract failed — continuing"
 fi
 
-_flux_seed_papirus_categories
+_altaris_seed_papirus_categories
 
 # Offline extras/stub usually satisfy the gate. Only then try the huge
 # guest papirus-icon-theme package (Fedora ~100MiB).
 if ! papirus_xfce_ok; then
     echo "Altaris: category icons still missing — trying papirus-icon-theme"
-    _flux_pkg_add papirus-icon-theme 2>/dev/null \
-        || _flux_pkg_add papirus-icon-theme-dark 2>/dev/null || true
-    _flux_fix_papirus_dangling
-    _flux_seed_papirus_categories
+    _altaris_pkg_add papirus-icon-theme 2>/dev/null \
+        || _altaris_pkg_add papirus-icon-theme-dark 2>/dev/null || true
+    _altaris_fix_papirus_dangling
+    _altaris_seed_papirus_categories
 fi
 
 # image-missing seed so GTK/glycin does not abort xfce4-panel.
@@ -550,9 +550,9 @@ if [ -n "$_src_missing" ]; then
         for _sz in 16x16 22x22 24x24 32x32 48x48 64x64 \
                    16x16@2x 22x22@2x 24x24@2x 32x32@2x 48x48@2x; do
             _szd="$ICON_DIR/$_theme/$_sz"
-            _flux_ensure_dir "$_szd" || continue
+            _altaris_ensure_dir "$_szd" || continue
             _dest="$_szd/status"
-            _flux_ensure_dir "$_dest" || continue
+            _altaris_ensure_dir "$_dest" || continue
             [ -f "$_dest/image-missing.svg" ] || cp -f "$_src_missing" "$_dest/image-missing.svg" 2>/dev/null || true
         done
     done
@@ -566,7 +566,7 @@ else
     SEL_ICON="Adwaita"
     mkdir -p "$ICON_DIR/Adwaita/24x24/categories"
     for n in applications-internet applications-accessories applications-system; do
-        _src="$(_flux_find_category_icon "$n" || true)"
+        _src="$(_altaris_find_category_icon "$n" || true)"
         [ -n "$_src" ] || continue
         _ext="${_src##*.}"
         [ -f "$ICON_DIR/Adwaita/24x24/categories/$n.$_ext" ] \
@@ -577,7 +577,7 @@ gtk-update-icon-cache -f "$ICON_DIR/Papirus-Dark" 2>/dev/null || true
 
 WALLPAPER_DIR="$USER_HOME/Pictures/Wallpapers"
 mkdir -p "$WALLPAPER_DIR"
-_flux_chown_r "$CUSTOM_USER:$CUSTOM_GROUP" "$USER_HOME/Pictures" 2>/dev/null || true
+_altaris_chown_r "$CUSTOM_USER:$CUSTOM_GROUP" "$USER_HOME/Pictures" 2>/dev/null || true
 
 if [ ! -f "$WALLPAPER_DIR/$SEL_WALLPAPER" ]; then
     WFILE="$(find_asset "$SEL_WALLPAPER" || true)"
@@ -587,12 +587,12 @@ if [ ! -f "$WALLPAPER_DIR/$SEL_WALLPAPER" ]; then
         TEMP_WP_ZIP="/tmp/wallpaper.zip"
         if download_if_needed "$BASE_URL/wallpaper.zip" "$TEMP_WP_ZIP"; then
             unzip -o -j "$TEMP_WP_ZIP" -d "$WALLPAPER_DIR" 2>/dev/null || true
-            [ -f "$WALLPAPER_DIR/dark.png" ] && mv -f "$WALLPAPER_DIR/dark.png" "$WALLPAPER_DIR/bliss-dark.png"
-            [ -f "$WALLPAPER_DIR/light.png" ] && mv -f "$WALLPAPER_DIR/light.png" "$WALLPAPER_DIR/bliss-light.png"
+            [ -f "$WALLPAPER_DIR/dark.png" ] && mv -f "$WALLPAPER_DIR/dark.png" "$WALLPAPER_DIR/altaris-dark.png"
+            [ -f "$WALLPAPER_DIR/light.png" ] && mv -f "$WALLPAPER_DIR/light.png" "$WALLPAPER_DIR/altaris-light.png"
         fi
     fi
 fi
-_flux_chown "$CUSTOM_USER:$CUSTOM_GROUP" "$WALLPAPER_DIR"/* 2>/dev/null || true
+_altaris_chown "$CUSTOM_USER:$CUSTOM_GROUP" "$WALLPAPER_DIR"/* 2>/dev/null || true
 
 FONT_DIR="/usr/share/fonts/jetbrains-mono-nerd"
 if ! fc-list 2>/dev/null | grep -qi "JetBrainsMono Nerd"; then
@@ -600,7 +600,7 @@ if ! fc-list 2>/dev/null | grep -qi "JetBrainsMono Nerd"; then
     mkdir -p "$FONT_DIR"
     TEMP_ZIP="/tmp/JetBrainsMono.zip"
     NERD_FONT_URL="https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.zip"
-    if _flux_fetch "$NERD_FONT_URL" "$TEMP_ZIP"; then
+    if _altaris_fetch "$NERD_FONT_URL" "$TEMP_ZIP"; then
         unzip -o -j "$TEMP_ZIP" "*.ttf" -d "$FONT_DIR" 2>/dev/null || unzip -o "$TEMP_ZIP" -d "$FONT_DIR" 2>/dev/null || true
         fc-cache -f "$FONT_DIR" 2>/dev/null || true
     fi
@@ -740,10 +740,10 @@ cat > "$XFCONF_DIR/xfce4-desktop.xml" <<EOF
 </channel>
 EOF
 
-_flux_chown_r "$CUSTOM_USER:$CUSTOM_GROUP" "$USER_HOME/.config" 2>/dev/null || true
-_flux_chown_r "$CUSTOM_USER:$CUSTOM_GROUP" "$USER_HOME" 2>/dev/null || true
+_altaris_chown_r "$CUSTOM_USER:$CUSTOM_GROUP" "$USER_HOME/.config" 2>/dev/null || true
+_altaris_chown_r "$CUSTOM_USER:$CUSTOM_GROUP" "$USER_HOME" 2>/dev/null || true
 
-_flux_write_folio_xfce_panel() {
+_altaris_write_altaris_xfce_panel() {
     _pcfg="$1"
     _phome="${2:-/home/flux}"
     [ -n "$_pcfg" ] || return 0
@@ -783,7 +783,7 @@ _flux_write_folio_xfce_panel() {
     _appdir="$_phome/.local/share/applications"
     mkdir -p "$_appdir" 2>/dev/null || true
     if [ -d "$_appdir" ]; then
-        cat > "$_appdir/bliss-terminal.desktop" <<'FOLIO_DESKTOP'
+        cat > "$_appdir/altaris-terminal.desktop" <<'ALTARIS_DESKTOP'
 [Desktop Entry]
 Type=Application
 Version=1.0
@@ -793,8 +793,8 @@ Exec=xfce4-terminal
 Icon=utilities-terminal
 Terminal=false
 Categories=System;TerminalEmulator;
-FOLIO_DESKTOP
-        cat > "$_appdir/bliss-files.desktop" <<'FOLIO_DESKTOP'
+ALTARIS_DESKTOP
+        cat > "$_appdir/altaris-files.desktop" <<'ALTARIS_DESKTOP'
 [Desktop Entry]
 Type=Application
 Version=1.0
@@ -804,9 +804,9 @@ Exec=thunar
 Icon=folder
 Terminal=false
 Categories=System;FileManager;
-FOLIO_DESKTOP
+ALTARIS_DESKTOP
         if command -v xfce4-settings-manager >/dev/null 2>&1; then
-            cat > "$_appdir/bliss-settings.desktop" <<'FOLIO_DESKTOP'
+            cat > "$_appdir/altaris-settings.desktop" <<'ALTARIS_DESKTOP'
 [Desktop Entry]
 Type=Application
 Version=1.0
@@ -816,10 +816,10 @@ Exec=xfce4-settings-manager
 Icon=preferences-system
 Terminal=false
 Categories=Settings;
-FOLIO_DESKTOP
+ALTARIS_DESKTOP
         fi
         if [ -n "$_browser" ]; then
-            cat > "$_appdir/bliss-browser.desktop" <<FOLIO_DESKTOP
+            cat > "$_appdir/altaris-browser.desktop" <<ALTARIS_DESKTOP
 [Desktop Entry]
 Type=Application
 Version=1.0
@@ -829,13 +829,13 @@ Exec=$_browser
 Icon=applications-internet
 Terminal=false
 Categories=Network;WebBrowser;
-FOLIO_DESKTOP
+ALTARIS_DESKTOP
         fi
         # Root runs: hand the launcher entries to the home owner.
         _hu=$(stat -c %u "$_phome" 2>/dev/null || stat -f %u "$_phome" 2>/dev/null || true)
         _hg=$(stat -c %g "$_phome" 2>/dev/null || stat -f %g "$_phome" 2>/dev/null || true)
         if [ -n "$_hu" ] && [ "$(id -u 2>/dev/null || echo 0)" = "0" ]; then
-            chown "$_hu:$_hg" "$_appdir"/folio-*.desktop 2>/dev/null || true
+            chown "$_hu:$_hg" "$_appdir"/altaris-*.desktop 2>/dev/null || true
         fi
     fi
 
@@ -915,7 +915,7 @@ FOLIO_DESKTOP
     _plugins="$_plugins
     <property name='plugin-$_pid' type='string' value='launcher'>
       <property name='items' type='array'>
-        <value type='string' value='bliss-terminal.desktop'/>
+        <value type='string' value='altaris-terminal.desktop'/>
       </property>
     </property>"
 
@@ -925,7 +925,7 @@ FOLIO_DESKTOP
     _plugins="$_plugins
     <property name='plugin-$_pid' type='string' value='launcher'>
       <property name='items' type='array'>
-        <value type='string' value='bliss-files.desktop'/>
+        <value type='string' value='altaris-files.desktop'/>
       </property>
     </property>"
 
@@ -936,7 +936,7 @@ FOLIO_DESKTOP
         _plugins="$_plugins
     <property name='plugin-$_pid' type='string' value='launcher'>
       <property name='items' type='array'>
-        <value type='string' value='bliss-settings.desktop'/>
+        <value type='string' value='altaris-settings.desktop'/>
       </property>
     </property>"
     fi
@@ -948,7 +948,7 @@ FOLIO_DESKTOP
         _plugins="$_plugins
     <property name='plugin-$_pid' type='string' value='launcher'>
       <property name='items' type='array'>
-        <value type='string' value='bliss-browser.desktop'/>
+        <value type='string' value='altaris-browser.desktop'/>
       </property>
     </property>"
     fi
@@ -1048,7 +1048,7 @@ EOF
 
 # ── Compact phone layout: top status bar + floating dock + shortcuts ──────
 # Reuses the guest's shipped theme/icons; no colors, no extra downloads.
-_flux_write_folio_xfce_compact() {
+_altaris_write_altaris_xfce_compact() {
     _cfg="$USER_HOME/.config/xfce4/xfconf/xfce-perchannel-xml"
     mkdir -p "$_cfg" "$USER_HOME/Pictures" 2>/dev/null || return 0
     _menu_plugin="applicationsmenu"
@@ -1061,7 +1061,7 @@ _flux_write_folio_xfce_compact() {
     # Android-style phone panels (thin status bar + floating dock); the
     # shared writer degrades gracefully and leaves _menu_plugin set for the
     # keyboard-shortcut block below.
-    _flux_write_folio_xfce_panel "$_cfg" "$USER_HOME" || true
+    _altaris_write_altaris_xfce_panel "$_cfg" "$USER_HOME" || true
 
     cat > "$_cfg/xfce4-keyboard-shortcuts.xml" <<EOF
 <?xml version="1.1" encoding="UTF-8"?>
@@ -1117,23 +1117,23 @@ EOF
 MiscSingleClick=TRUE
 EOF
     fi
-    _flux_chown_r "$CUSTOM_USER:$CUSTOM_GROUP" "$_cfg" 2>/dev/null || true
-    _flux_chown_r "$CUSTOM_USER:$CUSTOM_GROUP" "$USER_HOME/.config/Thunar" 2>/dev/null || true
+    _altaris_chown_r "$CUSTOM_USER:$CUSTOM_GROUP" "$_cfg" 2>/dev/null || true
+    _altaris_chown_r "$CUSTOM_USER:$CUSTOM_GROUP" "$USER_HOME/.config/Thunar" 2>/dev/null || true
     unset _cfg _menu_plugin
     return 0
 }
-_flux_write_folio_xfce_compact
+_altaris_write_altaris_xfce_compact
 
-_flux_timeout_works() {
+_altaris_timeout_works() {
     # Chimera/BSD timeout under Android chroot dies with
     # "sigaction(32): Invalid argument" and never execs the child.
     command -v timeout >/dev/null 2>&1 || return 1
     timeout 1 true >/dev/null 2>&1
 }
 
-_flux_run() {
+_altaris_run() {
     _t="$1"; shift
-    if _flux_timeout_works; then
+    if _altaris_timeout_works; then
         timeout "$_t" "$@"
         return $?
     fi
@@ -1160,19 +1160,19 @@ _flux_run() {
     return "$_rc"
 }
 
-_flux_safe_rm_tree() {
+_altaris_safe_rm_tree() {
     _p="$1"
     [ -e "$_p" ] || return 0
-    _bak="${_p}.flux_rm.$$"
+    _bak="${_p}.altaris_rm.$$"
     mv "$_p" "$_bak" 2>/dev/null || { rm -rf "$_p" 2>/dev/null || true; return 0; }
     rm -rf "$_bak" 2>/dev/null || true
 }
 
-_flux_git_clone() {
+_altaris_git_clone() {
     _url="$1"; _dest="$2"; _secs="${3:-90}"
-    _flux_safe_rm_tree "$_dest"
+    _altaris_safe_rm_tree "$_dest"
     mkdir -p "$(dirname "$_dest")"
-    _flux_run "$_secs" git clone --depth 1 --single-branch "$_url" "$_dest"
+    _altaris_run "$_secs" git clone --depth 1 --single-branch "$_url" "$_dest"
 }
 
 echo "Altaris: Installing Oh My Zsh..."
@@ -1183,14 +1183,14 @@ if [ -f "$USER_HOME/.oh-my-zsh/oh-my-zsh.sh" ]; then
 else
     if [ -e "$USER_HOME/.oh-my-zsh" ]; then
         echo "Altaris: Incomplete Oh My Zsh detected — removing (bounded)…"
-        _flux_safe_rm_tree "$USER_HOME/.oh-my-zsh"
+        _altaris_safe_rm_tree "$USER_HOME/.oh-my-zsh"
     fi
-    if [ "${FLUX_SKIP_OMZ:-0}" = "1" ]; then
-        echo "Altaris: FLUX_SKIP_OMZ set but oh-my-zsh.sh missing — guest fallback"
+    if [ "${ALTARIS_SKIP_OMZ:-0}" = "1" ]; then
+        echo "Altaris: ALTARIS_SKIP_OMZ set but oh-my-zsh.sh missing — guest fallback"
     fi
     if command -v git >/dev/null 2>&1; then
         echo "Altaris: Shallow git clone Oh My Zsh (timeout 120s)…"
-        if _flux_git_clone "https://github.com/ohmyzsh/ohmyzsh.git" "$USER_HOME/.oh-my-zsh" 120 \
+        if _altaris_git_clone "https://github.com/ohmyzsh/ohmyzsh.git" "$USER_HOME/.oh-my-zsh" 120 \
             && [ -f "$USER_HOME/.oh-my-zsh/oh-my-zsh.sh" ]; then
             echo "Altaris: Oh My Zsh installed"
             OMZ_OK=1
@@ -1198,7 +1198,7 @@ else
             echo "Altaris: WARNING: Oh My Zsh clone failed or timed out — not treating as success"
             # Never leave a half tree, but never rm a good oh-my-zsh.sh either.
             if [ ! -f "$USER_HOME/.oh-my-zsh/oh-my-zsh.sh" ]; then
-                _flux_safe_rm_tree "$USER_HOME/.oh-my-zsh"
+                _altaris_safe_rm_tree "$USER_HOME/.oh-my-zsh"
             else
                 OMZ_OK=1
             fi
@@ -1215,12 +1215,12 @@ if [ "$OMZ_OK" = "1" ]; then
     if [ ! -d "$ZSH_CUSTOM/plugins/zsh-autosuggestions/.git" ] \
         && [ ! -f "$ZSH_CUSTOM/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh" ]; then
         echo "Altaris: Shallow clone zsh-autosuggestions (timeout 60s)…"
-        if ! _flux_git_clone "https://github.com/zsh-users/zsh-autosuggestions.git" \
+        if ! _altaris_git_clone "https://github.com/zsh-users/zsh-autosuggestions.git" \
             "$ZSH_CUSTOM/plugins/zsh-autosuggestions" 60 \
             || [ ! -f "$ZSH_CUSTOM/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh" ]; then
             echo "Altaris: WARNING: zsh-autosuggestions clone failed or timed out"
             [ -f "$ZSH_CUSTOM/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh" ] \
-                || _flux_safe_rm_tree "$ZSH_CUSTOM/plugins/zsh-autosuggestions"
+                || _altaris_safe_rm_tree "$ZSH_CUSTOM/plugins/zsh-autosuggestions"
         fi
     else
         echo "Altaris: zsh-autosuggestions already present — skip"
@@ -1228,41 +1228,41 @@ if [ "$OMZ_OK" = "1" ]; then
     if [ ! -d "$ZSH_CUSTOM/plugins/zsh-syntax-highlighting/.git" ] \
         && [ ! -f "$ZSH_CUSTOM/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh" ]; then
         echo "Altaris: Shallow clone zsh-syntax-highlighting (timeout 60s)…"
-        if ! _flux_git_clone "https://github.com/zsh-users/zsh-syntax-highlighting.git" \
+        if ! _altaris_git_clone "https://github.com/zsh-users/zsh-syntax-highlighting.git" \
             "$ZSH_CUSTOM/plugins/zsh-syntax-highlighting" 60 \
             || [ ! -f "$ZSH_CUSTOM/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh" ]; then
             echo "Altaris: WARNING: zsh-syntax-highlighting clone failed or timed out"
             [ -f "$ZSH_CUSTOM/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh" ] \
-                || _flux_safe_rm_tree "$ZSH_CUSTOM/plugins/zsh-syntax-highlighting"
+                || _altaris_safe_rm_tree "$ZSH_CUSTOM/plugins/zsh-syntax-highlighting"
         fi
     else
         echo "Altaris: zsh-syntax-highlighting already present — skip"
     fi
     # Local monochrome prompt theme — no remote download (old colorful theme removed).
     rm -f "$ZSH_CUSTOM/themes/agnosterzak.zsh-theme" 2>/dev/null || true
-    if [ ! -s "$ZSH_CUSTOM/themes/bliss.zsh-theme" ]; then
-        echo "Altaris: Installing folio prompt theme…"
-        cat > "$ZSH_CUSTOM/themes/bliss.zsh-theme" <<'FOLIO_THEME_EOF'
+    if [ ! -s "$ZSH_CUSTOM/themes/altaris.zsh-theme" ]; then
+        echo "Altaris: Installing altaris prompt theme…"
+        cat > "$ZSH_CUSTOM/themes/altaris.zsh-theme" <<'ALTARIS_THEME_EOF'
 # altaris prompt — Altaris's minimal monochrome prompt.
 # White/gray on black only; ASCII-safe (no powerline glyphs, no ANSI colors 31-44).
 # Segments:  altaris  host  working-dir  input-char
 PROMPT='%F{79}altaris%f%F{244}@%m%f %F{110}%~%f %F{255}%#%f '
 PROMPT2='%F{240}> %f'
-FOLIO_THEME_EOF
-        if [ ! -s "$ZSH_CUSTOM/themes/bliss.zsh-theme" ]; then
-            echo "Altaris: WARNING: folio prompt theme write failed — zsh keeps default prompt"
+ALTARIS_THEME_EOF
+        if [ ! -s "$ZSH_CUSTOM/themes/altaris.zsh-theme" ]; then
+            echo "Altaris: WARNING: altaris prompt theme write failed — zsh keeps default prompt"
         fi
     else
-        echo "Altaris: folio prompt theme already present — skip"
+        echo "Altaris: altaris prompt theme already present — skip"
     fi
-    _flux_chown_r "$CUSTOM_USER:$CUSTOM_GROUP" "$USER_HOME/.oh-my-zsh"
+    _altaris_chown_r "$CUSTOM_USER:$CUSTOM_GROUP" "$USER_HOME/.oh-my-zsh"
 else
     echo "Altaris: Skipping Zsh plugins (Oh My Zsh not installed)"
 fi
 
 # pokemon-colorscripts: try by default (60s budget). Skip only if explicitly 1.
-if [ "${FLUX_SKIP_POKEMON:-0}" = "1" ]; then
-    echo "Altaris: pokemon-colorscripts skip (FLUX_SKIP_POKEMON=1)"
+if [ "${ALTARIS_SKIP_POKEMON:-0}" = "1" ]; then
+    echo "Altaris: pokemon-colorscripts skip (ALTARIS_SKIP_POKEMON=1)"
 elif command -v pokemon-colorscripts >/dev/null 2>&1; then
     echo "Altaris: pokemon-colorscripts already present — skip"
 elif ! command -v git >/dev/null 2>&1; then
@@ -1270,10 +1270,10 @@ elif ! command -v git >/dev/null 2>&1; then
 else
     echo "Altaris: Installing pokemon-colorscripts (optional, 60s budget)…"
     POKEMON_TEMP="/tmp/pokemon-colorscripts.$$"
-    _flux_safe_rm_tree "$POKEMON_TEMP"
-    if _flux_git_clone "https://gitlab.com/phoneybadger/pokemon-colorscripts.git" "$POKEMON_TEMP" 60 \
+    _altaris_safe_rm_tree "$POKEMON_TEMP"
+    if _altaris_git_clone "https://gitlab.com/phoneybadger/pokemon-colorscripts.git" "$POKEMON_TEMP" 60 \
         && [ -f "$POKEMON_TEMP/install.sh" ]; then
-        (cd "$POKEMON_TEMP" && _flux_run 30 sh ./install.sh) \
+        (cd "$POKEMON_TEMP" && _altaris_run 30 sh ./install.sh) \
             || echo "Altaris: WARNING: pokemon-colorscripts install.sh failed"
         if command -v pokemon-colorscripts >/dev/null 2>&1; then
             echo "Altaris: pokemon-colorscripts installed"
@@ -1283,7 +1283,7 @@ else
     else
         echo "Altaris: WARNING: pokemon-colorscripts skipped (clone timeout/fail)"
     fi
-    _flux_safe_rm_tree "$POKEMON_TEMP"
+    _altaris_safe_rm_tree "$POKEMON_TEMP"
 fi
 
 echo "Altaris: Configuring .zshrc..."
@@ -1292,8 +1292,8 @@ cat > "$ZSHRC" << 'ZSHEOF'
 # Guest PATH only — never inherit host PREFIX/bin (nested proot glue errors).
 export PATH="$HOME/.local/bin:/opt/nodejs/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
-if [ -x /usr/local/sbin/bliss-ensure-locale ] && command -v sudo >/dev/null 2>&1; then
-  sudo /usr/local/sbin/bliss-ensure-locale 2>/dev/null || true
+if [ -x /usr/local/sbin/altaris-ensure-locale ] && command -v sudo >/dev/null 2>&1; then
+  sudo /usr/local/sbin/altaris-ensure-locale 2>/dev/null || true
 fi
 _have=$(locale -a 2>/dev/null || true)
 _pick=""
@@ -1318,12 +1318,12 @@ export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp}"
 # shell can get SIGTTIN-killed. Disable MONITOR (job control) for the guest.
 setopt no_monitor
 
-# Launch sticker + info block: ~/.config/bliss/banner.sh (sourced at the end).
+# Launch sticker + info block: ~/.config/altaris/banner.sh (sourced at the end).
 # pokemon-colorscripts stays installed but no longer auto-prints (old style).
 
 export ZSH="${ZSH:-$HOME/.oh-my-zsh}"
 if [ -f "$ZSH/oh-my-zsh.sh" ]; then
-  ZSH_THEME="bliss"
+  ZSH_THEME="altaris"
   DISABLE_UPDATE_PROMPT=true
   DISABLE_AUTO_UPDATE=true
   ZSH_DISABLE_COMPFIX=true
@@ -1331,7 +1331,7 @@ if [ -f "$ZSH/oh-my-zsh.sh" ]; then
   source "$ZSH/oh-my-zsh.sh"
 fi
 
-# Package managers need root. NOPASSWD sudo is configured for flux.
+# Package managers need root. NOPASSWD sudo is configured for altaris.
 if command -v sudo >/dev/null 2>&1; then
   if command -v apt-get >/dev/null 2>&1; then
     apt-get() { command sudo apt-get "$@"; }
@@ -1358,28 +1358,28 @@ if command -v sudo >/dev/null 2>&1; then
     apk() { command sudo apk "$@"; }
   fi
 fi
-# ── Altaris launch sticker (random truecolor anime banner; opt out FLUX_NO_BANNER=1)
-[ -r "$HOME/.config/bliss/banner.sh" ] && . "$HOME/.config/bliss/banner.sh"
+# ── Altaris launch sticker (random truecolor anime banner; opt out ALTARIS_NO_BANNER=1)
+[ -r "$HOME/.config/altaris/banner.sh" ] && . "$HOME/.config/altaris/banner.sh"
 
 ZSHEOF
-_flux_chown "$CUSTOM_USER:$CUSTOM_GROUP" "$ZSHRC"
+_altaris_chown "$CUSTOM_USER:$CUSTOM_GROUP" "$ZSHRC"
 ZPROFILE="$USER_HOME/.zprofile"
 if [ ! -f "$ZPROFILE" ]; then
     printf '%s\n' '[[ -o interactive ]] || { [ -f "$HOME/.zshrc" ] && . "$HOME/.zshrc"; }' \
         > "$ZPROFILE"
-    _flux_chown "$CUSTOM_USER:$CUSTOM_GROUP" "$ZPROFILE"
+    _altaris_chown "$CUSTOM_USER:$CUSTOM_GROUP" "$ZPROFILE"
 fi
 
 # ── Altaris launch stickers: 49 truecolor anime half-block designs ─
-# Installs ~/.config/bliss/banner/*.txt (random pick per shell open) and
-# ~/.config/bliss/banner.sh (the bliss_banner function sourced by .zshrc/.bashrc).
+# Installs ~/.config/altaris/banner/*.txt (random pick per shell open) and
+# ~/.config/altaris/banner.sh (the altaris_banner function sourced by .zshrc/.bashrc).
 # Offline, idempotent (`.banner-rev` refreshes existing installs).
-# Opt out at runtime: FLUX_NO_BANNER=1.
-_flux_write_folio_banner() {
+# Opt out at runtime: ALTARIS_NO_BANNER=1.
+_altaris_write_altaris_banner() {
     _home="$1"
     _owner="${2:-}"
     [ -n "$_home" ] || return 0
-    _bdir="$_home/.config/bliss/banner"
+    _bdir="$_home/.config/altaris/banner"
     _brev="9-l2"
     _need=0
     case "$(cat "$_bdir/.banner-rev" 2>/dev/null || true)" in
@@ -1389,13 +1389,13 @@ _flux_write_folio_banner() {
     for _b in 01-catgirl 02-catgirl-teal 03-catgirl-violet 04-arch-tan 05-arch-tan-violet 06-icecat 07-icecat-blush 08-maidfull 09-maidfull-rose 10-maidfull-lime 11-fandom 12-fandom-teal 13-fox 14-fox-sky 15-godette 16-godette-violet 17-godette-gobot 18-godette-gobot-mint 19-newsboy 20-newsboy-rose 21-newsboy-violet 22-rational 23-rational-indigo 24-lufthan 25-lufthan-teal 26-lufthan-violet 27-publicq 28-publicq-blue 29-publicq-violet 30-chibisq 31-chibisq-cyan 32-chibisq-amber 33-loveweb 34-loveweb-teal 35-kitsune 36-kitsune-jade 37-kitsune-azure 38-animegirl 39-animegirl-teal 40-animegirl-lime 41-moemiku 42-moemiku-azure 43-moemiku-blush 44-afrowikipe 45-afrowikipe-indigo 46-vocaloid 47-vocaloid-azure 48-vocaloid-blush 49-blossom; do
         [ -s "$_bdir/$_b.txt" ] || _need=1
     done
-    [ -s "$_home/.config/bliss/banner.sh" ] || _need=1
-    grep -q "bliss-banner v9" "$_home/.config/bliss/banner.sh" 2>/dev/null || _need=1
+    [ -s "$_home/.config/altaris/banner.sh" ] || _need=1
+    grep -q "altaris-banner v9" "$_home/.config/altaris/banner.sh" 2>/dev/null || _need=1
     [ "$_need" = "1" ] || return 0
 
     mkdir -p "$_bdir" 2>/dev/null || return 0
     rm -f "$_bdir"/*.txt 2>/dev/null || true
-    cat > "$_bdir/.bliss-banners.$$" <<'FOLIO_BANNER_ALL'
+    cat > "$_bdir/.altaris-banners.$$" <<'ALTARIS_BANNER_ALL'
 ==>01-catgirl
 \033[48;2;0;0;0m              \033[38;2;0;0;0;48;2;46;32;21m▀▀ \033[38;2;46;32;21;48;2;0;0;0m▀\033[48;2;46;32;21m \033[38;2;86;53;28;48;2;194;115;54m▀\033[48;2;202;107;38m▀\033[38;2;46;32;21;48;2;172;87;29m▀\033[38;2;122;90;61;48;2;201;138;85m▀\033[38;2;201;181;159;48;2;160;165;163m▀\033[38;2;123;127;125;48;2;46;32;21m▀\033[38;2;46;32;21;48;2;0;0;0m▀\033[0m
 \033[48;2;0;0;0m              \033[38;2;46;32;21m▀▀▀\033[48;2;138;82;37m▀\033[38;2;166;106;57;48;2;225;138;61m▀\033[48;2;194;115;54m \033[38;2;194;115;54;48;2;225;138;61m▀ \033[38;2;172;87;29m▀\033[38;2;123;59;19;48;2;172;87;29m▀\033[48;2;123;59;19m \033[38;2;46;32;21;48;2;86;53;28m▀\033[0m
@@ -2245,27 +2245,27 @@ _flux_write_folio_banner() {
 \033[38;2;124;119;106;48;2;229;225;210m▀\033[38;2;244;232;219;48;2;206;193;175m▀\033[38;2;212;180;145;48;2;185;189;174m▀\033[38;2;208;161;141;48;2;206;193;175m▀\033[38;2;209;210;199;48;2;183;180;154m▀\033[38;2;208;205;182;48;2;185;189;174m▀\033[38;2;183;180;154;48;2;209;210;199m▀\033[38;2;178;171;135;48;2;183;180;154m▀\033[38;2;135;156;136;48;2;144;154;118m▀\033[38;2;182;154;130;48;2;183;180;154m▀\033[38;2;229;225;210;48;2;206;193;175m▀\033[38;2;206;193;175;48;2;155;181;160m▀ \033[38;2;208;205;182;48;2;229;225;210m▀\033[38;2;155;181;160;48;2;185;189;174m▀\033[48;2;155;181;160m \033[48;2;208;205;182m \033[38;2;223;197;179;48;2;212;180;145m▀\033[38;2;227;186;143m▀\033[38;2;212;180;145;48;2;178;171;135m▀\033[38;2;223;197;179;48;2;183;180;154m▀\033[38;2;208;205;182;48;2;135;156;136m▀\033[48;2;206;193;175m▀\033[38;2;206;193;175;48;2;229;216;197m▀\033[48;2;178;171;135m \033[38;2;144;154;118m▀\033[38;2;212;180;145;48;2;223;197;179m▀\033[48;2;229;225;210m \033[48;2;37;39;35m \033[0m
 \033[38;2;56;56;47;48;2;0;0;0m▀\033[38;2;244;232;219;48;2;94;113;96m▀\033[38;2;229;225;210;48;2;185;189;174m▀ \033[38;2;178;171;135;48;2;206;193;175m▀\033[38;2;223;197;179;48;2;229;216;197m▀\033[38;2;208;205;182;48;2;183;180;154m▀\033[38;2;153;164;140;48;2;123;149;113m▀\033[48;2;182;154;130m▀\033[38;2;182;154;130;48;2;212;180;145m▀\033[48;2;142;130;122m▀\033[48;2;153;164;140m \033[38;2;132;171;148;48;2;155;181;160m▀\033[38;2;155;181;160;48;2;185;189;174m▀\033[48;2;209;210;199m▀\033[48;2;208;205;182m▀\033[48;2;185;189;174m▀\033[48;2;144;154;118m \033[38;2;182;154;130m▀\033[38;2;144;154;118;48;2;178;171;135m▀\033[38;2;153;164;140m▀▀\033[38;2;223;197;179m▀\033[38;2;183;180;154;48;2;144;154;118m▀\033[38;2;144;154;118;48;2;183;180;154m▀\033[38;2;155;181;160;48;2;244;232;219m▀\033[48;2;153;164;140m \033[38;2;56;56;47;48;2;135;156;136m▀\033[38;2;0;0;0;48;2;37;39;35m▀\033[0m
 \033[48;2;0;0;0m  \033[38;2;37;39;35m▀\033[38;2;56;56;47m▀▀▀▀\033[38;2;37;39;35m▀\033[38;2;56;56;47m▀▀▀\033[38;2;37;39;35m▀\033[38;2;56;56;47m▀▀▀▀▀▀▀▀▀▀▀▀▀\033[38;2;85;84;76m▀\033[38;2;56;56;47m▀\033[38;2;85;84;76m▀\033[38;2;37;39;35m▀\033[0m
-FOLIO_BANNER_ALL
+ALTARIS_BANNER_ALL
     awk -v dir="$_bdir" '
         /^==> ?[0-9A-Za-z._-]+$/ { name=substr($0,4); gsub(/^[ \t]+|[ \t]+$/, "", name); file=dir "/" name ".txt"; next }
         { if (file != "") print > file }
-    ' "$_bdir/.bliss-banners.$$" 2>/dev/null || true
-    rm -f "$_bdir/.bliss-banners.$$" 2>/dev/null || true
+    ' "$_bdir/.altaris-banners.$$" 2>/dev/null || true
+    rm -f "$_bdir/.altaris-banners.$$" 2>/dev/null || true
     printf '%s\n' "$_brev" > "$_bdir/.banner-rev" 2>/dev/null || true
 
-    cat > "$_home/.config/bliss/banner.sh" <<'FOLIO_BANNER_SH'
-# bliss-banner.sh — Altaris launch sticker: truecolor half-block anime art,
+    cat > "$_home/.config/altaris/banner.sh" <<'ALTARIS_BANNER_SH'
+# altaris-banner.sh — Altaris launch sticker: truecolor half-block anime art,
 # one random design per interactive shell, printed exactly ONCE per shell
 # even when several rc files source it or nested shells inherit the
 # environment. Works with zsh, bash and POSIX sh.
-# Opt out at runtime: FLUX_NO_BANNER=1
-# bliss-banner v9
-bliss_banner_art() {
+# Opt out at runtime: ALTARIS_NO_BANNER=1
+# altaris-banner v9
+altaris_banner_art() {
   # zsh: empty glob must not abort the function.
   if [ -n "${ZSH_VERSION:-}" ]; then
     setopt localoptions nullglob nonomatch 2>/dev/null || true
   fi
-  _bb_dir="${HOME:-/root}/.config/bliss/banner"
+  _bb_dir="${HOME:-/root}/.config/altaris/banner"
   [ -d "$_bb_dir" ] || return 0
   _bb_list=""
   _bb_n=0
@@ -2291,18 +2291,18 @@ bliss_banner_art() {
   fi
   unset _bb_dir _bb_list _bb_n _bb_f _bb_i _bb_pick
 }
-bliss_banner() {
-  [ "${FLUX_NO_BANNER:-0}" = "1" ] && return 0
+altaris_banner() {
+  [ "${ALTARIS_NO_BANNER:-0}" = "1" ] && return 0
   # One sticker per shell process: exported, so nested shells and every
   # re-sourced rc file in the same process skip instantly. A brand-new
   # shell (new tab / new session) always prints exactly one design.
-  [ -z "${_BLISS_BANNER_SHOWN:-}" ] || return 0
+  [ -z "${_ALTARIS_BANNER_SHOWN:-}" ] || return 0
   case $- in
     *i*) ;;
     *) return 0 ;;
   esac
-  export _BLISS_BANNER_SHOWN=1
-  bliss_banner_art
+  export _ALTARIS_BANNER_SHOWN=1
+  altaris_banner_art
   # Header: exactly one line, "altaris@<id>" (distro id only). ID= from
   # /etc/os-release; fallbacks: first word of PRETTY_NAME, then "linux".
   _bb_fid=""
@@ -2316,18 +2316,18 @@ bliss_banner() {
   printf '%s\n' "altaris@$_bb_fid"
   unset _bb_fid
 }
-bliss_banner
-FOLIO_BANNER_SH
+altaris_banner
+ALTARIS_BANNER_SH
 
     if [ -n "$_owner" ]; then
-        chown -R "$_owner" "$_home/.config/bliss" 2>/dev/null || true
+        chown -R "$_owner" "$_home/.config/altaris" 2>/dev/null || true
     fi
     return 0
 }
 
 # Random colored anime launch sticker for the guest shell.
 # ── Bash login wiring: same launch sticker for bash sessions (idempotent).
-_flux_wire_bash_banner() {
+_altaris_wire_bash_banner() {
     _home="$1"
     _owner="${2:-}"
     [ -n "$_home" ] && [ -d "$_home" ] || return 0
@@ -2335,10 +2335,10 @@ _flux_wire_bash_banner() {
     if [ ! -f "$_brc" ]; then
         printf '%s\n' '# Altaris bash profile' 'export PATH="$HOME/.local/bin:$PATH"' > "$_brc" 2>/dev/null || true
     fi
-    if [ -f "$_brc" ] && ! grep -q 'bliss/banner.sh' "$_brc" 2>/dev/null; then
+    if [ -f "$_brc" ] && ! grep -q 'altaris/banner.sh' "$_brc" 2>/dev/null; then
         {
-            printf '\n# Altaris launch sticker (random truecolor anime banner; opt out FLUX_NO_BANNER=1)\n'
-            printf '[ -r "$HOME/.config/bliss/banner.sh" ] && . "$HOME/.config/bliss/banner.sh"\n'
+            printf '\n# Altaris launch sticker (random truecolor anime banner; opt out ALTARIS_NO_BANNER=1)\n'
+            printf '[ -r "$HOME/.config/altaris/banner.sh" ] && . "$HOME/.config/altaris/banner.sh"\n'
         } >> "$_brc" 2>/dev/null || true
     fi
     _bpf="$_home/.bash_profile"
@@ -2356,10 +2356,10 @@ _flux_wire_bash_banner() {
     unset _brc _bpf
 }
 
-_flux_write_folio_banner "$USER_HOME" "$CUSTOM_USER:$CUSTOM_GROUP"
-_flux_write_folio_banner /root
-_flux_wire_bash_banner "$USER_HOME" "$CUSTOM_USER:$CUSTOM_GROUP"
-_flux_wire_bash_banner /root
+_altaris_write_altaris_banner "$USER_HOME" "$CUSTOM_USER:$CUSTOM_GROUP"
+_altaris_write_altaris_banner /root
+_altaris_wire_bash_banner "$USER_HOME" "$CUSTOM_USER:$CUSTOM_GROUP"
+_altaris_wire_bash_banner /root
 
 if command -v zsh >/dev/null 2>&1; then
     ZSH_PATH="$(command -v zsh)"
@@ -2369,14 +2369,14 @@ if command -v zsh >/dev/null 2>&1; then
     chsh -s "$ZSH_PATH" "$CUSTOM_USER" 2>/dev/null || true
 fi
 
-_flux_chown_r "$CUSTOM_USER:$CUSTOM_GROUP" "$USER_HOME" 2>/dev/null || true
+_altaris_chown_r "$CUSTOM_USER:$CUSTOM_GROUP" "$USER_HOME" 2>/dev/null || true
 
 # ── Altaris Linux appearance (wallpaper/colors/terminal) ───────────────────────
 # Re-apply the app-staged appearance config. Runs last (after the compact
 # defaults + theme setup) and forces one pass so a re-run always wins.
-if [ -r "$USER_HOME/.config/bliss/appearance-apply.sh" ]; then
-    FOLIO_APPLY_HOME="$USER_HOME" FOLIO_APPLY_FORCE=1 \
-        sh "$USER_HOME/.config/bliss/appearance-apply.sh" >/dev/null 2>&1 || true
+if [ -r "$USER_HOME/.config/altaris/appearance-apply.sh" ]; then
+    ALTARIS_APPLY_HOME="$USER_HOME" ALTARIS_APPLY_FORCE=1 \
+        sh "$USER_HOME/.config/altaris/appearance-apply.sh" >/dev/null 2>&1 || true
 fi
 
 # Proot-safe PM db ownership (portable stat: GNU -c / BSD -f)

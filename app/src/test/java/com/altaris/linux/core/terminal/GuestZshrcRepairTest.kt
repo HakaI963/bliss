@@ -1,0 +1,389 @@
+package com.altaris.linux.core.terminal
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import java.io.File
+import kotlin.io.path.createTempDirectory
+
+class GuestZshrcRepairTest {
+
+    @Test
+    fun resolveProotName_alpineAndDebian() {
+        assertEquals("alpine", GuestZshrcRepair.resolveProotName("alpine"))
+        assertEquals("alpine", GuestZshrcRepair.resolveProotName("alpine_chroot"))
+        assertEquals("debian", GuestZshrcRepair.resolveProotName("debian"))
+        assertEquals("debian", GuestZshrcRepair.resolveProotName("debian13_chroot"))
+        assertEquals("debian", GuestZshrcRepair.resolveProotName(null))
+        assertEquals("fedora", GuestZshrcRepair.resolveProotName("fedora"))
+        assertEquals("fedora", GuestZshrcRepair.resolveProotName("fedora_chroot"))
+        assertEquals("void", GuestZshrcRepair.resolveProotName("void_chroot"))
+        assertEquals("opensuse", GuestZshrcRepair.resolveProotName("opensuse"))
+    }
+
+    @Test
+    fun resolveProotName_deepinChimeraManjaro() {
+        assertEquals("deepin", GuestZshrcRepair.resolveProotName("deepin"))
+        assertEquals("deepin", GuestZshrcRepair.resolveProotName("deepin_chroot"))
+        assertEquals("chimera", GuestZshrcRepair.resolveProotName("chimera"))
+        assertEquals("chimera", GuestZshrcRepair.resolveProotName("chimera_chroot"))
+        assertEquals("manjaro", GuestZshrcRepair.resolveProotName("manjaro"))
+        assertEquals("manjaro", GuestZshrcRepair.resolveProotName("manjaro_chroot"))
+    }
+
+    @Test
+    fun resolveProotName_ukpa_suffixStripKeepsArchlinux() {
+        assertEquals("ubuntu", GuestZshrcRepair.resolveProotName("ubuntu"))
+        assertEquals("ubuntu", GuestZshrcRepair.resolveProotName("ubuntu_chroot"))
+        assertEquals("kali", GuestZshrcRepair.resolveProotName("kali"))
+        assertEquals("kali", GuestZshrcRepair.resolveProotName("kali_chroot"))
+        assertEquals("parrot", GuestZshrcRepair.resolveProotName("parrot"))
+        assertEquals("parrot", GuestZshrcRepair.resolveProotName("parrot_chroot"))
+        assertEquals("archlinux", GuestZshrcRepair.resolveProotName("archlinux"))
+        assertEquals("archlinux", GuestZshrcRepair.resolveProotName("archlinux_chroot"))
+        // Guard: a future removePrefix("arch") must not land.
+        assertFalse(GuestZshrcRepair.resolveProotName("archlinux_chroot") == "linux")
+        assertFalse(GuestZshrcRepair.resolveProotName("archlinux") == "linux")
+        assertTrue(GuestZshrcRepair.resolveProotName("archlinux_chroot").startsWith("arch"))
+    }
+
+    @Test
+    fun needsRepair_hardOmzSource() {
+        // Old non-defensive template: unconditional source, no existence guard.
+        val bad = "export ZSH=\"\$HOME/.oh-my-zsh\"\nsource \$ZSH/oh-my-zsh.sh\n"
+        assertTrue(GuestZshrcRepair.needsRepair(bad))
+    }
+
+    @Test
+    fun needsRepair_hardPokemon() {
+        val bad = "pokemon-colorscripts --no-title -r 1,2,3\n"
+        assertTrue(GuestZshrcRepair.needsRepair(bad))
+    }
+
+    @Test
+    fun needsRepair_guardedIsOk() {
+        val good = """
+            unset PROOT_TMP_DIR
+            setopt no_monitor
+            if locale -a 2>/dev/null | grep -qiE 'en_US\.(utf8|UTF-8)'; then
+              export LANG=en_US.UTF-8
+            fi
+            export ZSH="${'$'}{ZSH:-${'$'}HOME/.oh-my-zsh}"
+            if [ -f "${'$'}ZSH/oh-my-zsh.sh" ]; then
+              source "${'$'}ZSH/oh-my-zsh.sh"
+            fi
+        """.trimIndent()
+        assertFalse(GuestZshrcRepair.needsRepair(good))
+    }
+
+    @Test
+    fun needsRepair_oldCUtf8Fallback() {
+        val old = """
+            unset PROOT_TMP_DIR
+            setopt no_monitor
+            if locale -a 2>/dev/null | grep -qiE 'en_US\.(utf8|UTF-8)'; then
+              export LANG=en_US.UTF-8
+              export LC_ALL=en_US.UTF-8
+            else
+              export LANG=C.UTF-8
+              export LC_ALL=C.UTF-8
+            fi
+        """.trimIndent()
+        assertTrue(GuestZshrcRepair.needsRepair(old))
+    }
+
+    @Test
+    fun needsRepair_bareFastfetch() {
+        val old = """
+            unset PROOT_TMP_DIR
+            setopt no_monitor
+            if locale -a 2>/dev/null | grep -qiE 'en_US\.(utf8|UTF-8)'; then
+              export LANG=en_US.UTF-8
+            fi
+            fastfetch --config termux 2>/dev/null || fastfetch 2>/dev/null || true
+        """.trimIndent()
+        assertTrue(GuestZshrcRepair.needsRepair(old))
+    }
+
+    @Test
+    fun needsRepair_missingLocaleFallback() {
+        val old = """
+            unset PROOT_TMP_DIR
+            setopt no_monitor
+            export LANG=en_US.UTF-8
+            export LC_ALL=en_US.UTF-8
+            export ZSH="${'$'}{ZSH:-${'$'}HOME/.oh-my-zsh}"
+            if [ -f "${'$'}ZSH/oh-my-zsh.sh" ]; then
+              source "${'$'}ZSH/oh-my-zsh.sh"
+            fi
+        """.trimIndent()
+        assertTrue(GuestZshrcRepair.needsRepair(old))
+    }
+
+    @Test
+    fun needsRepair_missingNoMonitor() {
+        val old = """
+            unset PROOT_TMP_DIR
+            export ZSH="${'$'}{ZSH:-${'$'}HOME/.oh-my-zsh}"
+            if [ -f "${'$'}ZSH/oh-my-zsh.sh" ]; then
+              source "${'$'}ZSH/oh-my-zsh.sh"
+            fi
+        """.trimIndent()
+        assertTrue(GuestZshrcRepair.needsRepair(old))
+    }
+
+    @Test
+    fun needsRepair_missingProotTmpUnset() {
+        val old = """
+            export PATH="${'$'}HOME/.local/bin:${'$'}PATH"
+            export ZSH="${'$'}{ZSH:-${'$'}HOME/.oh-my-zsh}"
+            if [ -f "${'$'}ZSH/oh-my-zsh.sh" ]; then
+              source "${'$'}ZSH/oh-my-zsh.sh"
+            fi
+        """.trimIndent()
+        assertTrue(GuestZshrcRepair.needsRepair(old))
+    }
+
+    @Test
+    fun ensureZprofile_writesOnce() {
+        val dir = createTempDirectory("altaris-zprofile").toFile()
+        try {
+            GuestZshrcRepair.ensureZprofile(dir)
+            val f = File(dir, ".zprofile")
+            assertTrue(f.isFile)
+            assertTrue(f.readText().contains(".zshrc"))
+            val first = f.readText()
+            GuestZshrcRepair.ensureZprofile(dir)
+            assertEquals(first, f.readText())
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun ensureAltarisLoginShellZsh_updatesPasswd() {
+        val dir = createTempDirectory("altaris-zshrc").toFile()
+        try {
+            File(dir, "bin").mkdirs()
+            File(dir, "bin/zsh").writeText("#!/bin/zsh\n")
+            File(dir, "etc").mkdirs()
+            val passwd = File(dir, "etc/passwd")
+            passwd.writeText(
+                "root:x:0:0:root:/root:/bin/sh\n" +
+                    "altaris:x:1000:1000::/home/flux:/bin/bash\n"
+            )
+            GuestZshrcRepair.ensureAltarisLoginShellZsh(dir)
+            val line = passwd.readLines().first { it.startsWith("altaris:") }
+            assertTrue(line.endsWith(":/bin/zsh"))
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun ensureAltarisLoginShellZsh_noopWithoutZsh() {
+        val dir = createTempDirectory("altaris-zshrc-no").toFile()
+        try {
+            File(dir, "etc").mkdirs()
+            val passwd = File(dir, "etc/passwd")
+            passwd.writeText("altaris:x:1000:1000::/home/flux:/bin/bash\n")
+            GuestZshrcRepair.ensureAltarisLoginShellZsh(dir)
+            assertTrue(passwd.readText().contains(":/bin/bash"))
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
+    private fun prootFilesDir(): File =
+        createTempDirectory("altaris-zshrc-proot").toFile()
+
+    @Test
+    fun repairIfNeeded_chimera_createsApkWrappedZshrc() {
+        val dir = prootFilesDir()
+        try {
+            val home = File(
+                dir,
+                "usr/var/lib/proot-distro/containers/chimera/rootfs/home/flux"
+            )
+            home.mkdirs()
+            val ctx = FakeContext(dir, "$dir/jni")
+            GuestZshrcRepair.repairIfNeeded(ctx, "proot", "chimera")
+            val zshrc = File(home, ".zshrc")
+            assertTrue(zshrc.isFile)
+            val text = zshrc.readText()
+            assertTrue(text.contains("apk() { command sudo apk"))
+            assertTrue(text.contains("unset PROOT_TMP_DIR"))
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun repairIfNeeded_deepin_createsAptPacmanWrappedZshrc() {
+        val dir = prootFilesDir()
+        try {
+            val home = File(
+                dir,
+                "usr/var/lib/proot-distro/containers/deepin/rootfs/home/flux"
+            )
+            home.mkdirs()
+            val ctx = FakeContext(dir, "$dir/jni")
+            GuestZshrcRepair.repairIfNeeded(ctx, "proot", "deepin")
+            val text = File(home, ".zshrc").readText()
+            assertTrue(text.contains("apt-get() { command sudo apt-get"))
+            assertTrue(text.contains("apt() { command sudo apt"))
+            assertTrue(text.contains("pacman() { command sudo pacman"))
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun repairIfNeeded_manjaro_createsPacmanWrappedZshrc() {
+        val dir = prootFilesDir()
+        try {
+            val home = File(
+                dir,
+                "usr/var/lib/proot-distro/containers/manjaro/rootfs/home/flux"
+            )
+            home.mkdirs()
+            val ctx = FakeContext(dir, "$dir/jni")
+            GuestZshrcRepair.repairIfNeeded(ctx, "proot", "manjaro")
+            val text = File(home, ".zshrc").readText()
+            assertTrue(text.contains("pacman() { command sudo pacman"))
+            assertTrue(!text.contains("apk() { command sudo apk"))
+            assertTrue(text.contains("grep -qxFi"))
+            assertTrue(text.contains("altaris-ensure-locale"))
+            assertTrue(text.contains("ZSH_THEME=\"agnosterzak\""))
+            assertTrue(text.contains("pokemon-colorscripts --no-title"))
+            assertFalse(text.contains("ZSH_THEME=\"\""))
+            val rootfs = File(dir, "usr/var/lib/proot-distro/containers/manjaro/rootfs")
+            assertTrue(File(rootfs, "etc/profile.d/altaris-locale.sh").isFile)
+            assertTrue(File(rootfs, "usr/local/sbin/altaris-ensure-locale").isFile)
+            assertFalse(
+                File(rootfs, "etc/profile.d/altaris-locale.sh").readText()
+                    .contains("export LANG=C.UTF-8")
+            )
+            assertTrue(
+                File(rootfs, "etc/profile.d/altaris-locale.sh").readText()
+                    .contains("no UTF-8 locale in locale -a")
+            )
+            val ensure = File(rootfs, "usr/local/sbin/altaris-ensure-locale").readText()
+            assertTrue(ensure.contains("locale -a"))
+            assertFalse(ensure.contains("--needed glibc"))
+            assertTrue(ensure.contains("pacman -S --noconfirm glibc"))
+            assertTrue(ensure.contains("locale -a has neither en_US.utf8 nor C.utf8"))
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun repairIfNeeded_ubuntu_createsAptWrappedZshrc() {
+        val dir = prootFilesDir()
+        try {
+            val home = File(
+                dir,
+                "usr/var/lib/proot-distro/containers/ubuntu/rootfs/home/flux"
+            )
+            home.mkdirs()
+            val ctx = FakeContext(dir, "$dir/jni")
+            GuestZshrcRepair.repairIfNeeded(ctx, "proot", "ubuntu")
+            val text = File(home, ".zshrc").readText()
+            assertTrue(text.contains("apt-get() { command sudo apt-get"))
+            assertTrue(text.contains("apt() { command sudo apt"))
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun repairIfNeeded_archlinux_createsPacmanWrappedZshrc() {
+        val dir = prootFilesDir()
+        try {
+            val home = File(
+                dir,
+                "usr/var/lib/proot-distro/containers/archlinux/rootfs/home/flux"
+            )
+            home.mkdirs()
+            val ctx = FakeContext(dir, "$dir/jni")
+            GuestZshrcRepair.repairIfNeeded(ctx, "proot", "archlinux")
+            val text = File(home, ".zshrc").readText()
+            assertTrue(text.contains("pacman() { command sudo pacman"))
+            assertTrue(!text.contains("apk() { command sudo apk"))
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun repairIfNeeded_kali_and_parrot_aptWrappers() {
+        val dir = prootFilesDir()
+        try {
+            listOf("kali", "parrot").forEach { name ->
+                val home = File(
+                    dir,
+                    "usr/var/lib/proot-distro/containers/$name/rootfs/home/flux"
+                )
+                home.mkdirs()
+                val ctx = FakeContext(dir, "$dir/jni")
+                GuestZshrcRepair.repairIfNeeded(ctx, "proot", name)
+                val text = File(home, ".zshrc").readText()
+                assertTrue("$name missing apt-get wrapper", text.contains("apt-get() { command sudo apt-get"))
+            }
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun repairIfNeeded_writesFastfetchPresetWithFolders() {
+        val dir = prootFilesDir()
+        try {
+            val rootfs = File(dir, "usr/var/lib/proot-distro/containers/fedora/rootfs")
+            val home = File(rootfs, "home/altaris")
+            home.mkdirs()
+            File(rootfs, "root").mkdirs()
+            val ctx = FakeContext(dir, "$dir/jni")
+            GuestZshrcRepair.repairIfNeeded(ctx, "proot", "fedora")
+            val altarisJsonc = File(home, ".local/share/fastfetch/presets/termux.jsonc")
+            val rootJsonc = File(rootfs, "root/.local/share/fastfetch/presets/termux.jsonc")
+            val sysJsonc = File(rootfs, "usr/share/fastfetch/presets/termux.jsonc")
+            assertTrue(altarisJsonc.isFile)
+            assertTrue(rootJsonc.isFile)
+            assertTrue(sysJsonc.isFile)
+            val text = altarisJsonc.readText()
+            assertTrue(text.contains("\"folders\""))
+            assertTrue(text.contains("\"/\""))
+            assertFalse(text.contains("(pacman)"))
+            assertTrue(File(home, ".zshrc").readText().contains("locale -a"))
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun repairIfNeeded_cachesCompletion_skipsSecondPass() {
+        val dir = prootFilesDir()
+        try {
+            val home = File(
+                dir,
+                "usr/var/lib/proot-distro/containers/alpine/rootfs/home/flux"
+            )
+            home.mkdirs()
+            val ctx = FakeContext(dir, "$dir/jni")
+            // First pass creates the profile and caches completion (proot-opt-01).
+            GuestZshrcRepair.repairIfNeeded(ctx, "proot", "alpine")
+            val zshrc = File(home, ".zshrc")
+            assertTrue(zshrc.isFile)
+            // Second pass must return instantly via the SharedPreferences flag —
+            // deleting the file proves the cached pass did not re-scan/rewrite.
+            zshrc.delete()
+            GuestZshrcRepair.repairIfNeeded(ctx, "proot", "alpine")
+            assertFalse("cached pass should not recreate .zshrc", zshrc.exists())
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+}

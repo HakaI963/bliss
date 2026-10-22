@@ -24,12 +24,12 @@
 }
 
 # Keep app code package (applicationId may be com.zenithblue.fluxlinux but
-# Kotlin sources stay under com.ivarna.fluxlinux for both flavors).
--keep class com.ivarna.fluxlinux.** { *; }
+# Kotlin sources stay under com.altaris.linux for both flavors).
+-keep class com.altaris.linux.** { *; }
 
 # Shizuku instantiates the user service by class name inside the shell process.
 # Keep the whole engine plus the APK patching/signing libraries it reflects over.
--keep class com.ivarna.fluxlinux.clone.engine.** { *; }
+-keep class com.altaris.linux.clone.engine.** { *; }
 -dontwarn com.android.apksig.**
 -dontwarn com.reandroid.**
 -keep class com.android.apksig.** { *; }

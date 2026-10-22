@@ -19,21 +19,21 @@ install_ohmyzsh() {
     # Monochrome Altaris prompt theme (local; replaces the old colorful default).
     mkdir -p "$ZSH_CUSTOM/themes"
     rm -f "$ZSH_CUSTOM/themes/agnosterzak.zsh-theme" 2>/dev/null || true
-    if [ ! -s "$ZSH_CUSTOM/themes/bliss.zsh-theme" ]; then
-        cat > "$ZSH_CUSTOM/themes/bliss.zsh-theme" <<'FOLIO_THEME_EOF'
+    if [ ! -s "$ZSH_CUSTOM/themes/altaris.zsh-theme" ]; then
+        cat > "$ZSH_CUSTOM/themes/altaris.zsh-theme" <<'ALTARIS_THEME_EOF'
 # altaris prompt — Altaris's minimal monochrome prompt.
 # White/gray on black only; ASCII-safe (no powerline glyphs, no ANSI colors 31-44).
 # Segments:  altaris  host  working-dir  input-char
 PROMPT='%F{79}altaris%f%F{244}@%m%f %F{110}%~%f %F{255}%#%f '
 PROMPT2='%F{240}> %f'
-FOLIO_THEME_EOF
+ALTARIS_THEME_EOF
     fi
     if grep -q "plugins=" "$HOME/.zshrc" 2>/dev/null; then
         sed -i 's/plugins=(.*)/plugins=(git zsh-autosuggestions zsh-syntax-highlighting)/' "$HOME/.zshrc"
     else
         echo 'plugins=(git zsh-autosuggestions zsh-syntax-highlighting)' >> "$HOME/.zshrc"
     fi
-    sed -i 's/^ZSH_THEME=.*$/ZSH_THEME="bliss"/' "$HOME/.zshrc"
+    sed -i 's/^ZSH_THEME=.*$/ZSH_THEME="altaris"/' "$HOME/.zshrc"
     echo "✅ Zsh configuration complete."
 }
 
@@ -165,15 +165,15 @@ install_nerd_font() {
 }
 
 # ── Altaris launch stickers: 49 truecolor anime half-block designs ─
-# Installs ~/.config/bliss/banner/*.txt (random pick per shell open) and
-# ~/.config/bliss/banner.sh (the bliss_banner function sourced by .zshrc/.bashrc).
+# Installs ~/.config/altaris/banner/*.txt (random pick per shell open) and
+# ~/.config/altaris/banner.sh (the altaris_banner function sourced by .zshrc/.bashrc).
 # Offline, idempotent (`.banner-rev` refreshes existing installs).
-# Opt out at runtime: FLUX_NO_BANNER=1.
-_flux_write_folio_banner() {
+# Opt out at runtime: ALTARIS_NO_BANNER=1.
+_altaris_write_altaris_banner() {
     _home="$1"
     _owner="${2:-}"
     [ -n "$_home" ] || return 0
-    _bdir="$_home/.config/bliss/banner"
+    _bdir="$_home/.config/altaris/banner"
     _brev="9-l2"
     _need=0
     case "$(cat "$_bdir/.banner-rev" 2>/dev/null || true)" in
@@ -183,13 +183,13 @@ _flux_write_folio_banner() {
     for _b in 01-catgirl 02-catgirl-teal 03-catgirl-violet 04-arch-tan 05-arch-tan-violet 06-icecat 07-icecat-blush 08-maidfull 09-maidfull-rose 10-maidfull-lime 11-fandom 12-fandom-teal 13-fox 14-fox-sky 15-godette 16-godette-violet 17-godette-gobot 18-godette-gobot-mint 19-newsboy 20-newsboy-rose 21-newsboy-violet 22-rational 23-rational-indigo 24-lufthan 25-lufthan-teal 26-lufthan-violet 27-publicq 28-publicq-blue 29-publicq-violet 30-chibisq 31-chibisq-cyan 32-chibisq-amber 33-loveweb 34-loveweb-teal 35-kitsune 36-kitsune-jade 37-kitsune-azure 38-animegirl 39-animegirl-teal 40-animegirl-lime 41-moemiku 42-moemiku-azure 43-moemiku-blush 44-afrowikipe 45-afrowikipe-indigo 46-vocaloid 47-vocaloid-azure 48-vocaloid-blush 49-blossom; do
         [ -s "$_bdir/$_b.txt" ] || _need=1
     done
-    [ -s "$_home/.config/bliss/banner.sh" ] || _need=1
-    grep -q "bliss-banner v9" "$_home/.config/bliss/banner.sh" 2>/dev/null || _need=1
+    [ -s "$_home/.config/altaris/banner.sh" ] || _need=1
+    grep -q "altaris-banner v9" "$_home/.config/altaris/banner.sh" 2>/dev/null || _need=1
     [ "$_need" = "1" ] || return 0
 
     mkdir -p "$_bdir" 2>/dev/null || return 0
     rm -f "$_bdir"/*.txt 2>/dev/null || true
-    cat > "$_bdir/.bliss-banners.$$" <<'FOLIO_BANNER_ALL'
+    cat > "$_bdir/.altaris-banners.$$" <<'ALTARIS_BANNER_ALL'
 ==>01-catgirl
 \033[48;2;0;0;0m              \033[38;2;0;0;0;48;2;46;32;21m▀▀ \033[38;2;46;32;21;48;2;0;0;0m▀\033[48;2;46;32;21m \033[38;2;86;53;28;48;2;194;115;54m▀\033[48;2;202;107;38m▀\033[38;2;46;32;21;48;2;172;87;29m▀\033[38;2;122;90;61;48;2;201;138;85m▀\033[38;2;201;181;159;48;2;160;165;163m▀\033[38;2;123;127;125;48;2;46;32;21m▀\033[38;2;46;32;21;48;2;0;0;0m▀\033[0m
 \033[48;2;0;0;0m              \033[38;2;46;32;21m▀▀▀\033[48;2;138;82;37m▀\033[38;2;166;106;57;48;2;225;138;61m▀\033[48;2;194;115;54m \033[38;2;194;115;54;48;2;225;138;61m▀ \033[38;2;172;87;29m▀\033[38;2;123;59;19;48;2;172;87;29m▀\033[48;2;123;59;19m \033[38;2;46;32;21;48;2;86;53;28m▀\033[0m
@@ -1039,27 +1039,27 @@ _flux_write_folio_banner() {
 \033[38;2;124;119;106;48;2;229;225;210m▀\033[38;2;244;232;219;48;2;206;193;175m▀\033[38;2;212;180;145;48;2;185;189;174m▀\033[38;2;208;161;141;48;2;206;193;175m▀\033[38;2;209;210;199;48;2;183;180;154m▀\033[38;2;208;205;182;48;2;185;189;174m▀\033[38;2;183;180;154;48;2;209;210;199m▀\033[38;2;178;171;135;48;2;183;180;154m▀\033[38;2;135;156;136;48;2;144;154;118m▀\033[38;2;182;154;130;48;2;183;180;154m▀\033[38;2;229;225;210;48;2;206;193;175m▀\033[38;2;206;193;175;48;2;155;181;160m▀ \033[38;2;208;205;182;48;2;229;225;210m▀\033[38;2;155;181;160;48;2;185;189;174m▀\033[48;2;155;181;160m \033[48;2;208;205;182m \033[38;2;223;197;179;48;2;212;180;145m▀\033[38;2;227;186;143m▀\033[38;2;212;180;145;48;2;178;171;135m▀\033[38;2;223;197;179;48;2;183;180;154m▀\033[38;2;208;205;182;48;2;135;156;136m▀\033[48;2;206;193;175m▀\033[38;2;206;193;175;48;2;229;216;197m▀\033[48;2;178;171;135m \033[38;2;144;154;118m▀\033[38;2;212;180;145;48;2;223;197;179m▀\033[48;2;229;225;210m \033[48;2;37;39;35m \033[0m
 \033[38;2;56;56;47;48;2;0;0;0m▀\033[38;2;244;232;219;48;2;94;113;96m▀\033[38;2;229;225;210;48;2;185;189;174m▀ \033[38;2;178;171;135;48;2;206;193;175m▀\033[38;2;223;197;179;48;2;229;216;197m▀\033[38;2;208;205;182;48;2;183;180;154m▀\033[38;2;153;164;140;48;2;123;149;113m▀\033[48;2;182;154;130m▀\033[38;2;182;154;130;48;2;212;180;145m▀\033[48;2;142;130;122m▀\033[48;2;153;164;140m \033[38;2;132;171;148;48;2;155;181;160m▀\033[38;2;155;181;160;48;2;185;189;174m▀\033[48;2;209;210;199m▀\033[48;2;208;205;182m▀\033[48;2;185;189;174m▀\033[48;2;144;154;118m \033[38;2;182;154;130m▀\033[38;2;144;154;118;48;2;178;171;135m▀\033[38;2;153;164;140m▀▀\033[38;2;223;197;179m▀\033[38;2;183;180;154;48;2;144;154;118m▀\033[38;2;144;154;118;48;2;183;180;154m▀\033[38;2;155;181;160;48;2;244;232;219m▀\033[48;2;153;164;140m \033[38;2;56;56;47;48;2;135;156;136m▀\033[38;2;0;0;0;48;2;37;39;35m▀\033[0m
 \033[48;2;0;0;0m  \033[38;2;37;39;35m▀\033[38;2;56;56;47m▀▀▀▀\033[38;2;37;39;35m▀\033[38;2;56;56;47m▀▀▀\033[38;2;37;39;35m▀\033[38;2;56;56;47m▀▀▀▀▀▀▀▀▀▀▀▀▀\033[38;2;85;84;76m▀\033[38;2;56;56;47m▀\033[38;2;85;84;76m▀\033[38;2;37;39;35m▀\033[0m
-FOLIO_BANNER_ALL
+ALTARIS_BANNER_ALL
     awk -v dir="$_bdir" '
         /^==> ?[0-9A-Za-z._-]+$/ { name=substr($0,4); gsub(/^[ \t]+|[ \t]+$/, "", name); file=dir "/" name ".txt"; next }
         { if (file != "") print > file }
-    ' "$_bdir/.bliss-banners.$$" 2>/dev/null || true
-    rm -f "$_bdir/.bliss-banners.$$" 2>/dev/null || true
+    ' "$_bdir/.altaris-banners.$$" 2>/dev/null || true
+    rm -f "$_bdir/.altaris-banners.$$" 2>/dev/null || true
     printf '%s\n' "$_brev" > "$_bdir/.banner-rev" 2>/dev/null || true
 
-    cat > "$_home/.config/bliss/banner.sh" <<'FOLIO_BANNER_SH'
-# bliss-banner.sh — Altaris launch sticker: truecolor half-block anime art,
+    cat > "$_home/.config/altaris/banner.sh" <<'ALTARIS_BANNER_SH'
+# altaris-banner.sh — Altaris launch sticker: truecolor half-block anime art,
 # one random design per interactive shell, printed exactly ONCE per shell
 # even when several rc files source it or nested shells inherit the
 # environment. Works with zsh, bash and POSIX sh.
-# Opt out at runtime: FLUX_NO_BANNER=1
-# bliss-banner v9
-bliss_banner_art() {
+# Opt out at runtime: ALTARIS_NO_BANNER=1
+# altaris-banner v9
+altaris_banner_art() {
   # zsh: empty glob must not abort the function.
   if [ -n "${ZSH_VERSION:-}" ]; then
     setopt localoptions nullglob nonomatch 2>/dev/null || true
   fi
-  _bb_dir="${HOME:-/root}/.config/bliss/banner"
+  _bb_dir="${HOME:-/root}/.config/altaris/banner"
   [ -d "$_bb_dir" ] || return 0
   _bb_list=""
   _bb_n=0
@@ -1085,18 +1085,18 @@ bliss_banner_art() {
   fi
   unset _bb_dir _bb_list _bb_n _bb_f _bb_i _bb_pick
 }
-bliss_banner() {
-  [ "${FLUX_NO_BANNER:-0}" = "1" ] && return 0
+altaris_banner() {
+  [ "${ALTARIS_NO_BANNER:-0}" = "1" ] && return 0
   # One sticker per shell process: exported, so nested shells and every
   # re-sourced rc file in the same process skip instantly. A brand-new
   # shell (new tab / new session) always prints exactly one design.
-  [ -z "${_BLISS_BANNER_SHOWN:-}" ] || return 0
+  [ -z "${_ALTARIS_BANNER_SHOWN:-}" ] || return 0
   case $- in
     *i*) ;;
     *) return 0 ;;
   esac
-  export _BLISS_BANNER_SHOWN=1
-  bliss_banner_art
+  export _ALTARIS_BANNER_SHOWN=1
+  altaris_banner_art
   # Header: exactly one line, "altaris@<id>" (distro id only). ID= from
   # /etc/os-release; fallbacks: first word of PRETTY_NAME, then "linux".
   _bb_fid=""
@@ -1110,17 +1110,17 @@ bliss_banner() {
   printf '%s\n' "altaris@$_bb_fid"
   unset _bb_fid
 }
-bliss_banner
-FOLIO_BANNER_SH
+altaris_banner
+ALTARIS_BANNER_SH
 
     if [ -n "$_owner" ]; then
-        chown -R "$_owner" "$_home/.config/bliss" 2>/dev/null || true
+        chown -R "$_owner" "$_home/.config/altaris" 2>/dev/null || true
     fi
     return 0
 }
 
 # ── Bash login wiring: same launch sticker for bash sessions (idempotent).
-_flux_wire_bash_banner() {
+_altaris_wire_bash_banner() {
     _home="$1"
     _owner="${2:-}"
     [ -n "$_home" ] && [ -d "$_home" ] || return 0
@@ -1128,10 +1128,10 @@ _flux_wire_bash_banner() {
     if [ ! -f "$_brc" ]; then
         printf '%s\n' '# Altaris bash profile' 'export PATH="$HOME/.local/bin:$PATH"' > "$_brc" 2>/dev/null || true
     fi
-    if [ -f "$_brc" ] && ! grep -q 'bliss/banner.sh' "$_brc" 2>/dev/null; then
+    if [ -f "$_brc" ] && ! grep -q 'altaris/banner.sh' "$_brc" 2>/dev/null; then
         {
-            printf '\n# Altaris launch sticker (random truecolor anime banner; opt out FLUX_NO_BANNER=1)\n'
-            printf '[ -r "$HOME/.config/bliss/banner.sh" ] && . "$HOME/.config/bliss/banner.sh"\n'
+            printf '\n# Altaris launch sticker (random truecolor anime banner; opt out ALTARIS_NO_BANNER=1)\n'
+            printf '[ -r "$HOME/.config/altaris/banner.sh" ] && . "$HOME/.config/altaris/banner.sh"\n'
         } >> "$_brc" 2>/dev/null || true
     fi
     _bpf="$_home/.bash_profile"
@@ -1155,8 +1155,8 @@ configure_shell_banner() {
 
     echo "⚡ Configuring shell banner..."
     # Random truecolor anime launch sticker + minimal `altaris@<id>` header.
-    _flux_write_folio_banner "$HOME"
-    _flux_wire_bash_banner "$HOME"
+    _altaris_write_altaris_banner "$HOME"
+    _altaris_wire_bash_banner "$HOME"
 
     RCFILE="$HOME/.zshrc"
     [ -f "$RCFILE" ] || touch "$RCFILE"
@@ -1164,18 +1164,18 @@ configure_shell_banner() {
     # Drop the plain auto-print fastfetch line from older runs; the banner
     # prints the sticker + one-line header itself.
     if grep -q 'fastfetch --config' "$RCFILE" 2>/dev/null; then
-        grep -v '^fastfetch --config' "$RCFILE" > "${RCFILE}.folio.$$" 2>/dev/null \
-            && mv -f "${RCFILE}.folio.$$" "$RCFILE" 2>/dev/null || rm -f "${RCFILE}.folio.$$"
+        grep -v '^fastfetch --config' "$RCFILE" > "${RCFILE}.altaris.$$" 2>/dev/null \
+            && mv -f "${RCFILE}.altaris.$$" "$RCFILE" 2>/dev/null || rm -f "${RCFILE}.altaris.$$"
     fi
     if [ -f "$RCFILE" ]; then
         awk '/banner\.sh/ { if (b++) next } /appearance-apply\.sh/ { if (a++) next } { print }' \
-            "$RCFILE" > "${RCFILE}.bliss.$$" 2>/dev/null && \
-            mv -f "${RCFILE}.bliss.$$" "$RCFILE" 2>/dev/null || rm -f "${RCFILE}.bliss.$$" 2>/dev/null || true
+            "$RCFILE" > "${RCFILE}.altaris.$$" 2>/dev/null && \
+            mv -f "${RCFILE}.altaris.$$" "$RCFILE" 2>/dev/null || rm -f "${RCFILE}.altaris.$$" 2>/dev/null || true
     fi
-    if [ -f "$RCFILE" ] && ! grep -q 'bliss/banner.sh' "$RCFILE" 2>/dev/null; then
+    if [ -f "$RCFILE" ] && ! grep -q 'altaris/banner.sh' "$RCFILE" 2>/dev/null; then
         {
-            printf '\n# Altaris launch sticker (random truecolor anime banner; opt out FLUX_NO_BANNER=1)\n'
-            printf '[ -r "$HOME/.config/bliss/banner.sh" ] && . "$HOME/.config/bliss/banner.sh"\n'
+            printf '\n# Altaris launch sticker (random truecolor anime banner; opt out ALTARIS_NO_BANNER=1)\n'
+            printf '[ -r "$HOME/.config/altaris/banner.sh" ] && . "$HOME/.config/altaris/banner.sh"\n'
         } >> "$RCFILE"
     fi
 
@@ -1185,13 +1185,13 @@ configure_shell_banner() {
 }
 
 # ── Altaris Linux appearance (host Termux side) ────────────────────────────────
-# Applies the terminal colors from ~/.config/bliss/appearance.env when the app
+# Applies the terminal colors from ~/.config/altaris/appearance.env when the app
 # staged one for the host bootstrap. No-op otherwise; never fatal.
 apply_host_appearance() {
-    ENV="$HOME/.config/bliss/appearance.env"
+    ENV="$HOME/.config/altaris/appearance.env"
     [ -r "$ENV" ] || return 0
-    FG=$(. "$ENV" >/dev/null 2>&1 || true; printf '%s' "${FLUX_TERM_FG:-#F4F4F5}")
-    BG=$(. "$ENV" >/dev/null 2>&1 || true; printf '%s' "${FLUX_TERM_BG:-#09090B}")
+    FG=$(. "$ENV" >/dev/null 2>&1 || true; printf '%s' "${ALTARIS_TERM_FG:-#F4F4F5}")
+    BG=$(. "$ENV" >/dev/null 2>&1 || true; printf '%s' "${ALTARIS_TERM_BG:-#09090B}")
     mkdir -p "$HOME/.termux" 2>/dev/null || true
     {
         printf 'foreground=%s\n' "$FG"
@@ -1217,5 +1217,5 @@ echo "🎉 Altaris: Termux enhancement complete!"
 echo "🔄 Restart Termux to see all changes."
 
 # Create marker file to track tweaks application
-touch "$HOME/.fluxlinux/termux_tweaks.done"
-am start -a android.intent.action.VIEW -d "fluxlinux://callback?result=success&name=termux_tweaks"
+touch "$HOME/.altarislinux/termux_tweaks.done"
+am start -a android.intent.action.VIEW -d "altaris://callback?result=success&name=termux_tweaks"

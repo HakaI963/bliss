@@ -11,7 +11,7 @@ CALLBACK_NAME="xfce4_desktop"
 send_callback() {
     RESULT="$1"
     am start -a android.intent.action.VIEW \
-      -d "fluxlinux://callback?result=${RESULT}&name=${CALLBACK_NAME}" \
+      -d "altaris://callback?result=${RESULT}&name=${CALLBACK_NAME}" \
       --flags 0x10000000 2>/dev/null || true
 }
 

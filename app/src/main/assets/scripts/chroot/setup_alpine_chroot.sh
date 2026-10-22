@@ -3,16 +3,16 @@
 # Installs Alpine 3.24 minirootfs chroot (Requires Root).
 # Family/XFCE install is owned by onboarding family phase (setup_alpine_family.sh).
 
-ALPINEPATH="${FLUX_CHROOT:-/data/local/bliss/chroots/alpine}"
-USERNAME="flux"
-[ -d /data/local/folio ] && [ ! -e /data/local/bliss ] && mv /data/local/folio /data/local/bliss 2>/dev/null || true
+ALPINEPATH="${ALTARIS_CHROOT:-/data/local/altaris/chroots/alpine}"
+USERNAME="altaris"
+[ -d /data/local/altaris ] && [ ! -e /data/local/altaris ] && mv /data/local/altaris /data/local/altaris 2>/dev/null || true
 
 PKG="${TERMUX_APP__PACKAGE_NAME:-com.ivarna.fluxlinux}"
 APP_HOME="${TERMUX__HOME:-/data/data/${PKG}/files/home}"
 APP_PREFIX="${TERMUX__PREFIX:-/data/data/${PKG}/files/usr}"
 ROOTFS_NAME="alpine_3.24_rootfs.tar.gz"
-ROOTFS_URL="${FLUX_ROOTFS_URL:-https://github.com/HakaI963/bliss/releases/download/rootfs/alpine_3.24_rootfs.tar.gz}"
-ROOTFS_SHA256="${FLUX_ROOTFS_SHA256:-f55a90f69052c5bd6f92cb09a8f47065970830b194c917a006fb94028e721259}"
+ROOTFS_URL="${ALTARIS_ROOTFS_URL:-https://github.com/HakaI963/altaris/releases/download/rootfs/alpine_3.24_rootfs.tar.gz}"
+ROOTFS_SHA256="${ALTARIS_ROOTFS_SHA256:-f55a90f69052c5bd6f92cb09a8f47065970830b194c917a006fb94028e721259}"
 
 progress() { printf "\033[1;36m[+] %s\033[0m\n" "$1"; }
 success()  { printf "\033[1;32m[✓] %s\033[0m\n" "$1"; }
@@ -40,9 +40,9 @@ goodbye() {
 
 resolve_rootfs_archive() {
     ROOTFS_ARCHIVE=""
-    if [ -n "${FLUX_ROOTFS_PATH:-}" ] && [ -f "$FLUX_ROOTFS_PATH" ] && [ -s "$FLUX_ROOTFS_PATH" ]; then
-        ROOTFS_ARCHIVE="$FLUX_ROOTFS_PATH"
-        progress "rootfs from FLUX_ROOTFS_PATH=$ROOTFS_ARCHIVE"
+    if [ -n "${ALTARIS_ROOTFS_PATH:-}" ] && [ -f "$ALTARIS_ROOTFS_PATH" ] && [ -s "$ALTARIS_ROOTFS_PATH" ]; then
+        ROOTFS_ARCHIVE="$ALTARIS_ROOTFS_PATH"
+        progress "rootfs from ALTARIS_ROOTFS_PATH=$ROOTFS_ARCHIVE"
         return 0
     fi
     for candidate in \
@@ -207,7 +207,7 @@ configure_alpine_chroot() {
             else
                 adduser -D -s /bin/sh $USERNAME
             fi
-            echo '$USERNAME:flux' | chpasswd 2>/dev/null || true
+            echo '$USERNAME:altaris' | chpasswd 2>/dev/null || true
         fi
         for g in wheel audio video netdev aid_inet; do
             addgroup $USERNAME \$g 2>/dev/null || true
@@ -218,20 +218,20 @@ configure_alpine_chroot() {
     " || goodbye
 
     # XFCE is installed by setup_alpine_family.sh in onboarding (cleaner single owner)
-    touch "$ALPINEPATH/.bliss_configured"
+    touch "$ALPINEPATH/.altaris_configured"
     success "Alpine Environment Configured (rootfs + user; XFCE via family phase)!"
 
     # Root-staged helper/launchers live in the Altaris helpers dir (idempotent).
-    mkdir -p /data/local/bliss/helpers
+    mkdir -p /data/local/altaris/helpers
 
     # Stage SSOT helper
-    HELPER="/data/local/bliss/helpers/bliss_chroot.sh"
+    HELPER="/data/local/altaris/helpers/altaris_chroot.sh"
     progress "Installing chroot SSOT helper at $HELPER..."
     HELPER_SRC=""
     for cand in \
-        "/data/data/${PKG}/files/home/bliss_chroot.sh" \
-        "/data/data/${PKG}/files/staged_scripts/bliss_chroot.sh" \
-        "$(dirname "$0")/bliss_chroot.sh"
+        "/data/data/${PKG}/files/home/altaris_chroot.sh" \
+        "/data/data/${PKG}/files/staged_scripts/altaris_chroot.sh" \
+        "$(dirname "$0")/altaris_chroot.sh"
     do
         if [ -f "$cand" ]; then
             HELPER_SRC="$cand"
@@ -243,28 +243,28 @@ configure_alpine_chroot() {
         chmod 755 "$HELPER"
         success "SSOT helper installed from $HELPER_SRC"
     else
-        error "bliss_chroot.sh not found — app will stage on first session"
+        error "altaris_chroot.sh not found — app will stage on first session"
     fi
 
     # Stage Alpine GUI scripts if present in app home
     for s in start_alpine_gui.sh stop_alpine_gui.sh; do
         src="/data/data/${PKG}/files/home/$s"
         if [ -f "$src" ]; then
-            cp -f "$src" "/data/local/bliss/helpers/$s"
-            chmod +x "/data/local/bliss/helpers/$s"
+            cp -f "$src" "/data/local/altaris/helpers/$s"
+            chmod +x "/data/local/altaris/helpers/$s"
             success "Staged $s"
         fi
     done
 
     # Thin CLI launcher
-    CLI_SCRIPT="/data/local/bliss/helpers/enter_alpine.sh"
+    CLI_SCRIPT="/data/local/altaris/helpers/enter_alpine.sh"
     cat > "$CLI_SCRIPT" <<'EOF'
 #!/system/bin/sh
-HELPER=/data/local/bliss/helpers/bliss_chroot.sh
-[ -f "$HELPER" ] || { echo "bliss_chroot.sh missing" >&2; exit 127; }
-export FLUX_CHROOT="${FLUX_CHROOT:-/data/local/bliss/chroots/alpine}"
+HELPER=/data/local/altaris/helpers/altaris_chroot.sh
+[ -f "$HELPER" ] || { echo "altaris_chroot.sh missing" >&2; exit 127; }
+export ALTARIS_CHROOT="${ALTARIS_CHROOT:-/data/local/altaris/chroots/alpine}"
 echo "Entering Alpine Chroot (CLI)..."
-exec sh "$HELPER" login --user flux --shell zsh
+exec sh "$HELPER" login --user altaris --shell zsh
 EOF
     chmod 755 "$CLI_SCRIPT"
 
@@ -272,7 +272,7 @@ EOF
     success "Altaris: Alpine Chroot Setup Complete!"
 
     am start -a android.intent.action.VIEW \
-        -d "fluxlinux://callback?result=success&name=distro_install_alpine_chroot" \
+        -d "altaris://callback?result=success&name=distro_install_alpine_chroot" \
         >/dev/null 2>&1 || true
     return 0
 }
@@ -288,9 +288,9 @@ main() {
 # resolve root BusyBox (manager built-in; NDK module not required)
 _rr=""
 for _c in \
-  "${FLUX_RESOLVE_BB:-}" \
+  "${ALTARIS_RESOLVE_BB:-}" \
   "$(dirname "$0")/resolve_bb.sh" \
-  /data/local/bliss/helpers/bliss_resolve_bb.sh
+  /data/local/altaris/helpers/altaris_resolve_bb.sh
 do
   [ -n "$_c" ] && [ -f "$_c" ] && _rr="$_c" && break
 done
@@ -301,11 +301,11 @@ if [ -n "$_rr" ]; then
 fi
 if [ -z "${BB:-}" ]; then
   # sidecar missing (desktop/uninstall/staged setup) — same B1 walk as resolve_bb
-  if [ -n "${FLUX_BB:-}" ] && [ -x "$FLUX_BB" ] &&
-     "$FLUX_BB" --list >/dev/null 2>&1; then BB="$FLUX_BB"; fi
-  if [ -z "${BB:-}" ] && [ -x /data/local/bliss/busybox/bliss_busybox ] &&
-     /data/local/bliss/busybox/bliss_busybox --list >/dev/null 2>&1; then
-    BB=/data/local/bliss/busybox/bliss_busybox
+  if [ -n "${ALTARIS_BB:-}" ] && [ -x "$ALTARIS_BB" ] &&
+     "$ALTARIS_BB" --list >/dev/null 2>&1; then BB="$ALTARIS_BB"; fi
+  if [ -z "${BB:-}" ] && [ -x /data/local/altaris/busybox/altaris_busybox ] &&
+     /data/local/altaris/busybox/altaris_busybox --list >/dev/null 2>&1; then
+    BB=/data/local/altaris/busybox/altaris_busybox
   fi
   if [ -z "${BB:-}" ]; then
     for path in \
@@ -330,17 +330,17 @@ fi
 
     progress "Using Root Busybox: $BB"
 
-    ALPINEPATH="${FLUX_CHROOT:-/data/local/bliss/chroots/alpine}"
+    ALPINEPATH="${ALTARIS_CHROOT:-/data/local/altaris/chroots/alpine}"
 
-    # Only treat as fully installed when marker + bash + flux user exist.
+    # Only treat as fully installed when marker + bash + altaris user exist.
     # Minirootfs always has bin/sh + sbin/apk — those alone must NOT skip configure.
-    if { [ -f "$ALPINEPATH/.bliss_configured" ] || [ -f "$ALPINEPATH/.flux_configured" ]; } && \
+    if { [ -f "$ALPINEPATH/.altaris_configured" ] || [ -f "$ALPINEPATH/.altaris_configured" ]; } && \
        { [ -e "$ALPINEPATH/bin/bash" ] || [ -e "$ALPINEPATH/usr/bin/bash" ]; } && \
-       grep -q '^flux:' "$ALPINEPATH/etc/passwd" 2>/dev/null; then
+       grep -q '^altaris:' "$ALPINEPATH/etc/passwd" 2>/dev/null; then
         success "Alpine Chroot already installed."
         progress "VERIFY: chroot present at $ALPINEPATH"
         am start -a android.intent.action.VIEW \
-            -d "fluxlinux://callback?result=success&name=distro_install_alpine_chroot" \
+            -d "altaris://callback?result=success&name=distro_install_alpine_chroot" \
             >/dev/null 2>&1 || true
         exit 0
     fi

@@ -1,22 +1,22 @@
 #!/system/bin/sh
 # start_debian13_gui.sh — root: mount Debian chroot + launch XFCE4
 # Called by start_gui_chroot.sh after host Pulse/VirGL/X11 are up.
-# Paths: app package via FLUX_PACKAGE / TARGET_PREFIX (ivarna or zenithblue). Sticky guest /tmp preserved.
+# Paths: app package via ALTARIS_PACKAGE / TARGET_PREFIX (ivarna or zenithblue). Sticky guest /tmp preserved.
 
-DEBIANPATH="${DEBIANPATH:-/data/local/bliss/chroots/debian}"
-[ -d /data/local/folio ] && [ ! -e /data/local/bliss ] && mv /data/local/folio /data/local/bliss 2>/dev/null || true
+DEBIANPATH="${DEBIANPATH:-/data/local/altaris/chroots/debian}"
+[ -d /data/local/altaris ] && [ ! -e /data/local/altaris ] && mv /data/local/altaris /data/local/altaris 2>/dev/null || true
 if [ -z "${TARGET_PREFIX:-}" ]; then
-  if [ -n "${FLUX_PREFIX:-}" ]; then
-    TARGET_PREFIX="$FLUX_PREFIX"
-  elif [ -n "${FLUX_PACKAGE:-}" ]; then
-    TARGET_PREFIX="/data/data/${FLUX_PACKAGE}/files/usr"
+  if [ -n "${ALTARIS_PREFIX:-}" ]; then
+    TARGET_PREFIX="$ALTARIS_PREFIX"
+  elif [ -n "${ALTARIS_PACKAGE:-}" ]; then
+    TARGET_PREFIX="/data/data/${ALTARIS_PACKAGE}/files/usr"
   elif [ -d /data/data/com.zenithblue.fluxlinux/files/usr ]; then
     TARGET_PREFIX="/data/data/com.zenithblue.fluxlinux/files/usr"
   else
     TARGET_PREFIX="/data/data/com.ivarna.fluxlinux/files/usr"
   fi
 fi
-USERNAME="${USERNAME:-flux}"
+USERNAME="${USERNAME:-altaris}"
 
 echo "========================================"
 echo "Altaris: Chroot XFCE (root stage)"
@@ -26,9 +26,9 @@ echo "========================================"
 # resolve root BusyBox (manager built-in; NDK module not required)
 _rr=""
 for _c in \
-  "${FLUX_RESOLVE_BB:-}" \
+  "${ALTARIS_RESOLVE_BB:-}" \
   "$(dirname "$0")/resolve_bb.sh" \
-  /data/local/bliss/helpers/bliss_resolve_bb.sh
+  /data/local/altaris/helpers/altaris_resolve_bb.sh
 do
   [ -n "$_c" ] && [ -f "$_c" ] && _rr="$_c" && break
 done
@@ -39,11 +39,11 @@ if [ -n "$_rr" ]; then
 fi
 if [ -z "${BB:-}" ]; then
   # sidecar missing (desktop/uninstall/staged setup) — same B1 walk as resolve_bb
-  if [ -n "${FLUX_BB:-}" ] && [ -x "$FLUX_BB" ] &&
-     "$FLUX_BB" --list >/dev/null 2>&1; then BB="$FLUX_BB"; fi
-  if [ -z "${BB:-}" ] && [ -x /data/local/bliss/busybox/bliss_busybox ] &&
-     /data/local/bliss/busybox/bliss_busybox --list >/dev/null 2>&1; then
-    BB=/data/local/bliss/busybox/bliss_busybox
+  if [ -n "${ALTARIS_BB:-}" ] && [ -x "$ALTARIS_BB" ] &&
+     "$ALTARIS_BB" --list >/dev/null 2>&1; then BB="$ALTARIS_BB"; fi
+  if [ -z "${BB:-}" ] && [ -x /data/local/altaris/busybox/altaris_busybox ] &&
+     /data/local/altaris/busybox/altaris_busybox --list >/dev/null 2>&1; then
+    BB=/data/local/altaris/busybox/altaris_busybox
   fi
   if [ -z "${BB:-}" ]; then
     for path in \
@@ -77,7 +77,7 @@ if [ ! -x "$DEBIANPATH/usr/bin/startxfce4" ] && [ ! -f "$DEBIANPATH/usr/bin/star
   exit 1
 fi
 
-# Soft SELinux (HyperOS / enforcing) — flux pattern; fail soft
+# Soft SELinux (HyperOS / enforcing) — altaris pattern; fail soft
 if command -v getenforce >/dev/null 2>&1; then
   SELINUX_STATUS=$(getenforce 2>/dev/null || true)
   echo "Altaris: SELinux=$SELINUX_STATUS"
@@ -96,7 +96,7 @@ if command -v chcon >/dev/null 2>&1; then
 fi
 restorecon -RF "$TARGET_PREFIX/tmp" 2>/dev/null || true
 
-HELPER="${HELPER:-/data/local/bliss/helpers/bliss_chroot.sh}"
+HELPER="${HELPER:-/data/local/altaris/helpers/altaris_chroot.sh}"
 echo "[1/5] Mounts (SSOT if available)..."
 # Wait for host Loader to create X0 before --x11 bind
 mkdir -p "$TARGET_PREFIX/tmp/.X11-unix" 2>/dev/null || true
@@ -115,15 +115,15 @@ if [ ! -S "$TARGET_PREFIX/tmp/.X11-unix/X0" ]; then
 fi
 
 if [ -f "$HELPER" ]; then
-  export FLUX_CHROOT="$DEBIANPATH"
-  export FLUX_PREFIX="$TARGET_PREFIX"
-  export FLUX_HOST_TMP="${TARGET_PREFIX}/tmp"
+  export ALTARIS_CHROOT="$DEBIANPATH"
+  export ALTARIS_PREFIX="$TARGET_PREFIX"
+  export ALTARIS_HOST_TMP="${TARGET_PREFIX}/tmp"
   # Legacy aliases (if an older helper still reads NC_*)
   export NC_CHROOT="$DEBIANPATH"
   export NC_PREFIX="$TARGET_PREFIX"
   export NC_HOST_TMP="${TARGET_PREFIX}/tmp"
   sh "$HELPER" mount --x11 || true
-  echo "[2/5] X11 via bliss_chroot mount --x11"
+  echo "[2/5] X11 via altaris_chroot mount --x11"
 else
   /system/bin/mount -o remount,dev,suid /data 2>/dev/null \
     || $BB mount -o remount,dev,suid /data 2>/dev/null || true
@@ -161,21 +161,21 @@ else
     >/dev/null 2>&1
 fi
 
-echo "[4/5] GPU mode + launch ${FLUX_DESKTOP:-xfce4} as $USERNAME..."
-# FLUX_DESKTOP (env from DesktopLauncher): xfce4 (default) | kde. Expanded into the guest script below.
-FLUX_DE_CMD=startxfce4
-FLUX_KDE_ENV=
-if [ "${FLUX_DESKTOP:-xfce4}" = kde ]; then
-  FLUX_DE_CMD=startplasma-x11
+echo "[4/5] GPU mode + launch ${ALTARIS_DESKTOP:-xfce4} as $USERNAME..."
+# ALTARIS_DESKTOP (env from DesktopLauncher): xfce4 (default) | kde. Expanded into the guest script below.
+ALTARIS_DE_CMD=startxfce4
+ALTARIS_KDE_ENV=
+if [ "${ALTARIS_DESKTOP:-xfce4}" = kde ]; then
+  ALTARIS_DE_CMD=startplasma-x11
   # Qt/KDE reject /tmp as XDG_RUNTIME_DIR (wrong perms); use a private 0700 dir.
   # GPU env for KDE: zink OpenGL compositing on Turnip/PanVK, none on software.
-  mkdir -p "$DEBIANPATH/usr/local/lib/fluxlinux"
-  cat > "$DEBIANPATH/usr/local/lib/fluxlinux/bliss_kde_env.sh" << 'KDE_EOF'
-# Sourced after flux_gpu_apply_runtime. Plasma 6 kwin_x11: O2 = desktop OpenGL.
-# OPT-IN (touch /etc/bliss/kde_gl): KWin O2 on zink shows a black screen on
+  mkdir -p "$DEBIANPATH/usr/local/lib/altarislinux"
+  cat > "$DEBIANPATH/usr/local/lib/altarislinux/altaris_kde_env.sh" << 'KDE_EOF'
+# Sourced after altaris_gpu_apply_runtime. Plasma 6 kwin_x11: O2 = desktop OpenGL.
+# OPT-IN (touch /etc/altaris/kde_gl): KWin O2 on zink shows a black screen on
 # PanVK (Xlorie, verified Poco X6 Pro); Turnip unverified. Default stays N.
 export QT_QPA_PLATFORMTHEME=kde KWIN_COMPOSE=N
-if [ -e /etc/bliss/kde_gl ]; then case "$GPU_MODE" in turnip|panvk)
+if [ -e /etc/altaris/kde_gl ]; then case "$GPU_MODE" in turnip|panvk)
   export KWIN_COMPOSE=O2
   _icd=/usr/share/vulkan/icd.d/freedreno_icd.aarch64.json
   if [ "$GPU_MODE" = turnip ] && [ "$MESA_LOADER_DRIVER_OVERRIDE" = kgsl ] && [ -r "$_icd" ]; then
@@ -210,13 +210,13 @@ if [ -n "$_kw" ]; then
   fi
 fi
 KDE_EOF
-  chmod 644 "$DEBIANPATH/usr/local/lib/fluxlinux/bliss_kde_env.sh"
-  FLUX_KDE_ENV="export XDG_RUNTIME_DIR=/home/$USERNAME/.cache/runtime; rm -rf /home/$USERNAME/.cache/runtime /home/$USERNAME/.cache/sessions 2>/dev/null || true; mkdir -p /home/$USERNAME/.cache/runtime; chmod 700 /home/$USERNAME/.cache/runtime; mkdir -p /tmp/.ICE-unix && chmod 1777 /tmp/.ICE-unix 2>/dev/null || true; . /usr/local/lib/fluxlinux/bliss_kde_env.sh"
+  chmod 644 "$DEBIANPATH/usr/local/lib/altarislinux/altaris_kde_env.sh"
+  ALTARIS_KDE_ENV="export XDG_RUNTIME_DIR=/home/$USERNAME/.cache/runtime; rm -rf /home/$USERNAME/.cache/runtime /home/$USERNAME/.cache/sessions 2>/dev/null || true; mkdir -p /home/$USERNAME/.cache/runtime; chmod 700 /home/$USERNAME/.cache/runtime; mkdir -p /tmp/.ICE-unix && chmod 1777 /tmp/.ICE-unix 2>/dev/null || true; . /usr/local/lib/altarislinux/altaris_kde_env.sh"
 fi
 # Guest script: sticky /tmp X11 + host-tmp VirGL + gpu_mode file
 $BB chroot "$DEBIANPATH" /bin/bash -c "
 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-[ -d /etc/fluxlinux ] && [ ! -e /etc/bliss ] && mv /etc/fluxlinux /etc/bliss 2>/dev/null || true
+[ -d /etc/altarislinux ] && [ ! -e /etc/altaris ] && mv /etc/altarislinux /etc/altaris 2>/dev/null || true
 export TMPDIR=/tmp
 if command -v dbus-uuidgen >/dev/null 2>&1; then
   dbus-uuidgen --ensure=/etc/machine-id 2>/dev/null || true
@@ -227,13 +227,13 @@ su - $USERNAME -c '
   export XDG_RUNTIME_DIR=/tmp
   export VTEST_SOCKET_NAME=/mnt/host-tmp/.virgl_test
 
-  if [ -r /usr/local/lib/fluxlinux/apply_gpu_env.sh ]; then
-    . /usr/local/lib/fluxlinux/apply_gpu_env.sh
-    flux_gpu_apply_runtime
+  if [ -r /usr/local/lib/altarislinux/apply_gpu_env.sh ]; then
+    . /usr/local/lib/altarislinux/apply_gpu_env.sh
+    altaris_gpu_apply_runtime
   else
     GPU_MODE=virgl
-    if [ -r /etc/bliss/gpu_mode ]; then
-      GPU_MODE=\$(tr -d \"[:space:]\" </etc/bliss/gpu_mode)
+    if [ -r /etc/altaris/gpu_mode ]; then
+      GPU_MODE=\$(tr -d \"[:space:]\" </etc/altaris/gpu_mode)
     fi
     case \"\$GPU_MODE\" in turnip|virgl) ;; *) GPU_MODE=virgl ;; esac
     if [ \"\$GPU_MODE\" = turnip ]; then
@@ -255,15 +255,15 @@ su - $USERNAME -c '
   echo \"Altaris(guest): GPU mode=\$GPU_MODE\"
 
   xfconf-query -c xfwm4 -p /general/use_compositing -s false 2>/dev/null || true
-  if [ x$FLUX_GPU_RUNTIME = xsoftware ]; then
+  if [ x$ALTARIS_GPU_RUNTIME = xsoftware ]; then
     unset MESA_LOADER_DRIVER_OVERRIDE VK_ICD_FILENAMES TU_DEBUG MESA_VK_WSI_DEBUG
     export LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe GPU_MODE=software
   fi
-  $FLUX_KDE_ENV
+  $ALTARIS_KDE_ENV
   if command -v dbus-run-session >/dev/null 2>&1; then
-    exec dbus-run-session -- $FLUX_DE_CMD
+    exec dbus-run-session -- $ALTARIS_DE_CMD
   else
-    exec dbus-launch --exit-with-session $FLUX_DE_CMD
+    exec dbus-launch --exit-with-session $ALTARIS_DE_CMD
   fi
 '
 "

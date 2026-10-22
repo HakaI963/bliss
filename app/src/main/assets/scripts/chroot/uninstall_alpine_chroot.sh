@@ -1,8 +1,8 @@
 #!/bin/sh
 # uninstall_alpine_chroot.sh — remove Alpine chroot (Requires Root)
 
-ALPINEPATH="${FLUX_CHROOT:-/data/local/bliss/chroots/alpine}"
-LAUNCH_SCRIPTS="/data/local/bliss/helpers/start_alpine_gui.sh /data/local/bliss/helpers/stop_alpine_gui.sh /data/local/bliss/helpers/enter_alpine.sh /data/local/bliss/helpers/uninstall_alpine_chroot.sh"
+ALPINEPATH="${ALTARIS_CHROOT:-/data/local/altaris/chroots/alpine}"
+LAUNCH_SCRIPTS="/data/local/altaris/helpers/start_alpine_gui.sh /data/local/altaris/helpers/stop_alpine_gui.sh /data/local/altaris/helpers/enter_alpine.sh /data/local/altaris/helpers/uninstall_alpine_chroot.sh"
 
 error()    { printf "\033[1;31m[!] %s\033[0m\n" "$1"; }
 success()  { printf "\033[1;32m[✓] %s\033[0m\n" "$1"; }
@@ -19,9 +19,9 @@ progress "Target: $ALPINEPATH"
 # resolve root BusyBox (manager built-in; NDK module not required)
 _rr=""
 for _c in \
-  "${FLUX_RESOLVE_BB:-}" \
+  "${ALTARIS_RESOLVE_BB:-}" \
   "$(dirname "$0")/resolve_bb.sh" \
-  /data/local/bliss/helpers/bliss_resolve_bb.sh
+  /data/local/altaris/helpers/altaris_resolve_bb.sh
 do
   [ -n "$_c" ] && [ -f "$_c" ] && _rr="$_c" && break
 done
@@ -31,11 +31,11 @@ if [ -n "$_rr" ]; then
   resolve_bb || true
 fi
 if [ -z "${BB:-}" ]; then
-  if [ -n "${FLUX_BB:-}" ] && [ -x "$FLUX_BB" ] &&
-     "$FLUX_BB" --list >/dev/null 2>&1; then BB="$FLUX_BB"; fi
-  if [ -z "${BB:-}" ] && [ -x /data/local/bliss/busybox/bliss_busybox ] &&
-     /data/local/bliss/busybox/bliss_busybox --list >/dev/null 2>&1; then
-    BB=/data/local/bliss/busybox/bliss_busybox
+  if [ -n "${ALTARIS_BB:-}" ] && [ -x "$ALTARIS_BB" ] &&
+     "$ALTARIS_BB" --list >/dev/null 2>&1; then BB="$ALTARIS_BB"; fi
+  if [ -z "${BB:-}" ] && [ -x /data/local/altaris/busybox/altaris_busybox ] &&
+     /data/local/altaris/busybox/altaris_busybox --list >/dev/null 2>&1; then
+    BB=/data/local/altaris/busybox/altaris_busybox
   fi
   if [ -z "${BB:-}" ]; then
     for path in \
@@ -107,12 +107,12 @@ for script in $LAUNCH_SCRIPTS; do
     fi
 done
 
-# Do NOT remove shared bliss_chroot.sh (used by Debian too)
+# Do NOT remove shared altaris_chroot.sh (used by Debian too)
 success "Uninstallation Complete!"
 
 mount -t tracefs tracefs /sys/kernel/tracing 2>/dev/null || true
 
 progress "Notifying Altaris App..."
 /system/bin/am start -a android.intent.action.VIEW \
-    -d "fluxlinux://callback?result=success&name=distro_uninstall_alpine_chroot" \
+    -d "altaris://callback?result=success&name=distro_uninstall_alpine_chroot" \
     >/dev/null 2>&1 || true

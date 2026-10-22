@@ -1,13 +1,13 @@
 #!/bin/sh
 
-# Helpers live in bliss_guest_common.sh (prepended by bliss_install /
+# Helpers live in altaris_guest_common.sh (prepended by altaris_install /
 # familySetupPayload). Source it only when this file is run standalone.
-if ! command -v _flux_setup_pulse >/dev/null 2>&1; then
+if ! command -v _altaris_setup_pulse >/dev/null 2>&1; then
     _here=$(CDPATH= cd -- "$(dirname -- "$0")" 2>/dev/null && pwd)
     for _common in \
-        "${_here}/bliss_guest_common.sh" \
-        "${HOME:-}/bliss_guest_common.sh" \
-        /tmp/bliss_guest_common.sh
+        "${_here}/altaris_guest_common.sh" \
+        "${HOME:-}/altaris_guest_common.sh" \
+        /tmp/altaris_guest_common.sh
     do
         if [ -f "$_common" ]; then
             # shellcheck source=/dev/null
@@ -28,8 +28,8 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 
-_flux_ensure_tmp
-_flux_ensure_dns
+_altaris_ensure_tmp
+_altaris_ensure_dns
 
 if ! command -v zypper >/dev/null 2>&1; then
     echo "Altaris: ERROR: zypper not found"
@@ -55,9 +55,9 @@ for _c in /usr/lib64/libcurl.so.4.8.0 /usr/lib64/libcurl.so.4 /usr/lib/libcurl.s
     fi
 done
 [ -n "$_CURL_SO" ] || _CURL_SO=/usr/lib64/libcurl.so.4.8.0
-_CURL_STASH="${_CURL_SO}.flux-mini"
+_CURL_STASH="${_CURL_SO}.altaris-mini"
 
-_flux_curl_needs_ldap() {
+_altaris_curl_needs_ldap() {
     [ -f "$1" ] || return 1
     if command -v readelf >/dev/null 2>&1; then
         readelf -d "$1" 2>/dev/null | grep -q 'libldap'
@@ -70,9 +70,9 @@ _flux_curl_needs_ldap() {
     return 1
 }
 
-_flux_opensuse_protect_zypper() {
+_altaris_opensuse_protect_zypper() {
     if [ -f "$_CURL_SO" ] && [ ! -f "$_CURL_STASH" ]; then
-        if ! _flux_curl_needs_ldap "$_CURL_SO"; then
+        if ! _altaris_curl_needs_ldap "$_CURL_SO"; then
             cp -f "$_CURL_SO" "$_CURL_STASH" 2>/dev/null || true
         fi
     fi
@@ -82,7 +82,7 @@ _flux_opensuse_protect_zypper() {
     fi
 }
 
-_flux_opensuse_install_md2_stub() {
+_altaris_opensuse_install_md2_stub() {
     # libldap (pulled by sudo) needs EVP_md2@OPENSSL_3.0.0, removed from
     # OpenSSL 3.5.3 in this rootfs. A tiny stub satisfies the loader;
     # /etc/ld.so.preload applies to setuid sudo.
@@ -101,11 +101,11 @@ _flux_opensuse_install_md2_stub() {
     if [ ! -f /etc/ld.so.preload ] || ! grep -q libevp_md2 /etc/ld.so.preload 2>/dev/null; then
         echo /usr/lib64/libevp_md2.so >> /etc/ld.so.preload
     fi
-    _flux_log "installed EVP_md2 stub for libldap/sudo"
+    _altaris_log "installed EVP_md2 stub for libldap/sudo"
 }
 
-_flux_opensuse_protect_zypper
-_flux_opensuse_install_md2_stub
+_altaris_opensuse_protect_zypper
+_altaris_opensuse_install_md2_stub
 
 if ! zypper --non-interactive --version >/dev/null 2>&1; then
     echo "Altaris: ERROR: zypper unusable (libcurl/libldap vs OpenSSL 3.5)."
@@ -123,13 +123,13 @@ if [ -f /etc/zypp/zypp.conf ]; then
         || echo 'rpm.install.excludedocs = yes' >> /etc/zypp/zypp.conf
 fi
 
-_flux_log "zypper refresh..."
+_altaris_log "zypper refresh..."
 zypper --non-interactive --gpg-auto-import-keys refresh || {
     echo "Altaris: zypper refresh failed (network / repos)"
     exit 1
 }
 
-_flux_log "Installing base packages (no curl/libcurl4)..."
+_altaris_log "Installing base packages (no curl/libcurl4)..."
 zypper --non-interactive install --no-recommends --auto-agree-with-licenses \
     bash sudo shadow wget unzip tar \
     dbus-1 \
@@ -138,12 +138,12 @@ zypper --non-interactive install --no-recommends --auto-agree-with-licenses \
         exit 1
     }
 zypper --non-interactive install --no-recommends --auto-agree-with-licenses dbus-1-daemon 2>/dev/null || true
-_flux_opensuse_protect_zypper
+_altaris_opensuse_protect_zypper
 
-_flux_ensure_dbus
+_altaris_ensure_dbus
 
 # Resolve desktop choice before graphics so a terminal base skips Mesa/icons.
-DESKTOPS="${FLUX_DESKTOPS:-${FLUX_DESKTOP:-${FLUX_DESKTOP_ENV:-xfce}}}"
+DESKTOPS="${ALTARIS_DESKTOPS:-${ALTARIS_DESKTOP:-${ALTARIS_DESKTOP_ENV:-xfce}}}"
 DESKTOPS=$(printf '%s' "$DESKTOPS" | tr ',' ' ')
 DESKTOPS=$(printf '%s' "$DESKTOPS" | tr -s '[:space:]' ' ')
 case " $DESKTOPS " in *" xfce "*|*" xfce4 "*) _norm="xfce" ;; *) _norm="" ;; esac
@@ -164,13 +164,13 @@ if [ "$DESKTOPS" != "none" ]; then
     zypper --non-interactive install --no-recommends --auto-agree-with-licenses \
         dejavu-fonts Mesa-libEGL1 2>/dev/null || true
 fi
-_flux_opensuse_protect_zypper
+_altaris_opensuse_protect_zypper
 
-# Desktop contract: FLUX_DESKTOPS (space/comma separated) = xfce | kde | none;
-# legacy FLUX_DESKTOP / FLUX_DESKTOP_ENV remain valid single values. Unset/empty
+# Desktop contract: ALTARIS_DESKTOPS (space/comma separated) = xfce | kde | none;
+# legacy ALTARIS_DESKTOP / ALTARIS_DESKTOP_ENV remain valid single values. Unset/empty
 # → xfce (backward compat). Normalized to the canonical "xfce kde" order;
 # unknown tokens are ignored and "none" installs neither desktop.
-DESKTOPS="${FLUX_DESKTOPS:-${FLUX_DESKTOP:-${FLUX_DESKTOP_ENV:-xfce}}}"
+DESKTOPS="${ALTARIS_DESKTOPS:-${ALTARIS_DESKTOP:-${ALTARIS_DESKTOP_ENV:-xfce}}}"
 DESKTOPS=$(printf '%s' "$DESKTOPS" | tr ',' ' ')
 DESKTOPS=$(printf '%s' "$DESKTOPS" | tr -s '[:space:]' ' ')
 DESKTOPS="${DESKTOPS# }"
@@ -181,14 +181,14 @@ case " $DESKTOPS " in *" kde "*) _norm="${_norm}${_norm:+ }kde" ;; esac
 DESKTOPS="$_norm"
 unset _norm
 if [ -z "${DESKTOPS##*xfce*}" ]; then
-    _flux_log "Installing XFCE4..."
-    if ! _flux_retry_pkg zypper --non-interactive install --no-recommends --auto-agree-with-licenses \
+    _altaris_log "Installing XFCE4..."
+    if ! _altaris_retry_pkg zypper --non-interactive install --no-recommends --auto-agree-with-licenses \
         xfce4-session xfce4-panel xfce4-settings xfce4-terminal \
         xfdesktop xfwm4 thunar; then
         echo "Altaris: XFCE package install failed after 3 tries — check your network, then tap Retry Setup."
         exit 1
     fi
-    _flux_opensuse_protect_zypper
+    _altaris_opensuse_protect_zypper
     # Phone niceties: Whisker panel menu + screenshot tool (best-effort).
     zypper --non-interactive install --no-recommends --auto-agree-with-licenses \
         xfce4-whiskermenu-plugin xfce4-screenshooter 2>/dev/null || true
@@ -200,7 +200,7 @@ fi
 
 # TW GTK/glycin uses bwrap; replace with Alpine-style proot-safe shim.
 if [ -x /usr/bin/bwrap ] && [ ! -e /usr/bin/bwrap.real ] && \
-   ! grep -q 'FluxLinux proot' /usr/bin/bwrap 2>/dev/null; then
+   ! grep -q 'AltarisLinux proot' /usr/bin/bwrap 2>/dev/null; then
     mv /usr/bin/bwrap /usr/bin/bwrap.real 2>/dev/null || true
 fi
 cat > /usr/bin/bwrap <<'BWRAP_EOF'
@@ -230,31 +230,31 @@ if ! ls /usr/lib/locale 2>/dev/null | grep -qi 'en_US'; then
         glibc-locale glibc-locale-base 2>/dev/null || true
 fi
 printf 'LANG=en_US.UTF-8\n' > /etc/locale.conf
-if command -v _flux_ensure_en_us_locale >/dev/null 2>&1; then
-    _flux_ensure_en_us_locale || exit 1
+if command -v _altaris_ensure_en_us_locale >/dev/null 2>&1; then
+    _altaris_ensure_en_us_locale || exit 1
 fi
 
 if [ -z "${DESKTOPS##*xfce*}" ]; then
-    _flux_require_startxfce4
+    _altaris_require_startxfce4
 fi
-_flux_ensure_user
-_flux_ensure_sudo
-_flux_ensure_home
-_flux_setup_pulse
-_flux_write_gpu_mode virgl
-_flux_fix_pm_writable
+_altaris_ensure_user
+_altaris_ensure_sudo
+_altaris_ensure_home
+_altaris_setup_pulse
+_altaris_write_gpu_mode virgl
+_altaris_fix_pm_writable
 
 # Phone-compact XFCE defaults (30px mono top panel, DPI 96, wallpaper,
-# Home-only desktop icons, shortcuts). Helper ships in bliss_guest_common.sh;
+# Home-only desktop icons, shortcuts). Helper ships in altaris_guest_common.sh;
 # guarded so a standalone run without it is a no-op and never fails install.
-if [ -z "${DESKTOPS##*xfce*}" ] && command -v _flux_xfce_compact_defaults >/dev/null 2>&1; then
-    _flux_xfce_compact_defaults || true
+if [ -z "${DESKTOPS##*xfce*}" ] && command -v _altaris_xfce_compact_defaults >/dev/null 2>&1; then
+    _altaris_xfce_compact_defaults || true
 fi
 
 
 # Altaris universal interactive shell: zsh suggestions, syntax colors, sticker.
-if command -v _flux_setup_altaris_shell >/dev/null 2>&1; then
-    _flux_setup_altaris_shell || true
+if command -v _altaris_setup_altaris_shell >/dev/null 2>&1; then
+    _altaris_setup_altaris_shell || true
 fi
 
 echo "Altaris: ${DISTRO_NAME} openSUSE setup complete!"

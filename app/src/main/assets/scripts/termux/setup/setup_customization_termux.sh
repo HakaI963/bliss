@@ -14,7 +14,7 @@ ICON_DIR="$HOME/.icons"
 FONT_DIR="$HOME/.fonts/JetBrainsMonoNerd"
 WALLPAPER_DIR="$HOME/Pictures/Wallpapers"
 XFCONF_DIR="$HOME/.config/xfce4/xfconf/xfce-perchannel-xml"
-ASSET_REPO="abhay-byte/fluxlinux"
+ASSET_REPO="abhay-byte/altarislinux"
 ASSET_TAG="debian-v1"
 BASE_URL="https://github.com/$ASSET_REPO/releases/download/$ASSET_TAG"
 TMP_BASE="${TMPDIR:-$PREFIX/tmp}"
@@ -23,7 +23,7 @@ mkdir -p "$TMP_BASE" || TMP_BASE="$HOME"
 send_callback() {
     RESULT="$1"
     am start -a android.intent.action.VIEW \
-      -d "fluxlinux://callback?result=${RESULT}&name=${CALLBACK_NAME}" \
+      -d "altaris://callback?result=${RESULT}&name=${CALLBACK_NAME}" \
       --flags 0x10000000 2>/dev/null || true
 }
 
@@ -92,18 +92,18 @@ echo "Altaris: Installing customization tools..."
 pkg update -y || handle_error "pkg update"
 pkg install -y curl wget unzip tar fontconfig xfce4-goodies || handle_error "customization tools"
 
-if [ -n "$FLUX_THEME" ] && [ "$FLUX_THEME" = "light" ]; then
+if [ -n "$ALTARIS_THEME" ] && [ "$ALTARIS_THEME" = "light" ]; then
     echo "Altaris: Light Mode Selected."
     SEL_THEME="Space-light"
     SEL_ICON="Papirus"
     SEL_CURSOR="Vimix-cursors"
-    SEL_WALLPAPER="bliss-light.png"
+    SEL_WALLPAPER="altaris-light.png"
 else
     echo "Altaris: Dark Mode Selected."
     SEL_THEME="Space-transparency"
     SEL_ICON="Papirus-Dark"
     SEL_CURSOR="Vimix-white-cursors"
-    SEL_WALLPAPER="bliss-dark.png"
+    SEL_WALLPAPER="altaris-dark.png"
 fi
 
 echo "Altaris: Installing Themes..."
@@ -121,8 +121,8 @@ TEMP_WP_ZIP="$TMP_BASE/wallpaper.zip"
 download_file "$BASE_URL/wallpaper.zip" "$TEMP_WP_ZIP" || handle_error "wallpaper download"
 unzip -q -o -j "$TEMP_WP_ZIP" -d "$WALLPAPER_DIR" || handle_error "wallpaper extract"
 rm -f "$TEMP_WP_ZIP"
-[ -f "$WALLPAPER_DIR/dark.png" ] && mv "$WALLPAPER_DIR/dark.png" "$WALLPAPER_DIR/bliss-dark.png"
-[ -f "$WALLPAPER_DIR/light.png" ] && mv "$WALLPAPER_DIR/light.png" "$WALLPAPER_DIR/bliss-light.png"
+[ -f "$WALLPAPER_DIR/dark.png" ] && mv "$WALLPAPER_DIR/dark.png" "$WALLPAPER_DIR/altaris-dark.png"
+[ -f "$WALLPAPER_DIR/light.png" ] && mv "$WALLPAPER_DIR/light.png" "$WALLPAPER_DIR/altaris-light.png"
 
 echo "Altaris: Installing JetBrains Mono Nerd Font..."
 mkdir -p "$FONT_DIR"

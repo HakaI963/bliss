@@ -1,13 +1,13 @@
 #!/bin/sh
 
-# Helpers live in bliss_guest_common.sh (prepended by bliss_install /
+# Helpers live in altaris_guest_common.sh (prepended by altaris_install /
 # familySetupPayload). Source it only when this file is run standalone.
-if ! command -v _flux_setup_pulse >/dev/null 2>&1; then
+if ! command -v _altaris_setup_pulse >/dev/null 2>&1; then
     _here=$(CDPATH= cd -- "$(dirname -- "$0")" 2>/dev/null && pwd)
     for _common in \
-        "${_here}/bliss_guest_common.sh" \
-        "${HOME:-}/bliss_guest_common.sh" \
-        /tmp/bliss_guest_common.sh
+        "${_here}/altaris_guest_common.sh" \
+        "${HOME:-}/altaris_guest_common.sh" \
+        /tmp/altaris_guest_common.sh
     do
         if [ -f "$_common" ]; then
             # shellcheck source=/dev/null
@@ -32,10 +32,10 @@ fi
 unset LC_ALL
 export LANG=C
 
-_flux_ensure_tmp
-_flux_ensure_dns
-_flux_disable_guest_selinux
-_flux_apt_prep
+_altaris_ensure_tmp
+_altaris_ensure_dns
+_altaris_disable_guest_selinux
+_altaris_apt_prep
 
 if ! command -v apt-get >/dev/null 2>&1; then
     echo "Altaris: ERROR: apt-get not found"
@@ -43,11 +43,11 @@ if ! command -v apt-get >/dev/null 2>&1; then
 fi
 
 # Rewrite amd64 archive/security URIs to Ubuntu Ports (this rootfs is arm64).
-_flux_rewrite_ubuntu_mirrors() {
-    _flux_log "Rewriting Ubuntu sources to ports.ubuntu.com/ubuntu-ports"
+_altaris_rewrite_ubuntu_mirrors() {
+    _altaris_log "Rewriting Ubuntu sources to ports.ubuntu.com/ubuntu-ports"
     for f in /etc/apt/sources.list /etc/apt/sources.list.d/*; do
         [ -f "$f" ] || continue
-        _tmp="${f}.fluxnew.$$"
+        _tmp="${f}.altarisnew.$$"
         # POSIX: no GNU sed required (uutils + gnu-coreutils both present, stay portable).
         while IFS= read -r _ln || [ -n "$_ln" ]; do
             _ln=$(printf '%s' "$_ln" | sed \
@@ -62,18 +62,18 @@ _flux_rewrite_ubuntu_mirrors() {
     done
 }
 
-_flux_rewrite_ubuntu_mirrors
+_altaris_rewrite_ubuntu_mirrors
 
-_flux_log "apt-get update..."
+_altaris_log "apt-get update..."
 if ! apt-get update; then
-    _flux_log "apt-get update failed once — retrying (ports.ubuntu.com only)"
+    _altaris_log "apt-get update failed once — retrying (ports.ubuntu.com only)"
     apt-get update || {
         echo "Altaris: apt-get update failed (repos/network)"
         exit 1
     }
 fi
 
-_flux_log "Installing base packages..."
+_altaris_log "Installing base packages..."
 apt-get install -y --no-install-recommends \
     bash sudo passwd adduser ca-certificates curl wget unzip tar xz-utils \
     git zsh python3 locales \
@@ -82,13 +82,13 @@ apt-get install -y --no-install-recommends \
         exit 1
     }
 
-_flux_ensure_dbus
+_altaris_ensure_dbus
 
-# Desktop contract: FLUX_DESKTOPS (space/comma separated) = xfce | kde | none;
-# legacy FLUX_DESKTOP / FLUX_DESKTOP_ENV remain valid single values. Unset/empty
+# Desktop contract: ALTARIS_DESKTOPS (space/comma separated) = xfce | kde | none;
+# legacy ALTARIS_DESKTOP / ALTARIS_DESKTOP_ENV remain valid single values. Unset/empty
 # → xfce (backward compat). Normalized to the canonical "xfce kde" order;
 # unknown tokens are ignored and "none" installs neither desktop.
-DESKTOPS="${FLUX_DESKTOPS:-${FLUX_DESKTOP:-${FLUX_DESKTOP_ENV:-xfce}}}"
+DESKTOPS="${ALTARIS_DESKTOPS:-${ALTARIS_DESKTOP:-${ALTARIS_DESKTOP_ENV:-xfce}}}"
 DESKTOPS=$(printf '%s' "$DESKTOPS" | tr ',' ' ')
 DESKTOPS=$(printf '%s' "$DESKTOPS" | tr -s '[:space:]' ' ')
 DESKTOPS="${DESKTOPS# }"
@@ -99,14 +99,14 @@ case " $DESKTOPS " in *" kde "*) _norm="${_norm}${_norm:+ }kde" ;; esac
 DESKTOPS="$_norm"
 unset _norm
 if [ -z "${DESKTOPS##*xfce*}" ]; then
-    _flux_log "Installing XFCE4 (targeted list — no xfce4 / ubuntu-desktop metapackage first)..."
-    if ! _flux_retry_pkg apt-get install -y --no-install-recommends \
+    _altaris_log "Installing XFCE4 (targeted list — no xfce4 / ubuntu-desktop metapackage first)..."
+    if ! _altaris_retry_pkg apt-get install -y --no-install-recommends \
         xfce4-session xfce4-panel xfce4-settings xfce4-terminal \
         xfdesktop4 xfwm4 thunar \
         adwaita-icon-theme fonts-dejavu-core \
         libgl1-mesa-dri libegl1 mesa-utils; then
-        _flux_log "targeted XFCE install failed — falling back to xfce4 metapackage"
-        _flux_retry_pkg apt-get install -y --no-install-recommends xfce4 || {
+        _altaris_log "targeted XFCE install failed — falling back to xfce4 metapackage"
+        _altaris_retry_pkg apt-get install -y --no-install-recommends xfce4 || {
             echo "Altaris: XFCE install failed after 3 tries — check your network, then tap Retry Setup."
             exit 1
         }
@@ -127,29 +127,29 @@ else
     fi
 fi
 
-_flux_ensure_en_us_locale || exit 1
+_altaris_ensure_en_us_locale || exit 1
 if [ -z "${DESKTOPS##*xfce*}" ]; then
-    _flux_require_startxfce4
+    _altaris_require_startxfce4
 fi
-_flux_ensure_groups
-_flux_ensure_user
-_flux_ensure_sudo
-_flux_ensure_home
-_flux_setup_pulse
-_flux_write_gpu_mode virgl
-_flux_fix_pm_writable
+_altaris_ensure_groups
+_altaris_ensure_user
+_altaris_ensure_sudo
+_altaris_ensure_home
+_altaris_setup_pulse
+_altaris_write_gpu_mode virgl
+_altaris_fix_pm_writable
 
 # Phone-compact XFCE defaults (30px mono top panel, DPI 96, wallpaper,
-# Home-only desktop icons, shortcuts). Helper ships in bliss_guest_common.sh;
+# Home-only desktop icons, shortcuts). Helper ships in altaris_guest_common.sh;
 # guarded so a standalone run without it is a no-op and never fails install.
-if [ -z "${DESKTOPS##*xfce*}" ] && command -v _flux_xfce_compact_defaults >/dev/null 2>&1; then
-    _flux_xfce_compact_defaults || true
+if [ -z "${DESKTOPS##*xfce*}" ] && command -v _altaris_xfce_compact_defaults >/dev/null 2>&1; then
+    _altaris_xfce_compact_defaults || true
 fi
 
 
 # Altaris universal interactive shell: zsh suggestions, syntax colors, sticker.
-if command -v _flux_setup_altaris_shell >/dev/null 2>&1; then
-    _flux_setup_altaris_shell || true
+if command -v _altaris_setup_altaris_shell >/dev/null 2>&1; then
+    _altaris_setup_altaris_shell || true
 fi
 
 echo "Altaris: ${DISTRO_NAME} Ubuntu setup complete!"

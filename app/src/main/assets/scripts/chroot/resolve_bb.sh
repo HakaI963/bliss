@@ -9,17 +9,17 @@ bb_has() {
 
 bb_ok() {
   [ -n "${1:-}" ] && [ -x "$1" ] || return 1
-  case "$1" in *com.termux*|*fluxlinux*|*nativecode*) return 1 ;; esac
+  case "$1" in *com.termux*|*altarislinux*|*nativecode*) return 1 ;; esac
   bb_has "$1" chroot && bb_has "$1" mount
 }
 
 resolve_bb() {
-[ -d /data/local/folio ] && [ ! -e /data/local/bliss ] && mv /data/local/folio /data/local/bliss 2>/dev/null || true
+[ -d /data/local/altaris ] && [ ! -e /data/local/altaris ] && mv /data/local/altaris /data/local/altaris 2>/dev/null || true
   BB=""
-  if [ -n "${FLUX_BB:-}" ] && bb_ok "$FLUX_BB"; then
-    BB="$FLUX_BB"
-  elif bb_ok /data/local/bliss/busybox/bliss_busybox; then
-    BB=/data/local/bliss/busybox/bliss_busybox
+  if [ -n "${ALTARIS_BB:-}" ] && bb_ok "$ALTARIS_BB"; then
+    BB="$ALTARIS_BB"
+  elif bb_ok /data/local/altaris/busybox/altaris_busybox; then
+    BB=/data/local/altaris/busybox/altaris_busybox
   else
     for path in \
       /data/adb/ksu/bin/busybox \
@@ -54,12 +54,12 @@ resolve_bb() {
     fi
   fi
   [ -n "$BB" ] || return 1
-  if [ "$BB" != /data/local/bliss/busybox/bliss_busybox ]; then
-    mkdir -p /data/local/bliss/busybox 2>/dev/null || true
-    cp -f "$BB" /data/local/bliss/busybox/bliss_busybox 2>/dev/null \
-      && chmod 755 /data/local/bliss/busybox/bliss_busybox 2>/dev/null \
-      && bb_ok /data/local/bliss/busybox/bliss_busybox \
-      && BB=/data/local/bliss/busybox/bliss_busybox || true
+  if [ "$BB" != /data/local/altaris/busybox/altaris_busybox ]; then
+    mkdir -p /data/local/altaris/busybox 2>/dev/null || true
+    cp -f "$BB" /data/local/altaris/busybox/altaris_busybox 2>/dev/null \
+      && chmod 755 /data/local/altaris/busybox/altaris_busybox 2>/dev/null \
+      && bb_ok /data/local/altaris/busybox/altaris_busybox \
+      && BB=/data/local/altaris/busybox/altaris_busybox || true
   fi
   return 0
 }

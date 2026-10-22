@@ -2,20 +2,20 @@
 # setup_customization_kde_debian.sh
 # Applies "Altaris" branding and customization to Debian KDE Plasma Desktop
 # Mirrors setup_customization_debian.sh structure exactly, adapted for KDE
-# Works for both Chroot and Proot environments (run as root, switches to user 'flux')
+# Works for both Chroot and Proot environments (run as root, switches to user 'altaris')
 
-CUSTOM_USER="flux"
+CUSTOM_USER="altaris"
 CUSTOM_GROUP="users"
 USER_HOME="/home/$CUSTOM_USER"
 THEME_DIR="/usr/share/themes"
 ICON_DIR="/usr/share/icons"
-LOG_FILE="/tmp/fluxlinux_kde_customization.log"
+LOG_FILE="/tmp/altarislinux_kde_customization.log"
 
 # Error Handler — never block on stdin (onboarding / component sessions attach a
 # pty, so "[ -t 0 ]" is true and a bare `read` hangs the install forever).
-# Pauses are opt-in (FLUX_INTERACTIVE=1).
-_flux_pause() {
-    if [ "${FLUX_INTERACTIVE:-0}" = "1" ] && [ -t 0 ]; then
+# Pauses are opt-in (ALTARIS_INTERACTIVE=1).
+_altaris_pause() {
+    if [ "${ALTARIS_INTERACTIVE:-0}" = "1" ] && [ -t 0 ]; then
         read -p "$1"
     fi
 }
@@ -28,9 +28,9 @@ handle_error() {
     echo ""
     echo "Please copy the log and send it to the developer:"
     echo "  Email: abhay02delhi@gmail.com"
-    echo "  GitHub: https://github.com/HakaI963/bliss/issues"
+    echo "  GitHub: https://github.com/HakaI963/altaris/issues"
     echo "─────────────────────────────────────────────────────────────"
-    _flux_pause "Press Enter to acknowledge error and exit..."
+    _altaris_pause "Press Enter to acknowledge error and exit..."
 
     exit 1
 }
@@ -44,9 +44,9 @@ if [ "$(id -u)" -ne 0 ]; then
     handle_error "Not Root"
 fi
 
-# Best-effort ownership (proot often cannot chown to flux:users — never spam/fail)
-_flux_chown() { chown "$@" 2>/dev/null || true; }
-_flux_chown_r() { chown -R "$@" 2>/dev/null || true; }
+# Best-effort ownership (proot often cannot chown to altaris:users — never spam/fail)
+_altaris_chown() { chown "$@" 2>/dev/null || true; }
+_altaris_chown_r() { chown -R "$@" 2>/dev/null || true; }
 
 # Redirect all output to log
 exec > >(tee -a "$LOG_FILE") 2>&1
@@ -68,7 +68,7 @@ update-locale LANG=en_US.UTF-8
 apt install -y qt5ct qt5-style-plugins systemsettings plasma-discover kinfocenter 2>/dev/null || true
 
 # 2. Deploy Assets (From GitHub Release debian-v1)
-ASSET_REPO="abhay-byte/fluxlinux"
+ASSET_REPO="abhay-byte/altarislinux"
 ASSET_TAG="debian-v1"
 BASE_URL="https://github.com/$ASSET_REPO/releases/download/$ASSET_TAG"
 
@@ -94,16 +94,16 @@ extract_all_assets() {
 }
 
 # 3. Theme Selection Prompt
-# Prompts need FLUX_INTERACTIVE=1: the install pipeline gives the script a pty,
+# Prompts need ALTARIS_INTERACTIVE=1: the install pipeline gives the script a pty,
 # so "[ -t 0 ]" alone would block a terminal-only install on stdin.
-if [ -n "$FLUX_THEME" ]; then
-    echo "Altaris: Auto-applying Theme: $FLUX_THEME"
-    if [ "$FLUX_THEME" == "light" ]; then
+if [ -n "$ALTARIS_THEME" ]; then
+    echo "Altaris: Auto-applying Theme: $ALTARIS_THEME"
+    if [ "$ALTARIS_THEME" == "light" ]; then
         THEME_CHOICE="2"
     else
         THEME_CHOICE="1"
     fi
-elif [ "${FLUX_INTERACTIVE:-0}" = "1" ] && [ -t 0 ]; then
+elif [ "${ALTARIS_INTERACTIVE:-0}" = "1" ] && [ -t 0 ]; then
     echo "------------------------------------------------"
     echo "Select Theme Preference:"
     echo "1) Dark (Default)"
@@ -111,7 +111,7 @@ elif [ "${FLUX_INTERACTIVE:-0}" = "1" ] && [ -t 0 ]; then
     read -r -p "Enter choice [1-2]: " THEME_CHOICE
     echo "------------------------------------------------"
 else
-    echo "Altaris: No TTY / FLUX_THEME — defaulting to dark"
+    echo "Altaris: No TTY / ALTARIS_THEME — defaulting to dark"
     THEME_CHOICE="1"
 fi
 
@@ -122,14 +122,14 @@ if [ "$THEME_CHOICE" == "2" ]; then
     echo "Altaris: Light Mode Selected (icons: Papirus-Dark only)."
     SEL_GTK_THEME="Space-light"
     SEL_CURSOR="Vimix-cursors"
-    SEL_WALLPAPER="bliss-light.png"
+    SEL_WALLPAPER="altaris-light.png"
     KDE_COLOR_SCHEME="BreezeLight"
     KWIN_THEME="Breeze"
 else
     echo "Altaris: Dark Mode Selected (icons: Papirus-Dark only)."
     SEL_GTK_THEME="Space-transparency"
     SEL_CURSOR="Vimix-white-cursors"
-    SEL_WALLPAPER="bliss-dark.png"
+    SEL_WALLPAPER="altaris-dark.png"
     KDE_COLOR_SCHEME="BreezeDark"
     KWIN_THEME="Breeze"
 fi
@@ -151,16 +151,16 @@ extract_all_assets "$BASE_URL/cursor.zip" "$ICON_DIR"
 # Wallpaper Setup
 WALLPAPER_DIR="$USER_HOME/Pictures/Wallpapers"
 mkdir -p "$WALLPAPER_DIR"
-_flux_chown_r "$CUSTOM_USER:$CUSTOM_GROUP" "$USER_HOME/Pictures"
+_altaris_chown_r "$CUSTOM_USER:$CUSTOM_GROUP" "$USER_HOME/Pictures"
 
 echo "Altaris: Downloading Wallpaper..."
 TEMP_WP_ZIP="/tmp/wallpaper.zip"
 wget -q --show-progress "$BASE_URL/wallpaper.zip" -O "$TEMP_WP_ZIP"
 unzip -o -j "$TEMP_WP_ZIP" -d "$WALLPAPER_DIR"
 rm "$TEMP_WP_ZIP"
-[ -f "$WALLPAPER_DIR/dark.png" ] && mv "$WALLPAPER_DIR/dark.png" "$WALLPAPER_DIR/bliss-dark.png"
-[ -f "$WALLPAPER_DIR/light.png" ] && mv "$WALLPAPER_DIR/light.png" "$WALLPAPER_DIR/bliss-light.png"
-_flux_chown "$CUSTOM_USER:$CUSTOM_GROUP" "$WALLPAPER_DIR"/*
+[ -f "$WALLPAPER_DIR/dark.png" ] && mv "$WALLPAPER_DIR/dark.png" "$WALLPAPER_DIR/altaris-dark.png"
+[ -f "$WALLPAPER_DIR/light.png" ] && mv "$WALLPAPER_DIR/light.png" "$WALLPAPER_DIR/altaris-light.png"
+_altaris_chown "$CUSTOM_USER:$CUSTOM_GROUP" "$WALLPAPER_DIR"/*
 
 WALLPAPER_PATH="$WALLPAPER_DIR/$SEL_WALLPAPER"
 
@@ -364,7 +364,7 @@ echo "Altaris: Configuring Konsole..."
 KONSOLE_DIR="$USER_HOME/.local/share/konsole"
 mkdir -p "$KONSOLE_DIR"
 
-cat > "$KONSOLE_DIR/bliss.profile" << 'EOF'
+cat > "$KONSOLE_DIR/altaris.profile" << 'EOF'
 [Appearance]
 ColorScheme=Breeze
 Font=JetBrainsMonoNerdFontMono,12,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
@@ -393,7 +393,7 @@ EOF
 KONSOLE_CONFIG_DIR="$USER_HOME/.config"
 cat > "$KONSOLE_CONFIG_DIR/konsolerc" << 'EOF'
 [Desktop Entry]
-DefaultProfile=bliss.profile
+DefaultProfile=altaris.profile
 
 [KonsoleWindow]
 RememberWindowSize=true
@@ -403,10 +403,10 @@ CloseTabOnMiddleMouseButton=true
 TabBarVisibility=ShowTabBarWhenNeeded
 EOF
 
-_flux_chown_r "$CUSTOM_USER:$CUSTOM_GROUP" "$KONSOLE_DIR" "$KONSOLE_CONFIG_DIR/konsolerc"
+_altaris_chown_r "$CUSTOM_USER:$CUSTOM_GROUP" "$KONSOLE_DIR" "$KONSOLE_CONFIG_DIR/konsolerc"
 
 # Fix ownership on all KDE configs
-_flux_chown_r "$CUSTOM_USER:$CUSTOM_GROUP" "$KDE_CONFIG"
+_altaris_chown_r "$CUSTOM_USER:$CUSTOM_GROUP" "$KDE_CONFIG"
 echo "Altaris: KDE settings applied successfully!"
 
 # 5. Configure Zsh and Terminal (identical to XFCE4 customization)
@@ -416,7 +416,7 @@ echo "Altaris: Configuring Zsh and Terminal..."
 echo "Altaris: Installing zsh..."
 apt-get install -y zsh 2>/dev/null
 
-# Install Oh My Zsh for flux user
+# Install Oh My Zsh for altaris user
 echo "Altaris: Installing Oh My Zsh..."
 
 # Check for corrupt installation
@@ -449,21 +449,21 @@ su -s /bin/bash - "$CUSTOM_USER" -c "git clone --depth 1 https://github.com/marl
 
 # Local monochrome prompt theme — no remote download (old colorful theme removed).
 rm -f "$ZSH_CUSTOM/themes/agnosterzak.zsh-theme" 2>/dev/null || true
-if [ ! -s "$ZSH_CUSTOM/themes/bliss.zsh-theme" ]; then
-    echo "Altaris: Installing folio prompt theme..."
+if [ ! -s "$ZSH_CUSTOM/themes/altaris.zsh-theme" ]; then
+    echo "Altaris: Installing altaris prompt theme..."
     mkdir -p "$ZSH_CUSTOM/themes"
-    cat > "$ZSH_CUSTOM/themes/bliss.zsh-theme" <<'FOLIO_THEME_EOF'
+    cat > "$ZSH_CUSTOM/themes/altaris.zsh-theme" <<'ALTARIS_THEME_EOF'
 # altaris prompt — Altaris's minimal monochrome prompt.
 # White/gray on black only; ASCII-safe (no powerline glyphs, no ANSI colors 31-44).
 # Segments:  altaris  host  working-dir  input-char
 PROMPT='%F{79}altaris%f%F{244}@%m%f %F{110}%~%f %F{255}%#%f '
 PROMPT2='%F{240}> %f'
-FOLIO_THEME_EOF
-    if [ ! -s "$ZSH_CUSTOM/themes/bliss.zsh-theme" ]; then
-        echo "Altaris: WARNING: folio prompt theme write failed — zsh keeps default prompt"
+ALTARIS_THEME_EOF
+    if [ ! -s "$ZSH_CUSTOM/themes/altaris.zsh-theme" ]; then
+        echo "Altaris: WARNING: altaris prompt theme write failed — zsh keeps default prompt"
     fi
 else
-    echo "Altaris: folio prompt theme already present — skip"
+    echo "Altaris: altaris prompt theme already present — skip"
 fi
 
 # Install pokemon-colorscripts
@@ -498,13 +498,13 @@ export LC_ALL=en_US.UTF-8
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp}"
 
 # Launch sticker: random truecolor anime art + the `altaris@<id>` header
-# (opt out FLUX_NO_BANNER=1; prints nothing when the shell is not interactive).
-[ -r "$HOME/.config/bliss/banner.sh" ] && . "$HOME/.config/bliss/banner.sh"
+# (opt out ALTARIS_NO_BANNER=1; prints nothing when the shell is not interactive).
+[ -r "$HOME/.config/altaris/banner.sh" ] && . "$HOME/.config/altaris/banner.sh"
 
 # oh-my-zsh (optional — install may fail offline; shell still usable without it)
 export ZSH="${ZSH:-$HOME/.oh-my-zsh}"
 if [ -f "$ZSH/oh-my-zsh.sh" ]; then
-  ZSH_THEME="bliss"
+  ZSH_THEME="altaris"
   DISABLE_UPDATE_PROMPT=true
   DISABLE_AUTO_UPDATE=true
   ZSH_DISABLE_COMPFIX=true
@@ -513,20 +513,20 @@ if [ -f "$ZSH/oh-my-zsh.sh" ]; then
   source "$ZSH/oh-my-zsh.sh"
 fi
 ZSHEOF
-_flux_chown "$CUSTOM_USER:$CUSTOM_GROUP" "$ZSHRC"
+_altaris_chown "$CUSTOM_USER:$CUSTOM_GROUP" "$ZSHRC"
 
-# Launch sticker is sourced from ~/.config/bliss/banner.sh (above)
+# Launch sticker is sourced from ~/.config/altaris/banner.sh (above)
 
-# Set zsh as default shell for flux user
+# Set zsh as default shell for altaris user
 chsh -s /bin/zsh "$CUSTOM_USER" 2>/dev/null
 
-_flux_chown_r "$CUSTOM_USER:$CUSTOM_GROUP" "$USER_HOME/.oh-my-zsh" "$USER_HOME/.zshrc" "$USER_HOME/.local"
+_altaris_chown_r "$CUSTOM_USER:$CUSTOM_GROUP" "$USER_HOME/.oh-my-zsh" "$USER_HOME/.zshrc" "$USER_HOME/.local"
 
-_flux_write_folio_banner() {
+_altaris_write_altaris_banner() {
     _home="$1"
     _owner="${2:-}"
     [ -n "$_home" ] || return 0
-    _bdir="$_home/.config/bliss/banner"
+    _bdir="$_home/.config/altaris/banner"
     _brev="9-l2"
     _need=0
     case "$(cat "$_bdir/.banner-rev" 2>/dev/null || true)" in
@@ -536,13 +536,13 @@ _flux_write_folio_banner() {
     for _b in 01-catgirl 02-catgirl-teal 03-catgirl-violet 04-arch-tan 05-arch-tan-violet 06-icecat 07-icecat-blush 08-maidfull 09-maidfull-rose 10-maidfull-lime 11-fandom 12-fandom-teal 13-fox 14-fox-sky 15-godette 16-godette-violet 17-godette-gobot 18-godette-gobot-mint 19-newsboy 20-newsboy-rose 21-newsboy-violet 22-rational 23-rational-indigo 24-lufthan 25-lufthan-teal 26-lufthan-violet 27-publicq 28-publicq-blue 29-publicq-violet 30-chibisq 31-chibisq-cyan 32-chibisq-amber 33-loveweb 34-loveweb-teal 35-kitsune 36-kitsune-jade 37-kitsune-azure 38-animegirl 39-animegirl-teal 40-animegirl-lime 41-moemiku 42-moemiku-azure 43-moemiku-blush 44-afrowikipe 45-afrowikipe-indigo 46-vocaloid 47-vocaloid-azure 48-vocaloid-blush 49-blossom; do
         [ -s "$_bdir/$_b.txt" ] || _need=1
     done
-    [ -s "$_home/.config/bliss/banner.sh" ] || _need=1
-    grep -q "bliss-banner v9" "$_home/.config/bliss/banner.sh" 2>/dev/null || _need=1
+    [ -s "$_home/.config/altaris/banner.sh" ] || _need=1
+    grep -q "altaris-banner v9" "$_home/.config/altaris/banner.sh" 2>/dev/null || _need=1
     [ "$_need" = "1" ] || return 0
 
     mkdir -p "$_bdir" 2>/dev/null || return 0
     rm -f "$_bdir"/*.txt 2>/dev/null || true
-    cat > "$_bdir/.bliss-banners.$$" <<'FOLIO_BANNER_ALL'
+    cat > "$_bdir/.altaris-banners.$$" <<'ALTARIS_BANNER_ALL'
 ==>01-catgirl
 \033[48;2;0;0;0m              \033[38;2;0;0;0;48;2;46;32;21m▀▀ \033[38;2;46;32;21;48;2;0;0;0m▀\033[48;2;46;32;21m \033[38;2;86;53;28;48;2;194;115;54m▀\033[48;2;202;107;38m▀\033[38;2;46;32;21;48;2;172;87;29m▀\033[38;2;122;90;61;48;2;201;138;85m▀\033[38;2;201;181;159;48;2;160;165;163m▀\033[38;2;123;127;125;48;2;46;32;21m▀\033[38;2;46;32;21;48;2;0;0;0m▀\033[0m
 \033[48;2;0;0;0m              \033[38;2;46;32;21m▀▀▀\033[48;2;138;82;37m▀\033[38;2;166;106;57;48;2;225;138;61m▀\033[48;2;194;115;54m \033[38;2;194;115;54;48;2;225;138;61m▀ \033[38;2;172;87;29m▀\033[38;2;123;59;19;48;2;172;87;29m▀\033[48;2;123;59;19m \033[38;2;46;32;21;48;2;86;53;28m▀\033[0m
@@ -1392,33 +1392,33 @@ _flux_write_folio_banner() {
 \033[38;2;124;119;106;48;2;229;225;210m▀\033[38;2;244;232;219;48;2;206;193;175m▀\033[38;2;212;180;145;48;2;185;189;174m▀\033[38;2;208;161;141;48;2;206;193;175m▀\033[38;2;209;210;199;48;2;183;180;154m▀\033[38;2;208;205;182;48;2;185;189;174m▀\033[38;2;183;180;154;48;2;209;210;199m▀\033[38;2;178;171;135;48;2;183;180;154m▀\033[38;2;135;156;136;48;2;144;154;118m▀\033[38;2;182;154;130;48;2;183;180;154m▀\033[38;2;229;225;210;48;2;206;193;175m▀\033[38;2;206;193;175;48;2;155;181;160m▀ \033[38;2;208;205;182;48;2;229;225;210m▀\033[38;2;155;181;160;48;2;185;189;174m▀\033[48;2;155;181;160m \033[48;2;208;205;182m \033[38;2;223;197;179;48;2;212;180;145m▀\033[38;2;227;186;143m▀\033[38;2;212;180;145;48;2;178;171;135m▀\033[38;2;223;197;179;48;2;183;180;154m▀\033[38;2;208;205;182;48;2;135;156;136m▀\033[48;2;206;193;175m▀\033[38;2;206;193;175;48;2;229;216;197m▀\033[48;2;178;171;135m \033[38;2;144;154;118m▀\033[38;2;212;180;145;48;2;223;197;179m▀\033[48;2;229;225;210m \033[48;2;37;39;35m \033[0m
 \033[38;2;56;56;47;48;2;0;0;0m▀\033[38;2;244;232;219;48;2;94;113;96m▀\033[38;2;229;225;210;48;2;185;189;174m▀ \033[38;2;178;171;135;48;2;206;193;175m▀\033[38;2;223;197;179;48;2;229;216;197m▀\033[38;2;208;205;182;48;2;183;180;154m▀\033[38;2;153;164;140;48;2;123;149;113m▀\033[48;2;182;154;130m▀\033[38;2;182;154;130;48;2;212;180;145m▀\033[48;2;142;130;122m▀\033[48;2;153;164;140m \033[38;2;132;171;148;48;2;155;181;160m▀\033[38;2;155;181;160;48;2;185;189;174m▀\033[48;2;209;210;199m▀\033[48;2;208;205;182m▀\033[48;2;185;189;174m▀\033[48;2;144;154;118m \033[38;2;182;154;130m▀\033[38;2;144;154;118;48;2;178;171;135m▀\033[38;2;153;164;140m▀▀\033[38;2;223;197;179m▀\033[38;2;183;180;154;48;2;144;154;118m▀\033[38;2;144;154;118;48;2;183;180;154m▀\033[38;2;155;181;160;48;2;244;232;219m▀\033[48;2;153;164;140m \033[38;2;56;56;47;48;2;135;156;136m▀\033[38;2;0;0;0;48;2;37;39;35m▀\033[0m
 \033[48;2;0;0;0m  \033[38;2;37;39;35m▀\033[38;2;56;56;47m▀▀▀▀\033[38;2;37;39;35m▀\033[38;2;56;56;47m▀▀▀\033[38;2;37;39;35m▀\033[38;2;56;56;47m▀▀▀▀▀▀▀▀▀▀▀▀▀\033[38;2;85;84;76m▀\033[38;2;56;56;47m▀\033[38;2;85;84;76m▀\033[38;2;37;39;35m▀\033[0m
-FOLIO_BANNER_ALL
+ALTARIS_BANNER_ALL
     awk -v dir="$_bdir" '
         /^==> ?[0-9A-Za-z._-]+$/ { name=substr($0,4); gsub(/^[ \t]+|[ \t]+$/, "", name); file=dir "/" name ".txt"; next }
         { if (file != "") print > file }
-    ' "$_bdir/.bliss-banners.$$" 2>/dev/null || true
-    rm -f "$_bdir/.bliss-banners.$$" 2>/dev/null || true
+    ' "$_bdir/.altaris-banners.$$" 2>/dev/null || true
+    rm -f "$_bdir/.altaris-banners.$$" 2>/dev/null || true
     printf '%s\n' "$_brev" > "$_bdir/.banner-rev" 2>/dev/null || true
 
     if [ -n "$_owner" ]; then
-        chown -R "$_owner" "$_home/.config/bliss" 2>/dev/null || true
+        chown -R "$_owner" "$_home/.config/altaris" 2>/dev/null || true
     fi
     return 0
 }
 
-    cat > "$_home/.config/bliss/banner.sh" <<'FOLIO_BANNER_SH'
-# bliss-banner.sh — Altaris launch sticker: truecolor half-block anime art,
+    cat > "$_home/.config/altaris/banner.sh" <<'ALTARIS_BANNER_SH'
+# altaris-banner.sh — Altaris launch sticker: truecolor half-block anime art,
 # one random design per interactive shell, printed exactly ONCE per shell
 # even when several rc files source it or nested shells inherit the
 # environment. Works with zsh, bash and POSIX sh.
-# Opt out at runtime: FLUX_NO_BANNER=1
-# bliss-banner v9
-bliss_banner_art() {
+# Opt out at runtime: ALTARIS_NO_BANNER=1
+# altaris-banner v9
+altaris_banner_art() {
   # zsh: empty glob must not abort the function.
   if [ -n "${ZSH_VERSION:-}" ]; then
     setopt localoptions nullglob nonomatch 2>/dev/null || true
   fi
-  _bb_dir="${HOME:-/root}/.config/bliss/banner"
+  _bb_dir="${HOME:-/root}/.config/altaris/banner"
   [ -d "$_bb_dir" ] || return 0
   _bb_list=""
   _bb_n=0
@@ -1444,18 +1444,18 @@ bliss_banner_art() {
   fi
   unset _bb_dir _bb_list _bb_n _bb_f _bb_i _bb_pick
 }
-bliss_banner() {
-  [ "${FLUX_NO_BANNER:-0}" = "1" ] && return 0
+altaris_banner() {
+  [ "${ALTARIS_NO_BANNER:-0}" = "1" ] && return 0
   # One sticker per shell process: exported, so nested shells and every
   # re-sourced rc file in the same process skip instantly. A brand-new
   # shell (new tab / new session) always prints exactly one design.
-  [ -z "${_BLISS_BANNER_SHOWN:-}" ] || return 0
+  [ -z "${_ALTARIS_BANNER_SHOWN:-}" ] || return 0
   case $- in
     *i*) ;;
     *) return 0 ;;
   esac
-  export _BLISS_BANNER_SHOWN=1
-  bliss_banner_art
+  export _ALTARIS_BANNER_SHOWN=1
+  altaris_banner_art
   # Header: exactly one line, "altaris@<id>" (distro id only). ID= from
   # /etc/os-release; fallbacks: first word of PRETTY_NAME, then "linux".
   _bb_fid=""
@@ -1469,12 +1469,12 @@ bliss_banner() {
   printf '%s\n' "altaris@$_bb_fid"
   unset _bb_fid
 }
-bliss_banner
-FOLIO_BANNER_SH
+altaris_banner
+ALTARIS_BANNER_SH
 
 # Random truecolor anime launch sticker for the guest shell.
 # ── Bash login wiring: same launch sticker for bash sessions (idempotent).
-_flux_wire_bash_banner() {
+_altaris_wire_bash_banner() {
     _home="$1"
     _owner="${2:-}"
     [ -n "$_home" ] && [ -d "$_home" ] || return 0
@@ -1482,10 +1482,10 @@ _flux_wire_bash_banner() {
     if [ ! -f "$_brc" ]; then
         printf '%s\n' '# Altaris bash profile' 'export PATH="$HOME/.local/bin:$PATH"' > "$_brc" 2>/dev/null || true
     fi
-    if [ -f "$_brc" ] && ! grep -q 'bliss/banner.sh' "$_brc" 2>/dev/null; then
+    if [ -f "$_brc" ] && ! grep -q 'altaris/banner.sh' "$_brc" 2>/dev/null; then
         {
-            printf '\n# Altaris launch sticker (random truecolor anime banner; opt out FLUX_NO_BANNER=1)\n'
-            printf '[ -r "$HOME/.config/bliss/banner.sh" ] && . "$HOME/.config/bliss/banner.sh"\n'
+            printf '\n# Altaris launch sticker (random truecolor anime banner; opt out ALTARIS_NO_BANNER=1)\n'
+            printf '[ -r "$HOME/.config/altaris/banner.sh" ] && . "$HOME/.config/altaris/banner.sh"\n'
         } >> "$_brc" 2>/dev/null || true
     fi
     _bpf="$_home/.bash_profile"
@@ -1503,10 +1503,10 @@ _flux_wire_bash_banner() {
     unset _brc _bpf
 }
 
-_flux_write_folio_banner "$USER_HOME" "$CUSTOM_USER:$CUSTOM_GROUP"
-_flux_write_folio_banner /root
-_flux_wire_bash_banner "$USER_HOME" "$CUSTOM_USER:$CUSTOM_GROUP"
-_flux_wire_bash_banner /root
+_altaris_write_altaris_banner "$USER_HOME" "$CUSTOM_USER:$CUSTOM_GROUP"
+_altaris_write_altaris_banner /root
+_altaris_wire_bash_banner "$USER_HOME" "$CUSTOM_USER:$CUSTOM_GROUP"
+_altaris_wire_bash_banner /root
 
 echo "Altaris: Zsh configuration complete!"
 
@@ -1536,10 +1536,10 @@ fi
 echo "Altaris: KDE Customization Complete!"
 echo "Log saved at: $LOG_FILE"
 echo "------------------------------------------------"
-# Interactive pause only on request (FLUX_INTERACTIVE=1). The install pipeline
+# Interactive pause only on request (ALTARIS_INTERACTIVE=1). The install pipeline
 # attaches a pty to component sessions, so "[ -t 0 ]" alone hangs the install.
-if [ "${FLUX_INTERACTIVE:-0}" = "1" ]; then
-    _flux_pause "Press Enter to close..."
+if [ "${ALTARIS_INTERACTIVE:-0}" = "1" ]; then
+    _altaris_pause "Press Enter to close..."
 fi
 
 

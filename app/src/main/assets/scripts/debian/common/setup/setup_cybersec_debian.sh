@@ -45,9 +45,9 @@ if [ "$1" = "uninstall" ]; then
     rm -f /usr/share/applications/burpsuite.desktop
     # Don't touch /opt/burpsuite — user may have manually placed the JAR there
 
-    # Remove flux user from wireshark group (cleanup)
-    if id "flux" &>/dev/null; then
-        gpasswd -d flux wireshark 2>/dev/null || true
+    # Remove altaris user from wireshark group (cleanup)
+    if id "altaris" &>/dev/null; then
+        gpasswd -d altaris wireshark 2>/dev/null || true
     fi
 
     echo "Altaris: Cybersecurity Environment Uninstalled."
@@ -67,7 +67,7 @@ handle_error() {
 }
 
 echo "Altaris: Setting up Cybersecurity Environment..."
-TARGET_USER="flux"
+TARGET_USER="altaris"
 TARGET_GROUP="users"
 
 # 1. System Dependencies & Core Tools
