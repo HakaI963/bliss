@@ -49,7 +49,7 @@ import com.altaris.linux.ui.theme.altarisHairlineBrush
 import com.altaris.linux.ui.theme.altarisSheenBrush
 
 private val FrostEdgeWidth = 1.dp
-private val FrostPillShape = RoundedCornerShape(20.dp)
+private val FrostPillShape = RoundedCornerShape(6.dp)
 private val FrostRowShape = RoundedCornerShape(10.dp)
 
 fun altarisSpring() = spring<Float>(dampingRatio = 0.8f, stiffness = 500f)
@@ -75,22 +75,8 @@ fun FrostContainer(
         modifier = modifier
             .fillMaxWidth()
             .clip(shape)
-            .background(
-                Brush.verticalGradient(
-                    listOf(palette.surfaceRaised, palette.panel)
-                )
-            )
-            .border(FrostEdgeWidth, altarisHairlineBrush(palette), shape)
-            .drawWithContent {
-                drawContent()
-                // Specular sheen along the top edge of the panel.
-                drawLine(
-                    brush = altarisSheenBrush(palette),
-                    start = Offset.Zero,
-                    end = Offset(size.width, 0f),
-                    strokeWidth = 1.dp.toPx(),
-                )
-            }
+            .background(palette.panel)
+            .border(FrostEdgeWidth, palette.border, shape)
             .padding(vertical = 2.dp),
         content = content
     )
@@ -167,11 +153,12 @@ fun FrostDivider(startInset: Dp = 14.dp, endInset: Dp = 14.dp) {
 @Composable
 fun FrostGroupTitle(text: String, modifier: Modifier = Modifier) {
     Text(
-        text,
-        fontSize = 13.sp,
+        text.uppercase(),
+        fontSize = 10.sp,
         fontWeight = FontWeight.SemiBold,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = modifier.padding(start = 4.dp, bottom = 4.dp, top = 10.dp)
+        letterSpacing = 0.6.sp,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = modifier.padding(start = 2.dp, bottom = 4.dp, top = 10.dp)
     )
 }
 
