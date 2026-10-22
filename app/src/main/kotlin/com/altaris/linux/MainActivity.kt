@@ -105,7 +105,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
-        if (com.altaris.linux.ui.debug.WindowCapture.wantsCapture(intent)) {
+        if (BuildConfig.DEBUG && com.altaris.linux.ui.debug.WindowCapture.wantsCapture(intent)) {
             captureShare = com.altaris.linux.ui.debug.WindowCapture.wantsShare(intent)
             captureRequests.value = captureRequests.value + 1
         }
@@ -594,7 +594,7 @@ class MainActivity : ComponentActivity() {
         if (savedInstanceState == null) {
             dispatchLegacyTermuxCallback(intent)
         }
-        if (com.altaris.linux.ui.debug.WindowCapture.wantsCapture(intent)) {
+        if (BuildConfig.DEBUG && com.altaris.linux.ui.debug.WindowCapture.wantsCapture(intent)) {
             captureShare = com.altaris.linux.ui.debug.WindowCapture.wantsShare(intent)
             captureRequests.value = captureRequests.value + 1
         }
