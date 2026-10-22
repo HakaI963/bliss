@@ -48,6 +48,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.altaris.linux.ui.theme.Prism
 import kotlin.math.roundToInt
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 
 /**
  * The Altaris component set.
@@ -474,7 +478,7 @@ fun PrismOrb(
         ),
         label = "orbHalo",
     )
-    val haloScale = if (active) 0.6f + pulse.value * 1.4f else 0f
+    val haloScale = if (active) 0.6f + halo * 1.4f else 0f
     Box(
         modifier = modifier.size(6.dp),
         contentAlignment = Alignment.Center,
@@ -486,7 +490,7 @@ fun PrismOrb(
                     .graphicsLayer {
                         scaleX = haloScale
                         scaleY = haloScale
-                        alpha = (1f - pulse.value) * 0.45f
+                        alpha = (1f - halo) * 0.45f
                     }
                     .clip(RoundedCornerShape(50))
                     .background(scheme.onSurface)

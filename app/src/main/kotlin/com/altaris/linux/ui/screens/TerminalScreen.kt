@@ -836,9 +836,8 @@ private fun TerminalSessionTab(
         Image(
             painter = painterResource(id = iconRes),
             contentDescription = null,
-            modifier = Modifier
-                .size(18.dp)
-                .colorFilter(androidx.compose.ui.graphics.ColorFilter.tint(foreground))
+            colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(foreground),
+            modifier = Modifier.size(18.dp)
         )
         Spacer(Modifier.width(6.dp))
         Text(
