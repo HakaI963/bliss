@@ -375,7 +375,7 @@ fun PrismButton(
                     Icon(
                         imageVector = icon,
                         contentDescription = null,
-                        tint = palette.onAction,
+                        tint = MaterialTheme.colorScheme.onPrimary,
                         modifier = Modifier.size(16.dp),
                     )
                 }
@@ -385,7 +385,7 @@ fun PrismButton(
                 text = text,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = palette.onAction,
+                color = MaterialTheme.colorScheme.onPrimary,
                 maxLines = 1,
             )
         }
