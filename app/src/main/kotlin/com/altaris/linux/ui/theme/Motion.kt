@@ -23,7 +23,7 @@ import kotlinx.coroutines.delay
  * Timing tokens — one source of truth for durations and stagger pacing.
  * Deliberately short and tween-based so the app stays snappy on low-end devices.
  */
-object AltarisMotion {
+object AltarisTimings {
     /** Full-screen route push/pop. */
     const val ScreenMs = 240
     /** Bottom-tab crossfade + rise. */
@@ -84,7 +84,7 @@ private val paparazziOnClasspath: Boolean by lazy {
  * Altaris spring tokens. Springs keep the UI feeling physical without the
  * long tail of a tween: layout shifts settle quickly, effects snap.
  */
-object AltarisTimings {
+object AltarisMotion {
     /** Layout moves (cards, panels, lists). */
     val spatial: SpringSpec<Float> = spring(dampingRatio = 0.8f, stiffness = 380f)
     /** Effects (press, glow, ripple). */

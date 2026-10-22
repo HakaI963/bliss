@@ -998,6 +998,7 @@ private fun CloneViewPage(
     val lines by HeadlessCloneEngine.cloneLogs.collectAsState()
     val actions by HeadlessCloneEngine.actionLog.collectAsState()
     val displayId by HeadlessCloneEngine.displayId.collectAsState()
+    val accent = sectionAccent(AltarisSection.APPS)
     var live by rememberSaveable { mutableStateOf(true) }
     var showLayout by rememberSaveable { mutableStateOf(false) }
     var showElements by rememberSaveable { mutableStateOf(false) }
