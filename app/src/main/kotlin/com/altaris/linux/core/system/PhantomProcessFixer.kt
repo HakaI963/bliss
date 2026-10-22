@@ -102,16 +102,18 @@ object PhantomProcessFixer {
      * ponytail: Shizuku.newProcess is private in API 13, so reflection instead of an AIDL UserService;
      * if a future Shizuku drops it, switch to a UserService (keep rule in proguard-rules.pro).
      */
-    fun applyShizuku(): String? = try {
-        for (c in shellCommands) {
-            val result = ShizukuShell.run(c)
-            if (!result.ok) {
-                return result.error.ifBlank { "command failed: $c" }
+    fun applyShizuku(): String? {
+        return try {
+            for (c in shellCommands) {
+                val result = ShizukuShell.run(c)
+                if (!result.ok) {
+                    return result.error.ifBlank { "command failed: $c" }
+                }
             }
+            null
+        } catch (e: Exception) {
+            (e.cause ?: e).message ?: "Shizuku failed"
         }
-        null
-    } catch (e: Exception) {
-        (e.cause ?: e).message ?: "Shizuku failed"
     }
 }
 

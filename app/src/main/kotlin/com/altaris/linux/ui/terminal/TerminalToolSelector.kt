@@ -54,23 +54,16 @@ import com.altaris.linux.core.terminal.TerminalShellCatalog
 import com.altaris.linux.ui.components.MethodChip
 import com.altaris.linux.ui.components.MethodTab
 import com.altaris.linux.ui.components.MethodTabs
-import com.altaris.linux.ui.theme.MaterialTheme.colorScheme.background
-import com.altaris.linux.ui.theme.MaterialTheme.colorScheme.surfaceVariant
-import com.altaris.linux.ui.theme.MaterialTheme.colorScheme.outline
-import com.altaris.linux.ui.theme.MaterialTheme.colorScheme.surfaceVariant
-import com.altaris.linux.ui.theme.MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)
-import com.altaris.linux.ui.theme.MaterialTheme.colorScheme.onSurface
-import com.altaris.linux.ui.theme.MaterialTheme.colorScheme.onSurfaceVariant
 
 // Monochrome frost method colors — no cyan/magenta/beige neon.
-private val MethodProot: Color
-    @Composable get() = MaterialTheme.colorScheme.onSurfaceVariant
+@Composable
+private fun methodProot(): Color = MaterialTheme.colorScheme.onSurfaceVariant
 
-private val MethodChroot: Color
-    @Composable get() = MaterialTheme.colorScheme.onSurfaceVariant
+@Composable
+private fun methodChroot(): Color = MaterialTheme.colorScheme.onSurfaceVariant
 
-private val MethodHost: Color
-    @Composable get() = MaterialTheme.colorScheme.onSurface
+@Composable
+private fun methodHost(): Color = MaterialTheme.colorScheme.onSurface
 private val RowShape = RoundedCornerShape(14.dp)
 private val TileShape = RoundedCornerShape(12.dp)
 
@@ -368,9 +361,9 @@ private fun NoDistrosHint() {
 @Composable
 private fun TerminalSectionHeader(group: TerminalMethodGroup, modifier: Modifier = Modifier) {
     val accent = when (group.method) {
-        "chroot" -> MethodChroot
-        "host" -> MethodHost
-        else -> MethodProot
+        "chroot" -> methodChroot()
+        "host" -> methodHost()
+        else -> methodProot()
     }
     Row(
         modifier = modifier
@@ -409,9 +402,9 @@ private fun TerminalDistroRowCard(
     modifier: Modifier = Modifier
 ) {
     val methodColor = when (row.method) {
-        "chroot" -> MethodChroot
-        "host" -> MethodHost
-        else -> MethodProot
+        "chroot" -> methodChroot()
+        "host" -> methodHost()
+        else -> methodProot()
     }
     val userCard = row.user
     val rootCard = row.root

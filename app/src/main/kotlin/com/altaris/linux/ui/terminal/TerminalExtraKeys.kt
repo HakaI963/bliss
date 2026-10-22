@@ -363,6 +363,8 @@ fun TerminalExtraKeys(
                             key = key,
                             active = isKeyActive(key, modState, fnVisible),
                             locked = isKeyLocked(key, modState),
+                            buttonColor = buttonColor,
+                            textColor = textColor,
                             menuOpen = menuKeyId == key.id,
                             labelSize = labelSize,
                             modifier = Modifier.width(fnKeyWidth).height(keyHeight),
@@ -449,6 +451,8 @@ private fun ShortcutBarRow(
                     key = key,
                     active = isKeyActive(key, modState, fnVisible),
                     locked = isKeyLocked(key, modState),
+                    buttonColor = buttonColor,
+                    textColor = textColor,
                     menuOpen = menuKeyId == key.id,
                     labelSize = labelSize,
                     modifier = Modifier

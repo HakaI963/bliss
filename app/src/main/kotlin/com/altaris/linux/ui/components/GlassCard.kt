@@ -59,10 +59,12 @@ import com.altaris.linux.ui.theme.altarisSheenBrush
 
 private val CardShape = RoundedCornerShape(16.dp)
 private val MethodProot: Color
-    @Composable get() = MaterialTheme.colorScheme.onSurface
+    @Composable
+    get() = MaterialTheme.colorScheme.onSurface
 
 private val MethodChroot: Color
-    @Composable get() = MaterialTheme.colorScheme.onSurfaceVariant
+    @Composable
+    get() = MaterialTheme.colorScheme.onSurfaceVariant
 private val StatusRunning = Color(0xFF4CAF50)
 private val StatusStarting = Color(0xFFFFA000)
 

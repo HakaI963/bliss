@@ -161,9 +161,20 @@ fun TerminalScreen(
             val previousNav = window?.navigationBarColor
             window?.statusBarColor = dark.background.toArgb()
             window?.navigationBarColor = dark.background.toArgb()
+            // A dark bar needs light icons, whatever the app identity is.
+            val view = window?.decorView
+            val controller = view?.let {
+                androidx.core.view.WindowCompat.getInsetsController(window, it)
+            }
+            val previousLightStatus = controller?.isAppearanceLightStatusBars
+            val previousLightNav = controller?.isAppearanceLightNavigationBars
+            controller?.isAppearanceLightStatusBars = false
+            controller?.isAppearanceLightNavigationBars = false
             onDispose {
                 window?.statusBarColor = previousStatus ?: dark.background.toArgb()
                 window?.navigationBarColor = previousNav ?: dark.background.toArgb()
+                controller?.isAppearanceLightStatusBars = previousLightStatus ?: true
+                controller?.isAppearanceLightNavigationBars = previousLightNav ?: true
             }
         }
         TerminalScreenContent(onBack = onBack, embeddedInBottomNav = embeddedInBottomNav)
