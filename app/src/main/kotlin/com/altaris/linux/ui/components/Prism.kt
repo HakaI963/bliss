@@ -216,10 +216,11 @@ fun PrismRow(
                     modifier = Modifier
                         .size(34.dp)
                         .clip(RoundedCornerShape(12.dp))
-                        .background(
-                            Brush.linearGradient(
-                                listOf(accent, accent.copy(alpha = 0.45f))
-                            )
+                        .background(scheme.surfaceVariant)
+                        .border(
+                            width = 1.dp,
+                            color = scheme.outline,
+                            shape = RoundedCornerShape(12.dp),
                         )
                 )
                 Spacer(Modifier.width(13.dp))
@@ -374,7 +375,7 @@ fun PrismButton(
                     Icon(
                         imageVector = icon,
                         contentDescription = null,
-                        tint = Color.White,
+                        tint = palette.onAction,
                         modifier = Modifier.size(16.dp),
                     )
                 }
@@ -384,7 +385,7 @@ fun PrismButton(
                 text = text,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = Color.White,
+                color = palette.onAction,
                 maxLines = 1,
             )
         }
