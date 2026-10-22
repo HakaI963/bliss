@@ -387,7 +387,7 @@ private fun OnboardingHero(
                 Image(
                     painter = painterResource(artRes),
                     contentDescription = "Altaris artwork",
-                    contentScale = ContentScale.Fit,
+                    contentScale = ContentScale.Crop,
                     modifier = Modifier.size(112.dp)
                 )
             }

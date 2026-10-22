@@ -36,6 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.layout.onSizeChanged
@@ -455,26 +456,51 @@ fun PrismSegmented(
     }
 }
 
-/** A status dot — the reference's `.status-dot`. */
+/** A status dot — the reference's `.status-dot`. It breathes while live. */
 @Composable
 fun PrismOrb(
     active: Boolean,
     accent: Color,
     modifier: Modifier = Modifier,
 ) {
+    val scheme = MaterialTheme.colorScheme
+    val pulse = rememberInfiniteTransition(label = "orbPulse")
+    val halo by pulse.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1800, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart,
+        ),
+        label = "orbHalo",
+    )
+    val haloScale = if (active) 0.6f + pulse.value * 1.4f else 0f
     Box(
         modifier = modifier.size(6.dp),
         contentAlignment = Alignment.Center,
     ) {
+        if (active) {
+            Box(
+                modifier = Modifier
+                    .size(6.dp)
+                    .graphicsLayer {
+                        scaleX = haloScale
+                        scaleY = haloScale
+                        alpha = (1f - pulse.value) * 0.45f
+                    }
+                    .clip(RoundedCornerShape(50))
+                    .background(scheme.onSurface)
+            )
+        }
         Box(
             modifier = Modifier
                 .size(6.dp)
                 .clip(RoundedCornerShape(50))
                 .background(
                     if (active) {
-                        MaterialTheme.colorScheme.onSurface
+                        scheme.onSurface
                     } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                        scheme.onSurfaceVariant.copy(alpha = 0.5f)
                     }
                 )
         )
