@@ -1416,7 +1416,7 @@ class MainActivity : ComponentActivity() {
                                 PaletteAction(
                                     id = "home",
                                     title = "Home",
-                                    subtitle = "Your Linux environments",
+                                    subtitle = "Containers, status and the host shell",
                                     icon = Icons.Default.Home,
                                     accent = MaterialTheme.colorScheme.primary,
                                     onSelect = { currentTab = BottomTab.HOME },
@@ -1455,11 +1455,11 @@ class MainActivity : ComponentActivity() {
                             add(
                                 PaletteAction(
                                     id = "terminal",
-                                    title = "Terminal",
-                                    subtitle = "Open a guest shell",
+                                    title = "Host shell",
+                                    subtitle = "A shell on the Android host",
                                     icon = Icons.Default.Terminal,
                                     accent = MaterialTheme.colorScheme.secondary,
-                                    onSelect = { currentTab = BottomTab.TERMINAL },
+                                    onSelect = { openHostShell() },
                                 )
                             )
                             add(

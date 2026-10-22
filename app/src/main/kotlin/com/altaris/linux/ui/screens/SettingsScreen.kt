@@ -424,13 +424,30 @@ private fun SchemeRow(
         accent = accent,
         modifier = modifier,
         leading = {
+            // A tiny preview of the identity: its background, its chrome and
+            // its action colour.
             Box(
                 modifier = Modifier
                     .size(38.dp)
                     .clip(shape)
                     .background(palette.base)
                     .border(1.dp, palette.onSurface.copy(alpha = 0.22f), shape)
-            )
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(11.dp)
+                        .background(palette.surface)
+                )
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(5.dp)
+                        .size(7.dp)
+                        .clip(CircleShape)
+                        .background(palette.action)
+                )
+            }
         },
         trailing = {
             if (selected) {
