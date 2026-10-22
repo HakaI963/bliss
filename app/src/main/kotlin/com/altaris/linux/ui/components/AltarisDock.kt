@@ -9,18 +9,20 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Android
+import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Layers
@@ -37,10 +39,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.altaris.linux.ui.theme.Prism
@@ -76,9 +80,10 @@ private val DockSlots = listOf(
 /**
  * The navigation bar.
  *
- * A flat strip with a hairline on top — the reference's mobile sidebar. The
- * active item gets a panel background and a border; pressing an item nudges
- * its neighbours aside.
+ * A full-width strip with a hairline on top and a soft shadow, so it reads
+ * as a separate layer above the content. The active destination sits on a
+ * plate that slides between the items; holding an item nudges its
+ * neighbours aside.
  */
 @Composable
 fun AltarisDock(
@@ -87,30 +92,66 @@ fun AltarisDock(
     onSelect: (DockDestination) -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
     // One interaction source per item, owned by the bar: the bar therefore
     // knows which item is held without stealing the tap from the item.
     val interactions = DockSlots.map { remember { MutableInteractionSource() } }
     val pressed = interactions.map { it.collectIsPressedAsState().value }
 
-    Row(
+    BoxWithConstraints(
         modifier = modifier
             .fillMaxWidth()
-            .height(Prism.NavBarHeight)
-            .background(scheme.surface)
-            .border(1.dp, scheme.outline, RoundedCornerShape(0.dp)),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+            .shadow(14.dp, shape, clip = false, ambientColor = Color.Black.copy(alpha = 0.18f))
+            .clip(shape)
+            .background(scheme.surface),
     ) {
-        DockSlots.forEachIndexed { index, destination ->
-            NavItem(
-                destination = destination,
-                selected = destination == selected,
-                held = pressed[index],
-                nudge = neighbourNudge(index, pressed.indexOfFirst { it }),
-                interaction = interactions[index],
-                onClick = { onSelect(destination) },
-                modifier = Modifier.weight(1f),
-            )
+        val gap = 4.dp
+        val itemWidth = (maxWidth - gap * (DockSlots.size - 1)) / DockSlots.size
+        val plateWidth by animateFloatAsState(
+            targetValue = itemWidth.value,
+            animationSpec = spring(dampingRatio = 0.9f, stiffness = 700f),
+            label = "plateWidth",
+        )
+        val plateX by animateFloatAsState(
+            targetValue = (DockSlots.indexOf(selected).coerceAtLeast(0) *
+                (itemWidth.value + gap.value)),
+            animationSpec = spring(dampingRatio = 0.78f, stiffness = 520f),
+            label = "plateX",
+        )
+        val indicatorShape = RoundedCornerShape(Prism.ButtonRadius)
+
+        // The sliding plate.
+        Box(
+            modifier = Modifier
+                .offset { IntOffset(plateX.toInt(), 0) }
+                .padding(top = 7.dp, bottom = 7.dp)
+                .width(plateWidth.dp)
+                .height(Prism.NavBarHeight - 14.dp)
+                .clip(indicatorShape)
+                .background(scheme.surfaceVariant)
+                .border(1.dp, scheme.outline, indicatorShape)
+        )
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(Prism.NavBarHeight),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(gap),
+        ) {
+            DockSlots.forEachIndexed { index, destination ->
+                NavItem(
+                    destination = destination,
+                    selected = destination == selected,
+                    held = pressed[index],
+                    nudge = neighbourNudge(index, pressed.indexOfFirst { it }),
+                    interaction = interactions[index],
+                    onClick = { onSelect(destination) },
+                    modifier = Modifier
+                        .width(itemWidth)
+                        .padding(horizontal = 1.dp),
+                )
+            }
         }
     }
 }
@@ -134,37 +175,39 @@ private fun NavItem(
 ) {
     val scheme = MaterialTheme.colorScheme
     val shift by animateFloatAsState(
-        targetValue = if (held) nudge * 6f else 0f,
+        targetValue = if (held) nudge * 5f else 0f,
         animationSpec = spring(dampingRatio = 0.7f, stiffness = 700f),
         label = "navNudge",
     )
-    val shape = RoundedCornerShape(Prism.ButtonRadius)
+    val iconScale by animateFloatAsState(
+        targetValue = if (selected) 1.06f else 1f,
+        animationSpec = spring(dampingRatio = 0.6f, stiffness = 600f),
+        label = "navIconScale",
+    )
     Column(
         modifier = modifier
             .graphicsLayer { translationX = shift }
-            .padding(horizontal = 6.dp, vertical = 7.dp)
-            .clip(shape)
-            .background(if (selected) scheme.surfaceVariant else Color.Transparent)
-            .border(
-                width = 1.dp,
-                color = if (selected) scheme.outline else Color.Transparent,
-                shape = shape,
-            )
+            .fillMaxWidth()
             .clickable(
                 interactionSource = interaction,
                 indication = null,
                 onClick = onClick,
             )
-            .padding(vertical = 5.dp),
+            .padding(vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Icon(
             imageVector = destination.icon,
             contentDescription = destination.title,
             tint = if (selected) scheme.onSurface else scheme.onSurfaceVariant,
-            modifier = Modifier.size(17.dp),
+            modifier = Modifier
+                .size(19.dp)
+                .graphicsLayer {
+                    scaleX = iconScale
+                    scaleY = iconScale
+                },
         )
-        Spacer(Modifier.height(2.dp))
+        Spacer(Modifier.height(3.dp))
         Text(
             text = destination.title,
             fontSize = 10.sp,

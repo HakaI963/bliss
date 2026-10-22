@@ -52,11 +52,17 @@ object Prism {
     /** Minimum touch target. */
     val TouchTarget: Dp = 48.dp
 
-    /** Top bar height (the reference's 46 px workspace bar). */
-    val TopBarHeight: Dp = 46.dp
+    /** Top bar height (the reference's workspace bar). */
+    val TopBarHeight: Dp = 50.dp
 
     /** Bottom navigation height. */
     val NavBarHeight: Dp = 58.dp
+
+    /** The mark tile in the top bar. */
+    val MarkSize: Dp = 28.dp
+
+    /** The home artwork keeps a cinematic 16:9-ish crop. */
+    const val HeroAspect: Float = 1.85f
 }
 
 /**

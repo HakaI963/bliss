@@ -139,6 +139,12 @@ fun AltarisTheme(
         val window = (view.context as? Activity)?.window ?: return@SideEffect
         window.statusBarColor = colorScheme.background.toArgb()
         window.navigationBarColor = colorScheme.background.toArgb()
+        // The window background is the app background: routes that do not
+        // paint their own surface (Settings, troubleshooting, …) must still
+        // follow the active identity.
+        window.setBackgroundDrawable(
+            android.graphics.drawable.ColorDrawable(colorScheme.background.toArgb())
+        )
         WindowCompat.getInsetsController(window, view).apply {
             isAppearanceLightStatusBars = !darkTheme
             isAppearanceLightNavigationBars = !darkTheme

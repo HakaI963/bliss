@@ -1,6 +1,7 @@
 package com.altaris.linux.ui.screens
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import kotlinx.coroutines.withContext
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
@@ -147,11 +148,19 @@ fun DistroScreen(
     // Installed state = filesystem truth (plan P4-T13); the browse page now keeps
     // installed cards visible with a chip, so a stale pref can never hide a card
     // whose rootfs is actually gone.
-    val installedDistroIds = remember(refreshKey.value, stateRefresh) {
-        DistroRepository.supportedDistros
-            .filter { TerminalLauncher.isDistroInstalledOnFs(context, it.id) }
-            .map { it.id }
-            .toSet()
+    // The probe touches the filesystem: keep it off the main thread, or the
+    // first frame of this screen stalls.
+    val installedDistroIds by androidx.compose.runtime.produceState(
+        initialValue = emptySet<String>(),
+        refreshKey.value,
+        stateRefresh,
+    ) {
+        value = withContext(kotlinx.coroutines.Dispatchers.IO) {
+            DistroRepository.supportedDistros
+                .filter { TerminalLauncher.isDistroInstalledOnFs(context, it.id) }
+                .map { it.id }
+                .toSet()
+        }
     }
 
     var methodTab by remember { mutableStateOf(MethodTab.PROOT) }

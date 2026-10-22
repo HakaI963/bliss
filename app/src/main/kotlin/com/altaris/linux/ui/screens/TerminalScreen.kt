@@ -423,8 +423,9 @@ private fun TerminalScreenContent(
         if (!immersive) Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(48.dp)
-                .padding(horizontal = 8.dp),
+                .height(50.dp)
+                .background(MaterialTheme.colorScheme.surface)
+                .padding(horizontal = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (onBack != null) {
@@ -447,11 +448,15 @@ private fun TerminalScreenContent(
                 }
             }
             Text(
-                text = "Terminal",
+                text = titles.getOrNull(activeIndex) ?: "Terminal",
                 style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
+                fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onBackground,
-                modifier = Modifier.padding(start = 8.dp)
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .padding(start = 9.dp)
+                    .weight(1f, fill = false)
             )
             Spacer(Modifier.weight(1f))
             IconButton(
@@ -461,7 +466,7 @@ private fun TerminalScreenContent(
                 Icon(
                     imageVector = if (showExtraKeys) Icons.Default.Keyboard else Icons.Default.KeyboardHide,
                     contentDescription = if (showExtraKeys) "Hide extra keys" else "Show extra keys",
-                    tint = if (showExtraKeys) TextPrimary
+                    tint = if (showExtraKeys) MaterialTheme.colorScheme.onSurface
                     else MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(20.dp)
                 )
@@ -473,7 +478,7 @@ private fun TerminalScreenContent(
                 Icon(
                     imageVector = if (immersive) Icons.Filled.FullscreenExit else Icons.Filled.Fullscreen,
                     contentDescription = if (immersive) "Exit fullscreen" else "Fullscreen",
-                    tint = TextPrimary,
+                    tint = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -484,7 +489,7 @@ private fun TerminalScreenContent(
                 Icon(
                     imageVector = Icons.Default.Build,
                     contentDescription = "Terminal tools",
-                    tint = TextPrimary,
+                    tint = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -495,10 +500,19 @@ private fun TerminalScreenContent(
                 Icon(
                     imageVector = if (showNewSessionPanel) Icons.Default.Close else Icons.Default.Add,
                     contentDescription = if (showNewSessionPanel) "Close new session panel" else "New session",
-                    tint = TextPrimary,
+                    tint = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.size(20.dp)
                 )
             }
+        }
+
+        if (!immersive) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(MaterialTheme.colorScheme.outline)
+            )
         }
 
         // ── Session strip: pill tabs (icon + name, integrated close) ─────────
@@ -787,17 +801,20 @@ private fun TerminalSessionTab(
 ) {
     val shape = RoundedCornerShape(percent = 50)
     val background by animateColorAsState(
-        targetValue = if (selected) TextPrimary else FrostSurface,
+        targetValue = if (selected) MaterialTheme.colorScheme.onSurface
+        else MaterialTheme.colorScheme.surfaceVariant,
         animationSpec = spring(dampingRatio = 0.78f, stiffness = 380f),
         label = "sessionTabBackground"
     )
     val foreground by animateColorAsState(
-        targetValue = if (selected) AltarisBackground else TextSecondary,
+        targetValue = if (selected) MaterialTheme.colorScheme.background
+        else MaterialTheme.colorScheme.onSurfaceVariant,
         animationSpec = spring(dampingRatio = 0.78f, stiffness = 380f),
         label = "sessionTabForeground"
     )
     val edge by animateColorAsState(
-        targetValue = if (selected) TextPrimary else FrostHairline,
+        targetValue = if (selected) MaterialTheme.colorScheme.onSurface
+        else MaterialTheme.colorScheme.outline,
         animationSpec = spring(dampingRatio = 0.78f, stiffness = 380f),
         label = "sessionTabEdge"
     )

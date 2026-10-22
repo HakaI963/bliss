@@ -1,6 +1,7 @@
 package com.altaris.linux.ui.components
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -28,14 +29,15 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -44,12 +46,13 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.altaris.linux.ui.theme.Prism
+import kotlin.math.roundToInt
 
 /**
  * The Altaris component set.
  *
  * The look follows the reference workspace: flat panels on the app
- * background, a single hairline border, 6–8 dp radii, small type and no
+ * background, a single hairline border, 6–10 dp radii, small type and no
  * gradients, tints or glass. Colour is only ever used for text and for the
  * primary action.
  */
@@ -86,6 +89,17 @@ fun PrismCard(
             )
             .padding(Prism.PanelPad),
         content = content,
+    )
+}
+
+/** A hairline rule inside a panel. */
+@Composable
+fun PrismDivider(modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(1.dp)
+            .background(MaterialTheme.colorScheme.outline)
     )
 }
 
@@ -319,7 +333,10 @@ fun PrismIconTile(
     }
 }
 
-/** A small selectable chip. */
+/**
+ * A small selectable chip — the reference's `.chip`. The active chip is
+ * filled with the text colour, the rest are outlined.
+ */
 @Composable
 fun PrismChip(
     text: String,
@@ -329,7 +346,7 @@ fun PrismChip(
     onClick: (() -> Unit)? = null,
 ) {
     val scheme = MaterialTheme.colorScheme
-    val shape = RoundedCornerShape(Prism.ButtonRadius)
+    val shape = RoundedCornerShape(Prism.ChipRadius)
     val bg by animateColorAsState(
         targetValue = if (selected) scheme.onSurface else Color.Transparent,
         animationSpec = tween(140),
@@ -361,13 +378,13 @@ fun PrismChip(
                     Modifier
                 }
             )
-            .padding(horizontal = 10.dp, vertical = 6.dp),
+            .padding(horizontal = 9.dp, vertical = 5.dp),
     )
 }
 
 /**
- * A segmented control: a bordered strip whose active segment is filled with
- * the text colour, like the reference's `.view-tabs`.
+ * A segmented control: a bordered strip whose active segment is a raised
+ * plate, like the reference's `.view-tabs`.
  */
 @Composable
 fun PrismSegmented(
@@ -378,41 +395,47 @@ fun PrismSegmented(
     onSelect: (Int) -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
-    var rowWidth by remember { mutableIntStateOf(0) }
+    val density = LocalDensity.current
+    var rowWidthPx by remember { mutableIntStateOf(0) }
     val count = options.size.coerceAtLeast(1)
-    val thumbWidth = if (rowWidth > 0) rowWidth / count else 0
-    val offsetX by androidx.compose.animation.core.animateFloatAsState(
-        targetValue = (selectedIndex.coerceIn(0, count - 1) * thumbWidth).toFloat(),
-        animationSpec = spring(dampingRatio = 0.8f, stiffness = 520f),
+    // The strip is measured in pixels; the thumb has to be laid out in dp,
+    // otherwise it overflows the segment it belongs to.
+    val thumbWidth = with(density) { (rowWidthPx.toDp() / count) }
+    val offsetX by androidx.compose.animation.core.animateDpAsState(
+        targetValue = thumbWidth * selectedIndex.coerceIn(0, count - 1),
+        animationSpec = spring(dampingRatio = 0.85f, stiffness = 620f),
         label = "segmentThumb",
     )
+    val inset = 3.dp
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(36.dp)
+            .height(34.dp)
             .clip(RoundedCornerShape(Prism.PanelRadius))
             .background(scheme.surface)
             .border(1.dp, scheme.outline, RoundedCornerShape(Prism.PanelRadius))
-            .onSizeChanged { rowWidth = it.width },
+            .onSizeChanged { rowWidthPx = it.width },
     ) {
-        if (thumbWidth > 0) {
+        if (rowWidthPx > 0) {
             Box(
                 modifier = Modifier
-                    .offset { IntOffset(offsetX.toInt(), 0) }
-                    .size(width = thumbWidth.dp, height = 34.dp)
-                    .padding(horizontal = 4.dp, vertical = 3.dp)
+                    .offset { IntOffset(offsetX.roundToInt(), 0) }
+                    .padding(horizontal = inset, vertical = inset)
+                    .width(thumbWidth - inset * 2)
+                    .height(34.dp - inset * 2)
                     .clip(RoundedCornerShape(Prism.ButtonRadius))
-                    .background(scheme.onSurface)
+                    .background(scheme.surfaceVariant)
+                    .border(1.dp, scheme.outline, RoundedCornerShape(Prism.ButtonRadius))
             )
         }
-        Row(modifier = Modifier.fillMaxWidth().height(36.dp)) {
+        Row(modifier = Modifier.fillMaxWidth().height(34.dp)) {
             options.forEachIndexed { index, option ->
                 val selected = index == selectedIndex
                 Box(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()
-                        .height(36.dp)
+                        .height(34.dp)
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,
@@ -422,8 +445,8 @@ fun PrismSegmented(
                     Text(
                         text = option,
                         fontSize = 12.sp,
-                        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
-                        color = if (selected) scheme.background else scheme.onSurfaceVariant,
+                        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                        color = if (selected) scheme.onSurface else scheme.onSurfaceVariant,
                         maxLines = 1,
                     )
                 }
@@ -473,4 +496,64 @@ fun PrismSectionLabel(
         letterSpacing = 0.6.sp,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
+}
+
+/**
+ * A compact statistic: a big value over a quiet label. Used in the status
+ * strip on Home.
+ */
+@Composable
+fun PrismStat(
+    value: String,
+    label: String,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(1.dp),
+    ) {
+        Text(
+            text = value,
+            fontSize = 17.sp,
+            fontWeight = FontWeight.SemiBold,
+            letterSpacing = (-0.3).sp,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+        )
+        Text(
+            text = label.uppercase(),
+            fontSize = 9.sp,
+            fontWeight = FontWeight.Medium,
+            letterSpacing = 0.7.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+        )
+    }
+}
+
+/** A row of statistics separated by hairlines. */
+@Composable
+fun PrismStatRow(
+    stats: List<Pair<String, String>>,
+    modifier: Modifier = Modifier,
+) {
+    val scheme = MaterialTheme.colorScheme
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        stats.forEachIndexed { index, (value, label) ->
+            if (index > 0) {
+                Box(
+                    modifier = Modifier
+                        .width(1.dp)
+                        .height(26.dp)
+                        .background(scheme.outline)
+                )
+                Spacer(Modifier.width(12.dp))
+            }
+            PrismStat(value = value, label = label)
+            if (index < stats.lastIndex) Spacer(Modifier.weight(1f))
+        }
+    }
 }

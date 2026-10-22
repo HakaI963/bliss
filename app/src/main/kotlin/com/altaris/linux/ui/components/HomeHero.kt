@@ -1,13 +1,21 @@
 package com.altaris.linux.ui.components
 
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -17,11 +25,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -32,9 +43,9 @@ import com.altaris.linux.ui.theme.Prism
 /**
  * The home artwork.
  *
- * A wide panel that carries the scene as its wallpaper, with the title over a
- * short scrim so the text stays readable. The artwork can be changed in
- * Settings.
+ * A cinematic card that carries the scene as its wallpaper, with the word
+ * over a short scrim so the text stays readable. The picture drifts very
+ * slowly (a Ken Burns pan) — one transform, drawn on the GPU.
  */
 @Composable
 fun HomeHero(
@@ -46,10 +57,20 @@ fun HomeHero(
 ) {
     val scheme = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(Prism.PanelRadius)
+    val drift = rememberInfiniteTransition(label = "heroDrift")
+    val scale by drift.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.06f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 16000),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "heroScale",
+    )
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(150.dp)
+            .aspectRatio(Prism.HeroAspect)
             .clip(shape)
             .background(scheme.surfaceVariant)
             .border(1.dp, scheme.outline, shape),
@@ -58,18 +79,22 @@ fun HomeHero(
             painter = painterResource(artRes),
             contentDescription = null,
             contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxWidth().height(150.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                },
         )
         // A scrim only where the text sits, so the picture stays clean.
         Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .height(150.dp)
+                .fillMaxSize()
                 .background(
                     Brush.verticalGradient(
-                        0f to Color.Black.copy(alpha = 0.55f),
-                        0.45f to Color.Black.copy(alpha = 0.12f),
-                        1f to Color.Black.copy(alpha = 0.30f),
+                        0f to Color.Transparent,
+                        0.45f to Color.Black.copy(alpha = 0.06f),
+                        1f to Color.Black.copy(alpha = 0.62f),
                     )
                 )
         )
@@ -77,7 +102,7 @@ fun HomeHero(
             modifier = Modifier
                 .align(Alignment.BottomStart)
                 .fillMaxWidth()
-                .padding(horizontal = Prism.Gutter, vertical = Prism.Tight + 2.dp),
+                .padding(horizontal = 14.dp, vertical = 11.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(modifier = Modifier.weight(1f)) {
@@ -85,7 +110,7 @@ fun HomeHero(
                     text = title,
                     fontSize = 19.sp,
                     fontWeight = FontWeight.SemiBold,
-                    letterSpacing = (-0.3).sp,
+                    letterSpacing = 0.4.sp,
                     color = Color.White,
                     maxLines = 1,
                 )
@@ -93,8 +118,9 @@ fun HomeHero(
                     Spacer(Modifier.height(2.dp))
                     Text(
                         text = subtitle,
-                        fontSize = 11.5.sp,
-                        color = Color.White.copy(alpha = 0.78f),
+                        fontSize = 10.5.sp,
+                        letterSpacing = 0.4.sp,
+                        color = Color.White.copy(alpha = 0.80f),
                         maxLines = 1,
                     )
                 }
@@ -128,9 +154,7 @@ fun ArtworkThumb(
                 shape = shape,
             )
             .clickable(
-                interactionSource = androidx.compose.runtime.remember {
-                    androidx.compose.foundation.interaction.MutableInteractionSource()
-                },
+                interactionSource = remember { MutableInteractionSource() },
                 indication = null,
                 onClick = onClick,
             ),

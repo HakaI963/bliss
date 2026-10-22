@@ -217,8 +217,8 @@ fun SettingsScreen(
             )
         }
 
-        // Identity — the five Altaris schemes. Picking one restyles the app.
-        SettingsGroup("Color scheme", accent, Modifier.staggerIn(2, entrance)) {
+        // Identity — the three Altaris identities. Picking one restyles the app.
+        SettingsGroup("Identity", accent, Modifier.staggerIn(2, entrance)) {
             AltarisScheme.entries.forEachIndexed { index, entry ->
                 SchemeRow(
                     scheme = entry,
@@ -230,23 +230,12 @@ fun SettingsScreen(
             }
         }
 
-        // Appearance — the theme mode still switches the system bars, the
-        // identity above owns the palette.
-        SettingsGroup("Appearance", accent, Modifier.staggerIn(3, entrance)) {
-            ThemeModeRow(
-                current = currentTheme,
-                accent = accent,
-                onSelect = { onThemeChanged?.invoke(it) },
-            )
-        }
-
         // Home artwork — the anime banner on the home screen.
         SettingsGroup("Home artwork", accent, Modifier.staggerIn(4, entrance)) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = Prism.Gutter, vertical = 14.dp),
+                    .horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 ArtworkThumbs.forEach { art ->
@@ -456,51 +445,6 @@ private fun SchemeRow(
         onClick = onClick,
         divider = divider
     )
-}
-
-/**
- * Theme mode row: Dark / Light / System. The choice is persisted by
- * MainActivity through ThemePreferences.
- */
-@Composable
-private fun ThemeModeRow(
-    current: ThemeMode,
-    accent: Color,
-    onSelect: (ThemeMode) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val normalized = when (current) {
-        ThemeMode.DARK -> ThemeMode.DARK
-        ThemeMode.SYSTEM -> ThemeMode.SYSTEM
-        else -> ThemeMode.LIGHT
-    }
-    Column(modifier = modifier.fillMaxWidth()) {
-        PrismRow(
-            title = "Theme",
-            subtitle = "Dark is the default. Light is the same layout on paper surfaces.",
-            accent = accent
-        )
-        Spacer(Modifier.height(Prism.Tight))
-        PrismSegmented(
-            options = listOf("Dark", "Light", "System"),
-            selectedIndex = when (normalized) {
-                ThemeMode.DARK -> 0
-                ThemeMode.LIGHT -> 1
-                else -> 2
-            },
-            accent = accent,
-            modifier = Modifier.fillMaxWidth(),
-            onSelect = { index ->
-                onSelect(
-                    when (index) {
-                        0 -> ThemeMode.DARK
-                        1 -> ThemeMode.LIGHT
-                        else -> ThemeMode.SYSTEM
-                    }
-                )
-            }
-        )
-    }
 }
 
 /**

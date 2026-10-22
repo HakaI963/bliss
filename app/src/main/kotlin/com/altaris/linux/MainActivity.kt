@@ -98,9 +98,17 @@ enum class Screen {
 }
 
 class MainActivity : ComponentActivity() {
-    
+
+    // TEMPORARY (dev only): window-capture requests, see ui/debug/WindowCapture.
+    private val captureRequests = kotlinx.coroutines.flow.MutableStateFlow(0)
+    private var captureShare = false
+
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
+        if (com.altaris.linux.ui.debug.WindowCapture.wantsCapture(intent)) {
+            captureShare = com.altaris.linux.ui.debug.WindowCapture.wantsShare(intent)
+            captureRequests.value = captureRequests.value + 1
+        }
         handleScriptCallback(intent)
         if (intent.getStringExtra("EXTRA_TARGET_PAGE") == "terminal") {
             // FGS notification tap → jump to in-app terminal (bottom-nav tab)
@@ -586,6 +594,10 @@ class MainActivity : ComponentActivity() {
         if (savedInstanceState == null) {
             dispatchLegacyTermuxCallback(intent)
         }
+        if (com.altaris.linux.ui.debug.WindowCapture.wantsCapture(intent)) {
+            captureShare = com.altaris.linux.ui.debug.WindowCapture.wantsShare(intent)
+            captureRequests.value = captureRequests.value + 1
+        }
         requestNotificationPermissionIfNeeded()
         setContent {
             // Midnight is the default. Day and System are explicit user choices.
@@ -598,6 +610,28 @@ class MainActivity : ComponentActivity() {
                         else -> ThemeMode.DARK
                     }
                 )
+            }
+
+            // TEMPORARY (dev only): in-app window capture.
+            val captureSignal by captureRequests.collectAsState()
+            LaunchedEffect(captureSignal) {
+                if (captureSignal > 0) {
+                    kotlinx.coroutines.delay(900)
+                    val file = com.altaris.linux.ui.debug.WindowCapture.capture(
+                        this@MainActivity,
+                        window.decorView
+                    )
+                    if (file != null) {
+                        android.widget.Toast.makeText(
+                            this@MainActivity,
+                            "Captured ${file.absolutePath}",
+                            android.widget.Toast.LENGTH_LONG
+                        ).show()
+                        if (captureShare) {
+                            com.altaris.linux.ui.debug.WindowCapture.share(this@MainActivity, file)
+                        }
+                    }
+                }
             }
 
             AltarisTheme(themeMode = currentThemeMode) {
@@ -643,9 +677,43 @@ class MainActivity : ComponentActivity() {
                 }
 
                 /** Open the Terminal page (bottom-nav hidden, full height). */
+                // A shell on the Android host itself (no container).
+                val openHostShell: () -> Unit = {
+                    android.widget.Toast.makeText(
+                        this@MainActivity,
+                        "Preparing the host shell…",
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                    com.altaris.linux.core.terminal.AltarisTerminalSessionManager
+                        .openHostShellAfterReady(
+                            this@MainActivity,
+                            title = "Host Shell",
+                            onResult = { result ->
+                                when (result) {
+                                    com.altaris.linux.core.terminal.AltarisTerminalSessionManager
+                                        .SessionOpenResult.OPENED -> currentScreen = Screen.TERMINAL
+                                    com.altaris.linux.core.terminal.AltarisTerminalSessionManager
+                                        .SessionOpenResult.MAX_TABS ->
+                                        android.widget.Toast.makeText(
+                                            this@MainActivity,
+                                            "Tab limit reached",
+                                            android.widget.Toast.LENGTH_SHORT
+                                        ).show()
+                                    else -> android.widget.Toast.makeText(
+                                        this@MainActivity,
+                                        "Host shell is not ready — check Settings",
+                                        android.widget.Toast.LENGTH_LONG
+                                    ).show()
+                                }
+                            }
+                        )
+                }
+
+                // The terminal is a full-screen route with its own dark chrome
+                // and a back button — it is not a navigation tab, so the user
+                // can never get stranded in it.
                 val openTerminalTab: () -> Unit = {
-                    currentScreen = Screen.HOME
-                    currentTab = BottomTab.TERMINAL
+                    currentScreen = Screen.TERMINAL
                 }
 
                 BackHandler {
@@ -663,6 +731,9 @@ class MainActivity : ComponentActivity() {
                         || currentScreen == Screen.ROOT_ACCESS
                         || currentScreen == Screen.CRASH_LOGS) {
                         currentScreen = Screen.SETTINGS
+                    } else if (currentScreen == Screen.TERMINAL) {
+                        com.altaris.linux.ui.terminal.hideIme(window.decorView)
+                        currentScreen = Screen.HOME
                     } else if (currentScreen == Screen.SETTINGS
                         || currentScreen == Screen.DISTRO_SETTINGS
                         || currentScreen == Screen.INSTALL_WIZARD) {
@@ -824,7 +895,8 @@ class MainActivity : ComponentActivity() {
                                     onNavigateToInstall = onNavigateToInstall,
                                     onNavigateToSettings = onNavigateToDistroSettings,
                                     onOpenTerminal = onOpenTerminal,
-                                    onShowTerminal = openTerminalTab
+                                    onShowTerminal = openTerminalTab,
+                                    onOpenHostShell = openHostShell
                                 )
                             }
                             BottomTab.DISTROS -> {
@@ -885,6 +957,7 @@ class MainActivity : ComponentActivity() {
                     cloneRunning: Boolean,
                     onOpenPalette: () -> Unit,
                     onOpenSettings: () -> Unit,
+                    onOpenHostShell: () -> Unit,
                 ) {
                     AltarisCommandBar(
                         accent = MaterialTheme.colorScheme.primary,
@@ -896,6 +969,7 @@ class MainActivity : ComponentActivity() {
                         live = displayLive || cloneRunning,
                         onOpenPalette = onOpenPalette,
                         onOpenSettings = onOpenSettings,
+                        onOpenHostShell = onOpenHostShell,
                     )
                 }
 
@@ -916,8 +990,7 @@ class MainActivity : ComponentActivity() {
                                 },
                                 onOpenTerminal = {
                                     StateManager.setOnboardingComplete(this@MainActivity, true)
-                                    currentScreen = Screen.HOME
-                                    currentTab = BottomTab.TERMINAL
+                                    openTerminalTab()
                                 },
                                 onStartDesktop = { distroId ->
                                     StateManager.setOnboardingComplete(this@MainActivity, true)
@@ -948,7 +1021,9 @@ class MainActivity : ComponentActivity() {
                             // top of ExtraKeys. This is why the tab bar must never
                             // carry a Terminal item: it can't be selected from the
                             // bar, and the bar can't reliably hide while mounted.
-                            val showChrome = currentTab != BottomTab.TERMINAL
+                            // The chrome never disappears: the terminal is a
+                            // route of its own, so the nav stays reachable.
+                            val showChrome = true
 
                             // Terminal hides the IME when we leave it, or it stays
                             // up over the next tab's contents.
@@ -979,7 +1054,8 @@ class MainActivity : ComponentActivity() {
                                                     displayLive = session != null,
                                                     cloneRunning = activeClone != null,
                                                     onOpenPalette = { paletteOpen = true },
-                                                    onOpenSettings = { currentScreen = Screen.SETTINGS }
+                                                    onOpenSettings = { currentScreen = Screen.SETTINGS },
+                                                    onOpenHostShell = openHostShell
                                                 )
                                             }
                                             // Live install strip (all tabs while chrome is
@@ -1200,11 +1276,10 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                         Screen.TERMINAL -> {
-                            // Legacy full-screen route — redirect to bottom-nav Terminal tab.
-                            LaunchedEffect(Unit) {
-                                currentScreen = Screen.HOME
-                                currentTab = BottomTab.TERMINAL
-                            }
+                            com.altaris.linux.ui.screens.TerminalScreen(
+                                onBack = { currentScreen = Screen.HOME },
+                                embeddedInBottomNav = false
+                            )
                         }
                         Screen.PREREQUISITES -> {
                             // Legacy redirect route: bounce to Home without a

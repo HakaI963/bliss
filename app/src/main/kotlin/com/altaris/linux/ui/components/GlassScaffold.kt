@@ -42,11 +42,12 @@ fun GlassScaffold(
             }
         )
 
+        // The navigation bar spans the full width and only the system
+        // navigation inset is kept clear.
         Box(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
-                .padding(horizontal = 14.dp, vertical = 6.dp)
         ) {
             bottomBar()
         }

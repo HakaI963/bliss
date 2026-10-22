@@ -5,6 +5,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -23,8 +24,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -47,8 +50,9 @@ import com.altaris.linux.ui.theme.Prism
 /**
  * The top bar.
  *
- * A flat 46 dp strip with a hairline underneath — the reference's workspace
- * topbar. The wordmark, the live status and two actions.
+ * A flat strip with a hairline underneath — the reference's workspace
+ * topbar. The mark sits in a filled tile, the wordmark and the live status
+ * sit next to it, and the actions live on the right.
  */
 @Composable
 fun AltarisCommandBar(
@@ -58,47 +62,74 @@ fun AltarisCommandBar(
     live: Boolean,
     onOpenPalette: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenHostShell: (() -> Unit)? = null,
 ) {
     val scheme = MaterialTheme.colorScheme
-    Row(
+    Column(
         modifier = modifier
             .fillMaxWidth()
-            .height(Prism.TopBarHeight)
             .background(scheme.surface)
-            .border(1.dp, scheme.outline, RoundedCornerShape(0.dp)),
-        verticalAlignment = Alignment.CenterVertically,
+            .padding(horizontal = 12.dp),
     ) {
-        AltarisMark(accent = accent, size = 18.dp)
-        Spacer(Modifier.width(8.dp))
-        Text(
-            text = "ALTARIS",
-            fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold,
-            letterSpacing = 1.6.sp,
-            color = scheme.onSurface,
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(Prism.TopBarHeight),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            AltarisMark(size = Prism.MarkSize)
+            Spacer(Modifier.width(9.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "ALTARIS",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = 1.5.sp,
+                    color = scheme.onSurface,
+                    maxLines = 1,
+                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(top = 1.dp),
+                ) {
+                    PrismOrb(active = live, accent = accent)
+                    Spacer(Modifier.width(5.dp))
+                    Text(
+                        text = statusLabel,
+                        fontSize = 9.5.sp,
+                        fontWeight = FontWeight.Medium,
+                        letterSpacing = 0.6.sp,
+                        color = scheme.onSurfaceVariant,
+                        maxLines = 1,
+                    )
+                }
+            }
+            if (onOpenHostShell != null) {
+                BarButton(
+                    icon = Icons.Default.Terminal,
+                    contentDescription = "Host shell",
+                    onClick = onOpenHostShell,
+                )
+                Spacer(Modifier.width(6.dp))
+            }
+            BarButton(
+                icon = Icons.Default.Search,
+                contentDescription = "Jump to…",
+                onClick = onOpenPalette,
+            )
+            Spacer(Modifier.width(6.dp))
+            BarButton(
+                icon = Icons.Default.Settings,
+                contentDescription = "Settings",
+                onClick = onOpenSettings,
+            )
+        }
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(scheme.outline)
         )
-        Spacer(Modifier.width(10.dp))
-        PrismOrb(active = live, accent = accent)
-        Spacer(Modifier.width(6.dp))
-        Text(
-            text = statusLabel,
-            fontSize = 11.sp,
-            color = scheme.onSurfaceVariant,
-            maxLines = 1,
-        )
-        Spacer(Modifier.weight(1f))
-        BarButton(
-            icon = Icons.Default.Search,
-            contentDescription = "Jump to…",
-            onClick = onOpenPalette,
-        )
-        Spacer(Modifier.width(6.dp))
-        BarButton(
-            icon = Icons.Default.Settings,
-            contentDescription = "Settings",
-            onClick = onOpenSettings,
-        )
-        Spacer(Modifier.width(10.dp))
     }
 }
 
@@ -115,9 +146,9 @@ private fun BarButton(
     val shape = RoundedCornerShape(Prism.ButtonRadius)
     Box(
         modifier = Modifier
-            .size(28.dp)
+            .size(30.dp)
             .clip(shape)
-            .background(if (pressed) scheme.onSurface.copy(alpha = 0.08f) else Color.Transparent)
+            .background(if (pressed) scheme.onSurface.copy(alpha = 0.10f) else Color.Transparent)
             .border(1.dp, scheme.outline, shape)
             .clickable(
                 interactionSource = interaction,
@@ -130,7 +161,7 @@ private fun BarButton(
             imageVector = icon,
             contentDescription = contentDescription,
             tint = scheme.onSurfaceVariant,
-            modifier = Modifier.size(14.dp),
+            modifier = Modifier.size(15.dp),
         )
     }
 }
@@ -150,7 +181,7 @@ fun AltarisTitle(
         AnimatedContent(
             targetState = title,
             transitionSpec = {
-                (fadeIn(tween(160)) + androidx.compose.animation.slideInVertically(
+                (fadeIn(tween(160)) + slideInVertically(
                     animationSpec = spring(dampingRatio = 0.9f, stiffness = 600f),
                     initialOffsetY = { it / 4 },
                 )) togetherWith fadeOut(tween(100))
@@ -179,32 +210,52 @@ fun AltarisTitle(
 }
 
 /**
- * The Altaris mark: a triangle that splits a beam — the prism the product
- * is named after.
+ * The Altaris mark: a prism that splits a beam — the stone the product is
+ * named after. It sits in a filled tile so the wordmark has a strong anchor.
  */
 @Composable
 fun AltarisMark(
     accent: Color,
     modifier: Modifier = Modifier,
-    size: Dp = 18.dp,
+    size: Dp = Prism.MarkSize,
 ) {
-    val ink = MaterialTheme.colorScheme.onSurface
-    val inkSoft = MaterialTheme.colorScheme.onSurfaceVariant
-    Canvas(modifier = modifier.size(size)) {
-        val w = this.size.width
-        val h = this.size.height
-        val path = Path().apply {
-            moveTo(w * 0.18f, h * 0.82f)
-            lineTo(w * 0.50f, h * 0.14f)
-            lineTo(w * 0.82f, h * 0.82f)
-            close()
+    val scheme = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(7.dp)
+    Box(
+        modifier = modifier
+            .size(size)
+            .clip(shape)
+            .background(scheme.onSurface),
+        contentAlignment = Alignment.Center,
+    ) {
+        val ink = scheme.background
+        Canvas(modifier = Modifier.size(size * 0.62f)) {
+            val w = this.size.width
+            val h = this.size.height
+            val path = Path().apply {
+                moveTo(w * 0.12f, h * 0.80f)
+                lineTo(w * 0.50f, h * 0.16f)
+                lineTo(w * 0.88f, h * 0.80f)
+                close()
+            }
+            drawPath(path, color = ink)
+            drawLine(
+                color = ink.copy(alpha = 0.55f),
+                start = androidx.compose.ui.geometry.Offset(w * 0.04f, h * 0.50f),
+                end = androidx.compose.ui.geometry.Offset(w * 0.40f, h * 0.44f),
+                strokeWidth = h * 0.07f,
+            )
         }
-        drawPath(path, color = ink)
-        drawLine(
-            color = inkSoft,
-            start = androidx.compose.ui.geometry.Offset(w * 0.02f, h * 0.46f),
-            end = androidx.compose.ui.geometry.Offset(w * 0.44f, h * 0.42f),
-            strokeWidth = h * 0.07f,
-        )
     }
+}
+
+/** A small chevron used by list rows. */
+@Composable
+fun PrismChevron(modifier: Modifier = Modifier) {
+    Icon(
+        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+        contentDescription = null,
+        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = modifier.size(15.dp),
+    )
 }
