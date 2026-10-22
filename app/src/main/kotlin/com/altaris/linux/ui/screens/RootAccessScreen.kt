@@ -100,8 +100,8 @@ fun RootAccessScreen(
                 AnimatedContent(
                     targetState = checkComplete,
                     transitionSpec = {
-                        (fadeIn(tween(AltarisMotion.ScreenMs, easing = FastOutSlowInEasing)) +
-                            scaleIn(initialScale = 0.96f)) togetherWith fadeOut(tween(AltarisMotion.FastMs))
+                        (fadeIn(tween(AltarisTimings.ScreenMs, easing = FastOutSlowInEasing)) +
+                            scaleIn(initialScale = 0.96f)) togetherWith fadeOut(tween(AltarisTimings.FastMs))
                     },
                     label = "rootCheck",
                     modifier = Modifier.fillMaxWidth(),

@@ -96,7 +96,7 @@ altaris_gpu_arch() {
 }
 
 altaris_gpu_write_state() {
-[ -d /etc/altarislinux ] && [ ! -e /etc/altaris ] && mv /etc/altarislinux /etc/altaris 2>/dev/null || true
+[ -d /etc/bliss ] && [ ! -e /etc/altaris ] && mv /etc/bliss /etc/altaris 2>/dev/null || true
     _mode=${1:-virgl}
     _vendor=${2:-unknown}
     mkdir -p /etc/altaris
@@ -140,7 +140,7 @@ altaris_gpu_has_kgsl_dri() {
 
 altaris_gpu_apply_runtime() {
     unset GALLIUM_DRIVER MESA_LOADER_DRIVER_OVERRIDE VK_ICD_FILENAMES
-[ -d /etc/altarislinux ] && [ ! -e /etc/altaris ] && mv /etc/altarislinux /etc/altaris 2>/dev/null || true
+[ -d /etc/bliss ] && [ ! -e /etc/altaris ] && mv /etc/bliss /etc/altaris 2>/dev/null || true
     unset LIBGL_ALWAYS_SOFTWARE TU_DEBUG MESA_VK_WSI_DEBUG
     MODE=virgl
     if [ -n "${ALTARIS_GPU_RUNTIME:-}" ]; then
@@ -210,7 +210,7 @@ altaris_gpu_has_kgsl_dri() {
 
 altaris_gpu_apply_runtime() {
     unset GALLIUM_DRIVER MESA_LOADER_DRIVER_OVERRIDE VK_ICD_FILENAMES
-[ -d /etc/altarislinux ] && [ ! -e /etc/altaris ] && mv /etc/altarislinux /etc/altaris 2>/dev/null || true
+[ -d /etc/bliss ] && [ ! -e /etc/altaris ] && mv /etc/bliss /etc/altaris 2>/dev/null || true
     unset LIBGL_ALWAYS_SOFTWARE TU_DEBUG MESA_VK_WSI_DEBUG
     MODE=virgl
     if [ -n "${ALTARIS_GPU_RUNTIME:-}" ]; then

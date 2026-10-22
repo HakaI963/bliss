@@ -9,12 +9,13 @@ bb_has() {
 
 bb_ok() {
   [ -n "${1:-}" ] && [ -x "$1" ] || return 1
-  case "$1" in *com.termux*|*altarislinux*|*nativecode*) return 1 ;; esac
+  case "$1" in *com.termux*|*fluxlinux*|*nativecode*) return 1 ;; esac
   bb_has "$1" chroot && bb_has "$1" mount
 }
 
 resolve_bb() {
-[ -d /data/local/altaris ] && [ ! -e /data/local/altaris ] && mv /data/local/altaris /data/local/altaris 2>/dev/null || true
+[ -d /data/local/bliss ] && [ ! -e /data/local/altaris ] && mv /data/local/bliss /data/local/altaris 2>/dev/null || true
+[ -d /data/local/folio ] && [ ! -e /data/local/altaris ] && mv /data/local/folio /data/local/altaris 2>/dev/null || true
   BB=""
   if [ -n "${ALTARIS_BB:-}" ] && bb_ok "$ALTARIS_BB"; then
     BB="$ALTARIS_BB"

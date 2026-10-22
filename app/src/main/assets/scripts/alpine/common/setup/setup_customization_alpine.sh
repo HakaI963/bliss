@@ -3,7 +3,7 @@
 # Altaris branding for Alpine XFCE4 (proot + chroot).
 # apk/musl port of setup_customization_debian.sh core path.
 
-CUSTOM_USER="altaris"
+CUSTOM_USER="flux"
 CUSTOM_GROUP="altaris"
 USER_HOME="/home/$CUSTOM_USER"
 THEME_DIR="/usr/share/themes"
@@ -33,7 +33,7 @@ export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin${PATH:
 _altaris_chown() { chown "$@" 2>/dev/null || true; }
 _altaris_chown_r() { chown -R "$@" 2>/dev/null || true; }
 
-# Resolve group for altaris (Alpine useradd often creates matching group)
+# Resolve group for flux (Alpine useradd often creates matching group)
 if id -gn "$CUSTOM_USER" >/dev/null 2>&1; then
     CUSTOM_GROUP="$(id -gn "$CUSTOM_USER")"
 fi
@@ -57,7 +57,7 @@ apk add --no-cache xfce4-whiskermenu-plugin 2>/dev/null || true
 export LANG="${LANG:-C.UTF-8}"
 export LC_ALL="${LC_ALL:-C.UTF-8}"
 
-ASSET_REPO="abhay-byte/altarislinux"
+ASSET_REPO="abhay-byte/fluxlinux"
 ASSET_TAG="debian-v1"
 BASE_URL="https://github.com/$ASSET_REPO/releases/download/$ASSET_TAG"
 ALTARIS_ASSET_DIR="${ALTARIS_ASSET_DIR:-/tmp/altaris_xfce_assets}"
@@ -887,7 +887,7 @@ if [ -f "$ZSH/oh-my-zsh.sh" ]; then
   source "$ZSH/oh-my-zsh.sh"
 fi
 
-# Alpine: package manager needs root. NOPASSWD sudo is configured for altaris.
+# Alpine: package manager needs root. NOPASSWD sudo is configured for flux.
 # Function (not alias) so it works in scripts and interactive shells.
 if command -v apk >/dev/null 2>&1 && command -v sudo >/dev/null 2>&1; then
   apk() { command sudo apk "$@"; }

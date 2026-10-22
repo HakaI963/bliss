@@ -7,13 +7,13 @@ android-notes/ShadowAuto), which is licensed under the Apache License,
 Version 2.0.
 
 Files derived from ShadowAuto:
-  app/src/main/java/com/ivarna/fluxlinux/clone/engine/VirtualDisplaySession.java
-  app/src/main/java/com/ivarna/fluxlinux/clone/engine/ScreenCapture.java
-  app/src/main/java/com/ivarna/fluxlinux/clone/engine/InputBridge.java
-  app/src/main/java/com/ivarna/fluxlinux/clone/engine/WindowManagerBridge.java
-  app/src/main/java/com/ivarna/fluxlinux/clone/engine/AppCatalog.java
-  app/src/main/java/com/ivarna/fluxlinux/clone/engine/DisplayService.java   (was ShellUserService.java)
-  app/src/main/java/com/ivarna/fluxlinux/clone/engine/EngineClient.java     (was ShizukuServerManager.java)
+  app/src/main/java/com/altaris/linux/clone/engine/VirtualDisplaySession.java
+  app/src/main/java/com/altaris/linux/clone/engine/ScreenCapture.java
+  app/src/main/java/com/altaris/linux/clone/engine/InputBridge.java
+  app/src/main/java/com/altaris/linux/clone/engine/WindowManagerBridge.java
+  app/src/main/java/com/altaris/linux/clone/engine/AppCatalog.java
+  app/src/main/java/com/altaris/linux/clone/engine/DisplayService.java   (was ShellUserService.java)
+  app/src/main/java/com/altaris/linux/clone/engine/EngineClient.java     (was ShizukuServerManager.java)
 
 This product includes the Shizuku API
 (https://github.com/RikkaApps/Shizuku-API) by Rikka, licensed under the

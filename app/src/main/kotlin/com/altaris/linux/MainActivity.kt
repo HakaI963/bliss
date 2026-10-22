@@ -139,7 +139,7 @@ class MainActivity : ComponentActivity() {
     private fun handleScriptCallback(intent: android.content.Intent) {
         android.util.Log.d("Altaris", "handleScriptCallback called with action: ${intent.action}, data: ${intent.data}")
         // Handle Deep Link: altaris://callback?result=success&name=setup_termux
-        if (intent.action == android.content.Intent.ACTION_VIEW && intent.data?.scheme == "altarislinux") {
+        if (intent.action == android.content.Intent.ACTION_VIEW && intent.data?.scheme == "altaris") {
             val uri = intent.data
             val result = uri?.getQueryParameter("result")
             val scriptName = uri?.getQueryParameter("name") ?: "unknown"
@@ -535,7 +535,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun dispatchLegacyTermuxCallback(intent: android.content.Intent?) {
-        if (intent?.action == android.content.Intent.ACTION_VIEW && intent.data?.scheme == "altarislinux") {
+        if (intent?.action == android.content.Intent.ACTION_VIEW && intent.data?.scheme == "altaris") {
             val uri = intent.data
             val scriptName = uri?.getQueryParameter("name") ?: return
             if (scriptName.startsWith("legacy_termux_")) {

@@ -8,10 +8,10 @@
 # Usage:
 #   altaris_chroot.sh version
 #   altaris_chroot.sh mount [--x11]
-#   altaris_chroot.sh login [--user altaris|root] [--shell zsh|bash] [--workdir PATH]
-#   altaris_chroot.sh sh    [--user altaris|root] -- 'shell string'
-#   altaris_chroot.sh exec  [--user altaris|root] -- CMD [ARGS...]
-#   altaris_chroot.sh b64   [--user altaris|root] -- BASE64_PAYLOAD
+#   altaris_chroot.sh login [--user flux|root] [--shell zsh|bash] [--workdir PATH]
+#   altaris_chroot.sh sh    [--user flux|root] -- 'shell string'
+#   altaris_chroot.sh exec  [--user flux|root] -- CMD [ARGS...]
+#   altaris_chroot.sh b64   [--user flux|root] -- BASE64_PAYLOAD
 #
 # Env:
 #   ALTARIS_CHROOT  ALTARIS_PACKAGE  ALTARIS_HOST_TMP  ALTARIS_PREFIX  ALTARIS_BB  ALTARIS_SHELL
@@ -46,10 +46,10 @@ usage() {
 usage:
   altaris_chroot.sh version
   altaris_chroot.sh mount [--x11]
-  altaris_chroot.sh login [--user altaris|root] [--shell zsh|bash] [--workdir PATH]
-  altaris_chroot.sh sh    [--user altaris|root] -- SHELL_STRING
-  altaris_chroot.sh exec  [--user altaris|root] -- CMD [ARGS...]
-  altaris_chroot.sh b64   [--user altaris|root] -- BASE64_PAYLOAD
+  altaris_chroot.sh login [--user flux|root] [--shell zsh|bash] [--workdir PATH]
+  altaris_chroot.sh sh    [--user flux|root] -- SHELL_STRING
+  altaris_chroot.sh exec  [--user flux|root] -- CMD [ARGS...]
+  altaris_chroot.sh b64   [--user flux|root] -- BASE64_PAYLOAD
 EOF
   exit 2
 }
@@ -78,7 +78,7 @@ if [ "$_RESOLVE_BB_SOURCED" != "1" ]; then
 
   bb_ok() {
     [ -n "${1:-}" ] && [ -x "$1" ] || return 1
-    case "$1" in *com.termux*|*altarislinux*|*nativecode*) return 1 ;; esac
+    case "$1" in *com.termux*|*fluxlinux*|*nativecode*) return 1 ;; esac
     bb_has "$1" chroot && bb_has "$1" mount
   }
 
@@ -299,7 +299,7 @@ build_guest_env_args() {
   if [ "$USER_NAME" = "root" ]; then
     GUEST_ENV_ARGS="PATH=$_gp HOME=/root USER=root LOGNAME=root TERM=$_term LANG=$_lang TMPDIR=/tmp XDG_RUNTIME_DIR=/tmp PULSE_SERVER=tcp:127.0.0.1 DEBIAN_FRONTEND=noninteractive"
   else
-    GUEST_ENV_ARGS="PATH=$_gp HOME=/home/flux USER=altaris LOGNAME=altaris NVM_DIR=/home/flux/.nvm TERM=$_term LANG=$_lang TMPDIR=/tmp XDG_RUNTIME_DIR=/tmp PULSE_SERVER=tcp:127.0.0.1 DEBIAN_FRONTEND=noninteractive"
+    GUEST_ENV_ARGS="PATH=$_gp HOME=/home/flux USER=flux LOGNAME=flux NVM_DIR=/home/flux/.nvm TERM=$_term LANG=$_lang TMPDIR=/tmp XDG_RUNTIME_DIR=/tmp PULSE_SERVER=tcp:127.0.0.1 DEBIAN_FRONTEND=noninteractive"
   fi
 }
 

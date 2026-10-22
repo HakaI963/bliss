@@ -24,7 +24,7 @@ object ProotXfceAssetInstaller {
 
     private const val TAG = "ProotXfceAssets"
     private const val GH_BASE =
-        "https://github.com/abhay-byte/altarislinux/releases/download/debian-v1"
+        "https://github.com/abhay-byte/fluxlinux/releases/download/debian-v1"
 
     /** Sole icon set we ship / install. */
     const val ICON_NAME = "Papirus-Dark"

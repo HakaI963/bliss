@@ -1,7 +1,7 @@
 #!/bin/sh
 # setup_alpine_family.sh
 # Post-install base desktop for Alpine (proot + chroot). apk + musl.
-# Creates user altaris, installs XFCE4. Must run as root inside the guest.
+# Creates user flux, installs XFCE4. Must run as root inside the guest.
 
 # Helpers live in altaris_guest_common.sh (prepended by altaris_install /
 # familySetupPayload). Source it only when this file is run standalone.
@@ -192,19 +192,19 @@ fi
 
 # 5. User altaris (prefer uid 1000 when free — matches common XFCE defaults)
 if ! id altaris >/dev/null 2>&1; then
-    echo "Altaris: Creating user altaris..."
+    echo "Altaris: Creating user flux..."
     if command -v useradd >/dev/null 2>&1; then
         if ! id -u 1000 >/dev/null 2>&1; then
-            useradd -m -u 1000 -s /bin/bash altaris 2>/dev/null \
-                || useradd -m -s /bin/bash altaris 2>/dev/null \
-                || useradd -m -s /bin/sh altaris
+            useradd -m -u 1000 -s /bin/bash flux 2>/dev/null \
+                || useradd -m -s /bin/bash flux 2>/dev/null \
+                || useradd -m -s /bin/sh flux
         else
-            useradd -m -s /bin/bash altaris 2>/dev/null || useradd -m -s /bin/sh altaris
+            useradd -m -s /bin/bash flux 2>/dev/null || useradd -m -s /bin/sh flux
         fi
     else
         adduser -D -s /bin/sh altaris
     fi
-    echo "altaris:altaris" | chpasswd 2>/dev/null || true
+    echo "flux:flux" | chpasswd 2>/dev/null || true
 fi
 
 # Groups (best-effort — names differ slightly across Alpine releases)
@@ -214,7 +214,7 @@ done
 
 # 6. Sudo NOPASSWD
 mkdir -p /etc/sudoers.d
-echo "altaris ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/flux
+echo "flux ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/flux
 chmod 0440 /etc/sudoers.d/flux
 # Alpine ships @includedir; re-assert if a minimal sudoers was replaced
 if [ -f /etc/sudoers ] && ! grep -qE '@includedir[[:space:]]+/etc/sudoers\.d' /etc/sudoers 2>/dev/null; then
@@ -260,16 +260,16 @@ EOF
 fi
 
 # Ensure home ownership / writability.
-# Proot: host process is the Android app uid; chown to altaris's guest uid (e.g.
+# Proot: host process is the Android app uid; chown to flux's guest uid (e.g.
 # 10302) can make mode-700 dirs unwritable on disk → xfconfd failsafe.
-# Prefer matching /home owner (app uid under proot), then best-effort altaris:altaris.
+# Prefer matching /home owner (app uid under proot), then best-effort flux:flux.
 if [ -d /home/flux ]; then
     _home_uid=$(stat -c %u /home 2>/dev/null || true)
     _home_gid=$(stat -c %g /home 2>/dev/null || true)
     if [ -n "$_home_uid" ]; then
         chown -R "$_home_uid:$_home_gid" /home/flux 2>/dev/null || true
     fi
-    chown -R altaris:altaris /home/flux 2>/dev/null || true
+    chown -R flux:flux /home/flux 2>/dev/null || true
     chmod 755 /home/flux 2>/dev/null || true
     mkdir -p /home/flux/.config /home/flux/.cache /home/flux/.local/share
     chmod -R u+rwX /home/flux/.config /home/flux/.cache /home/flux/.local 2>/dev/null || true
@@ -299,7 +299,7 @@ _altaris_fix_apk_writable() {
 echo "Altaris: Ensuring apk database is writable (proot-safe)…"
 _altaris_fix_apk_writable
 
-[ -d /etc/altarislinux ] && [ ! -e /etc/altaris ] && mv /etc/altarislinux /etc/altaris 2>/dev/null || true
+[ -d /etc/bliss ] && [ ! -e /etc/altaris ] && mv /etc/bliss /etc/altaris 2>/dev/null || true
 mkdir -p /etc/altaris
 printf '%s\n' virgl > /etc/altaris/gpu_mode
 echo "Altaris: gpu_mode=virgl (first-paint; hw-accel may upgrade)"

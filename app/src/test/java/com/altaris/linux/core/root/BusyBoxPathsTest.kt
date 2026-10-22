@@ -55,7 +55,7 @@ class BusyBoxPathsTest {
         val resolver = readAsset("scripts/chroot/resolve_bb.sh")
         for (src in listOf(helper, resolver)) {
             assertTrue(src.contains("*com.termux*"))
-            assertTrue(src.contains("*altarislinux*"))
+            assertTrue(src.contains("*fluxlinux*"))
             assertTrue(src.contains("*nativecode*"))
         }
     }

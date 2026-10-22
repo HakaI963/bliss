@@ -33,7 +33,7 @@ import java.lang.reflect.Method;
  * reject {@code PRESENTATION}.
  */
 final class VirtualDisplaySession {
-    private static final String TAG = "BlissEngine";
+    private static final String TAG = "AltarisEngine";
 
     final int displayId;
     final int width;

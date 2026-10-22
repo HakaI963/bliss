@@ -7,9 +7,10 @@ DISTRO_HINT="${1:-${ALTARIS_CHROOT_DISTRO:-debian13_chroot}}"
 
 PKG="${TERMUX_APP__PACKAGE_NAME:-com.ivarna.fluxlinux}"
 _HOST_ENV="${TERMUX__PREFIX:-/data/data/${PKG}/files/usr}/etc/altaris-host.env"
-[ -r "$_HOST_ENV" ] || _HOST_ENV="${_HOST_ENV%/*}/altaris-host.env"
+[ -r "$_HOST_ENV" ] || _HOST_ENV="${_HOST_ENV%/*}/fluxlinux-host.env"
 [ -r "$_HOST_ENV" ] && . "$_HOST_ENV"
-[ -d /data/local/altaris ] && [ ! -e /data/local/altaris ] && mv /data/local/altaris /data/local/altaris 2>/dev/null || true
+[ -d /data/local/bliss ] && [ ! -e /data/local/altaris ] && mv /data/local/bliss /data/local/altaris 2>/dev/null || true
+[ -d /data/local/folio ] && [ ! -e /data/local/altaris ] && mv /data/local/folio /data/local/altaris 2>/dev/null || true
 
 PKG="${TERMUX_APP__PACKAGE_NAME:-$PKG}"
 TERMUX_PREFIX="${TERMUX__PREFIX:-/data/data/$PKG/files/usr}"

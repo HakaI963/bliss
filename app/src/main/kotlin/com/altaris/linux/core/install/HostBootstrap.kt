@@ -12,14 +12,14 @@ package com.altaris.linux.core.install
 object HostBootstrap {
 
     const val RELEASE_BASE =
-        "https://github.com/abhay-byte/altarislinux/releases/download/rootfs"
+        "https://github.com/abhay-byte/fluxlinux/releases/download/rootfs"
 
     const val IVARNA_PACKAGE = "com.ivarna.fluxlinux"
     const val ZENITHBLUE_PACKAGE = "com.zenithblue.fluxlinux"
     const val ALTARIS_PACKAGE = "com.nopiece.bliss"
 
     /** Legacy applicationId (pre-Altaris rename); kept so old copies still resolve. */
-    const val ALTARIS_PACKAGE = "com.nopiece.altaris"
+    const val LEGACY_FOLIO_PACKAGE = "com.nopiece.folio"
 
     val IVARNA = PinnedReleaseArchive(
         fileName = "bootstrap_com.ivarna.fluxlinux.tar",
@@ -49,8 +49,8 @@ object HostBootstrap {
         when (applicationId) {
             ZENITHBLUE_PACKAGE -> ZENITHBLUE
             ALTARIS_PACKAGE -> ALTARIS
-            // Legacy com.nopiece.altaris id — same flavor before the Altaris rename.
-            ALTARIS_PACKAGE -> ALTARIS
+            // Legacy com.nopiece.folio id — same flavor before the Altaris rename.
+            LEGACY_FOLIO_PACKAGE -> ALTARIS
             else -> IVARNA
         }
 

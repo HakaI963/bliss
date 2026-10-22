@@ -85,20 +85,20 @@ if [ "$DESKTOPS" != "none" ]; then
             mesa-utils libgl1-mesa-dri libegl1 \
         || true
 fi
-[ -d /etc/altarislinux ] && [ ! -e /etc/altaris ] && mv /etc/altarislinux /etc/altaris 2>/dev/null || true
+[ -d /etc/bliss ] && [ ! -e /etc/altaris ] && mv /etc/bliss /etc/altaris 2>/dev/null || true
 mkdir -p /etc/altaris
 printf '%s\n' virgl > /etc/altaris/gpu_mode
 echo "Altaris: gpu_mode=virgl (first-paint; hw-accel may upgrade)"
 
 # 2. Create User 'altaris'
 if ! id "altaris" &>/dev/null; then
-    useradd -m -s /bin/bash altaris
-    echo "altaris:altaris" | chpasswd
+    useradd -m -s /bin/bash flux
+    echo "flux:flux" | chpasswd
     usermod -aG sudo altaris
 fi
 
 # 3. Configure Sudo
-echo "altaris ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/flux
+echo "flux ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/flux
 
 # 4. Configure VNC for User (session command follows ALTARIS_DESKTOPS)
 mkdir -p /home/flux/.vnc
@@ -114,7 +114,7 @@ exec $_xs_de
 EOF
 unset _xs_de
 chmod +x /home/flux/.vnc/xstartup
-chown -R altaris:altaris /home/flux/.vnc
+chown -R flux:flux /home/flux/.vnc
 
 if command -v _altaris_write_pulse_client >/dev/null 2>&1; then
     _altaris_write_pulse_client

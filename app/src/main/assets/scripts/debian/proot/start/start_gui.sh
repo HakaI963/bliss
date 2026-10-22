@@ -5,7 +5,7 @@
 DISTRO=${1:-debian}
 PKG="${TERMUX_APP__PACKAGE_NAME:-com.ivarna.fluxlinux}"
 _HOST_ENV="${TERMUX__PREFIX:-/data/data/${PKG}/files/usr}/etc/altaris-host.env"
-[ -r "$_HOST_ENV" ] || _HOST_ENV="${_HOST_ENV%/*}/altaris-host.env"
+[ -r "$_HOST_ENV" ] || _HOST_ENV="${_HOST_ENV%/*}/fluxlinux-host.env"
 [ -r "$_HOST_ENV" ] && . "$_HOST_ENV"
 
 # Termux paths (from SSOT env, with safe fallbacks)
@@ -249,7 +249,7 @@ else
       if [ -n "$_home_uid" ]; then
         chown -R "$_home_uid:$_home_gid" /home/flux 2>/dev/null || true
         if [ "$_home_uid" = "0" ]; then
-          chown -R altaris:altaris /home/flux 2>/dev/null || true
+          chown -R flux:flux /home/flux 2>/dev/null || true
         fi
       fi
       mkdir -p /home/flux/.config /home/flux/.cache /home/flux/.local/share
@@ -259,7 +259,7 @@ else
     fi
     if [ -d /home/flux/.cache/runtime ]; then
       chmod 700 /home/flux/.cache/runtime 2>/dev/null || true
-      chown altaris:altaris /home/flux/.cache/runtime 2>/dev/null || true
+      chown flux:flux /home/flux/.cache/runtime 2>/dev/null || true
     fi
     # dbus machine-id (session bus soft-depends on it on some builds)
     if command -v dbus-uuidgen >/dev/null 2>&1; then

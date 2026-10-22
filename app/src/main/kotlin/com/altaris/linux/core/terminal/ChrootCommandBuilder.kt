@@ -18,7 +18,7 @@ object ChrootCommandBuilder {
     fun build(
         ctx: Context,
         shellCmd: String,
-        user: String = "altaris",
+        user: String = "flux",
         chrootPath: String = ChrootPaths.CHROOT_PATH,
         loginShell: GuestLoginShell? = null
     ): Pair<Array<String>, HashMap<String, String>> {
@@ -56,12 +56,12 @@ object ChrootCommandBuilder {
     /** Pure guest-inner argv builder (unit-testable without Android). */
     fun buildRootInner(
         shellCmd: String,
-        user: String = "altaris",
+        user: String = "flux",
         helper: String = ChrootPaths.CHROOT_HELPER,
         loginShellAltaris: String = "zsh",
         loginShellRoot: String = "bash"
     ): String {
-        val u = if (user == "root") "root" else "altaris"
+        val u = if (user == "root") "root" else "flux"
         val workdir = GuestLoginShell.parseInteractiveWorkdir(shellCmd)
         val isInteractive = GuestLoginShell.isInteractiveLogin(shellCmd)
 
@@ -74,7 +74,7 @@ object ChrootCommandBuilder {
             }
             isInteractive -> {
                 val wd = workdir?.let { " --workdir ${shellSingleQuote(it)}" } ?: ""
-                "exec sh $helper login --user altaris --shell $loginShellAltaris$wd"
+                "exec sh $helper login --user flux --shell $loginShellAltaris$wd"
             }
             isSimpleGuestCmd(shellCmd) -> {
                 val esc = shellCmd.replace("'", "'\\''")
@@ -91,10 +91,10 @@ object ChrootCommandBuilder {
 
     /** Session env for the outer sh (Android PATH + TERM + guest HOME). */
     fun buildEnv(
-        user: String = "altaris",
+        user: String = "flux",
         chrootPath: String = ChrootPaths.CHROOT_PATH
     ): HashMap<String, String> {
-        val u = if (user == "root") "root" else "altaris"
+        val u = if (user == "root") "root" else "flux"
         val envMap = HashMap(System.getenv())
         envMap["PATH"] = "/system/bin:/system/xbin:/sbin:" + (envMap["PATH"] ?: "")
         envMap["TERM"] = "xterm-256color"

@@ -28,7 +28,7 @@ object ProotCommandBuilder {
 
     /** `KEY=value` list behind [guestLoginEnv]; [term] is the TERM value as written. */
     fun guestEnvVars(user: String, term: String): List<String> {
-        val u = if (user == "root") "root" else "altaris"
+        val u = if (user == "root") "root" else "flux"
         val home = if (u == "root") "/root" else "/home/flux"
         // Do not force LANG/LC_ALL here: missing en_US.UTF-8 prints
         // "cannot change locale" from /bin/sh before profile.d can pick.
@@ -219,7 +219,7 @@ object ProotCommandBuilder {
         shell: String,
         prootDistro: String,
         shellCmd: String,
-        user: String = "altaris",
+        user: String = "flux",
         useSharedTmp: Boolean = true,
         distro: String = "debian",
         loginShell: GuestLoginShell = GuestLoginShell.DEFAULT
@@ -248,7 +248,7 @@ object ProotCommandBuilder {
     fun build(
         ctx: Context,
         shellCmd: String,
-        user: String = "altaris",
+        user: String = "flux",
         useSharedTmp: Boolean = true,
         distro: String = "debian",
         loginShell: GuestLoginShell = GuestLoginShell.DEFAULT

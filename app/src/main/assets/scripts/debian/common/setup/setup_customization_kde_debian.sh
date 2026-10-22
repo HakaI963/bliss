@@ -4,7 +4,7 @@
 # Mirrors setup_customization_debian.sh structure exactly, adapted for KDE
 # Works for both Chroot and Proot environments (run as root, switches to user 'altaris')
 
-CUSTOM_USER="altaris"
+CUSTOM_USER="flux"
 CUSTOM_GROUP="users"
 USER_HOME="/home/$CUSTOM_USER"
 THEME_DIR="/usr/share/themes"
@@ -28,7 +28,7 @@ handle_error() {
     echo ""
     echo "Please copy the log and send it to the developer:"
     echo "  Email: abhay02delhi@gmail.com"
-    echo "  GitHub: https://github.com/HakaI963/altaris/issues"
+    echo "  GitHub: https://github.com/HakaI963/bliss/issues"
     echo "─────────────────────────────────────────────────────────────"
     _altaris_pause "Press Enter to acknowledge error and exit..."
 
@@ -44,7 +44,7 @@ if [ "$(id -u)" -ne 0 ]; then
     handle_error "Not Root"
 fi
 
-# Best-effort ownership (proot often cannot chown to altaris:users — never spam/fail)
+# Best-effort ownership (proot often cannot chown to flux:users — never spam/fail)
 _altaris_chown() { chown "$@" 2>/dev/null || true; }
 _altaris_chown_r() { chown -R "$@" 2>/dev/null || true; }
 
@@ -68,7 +68,7 @@ update-locale LANG=en_US.UTF-8
 apt install -y qt5ct qt5-style-plugins systemsettings plasma-discover kinfocenter 2>/dev/null || true
 
 # 2. Deploy Assets (From GitHub Release debian-v1)
-ASSET_REPO="abhay-byte/altarislinux"
+ASSET_REPO="abhay-byte/fluxlinux"
 ASSET_TAG="debian-v1"
 BASE_URL="https://github.com/$ASSET_REPO/releases/download/$ASSET_TAG"
 

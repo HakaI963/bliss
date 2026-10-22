@@ -173,15 +173,3 @@ val AltarisBodyMuted: Color get() = TextSecondary
 val AltarisHairline: Color get() = FrostHairline
 @Deprecated("Use AltarisSurface", ReplaceWith("AltarisSurface"))
 val AltarisCardFill: Color get() = AltarisSurface
-@Deprecated("Use AltarisDanger", ReplaceWith("AltarisDanger"))
-val AltarisDanger: Color get() = AltarisDanger
-@Deprecated("Use AltarisSwitchCheckedTrack", ReplaceWith("AltarisSwitchCheckedTrack"))
-val AltarisSwitchCheckedTrack: Color get() = AltarisSwitchCheckedTrack
-@Deprecated("Use AltarisSwitchCheckedThumb", ReplaceWith("AltarisSwitchCheckedThumb"))
-val AltarisSwitchCheckedThumb: Color get() = AltarisSwitchCheckedThumb
-@Deprecated("Use AltarisSwitchUncheckedTrack", ReplaceWith("AltarisSwitchUncheckedTrack"))
-val AltarisSwitchUncheckedTrack: Color get() = AltarisSwitchUncheckedTrack
-@Deprecated("Use AltarisSwitchUncheckedThumb", ReplaceWith("AltarisSwitchUncheckedThumb"))
-val AltarisSwitchUncheckedThumb: Color get() = AltarisSwitchUncheckedThumb
-@Deprecated("Use AltarisSwitchUncheckedBorder", ReplaceWith("AltarisSwitchUncheckedBorder"))
-val AltarisSwitchUncheckedBorder: Color get() = AltarisSwitchUncheckedBorder

@@ -10,7 +10,8 @@
 
 GUESTPATH="${ALTARIS_CHROOT:-/data/local/altaris/chroots/guest}"
 USERNAME="altaris"
-[ -d /data/local/altaris ] && [ ! -e /data/local/altaris ] && mv /data/local/altaris /data/local/altaris 2>/dev/null || true
+[ -d /data/local/bliss ] && [ ! -e /data/local/altaris ] && mv /data/local/bliss /data/local/altaris 2>/dev/null || true
+[ -d /data/local/folio ] && [ ! -e /data/local/altaris ] && mv /data/local/folio /data/local/altaris 2>/dev/null || true
 DISTRO_LABEL="${ALTARIS_DISTRO_LABEL:-guest}"
 
 PKG="${TERMUX_APP__PACKAGE_NAME:-com.ivarna.fluxlinux}"
@@ -305,7 +306,7 @@ fi
 
     GUESTPATH="${ALTARIS_CHROOT:-/data/local/altaris/chroots/guest}"
 
-    if { [ -f "$GUESTPATH/.altaris_configured" ] || [ -f "$GUESTPATH/.altaris_configured" ]; } && \
+    if { [ -f "$GUESTPATH/.altaris_configured" ] || [ -f "$GUESTPATH/.flux_configured" ]; } && \
        { [ -e "$GUESTPATH/bin/bash" ] || [ -e "$GUESTPATH/usr/bin/bash" ]; } && \
        grep -q '^altaris:' "$GUESTPATH/etc/passwd" 2>/dev/null; then
         success "$DISTRO_LABEL Chroot already installed."

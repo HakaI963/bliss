@@ -20,7 +20,7 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 
 /**
- * Shared motion tokens — one source of truth for durations and stagger pacing.
+ * Timing tokens — one source of truth for durations and stagger pacing.
  * Deliberately short and tween-based so the app stays snappy on low-end devices.
  */
 object AltarisMotion {
@@ -84,7 +84,7 @@ private val paparazziOnClasspath: Boolean by lazy {
  * Altaris spring tokens. Springs keep the UI feeling physical without the
  * long tail of a tween: layout shifts settle quickly, effects snap.
  */
-object AltarisMotion {
+object AltarisTimings {
     /** Layout moves (cards, panels, lists). */
     val spatial: SpringSpec<Float> = spring(dampingRatio = 0.8f, stiffness = 380f)
     /** Effects (press, glow, ripple). */

@@ -16,7 +16,7 @@ import android.util.Log;
  * with {@code int ok, String error, byte[] jpeg}.
  */
 public class DisplayService extends Binder {
-    private static final String TAG = "BlissEngine";
+    private static final String TAG = "AltarisEngine";
     private static volatile DisplayEngine engine;
 
     /** No-arg constructor used by Shizuku releases that do not pass a Context. */

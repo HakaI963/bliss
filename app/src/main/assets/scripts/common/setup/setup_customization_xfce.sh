@@ -3,7 +3,7 @@
 # Altaris XFCE branding for Fedora / Void / openSUSE / Deepin / Chimera / Manjaro.
 # Same theme/icon/font/xfconf path as Alpine; package manager auto-detected.
 
-CUSTOM_USER="altaris"
+CUSTOM_USER="flux"
 CUSTOM_GROUP="altaris"
 USER_HOME="/home/$CUSTOM_USER"
 THEME_DIR="/usr/share/themes"
@@ -42,7 +42,7 @@ _altaris_chown_r() { chown -R "$@" 2>/dev/null || true; }
 # Fedora 44 + proot: sudo PAM account fails → "a password is required".
 if command -v sudo >/dev/null 2>&1; then
     mkdir -p /etc/sudoers.d
-    echo "altaris ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/flux
+    echo "flux ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/flux
     chmod 0440 /etc/sudoers.d/flux 2>/dev/null || true
     chmod 0755 /etc/sudoers.d 2>/dev/null || true
     if [ -f /etc/sudoers ]; then
@@ -248,7 +248,7 @@ EOF
     fi
 fi
 
-ASSET_REPO="abhay-byte/altarislinux"
+ASSET_REPO="abhay-byte/fluxlinux"
 ASSET_TAG="debian-v1"
 BASE_URL="https://github.com/$ASSET_REPO/releases/download/$ASSET_TAG"
 ALTARIS_ASSET_DIR="${ALTARIS_ASSET_DIR:-/tmp/altaris_xfce_assets}"
@@ -1331,7 +1331,7 @@ if [ -f "$ZSH/oh-my-zsh.sh" ]; then
   source "$ZSH/oh-my-zsh.sh"
 fi
 
-# Package managers need root. NOPASSWD sudo is configured for altaris.
+# Package managers need root. NOPASSWD sudo is configured for flux.
 if command -v sudo >/dev/null 2>&1; then
   if command -v apt-get >/dev/null 2>&1; then
     apt-get() { command sudo apt-get "$@"; }

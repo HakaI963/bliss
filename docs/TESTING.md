@@ -63,7 +63,7 @@ Report the exact command + result, and the clone log lines for any app that stil
 ## 3.19 additions
 - [ ] Open a Parrot zsh terminal: the prompt is `altaris@<host>`, suggestions appear, and a valid command is green while a bogus command is red.
 - [ ] Open a Debian/Alpine bash terminal: ble.sh supplies the same green/red syntax coloring and inline suggestions.
-- [ ] In any proot terminal run `altaris status` and `altaris status`; both resolve the loopback server.
+- [ ] In any proot terminal run `altaris status` and `bliss status`; both resolve the loopback server.
 - [ ] Confirm the notification shade has no persistent Altaris/clone-control notification.
 - [ ] Tools → Clone scans only host/guest Linux agent binaries; Android apps are absent.
 - [ ] Tools → Clone has no MP4 capture card.

@@ -14,7 +14,7 @@
 set -u
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-KOTLIN="$ROOT/app/src/main/kotlin/com/ivarna/altarislinux/core/install/DistroInstallProfile.kt"
+KOTLIN="$ROOT/app/src/main/kotlin/com/altaris/linux/core/install/DistroInstallProfile.kt"
 ALTARIS_INSTALL="$ROOT/app/src/main/assets/scripts/debian/proot/setup/altaris_install.sh"
 DEBIAN_CHROOT="$ROOT/app/src/main/assets/scripts/chroot/setup_debian13_chroot.sh"
 ALPINE_CHROOT="$ROOT/app/src/main/assets/scripts/chroot/setup_alpine_chroot.sh"

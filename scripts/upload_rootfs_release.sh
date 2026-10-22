@@ -15,7 +15,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RELEASE_TAG="rootfs"
 ASSET_DIR="$ROOT/assets/rootfs"
-REPO="${ALTARIS_REPO:-abhay-byte/altarislinux}"
+REPO="${ALTARIS_REPO:-abhay-byte/fluxlinux}"
 BASE_URL="https://github.com/$REPO/releases/download/$RELEASE_TAG"
 
 # <release filename>|<sha256>

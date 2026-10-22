@@ -113,7 +113,7 @@ handle_error() {
     echo ""
     echo "Please copy the log content and send it to the developer:"
     echo "  Email: abhay02delhi@gmail.com"
-    echo "  GitHub: https://github.com/HakaI963/altaris/issues"
+    echo "  GitHub: https://github.com/HakaI963/bliss/issues"
     echo "──────────────────────────────────────────────────────"
     _altaris_pause "Press Enter to acknowledge error and exit..."
 
@@ -199,10 +199,10 @@ echo "[3/7] Installing KDE extras..."
 apt install -y --no-install-recommends "${EXTRA_PKGS[@]}" 2>/dev/null || true
 
 # 3. Create user 'altaris' (idempotent — setup_debian_family.sh may have made it)
-echo "[4/7] Creating user altaris..."
+echo "[4/7] Creating user flux..."
 if ! id "altaris" &>/dev/null; then
-    useradd -m -s /bin/bash altaris || handle_error "Create user altaris"
-    echo "altaris:altaris" | chpasswd
+    useradd -m -s /bin/bash flux || handle_error "Create user flux"
+    echo "flux:flux" | chpasswd
     usermod -aG sudo altaris 2>/dev/null || true
 fi
 
@@ -212,7 +212,7 @@ fi
 echo "[5/7] Configuring sudo..."
 mkdir -p /etc/sudoers.d || handle_error "Configure sudo"
 rm -f /etc/sudoers.d/flux 2>/dev/null || true
-echo "altaris ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/flux || handle_error "Configure sudo"
+echo "flux ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/flux || handle_error "Configure sudo"
 chmod 440 /etc/sudoers.d/flux 2>/dev/null || true
 
 # 5. Configure VNC for KDE (xstartup)
@@ -226,7 +226,7 @@ xrdb $HOME/.Xresources 2>/dev/null
 exec startplasma-x11
 VNCEOF
 chmod +x /home/flux/.vnc/xstartup
-chown -R altaris:altaris /home/flux/.vnc
+chown -R flux:flux /home/flux/.vnc
 
 # Compositing + effects off system-wide by default (XFCE parity; GPU accel path).
 # Per-user config is kept in sync at session start (altaris_kde_env.sh).
@@ -251,7 +251,7 @@ systemctl disable sddm 2>/dev/null || true
 echo "[7/7] Marking installation complete..."
 mkdir -p /home/flux/.altarislinux
 touch /home/flux/.altarislinux/kde_installed
-chown -R altaris:altaris /home/flux/.altarislinux
+chown -R flux:flux /home/flux/.altarislinux
 
 echo ""
 echo "✅ Altaris: KDE Plasma base setup for ${DISTRO_NAME} complete!"

@@ -9,7 +9,7 @@ if [ "$(id -u)" -ne 0 ]; then
     exit 1
 fi
 
-[ -d /etc/altarislinux ] && [ ! -e /etc/altaris ] && mv /etc/altarislinux /etc/altaris 2>/dev/null || true
+[ -d /etc/bliss ] && [ ! -e /etc/altaris ] && mv /etc/bliss /etc/altaris 2>/dev/null || true
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin${PATH:+:$PATH}"
 mkdir -p /tmp /var/tmp /etc/altaris /usr/local/lib/altarislinux
 chmod 1777 /tmp /var/tmp 2>/dev/null || true

@@ -79,7 +79,7 @@ object AppearanceStore {
     const val GUEST_AUTOSTART_FILE = "altaris-appearance.desktop"
 
     /** Pre-rename autostart entry, removed when (re)staging into a guest. */
-    private const val GUEST_AUTOSTART_FILE_LEGACY = "altaris-appearance.desktop"
+    private const val GUEST_AUTOSTART_FILE_LEGACY = "folio-appearance.desktop"
 
     /** Staged name of the app-side dimmed variant of a custom wallpaper. */
     private const val DIMMED_WALLPAPER_NAME = "wallpaper-dim.png"
@@ -186,23 +186,23 @@ object AppearanceStore {
     )
 
     /**
-     * Pre-rename (`altaris-*`) preset ids → current ids. Persisted user prefs
+     * Pre-rename (`folio-*`) preset ids → current ids. Persisted user prefs
      * (single preset + random set) keep working on existing installs.
      */
     private val LEGACY_WALLPAPER_IDS = mapOf(
-        "altaris-dark" to "altaris-dark",
-        "altaris-light" to "altaris-light",
-        "altaris-shard" to "altaris-shard",
-        "altaris-amoled" to "altaris-amoled",
-        "altaris-mesh" to "altaris-mesh",
-        "altaris-silk" to "altaris-silk",
-        "altaris-dither" to "altaris-dither",
-        "altaris-waves" to "altaris-waves",
-        "altaris-beams" to "altaris-beams",
-        "altaris-sakura" to "altaris-sakura"
+        "folio-dark" to "altaris-dark",
+        "folio-light" to "altaris-light",
+        "folio-shard" to "altaris-shard",
+        "folio-amoled" to "altaris-amoled",
+        "folio-mesh" to "altaris-mesh",
+        "folio-silk" to "altaris-silk",
+        "folio-dither" to "altaris-dither",
+        "folio-waves" to "altaris-waves",
+        "folio-beams" to "altaris-beams",
+        "folio-sakura" to "altaris-sakura"
     )
 
-    /** Resolve a persisted preset id (legacy `altaris-*` names still accepted). */
+    /** Resolve a persisted preset id (legacy `folio-*` names still accepted). */
     fun aliasPresetId(id: String?): String? {
         val v = id ?: return null
         return LEGACY_WALLPAPER_IDS[v] ?: v
@@ -398,7 +398,7 @@ object AppearanceStore {
     }
 
     /** Legacy prefs file (pre-Altaris); migrated once on first open. */
-    private const val LEGACY_PREFS = "altaris_appearance"
+    private const val LEGACY_PREFS = "folio_appearance"
 
     private fun prefs(ctx: Context): android.content.SharedPreferences {
         val app = ctx.applicationContext

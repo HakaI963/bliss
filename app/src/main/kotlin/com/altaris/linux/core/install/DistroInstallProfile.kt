@@ -54,7 +54,7 @@ data class DistroInstallProfile(
     companion object {
         /** Base URL of the GitHub release tag that hosts all rootfs archives (D1). */
         const val ROOTFS_RELEASE_BASE =
-            "https://github.com/abhay-byte/altarislinux/releases/download/rootfs"
+            "https://github.com/abhay-byte/fluxlinux/releases/download/rootfs"
 
         // Debian 13 pinned rootfs (existing)
         const val DEBIAN_ROOTFS_NAME = "debian_13_rootfs.tar.xz"
@@ -147,10 +147,10 @@ data class DistroInstallProfile(
         const val ARCH_ROOTFS_URL = "$ROOTFS_RELEASE_BASE/$ARCH_ROOTFS_NAME"
 
         // Rocky Linux 9 / CentOS Stream 9: official aarch64 container bases
-        // converted to plain rootfs and hosted on the HakaI963/altaris `rootfs`
+        // converted to plain rootfs and hosted on the HakaI963/bliss `rootfs`
         // release tag (sizes + sha256 verified against the hosted files).
         const val RPM_ROOTFS_RELEASE_BASE =
-            "https://github.com/HakaI963/altaris/releases/download/rootfs"
+            "https://github.com/HakaI963/bliss/releases/download/rootfs"
 
         const val ROCKY_ROOTFS_NAME = "rocky_9_aarch64_plain.tar.xz"
         const val ROCKY_ROOTFS_SHA256 =

@@ -191,7 +191,7 @@ MimeType=text/html;text/xml;application/xhtml+xml;x-scheme-handler/http;x-scheme
 StartupNotify=true
 Categories=Network;WebBrowser;
 EOF
-chown -R altaris:users "$ALTARIS_LOCAL_APPS" 2>/dev/null || true
+chown -R flux:users "$ALTARIS_LOCAL_APPS" 2>/dev/null || true
 echo "Altaris: Chromium wrapper applied."
 
 
@@ -327,7 +327,7 @@ cat <<'VSCODE_SETTINGS' > /home/flux/.config/Code/User/settings.json
     "extensions.verifySignature": false
 }
 VSCODE_SETTINGS
-chown -R altaris:$(id -gn altaris 2>/dev/null || echo "altaris") /home/flux/.config
+chown -R flux:$(id -gn flux 2>/dev/null || echo "altaris") /home/flux/.config
 
 
 

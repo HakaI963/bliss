@@ -72,8 +72,8 @@ import java.util.regex.Pattern;
  * limitation of this engine.
  */
 final class CloneManager {
-    private static final String TAG = "BlissClone";
-    private static final String DIR = "/data/local/tmp/bliss";
+    private static final String TAG = "AltarisClone";
+    private static final String DIR = "/data/local/tmp/altaris";
     private static final String REGISTRY = DIR + "/clones.json";
     private static final String KEYSTORE_ASSET = "clone.keystore";
     private static final String KEYSTORE_PASS = "headless";
@@ -355,7 +355,7 @@ final class CloneManager {
      * /data/local/tmp on recent Android builds), while the Shizuku service
      * usually runs as root/UID 2000. Resolve common guest/Android aliases here
      * instead of asking the CLI to guess. This is what makes
-     * {@code bliss install /emulated/…}, {@code /sdcard/…} and
+     * {@code altaris install /emulated/…}, {@code /sdcard/…} and
      * {@code /root/…} work from inside a proot guest.
      */
     String createFromPath(String rawPath, String requestedLabel) {
@@ -403,7 +403,7 @@ final class CloneManager {
         }
 
         // Guest-visible paths on this device: the agent/Kali chroot is exposed
-        // under /data/local/tmp/chrootKali, while Bliss proot containers live
+        // under /data/local/tmp/chrootKali, while Altaris proot containers live
         // under the app's files/usr tree.
         String base = clean.startsWith("/") ? clean : "/" + clean;
         String name = new File(base).getName();
@@ -435,7 +435,7 @@ final class CloneManager {
             }
         }
 
-        File chroots = new File("/data/local/bliss/chroots");
+        File chroots = new File("/data/local/altaris/chroots");
         File[] chrootDirs = chroots.listFiles();
         if (chrootDirs != null) {
             for (File chroot : chrootDirs) {

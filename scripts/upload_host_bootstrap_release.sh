@@ -12,7 +12,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RELEASE_TAG="rootfs"
-REPO="${ALTARIS_REPO:-abhay-byte/altarislinux}"
+REPO="${ALTARIS_REPO:-abhay-byte/fluxlinux}"
 BASE_URL="https://github.com/$REPO/releases/download/$RELEASE_TAG"
 
 # <release filename>|<sha256>|<local path relative to repo>
@@ -70,7 +70,7 @@ for pin in "${PINS[@]}"; do
 done
 
 # Cross-check Kotlin HostBootstrap pins.
-KOTLIN="$ROOT/app/src/main/kotlin/com/ivarna/altarislinux/core/install/HostBootstrap.kt"
+KOTLIN="$ROOT/app/src/main/kotlin/com/altaris/linux/core/install/HostBootstrap.kt"
 for pin in "${PINS[@]}"; do
   IFS='|' read -r name expected _ <<<"$pin"
   if ! grep -q "$name" "$KOTLIN"; then

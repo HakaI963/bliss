@@ -74,7 +74,7 @@ class TermuxHostPathsTest {
         assertEquals("/data/data/${TermuxHostPaths.PACKAGE}/files/usr/bin/proot-distro", TermuxHostPaths.PROOT_DISTRO)
         assertEquals("/data/data/${TermuxHostPaths.PACKAGE}/files/proot-tmp", TermuxHostPaths.PROOT_TMP)
         assertEquals("usr/etc/altaris-host.env", TermuxHostPaths.HOST_ENV_REL)
-        assertEquals("usr/etc/altaris-host.env", TermuxHostPaths.HOST_ENV_LEGACY_REL)
+        assertEquals("usr/etc/fluxlinux-host.env", TermuxHostPaths.HOST_ENV_LEGACY_REL)
     }
 
     @Test

@@ -44,6 +44,6 @@ final class Protocol {
 
     /** Class instantiated by Shizuku inside the shell process. Must stay public. */
     static final String SERVICE_CLASS = "com.altaris.linux.clone.engine.DisplayService";
-    static final String SERVICE_TAG = "bliss-engine";
+    static final String SERVICE_TAG = "altaris-engine";
     static final int SERVICE_VERSION = 4;
 }

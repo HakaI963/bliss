@@ -224,7 +224,7 @@ if id alarm >/dev/null 2>&1 && ! id altaris >/dev/null 2>&1; then
     usermod -l altaris -d /home/flux -m alarm 2>/dev/null \
         || { userdel -r alarm 2>/dev/null || true; }
 fi
-# Chroot can leave both (usermod -l no-op + useradd altaris=1001). One uid 1000.
+# Chroot can leave both (usermod -l no-op + useradd flux=1001). One uid 1000.
 if id alarm >/dev/null 2>&1 && id altaris >/dev/null 2>&1; then
     _altaris_log "Removing leftover alarm (altaris already exists)"
     userdel -r alarm 2>/dev/null || userdel alarm 2>/dev/null || true
@@ -237,7 +237,7 @@ if [ -z "${DESKTOPS##*xfce*}" ]; then
     _altaris_require_startxfce4
 fi
 _altaris_ensure_user
-echo "altaris:altaris" | chpasswd 2>/dev/null || true
+echo "flux:flux" | chpasswd 2>/dev/null || true
 if command -v usermod >/dev/null 2>&1; then
     usermod -aG wheel,audio,video,input,users altaris 2>/dev/null || true
 fi

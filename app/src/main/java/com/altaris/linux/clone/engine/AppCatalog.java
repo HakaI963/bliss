@@ -135,7 +135,7 @@ final class AppCatalog {
                 }
             } catch (Throwable ignored) {
             }
-        }, "bliss-command-drain");
+        }, "altaris-command-drain");
         drain.setDaemon(true);
         drain.start();
 

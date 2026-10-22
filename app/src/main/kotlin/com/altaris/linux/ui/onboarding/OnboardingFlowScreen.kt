@@ -259,7 +259,7 @@ private fun WelcomePage(onNext: () -> Unit) {
     val heroProgress by animateFloatAsState(
         targetValue = if (heroIn) 1f else 0f,
         animationSpec = tween(
-            durationMillis = AltarisMotion.ScreenMs,
+            durationMillis = AltarisTimings.ScreenMs,
             easing = FastOutSlowInEasing
         ),
         label = "welcomeHero"

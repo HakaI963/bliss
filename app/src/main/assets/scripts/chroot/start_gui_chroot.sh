@@ -8,9 +8,10 @@ DISTRO_HINT="${1:-${ALTARIS_CHROOT_DISTRO:-debian13_chroot}}"
 
 PKG="${TERMUX_APP__PACKAGE_NAME:-com.ivarna.fluxlinux}"
 _HOST_ENV="${TERMUX__PREFIX:-/data/data/${PKG}/files/usr}/etc/altaris-host.env"
-[ -r "$_HOST_ENV" ] || _HOST_ENV="${_HOST_ENV%/*}/altaris-host.env"
+[ -r "$_HOST_ENV" ] || _HOST_ENV="${_HOST_ENV%/*}/fluxlinux-host.env"
 [ -r "$_HOST_ENV" ] && . "$_HOST_ENV"
-[ -d /data/local/altaris ] && [ ! -e /data/local/altaris ] && mv /data/local/altaris /data/local/altaris 2>/dev/null || true
+[ -d /data/local/bliss ] && [ ! -e /data/local/altaris ] && mv /data/local/bliss /data/local/altaris 2>/dev/null || true
+[ -d /data/local/folio ] && [ ! -e /data/local/altaris ] && mv /data/local/folio /data/local/altaris 2>/dev/null || true
 
 # Normalize install-time ALTARIS_DESKTOP (xfce|xfce4|kde|none) → launch-time (xfce4|kde).
 # Unset/empty → xfce4 (backward compat); inner guest launchers only branch on "kde".
@@ -102,7 +103,7 @@ if [ ! -d "$CHROOT_PATH" ]; then
   echo "Install rooted distro from onboarding or Distros."
   exit 1
 fi
-if [ ! -f "$CHROOT_PATH/.altaris_configured" ] && [ ! -f "$CHROOT_PATH/.altaris_configured" ] && \
+if [ ! -f "$CHROOT_PATH/.altaris_configured" ] && [ ! -f "$CHROOT_PATH/.flux_configured" ] && \
    [ ! -e "$CHROOT_PATH/usr/bin/startxfce4" ] && \
    [ ! -e "$CHROOT_PATH/usr/sbin/startxfce4" ]; then
   echo "Altaris: ERROR — chroot incomplete (no .altaris_configured / startxfce4)."

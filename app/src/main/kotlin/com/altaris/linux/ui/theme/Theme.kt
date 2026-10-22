@@ -258,9 +258,12 @@ fun AltarisTheme(
     }
 }
 
-/** Legacy entry point — preserved so existing call sites keep compiling. */
+/**
+ * Legacy entry point — kept so existing call sites keep compiling.
+ * Prefer [AltarisTheme].
+ */
 @Composable
-fun AltarisTheme(
+fun AltarisAppTheme(
     themeMode: ThemeMode = ThemeMode.DARK,
     dynamicColor: Boolean = false,
     scheme: AltarisScheme? = null,

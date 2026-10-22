@@ -24,13 +24,13 @@ object LinuxCommandBuilder {
     fun sessionUserForType(type: String): String =
         when (type) {
             "shell-root", "component" -> "root"
-            else -> "altaris"
+            else -> "flux"
         }
 
     fun build(
         ctx: Context,
         shellCmd: String,
-        user: String = "altaris",
+        user: String = "flux",
         useSharedTmp: Boolean = true,
         method: String = currentMethod,
         distroId: String? = null,

@@ -22,7 +22,7 @@ import java.util.Locale;
  * clone manager, and answers Binder commands from the UI process.
  */
 final class DisplayEngine {
-    private static final String TAG = "BlissEngine";
+    private static final String TAG = "AltarisEngine";
     private static final int MAX_LOG_LINES = 400;
 
     private final Context context;
@@ -190,7 +190,7 @@ final class DisplayEngine {
             }
             wakeLock = power.newWakeLock(
                     PowerManager.FULL_WAKE_LOCK | PowerManager.ACQUIRE_CAUSES_WAKEUP,
-                    "Bliss:virtual-display");
+                    "Altaris:virtual-display");
             wakeLock.setReferenceCounted(false);
             wakeLock.acquire();
             log("wake lock acquired (screen stays on while the display exists)");
@@ -326,7 +326,7 @@ final class DisplayEngine {
     }
 
     private String loadOrCreateControlToken() {
-        File dir = new File("/data/local/tmp/bliss");
+        File dir = new File("/data/local/tmp/altaris");
         File file = new File(dir, "control.token");
         try {
             if (file.exists()) {

@@ -96,18 +96,18 @@ _altaris_ensure_user() {
         _altaris_shell="/bin/sh"
     fi
     if ! id altaris >/dev/null 2>&1; then
-        _altaris_log "Creating user altaris (shell $_altaris_shell)..."
+        _altaris_log "Creating user flux (shell $_altaris_shell)..."
         if command -v useradd >/dev/null 2>&1; then
             if ! id -u 1000 >/dev/null 2>&1; then
-                useradd -m -u 1000 -s "$_altaris_shell" altaris 2>/dev/null \
-                    || useradd -m -s "$_altaris_shell" altaris
+                useradd -m -u 1000 -s "$_altaris_shell" flux 2>/dev/null \
+                    || useradd -m -s "$_altaris_shell" flux
             else
-                useradd -m -s "$_altaris_shell" altaris
+                useradd -m -s "$_altaris_shell" flux
             fi
         else
             adduser -D -s "$_altaris_shell" altaris 2>/dev/null || true
         fi
-        echo "altaris:altaris" | chpasswd 2>/dev/null || true
+        echo "flux:flux" | chpasswd 2>/dev/null || true
     fi
     for g in wheel audio video netdev input users; do
         if command -v usermod >/dev/null 2>&1; then
@@ -158,7 +158,7 @@ PAM
 _altaris_ensure_sudo() {
     if command -v sudo >/dev/null 2>&1; then
         mkdir -p /etc/sudoers.d
-        echo "altaris ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/flux
+        echo "flux ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/flux
         chmod 0440 /etc/sudoers.d/flux
         chmod 0755 /etc/sudoers.d 2>/dev/null || true
         if [ -f /etc/sudoers ] && ! grep -qE '@includedir[[:space:]]+/etc/sudoers\.d' /etc/sudoers 2>/dev/null; then
@@ -201,14 +201,14 @@ _altaris_ensure_home() {
     _home_gid=$(_altaris_stat_g /home)
     if [ -n "$_home_uid" ]; then
         chown -R "$_home_uid:$_home_gid" /home/flux 2>/dev/null || true
-        # Proot: /home is the Android app uid. chown altaris:altaris (uid 1000) makes
+        # Proot: /home is the Android app uid. chown flux:flux (uid 1000) makes
         # xfconfd unable to write ~/.config → failsafe / "cannot create /home/flux".
-        # Only apply guest altaris:altaris ownership in real-root chroot (home owner 0).
+        # Only apply guest flux:flux ownership in real-root chroot (home owner 0).
         if [ "$_home_uid" = "0" ]; then
-            chown -R altaris:altaris /home/flux 2>/dev/null || true
+            chown -R flux:flux /home/flux 2>/dev/null || true
         fi
     else
-        chown -R altaris:altaris /home/flux 2>/dev/null || true
+        chown -R flux:flux /home/flux 2>/dev/null || true
     fi
     chmod 755 /home/flux 2>/dev/null || true
     mkdir -p /home/flux/.config /home/flux/.cache /home/flux/.local/share /home/flux/.vnc
@@ -235,7 +235,7 @@ EOF
 }
 
 _altaris_write_gpu_mode() {
-[ -d /etc/altarislinux ] && [ ! -e /etc/altaris ] && mv /etc/altarislinux /etc/altaris 2>/dev/null || true
+[ -d /etc/bliss ] && [ ! -e /etc/altaris ] && mv /etc/bliss /etc/altaris 2>/dev/null || true
     _mode="${1:-virgl}"
     mkdir -p /etc/altaris
     printf '%s\n' "$_mode" > /etc/altaris/gpu_mode
@@ -1333,12 +1333,12 @@ _altaris_xfce_compact_defaults() {
     _wpdir="$_h/Pictures/Wallpapers"
     mkdir -p "$_wpdir" 2>/dev/null || true
     # Pre-rename installs: migrate the old wallpaper file names once (same images).
-    [ -f "$_wpdir/altaris-android-dark.png" ] && [ ! -f "$_wpdir/altaris-android-dark.png" ] \
-        && mv -f "$_wpdir/altaris-android-dark.png" "$_wpdir/altaris-android-dark.png" 2>/dev/null || true
-    [ -f "$_wpdir/altarislinux-dark.png" ] && [ ! -f "$_wpdir/altaris-dark.png" ] \
-        && mv -f "$_wpdir/altarislinux-dark.png" "$_wpdir/altaris-dark.png" 2>/dev/null || true
-    [ -f "$_wpdir/altarislinux-light.png" ] && [ ! -f "$_wpdir/altaris-light.png" ] \
-        && mv -f "$_wpdir/altarislinux-light.png" "$_wpdir/altaris-light.png" 2>/dev/null || true
+    [ -f "$_wpdir/folio-android-dark.png" ] && [ ! -f "$_wpdir/altaris-android-dark.png" ] \
+        && mv -f "$_wpdir/folio-android-dark.png" "$_wpdir/altaris-android-dark.png" 2>/dev/null || true
+    [ -f "$_wpdir/fluxlinux-dark.png" ] && [ ! -f "$_wpdir/altaris-dark.png" ] \
+        && mv -f "$_wpdir/fluxlinux-dark.png" "$_wpdir/altaris-dark.png" 2>/dev/null || true
+    [ -f "$_wpdir/fluxlinux-light.png" ] && [ ! -f "$_wpdir/altaris-light.png" ] \
+        && mv -f "$_wpdir/fluxlinux-light.png" "$_wpdir/altaris-light.png" 2>/dev/null || true
     _wp="$_wpdir/altaris-android-dark.png"
     if [ ! -f "$_wp" ]; then
         for _src in /tmp/altaris_xfce_assets/altaris-android-dark.png \

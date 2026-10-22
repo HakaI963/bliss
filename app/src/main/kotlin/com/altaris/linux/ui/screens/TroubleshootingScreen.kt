@@ -98,7 +98,7 @@ fun ExpandableIssueCard(issue: TroubleshootingItem) {
     // Single chevron rotates instead of swapping glyphs — smooth, no pop.
     val chevronRotation by animateFloatAsState(
         targetValue = if (expanded) 180f else 0f,
-        animationSpec = tween(AltarisMotion.ScreenMs, easing = FastOutSlowInEasing),
+        animationSpec = tween(AltarisTimings.ScreenMs, easing = FastOutSlowInEasing),
         label = "issueChevron"
     )
 

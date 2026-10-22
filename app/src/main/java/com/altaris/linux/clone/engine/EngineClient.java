@@ -25,7 +25,7 @@ import rikka.shizuku.Shizuku;
  * polling, no RPC port probing, no server-version handshakes.
  */
 public final class EngineClient {
-    private static final String TAG = "BlissEngine";
+    private static final String TAG = "AltarisEngine";
     public static final String SHIZUKU_MANAGER = "moe.shizuku.privileged.api";
     private static final int PERMISSION_REQUEST_CODE = 4451;
 

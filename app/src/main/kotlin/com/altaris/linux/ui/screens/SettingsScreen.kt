@@ -368,7 +368,7 @@ fun SettingsScreen(
                 title = "Documentation",
                 subtitle = "Setup guides and tutorials",
                 accent = accent,
-                onClick = { openUrl(context, "https://github.com/HakaI963/altaris#readme") },
+                onClick = { openUrl(context, "https://github.com/HakaI963/bliss#readme") },
             )
         }
 

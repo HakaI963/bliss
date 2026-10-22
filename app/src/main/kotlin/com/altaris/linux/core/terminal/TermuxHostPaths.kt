@@ -28,7 +28,7 @@ object TermuxHostPaths {
         "/data/data/$STOCK_PACKAGE", // com.termux
         "/data/data/com.ivarna.fluxlinux",
         "/data/data/com.zenithblue.fluxlinux",
-        "/data/data/com.nopiece.altaris",
+        "/data/data/com.nopiece.folio",
         "/data/data/com.nopiece.bliss"
     )
 
@@ -57,9 +57,9 @@ object TermuxHostPaths {
 
     /**
      * Legacy env file name — still written with the same content so the frozen
-     * `setup_termux.sh` (which sources `/etc/altaris-host.env`) keeps working.
+     * `setup_termux.sh` (which sources `/etc/fluxlinux-host.env`) keeps working.
      */
-    const val HOST_ENV_LEGACY_REL = "usr/etc/altaris-host.env"
+    const val HOST_ENV_LEGACY_REL = "usr/etc/fluxlinux-host.env"
 
     private const val TAG = "TermuxHostPaths"
     private const val MAX_REWRITE_BYTES = 2_000_000L

@@ -7,7 +7,7 @@ persistent control-plane notification. Nothing is exposed to the LAN.
 
 ## CLI inside a distro
 
-The app installs a small `altaris` helper (legacy `altaris` alias kept) into the host prefix and into every
+The app installs a small `altaris` helper (legacy `bliss` alias kept) into the host prefix and into every
 installed proot/chroot rootfs. Open a terminal in a distro and run:
 
 ```sh
