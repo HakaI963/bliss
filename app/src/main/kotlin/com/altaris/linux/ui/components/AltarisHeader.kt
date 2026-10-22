@@ -215,7 +215,6 @@ fun AltarisTitle(
  */
 @Composable
 fun AltarisMark(
-    accent: Color,
     modifier: Modifier = Modifier,
     size: Dp = Prism.MarkSize,
 ) {

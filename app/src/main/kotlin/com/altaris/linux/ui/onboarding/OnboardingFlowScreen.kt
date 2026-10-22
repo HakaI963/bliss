@@ -393,7 +393,7 @@ private fun OnboardingHero(
             }
             Spacer(Modifier.width(Prism.Gutter))
             Column(modifier = Modifier.weight(1f)) {
-                AltarisMark(accent = accent, size = 24.dp)
+                AltarisMark(size = 24.dp)
                 Spacer(Modifier.height(12.dp))
                 Text(
                     text = "ALTARIS",

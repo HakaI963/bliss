@@ -98,6 +98,9 @@ import com.altaris.linux.ui.components.PrismCard
 import com.altaris.linux.ui.components.PrismChip
 import com.altaris.linux.ui.components.PrismIconTile
 import com.altaris.linux.ui.components.PrismDivider
+import com.altaris.linux.ui.components.PrismRow
+import com.altaris.linux.ui.components.PrismStatRow
+import com.altaris.linux.ui.components.PrismSectionLabel
 import com.altaris.linux.ui.components.PrismOrb
 import com.altaris.linux.ui.components.QDivider
 import com.altaris.linux.ui.components.isChrootCard

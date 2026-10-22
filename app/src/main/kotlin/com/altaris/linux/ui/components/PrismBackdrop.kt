@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.unit.dp
 import com.altaris.linux.ui.theme.AltarisPalette
 import com.altaris.linux.ui.theme.LocalAltarisPalette
 

@@ -121,22 +121,10 @@ fun CommandPaletteOverlay(
                 .padding(horizontal = 16.dp, vertical = 44.dp)
                 .scale(scale.value)
                 .clip(RoundedCornerShape(Prism.SheetRadius))
-                .background(
-                    Brush.verticalGradient(
-                        listOf(
-                            MaterialTheme.colorScheme.surface,
-                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.94f),
-                        )
-                    )
-                )
+                .background(MaterialTheme.colorScheme.surface)
                 .border(
                     width = 1.dp,
-                    brush = Brush.verticalGradient(
-                        listOf(
-                            Color.White.copy(alpha = 0.20f),
-                            Color.White.copy(alpha = 0.04f),
-                        )
-                    ),
+                    color = MaterialTheme.colorScheme.outline,
                     shape = RoundedCornerShape(Prism.SheetRadius),
                 )
                 .clickable(
@@ -279,20 +267,21 @@ private fun PaletteRow(
     ) {
         Box(
             modifier = Modifier
-                .size(34.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(
-                    Brush.linearGradient(
-                        listOf(action.accent, action.accent.copy(alpha = 0.42f))
-                    )
+                .size(32.dp)
+                .clip(RoundedCornerShape(Prism.ButtonRadius))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .border(
+                    1.dp,
+                    MaterialTheme.colorScheme.outline,
+                    RoundedCornerShape(Prism.ButtonRadius),
                 ),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
                 imageVector = action.icon,
                 contentDescription = null,
-                tint = Color.White,
-                modifier = Modifier.size(17.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(16.dp),
             )
         }
         Spacer(Modifier.width(13.dp))
@@ -319,7 +308,7 @@ private fun PaletteRow(
             modifier = Modifier
                 .size(6.dp)
                 .clip(RoundedCornerShape(50))
-                .background(action.accent.copy(alpha = 0.75f))
+                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f))
         )
     }
 }

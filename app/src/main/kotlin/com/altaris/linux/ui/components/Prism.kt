@@ -419,7 +419,7 @@ fun PrismSegmented(
         if (rowWidthPx > 0) {
             Box(
                 modifier = Modifier
-                    .offset { IntOffset(offsetX.roundToInt(), 0) }
+                    .offset { IntOffset(offsetX.value.roundToInt(), 0) }
                     .padding(horizontal = inset, vertical = inset)
                     .width(thumbWidth - inset * 2)
                     .height(34.dp - inset * 2)
