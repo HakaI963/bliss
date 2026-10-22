@@ -22,6 +22,15 @@ object Prism {
     /** Button / chip / nav radius. */
     val ButtonRadius: Dp = 6.dp
 
+    /** Chip radius. */
+    val ChipRadius: Dp = 6.dp
+
+    /** Small tile radius. */
+    val TileRadius: Dp = 8.dp
+
+    /** Sheet radius. */
+    val SheetRadius: Dp = 10.dp
+
     /** Panel inner padding. */
     val PanelPad: Dp = 14.dp
 

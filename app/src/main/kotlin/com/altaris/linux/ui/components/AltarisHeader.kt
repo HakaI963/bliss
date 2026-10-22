@@ -171,7 +171,7 @@ fun AltarisTitle(
             Text(
                 text = subtitle,
                 fontSize = 11.5.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = inkSoft,
                 maxLines = 1,
             )
         }
@@ -188,6 +188,8 @@ fun AltarisMark(
     modifier: Modifier = Modifier,
     size: Dp = 18.dp,
 ) {
+    val ink = MaterialTheme.colorScheme.onSurface
+    val inkSoft = MaterialTheme.colorScheme.onSurfaceVariant
     Canvas(modifier = modifier.size(size)) {
         val w = this.size.width
         val h = this.size.height
@@ -197,9 +199,9 @@ fun AltarisMark(
             lineTo(w * 0.82f, h * 0.82f)
             close()
         }
-        drawPath(path, color = MaterialTheme.colorScheme.onSurface)
+        drawPath(path, color = ink)
         drawLine(
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = inkSoft,
             start = androidx.compose.ui.geometry.Offset(w * 0.02f, h * 0.46f),
             end = androidx.compose.ui.geometry.Offset(w * 0.44f, h * 0.42f),
             strokeWidth = h * 0.07f,
