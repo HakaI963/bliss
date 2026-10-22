@@ -62,6 +62,7 @@ import com.altaris.linux.core.utils.StateManager
 import com.altaris.linux.core.utils.ThemeMode
 import com.altaris.linux.ui.components.AltarisTitle
 import com.altaris.linux.ui.components.ArtworkThumb
+import com.altaris.linux.ui.components.ArtworkThumbs
 import com.altaris.linux.ui.components.PrismCard
 import com.altaris.linux.ui.components.PrismIconTile
 import com.altaris.linux.ui.components.PrismOrb
@@ -72,7 +73,6 @@ import com.altaris.linux.ui.theme.AltarisPalettes
 import com.altaris.linux.ui.theme.AltarisScheme
 import com.altaris.linux.ui.theme.AltarisSection
 import com.altaris.linux.ui.theme.Prism
-import com.altaris.linux.ui.theme.accentColor
 import com.altaris.linux.ui.theme.rememberStaggerEntrance
 import com.altaris.linux.ui.theme.sectionAccent
 import com.altaris.linux.ui.theme.staggerIn
@@ -506,7 +506,6 @@ private fun ThemeModeRow(
 /**
  * Accent row: four compact choices. Surfaces remain AOSP neutral.
  */
-@Composable
 @Composable
 private fun PalettePill(
     label: String,

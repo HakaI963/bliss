@@ -35,15 +35,16 @@ object StateManager {
     fun getHomeArt(context: Context): Int {
         val prefs = context.getSharedPreferences("theme_prefs", Context.MODE_PRIVATE)
         val name = prefs.getString("home_art", null)
-        val art = name?.let { runCatching { resources.getIdentifier(it, "drawable", packageName) }.getOrNull() }
-            ?: R.drawable.splash_art_catgirl
+        val art = name?.let {
+            runCatching { context.resources.getIdentifier(it, "drawable", context.packageName) }.getOrNull()
+        } ?: R.drawable.splash_art_catgirl
         _homeArt.value = art
         return art
     }
 
     fun setHomeArt(context: Context, artRes: Int) {
         val prefs = context.getSharedPreferences("theme_prefs", Context.MODE_PRIVATE)
-        val name = runCatching { resources.getResourceEntryName(artRes) }.getOrNull()
+        val name = runCatching { context.resources.getResourceEntryName(artRes) }.getOrNull()
         if (name != null) {
             prefs.edit().putString("home_art", name).apply()
         }

@@ -313,7 +313,6 @@ fun HomeScreen(
     // The section accent colours every surface of this screen.
     val accent = sectionAccent(AltarisSection.HOME)
     // The banner artwork, changeable in Settings.
-    val context = LocalContext.current
     val homeArt by StateManager.homeArt.collectAsState()
     LaunchedEffect(Unit) { StateManager.getHomeArt(context) }
 

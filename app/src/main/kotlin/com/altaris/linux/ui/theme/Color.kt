@@ -67,13 +67,13 @@ val AltarisFrostBorder: Brush
  */
 fun altarisHairlineBrush(palette: AltarisPalette): Brush = Brush.horizontalGradient(
     listOf(
-        palette.outlineVariant,
+        palette.border,
         if (palette.isDark) {
-            palette.glassHighlight.copy(alpha = 0.32f)
+            palette.onSurface.copy(alpha = 0.22f)
         } else {
-            palette.outline.copy(alpha = 0.45f)
+            palette.border.copy(alpha = 0.9f)
         },
-        palette.outlineVariant,
+        palette.border,
     )
 )
 
@@ -81,7 +81,7 @@ fun altarisHairlineBrush(palette: AltarisPalette): Brush = Brush.horizontalGradi
 fun altarisSheenBrush(palette: AltarisPalette): Brush = Brush.horizontalGradient(
     listOf(
         Color.Transparent,
-        palette.glassHighlight,
+        palette.onSurface.copy(alpha = if (palette.isDark) 0.10f else 0.06f),
         Color.Transparent,
     )
 )

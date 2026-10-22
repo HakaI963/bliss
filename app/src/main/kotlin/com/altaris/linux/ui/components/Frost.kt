@@ -77,7 +77,7 @@ fun FrostContainer(
             .clip(shape)
             .background(
                 Brush.verticalGradient(
-                    listOf(palette.glassFillTop, palette.glassFillBottom)
+                    listOf(palette.surfaceRaised, palette.panel)
                 )
             )
             .border(FrostEdgeWidth, altarisHairlineBrush(palette), shape)

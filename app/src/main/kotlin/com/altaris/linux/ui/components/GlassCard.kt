@@ -455,7 +455,7 @@ fun GlassSettingCard(
             .clip(shape)
             .background(
                 Brush.verticalGradient(
-                    listOf(palette.glassFillTop, palette.glassFillBottom)
+                    listOf(palette.surfaceRaised, palette.panel)
                 )
             )
             .then(

@@ -422,8 +422,8 @@ fun QPrimaryButton(
                 elevation = 12.dp * glow,
                 shape = Quartz.ButtonShape,
                 clip = false,
-                ambientColor = palette.primary,
-                spotColor = palette.primary,
+                ambientColor = palette.action,
+                spotColor = palette.action,
             )
             .drawBehind {
                 // The accent gradient drifts across the button. The sweep is
@@ -450,7 +450,7 @@ fun QPrimaryButton(
         elevation = null,
         colors = ButtonDefaults.buttonColors(
             containerColor = Color.Transparent,
-            contentColor = palette.onPrimary,
+            contentColor = palette.onAction,
             disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
             disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
         ),

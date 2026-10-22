@@ -78,11 +78,11 @@ private fun applyLegacyTokens(palette: AltarisPalette) {
     val onPrimary = palette.onAction
     AltarisBackground = palette.base
     AltarisSurface = palette.surface
-    AltarisCard = palette.surfaceVariant
+    AltarisCard = palette.panel
     FrostSurface = palette.surface
     FrostSurfaceElevated = palette.surfaceElevated
-    FrostHairline = palette.outlineVariant
-    FrostTopSheen = palette.glassHighlight
+    FrostHairline = palette.border
+    FrostTopSheen = palette.onSurface.copy(alpha = 0.10f)
     TextPrimary = palette.onSurface
     TextSecondary = palette.onSurfaceVariant
     TextMuted = palette.outline
@@ -90,10 +90,10 @@ private fun applyLegacyTokens(palette: AltarisPalette) {
     OnPrimaryAction = onPrimary
     StatusDot = primary
     AltarisDanger = palette.error
-    AltarisDangerContainer = palette.errorContainer
+    AltarisDangerContainer = palette.error.copy(alpha = 0.16f)
     AltarisSwitchCheckedTrack = primary
     AltarisSwitchCheckedThumb = onPrimary
-    AltarisSwitchUncheckedTrack = palette.surfaceVariant
+    AltarisSwitchUncheckedTrack = palette.panel
     AltarisSwitchUncheckedThumb = palette.outline
     AltarisSwitchUncheckedBorder = palette.outline
 }
