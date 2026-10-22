@@ -107,7 +107,7 @@ import com.altaris.linux.ui.components.MethodTabs
 import com.altaris.linux.ui.components.isChrootCard
 import com.altaris.linux.ui.install.InstallProgressPanel
 import com.altaris.linux.ui.theme.AltarisBackground
-import com.altaris.linux.ui.theme.AltarisMotion
+import com.altaris.linux.ui.theme.AltarisTimings
 import com.altaris.linux.ui.theme.FrostHairline
 import com.altaris.linux.ui.theme.StatusDot
 import com.altaris.linux.ui.theme.TextPrimary

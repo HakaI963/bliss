@@ -24,7 +24,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.altaris.linux.ui.components.GlassSettingCard
-import com.altaris.linux.ui.theme.AltarisMotion
+import com.altaris.linux.ui.theme.AltarisTimings
 import com.altaris.linux.ui.theme.rememberStaggerEntrance
 import com.altaris.linux.ui.theme.staggerIn
 import dev.chrisbanes.haze.HazeState
