@@ -61,6 +61,7 @@ import com.altaris.linux.ui.theme.rememberStaggerEntrance
 import com.altaris.linux.ui.theme.sectionAccent
 import com.altaris.linux.ui.theme.staggerIn
 import dev.chrisbanes.haze.HazeState
+import androidx.compose.foundation.border
 
 private enum class DistroCategory(val label: String) {
     ALL("All"),
@@ -368,8 +369,13 @@ private fun DistroRow(
             Box(
                 modifier = Modifier
                     .size(32.dp)
-                    .clip(RoundedCornerShape(Prism.TileRadius))
-                    .background(accent.copy(alpha = 0.16f)),
+                    .clip(RoundedCornerShape(Prism.ButtonRadius))
+                    .background(MaterialTheme.colorScheme.surface)
+                    .border(
+                        1.dp,
+                        MaterialTheme.colorScheme.outline,
+                        RoundedCornerShape(Prism.ButtonRadius)
+                    ),
                 contentAlignment = Alignment.Center
             ) {
                 if (distro.iconRes != null) {
@@ -429,7 +435,12 @@ private fun StatusTag(text: String, accent: Color, dot: Boolean = false) {
     Row(
         modifier = Modifier
             .clip(RoundedCornerShape(Prism.ChipRadius))
-            .background(accent.copy(alpha = 0.14f))
+            .background(MaterialTheme.colorScheme.surface)
+            .border(
+                1.dp,
+                MaterialTheme.colorScheme.outline,
+                RoundedCornerShape(Prism.ChipRadius)
+            )
             .padding(horizontal = 9.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {

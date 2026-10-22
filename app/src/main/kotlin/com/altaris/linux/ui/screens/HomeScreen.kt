@@ -1057,7 +1057,7 @@ private fun envDesktopFlags(
     return xfce to kde
 }
 
-/** A squircle icon plate tinted with the section accent. */
+/** A squared icon plate with a hairline — no tint, no glow. */
 @Composable
 private fun AccentIconBox(
     icon: ImageVector,
@@ -1067,20 +1067,25 @@ private fun AccentIconBox(
     Box(
         modifier = Modifier
             .size(size)
-            .clip(RoundedCornerShape(Prism.TileRadius))
-            .background(accent.copy(alpha = 0.16f)),
+            .clip(RoundedCornerShape(Prism.ButtonRadius))
+            .background(MaterialTheme.colorScheme.surface)
+            .border(
+                1.dp,
+                MaterialTheme.colorScheme.outline,
+                RoundedCornerShape(Prism.ButtonRadius)
+            ),
         contentAlignment = Alignment.Center
     ) {
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = accent,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(size * 0.46f)
         )
     }
 }
 
-/** The distro logo (or a shell glyph) on an accent plate. */
+/** The distro logo (or a shell glyph) in a hairline plate. */
 @Composable
 private fun DistroTileIcon(
     distro: Distro,
@@ -1090,8 +1095,13 @@ private fun DistroTileIcon(
     Box(
         modifier = Modifier
             .size(size)
-            .clip(RoundedCornerShape(Prism.TileRadius))
-            .background(accent.copy(alpha = 0.16f)),
+            .clip(RoundedCornerShape(Prism.ButtonRadius))
+            .background(MaterialTheme.colorScheme.surface)
+            .border(
+                1.dp,
+                MaterialTheme.colorScheme.outline,
+                RoundedCornerShape(Prism.ButtonRadius)
+            ),
         contentAlignment = Alignment.Center
     ) {
         if (distro.iconRes != null) {
