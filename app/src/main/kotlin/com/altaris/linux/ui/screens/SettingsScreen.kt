@@ -428,8 +428,8 @@ private fun SchemeRow(
                 modifier = Modifier
                     .size(38.dp)
                     .clip(shape)
-                    .background(palette.panel)
-                    .border(1.dp, palette.onSurface.copy(alpha = 0.18f), shape)
+                    .background(palette.base)
+                    .border(1.dp, palette.onSurface.copy(alpha = 0.22f), shape)
             )
         },
         trailing = {

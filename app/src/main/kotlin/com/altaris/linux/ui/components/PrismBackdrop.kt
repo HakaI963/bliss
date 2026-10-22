@@ -86,7 +86,7 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawTree(ink: Color
         cubicTo(w * 0.10f, h * 0.78f, w * 0.085f, h * 0.62f, w * 0.145f, h * 0.44f)
         cubicTo(w * 0.19f, h * 0.30f, w * 0.17f, h * 0.20f, w * 0.225f, h * 0.075f)
     }
-    drawPath(path = trunk, color = ink.copy(alpha = 0.07f), style = androidx.compose.ui.graphics.drawscope.Stroke(width = stroke))
+    drawPath(path = trunk, color = ink.copy(alpha = 0.045f), style = androidx.compose.ui.graphics.drawscope.Stroke(width = stroke))
 
     val branches = listOf(
         // from-trunk, to
@@ -103,7 +103,7 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawTree(ink: Color
         }
         drawPath(
             path = path,
-            color = ink.copy(alpha = 0.06f),
+            color = ink.copy(alpha = 0.038f),
             style = androidx.compose.ui.graphics.drawscope.Stroke(width = stroke * 0.7f),
         )
     }
@@ -134,7 +134,7 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawLeaves(ink: Col
                 }
                 drawPath(
                     path = path,
-                    color = ink.copy(alpha = 0.11f * fade),
+                    color = ink.copy(alpha = 0.075f * fade),
                     style = androidx.compose.ui.graphics.drawscope.Fill,
                 )
             }

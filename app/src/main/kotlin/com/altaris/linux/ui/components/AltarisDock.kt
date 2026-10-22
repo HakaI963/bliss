@@ -1,5 +1,6 @@
 package com.altaris.linux.ui.components
 
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
@@ -106,15 +107,15 @@ fun AltarisDock(
             .background(scheme.surface),
     ) {
         val gap = 4.dp
-        val itemWidth = (maxWidth - gap * (DockSlots.size - 1)) / DockSlots.size
-        val plateWidth by animateFloatAsState(
-            targetValue = itemWidth.value,
-            animationSpec = spring(dampingRatio = 0.9f, stiffness = 700f),
-            label = "plateWidth",
-        )
-        val plateX by animateFloatAsState(
-            targetValue = (DockSlots.indexOf(selected).coerceAtLeast(0) *
-                (itemWidth.value + gap.value)),
+        // The items are inset from the screen edge, so the plate never runs
+        // into the bezel.
+        val side = 10.dp
+        val itemWidth = (maxWidth - side * 2 - gap * (DockSlots.size - 1)) / DockSlots.size
+        // The plate lives in dp; the offset is applied in pixels, so the
+        // conversion happens inside the offset lambda.
+        val plateX by animateDpAsState(
+            targetValue = side + (itemWidth + gap) *
+                DockSlots.indexOf(selected).coerceAtLeast(0),
             animationSpec = spring(dampingRatio = 0.78f, stiffness = 520f),
             label = "plateX",
         )
@@ -123,9 +124,9 @@ fun AltarisDock(
         // The sliding plate.
         Box(
             modifier = Modifier
-                .offset { IntOffset(plateX.toInt(), 0) }
+                .offset { IntOffset(plateX.toPx().toInt(), 0) }
                 .padding(top = 7.dp, bottom = 7.dp)
-                .width(plateWidth.dp)
+                .width(itemWidth)
                 .height(Prism.NavBarHeight - 14.dp)
                 .clip(indicatorShape)
                 .background(scheme.surfaceVariant)
@@ -135,7 +136,8 @@ fun AltarisDock(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(Prism.NavBarHeight),
+                .height(Prism.NavBarHeight)
+                .padding(horizontal = side),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(gap),
         ) {
