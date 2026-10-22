@@ -80,10 +80,9 @@ object PhantomProcessFixer {
 
     // ---- Shizuku -------------------------------------------------------------------
 
-    fun shizukuRunning(): Boolean = runCatching { Shizuku.pingBinder() }.getOrDefault(false)
+    fun shizukuRunning(): Boolean = ShizukuShell.running()
 
-    fun shizukuGranted(): Boolean =
-        runCatching { Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED }.getOrDefault(false)
+    fun shizukuGranted(): Boolean = ShizukuShell.granted()
 
     /** Asks the Shizuku manager for permission; result arrives on [onResult] (main thread). */
     fun requestShizuku(onResult: (Boolean) -> Unit) {
@@ -104,19 +103,121 @@ object PhantomProcessFixer {
      * if a future Shizuku drops it, switch to a UserService (keep rule in proguard-rules.pro).
      */
     fun applyShizuku(): String? = try {
-        val m = Shizuku::class.java.getDeclaredMethod(
-            "newProcess", Array<String>::class.java, Array<String>::class.java, String::class.java
-        ).apply { isAccessible = true }
-        var err: String? = null
         for (c in shellCommands) {
-            val p = m.invoke(null, arrayOf("sh", "-c", c), null, null) as Process
-            p.outputStream.close()
-            val out = p.errorStream.bufferedReader().readText()
-            p.inputStream.bufferedReader().readText()
-            if (p.waitFor() != 0) { err = out.ifBlank { "command failed: $c" }; break }
+            val result = ShizukuShell.run(c)
+            if (!result.ok) {
+                return result.error.ifBlank { "command failed: $c" }
+            }
         }
-        err
+        null
     } catch (e: Exception) {
         (e.cause ?: e).message ?: "Shizuku failed"
+    }
+}
+
+/**
+ * Thin wrapper around the Shizuku server process API.
+ *
+ * Commands run as the Shizuku server uid (shell 2000 for an adb-started
+ * server, root 0 for a su-started one). That uid may write secure settings,
+ * which is what the accessibility-service auto-enable needs.
+ *
+ * ponytail: Shizuku.newProcess is private in API 13, so it is called by
+ * reflection (keep rule in proguard-rules.pro); if a future Shizuku drops
+ * it, switch to a UserService.
+ */
+object ShizukuShell {
+
+    /** Result of one shell command. */
+    data class Outcome(val exitCode: Int, val stdout: String, val stderr: String) {
+        /** True when the command exited with 0. */
+        val ok: Boolean get() = exitCode == 0
+
+        /** Error text of a failed command (stderr first, stdout as fallback). */
+        val error: String get() = stderr.ifBlank { stdout }
+    }
+
+    /** True when the Shizuku server is up (the binder answers). */
+    fun running(): Boolean = runCatching { Shizuku.pingBinder() }.getOrDefault(false)
+
+    /** True when the user granted this app the Shizuku permission. */
+    fun granted(): Boolean =
+        runCatching { Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED }
+            .getOrDefault(false)
+
+    /** True when the server is up *and* the permission was granted. */
+    fun available(): Boolean = running() && granted()
+
+    /**
+     * Uid of the Shizuku server process, or -1 when it cannot be read.
+     * Shell (2000) and root (0) may write secure settings.
+     */
+    fun uid(): Int = runCatching { Shizuku.getUid() }.getOrDefault(-1)
+
+    /**
+     * Runs [command] through `sh -c` on the Shizuku server. Blocking; run
+     * off the main thread. Never throws — a failed run reports a non-zero
+     * exit code.
+     */
+    fun run(command: String, timeoutMs: Long = 10_000L): Outcome {
+        val method = newProcessMethod
+            ?: return Outcome(-1, "", "Shizuku.newProcess is unavailable")
+        val process = try {
+            method.invoke(null, arrayOf("sh", "-c", command), null, null) as Process
+        } catch (e: Exception) {
+            val cause = e.cause ?: e
+            return Outcome(-1, "", cause.message ?: "Shizuku failed")
+        }
+        return collect(process, command, timeoutMs)
+    }
+
+    /** `Shizuku.newProcess` is private in API 13 — reach it by reflection. */
+    private val newProcessMethod: java.lang.reflect.Method? by lazy {
+        runCatching {
+            Shizuku::class.java.getDeclaredMethod(
+                "newProcess", Array<String>::class.java, Array<String>::class.java, String::class.java,
+            ).apply { isAccessible = true }
+        }.getOrNull()
+    }
+
+    /** Reads both pipes without dead-locking and waits for the exit code. */
+    private fun collect(process: Process, command: String, timeoutMs: Long): Outcome {
+        runCatching { process.outputStream.close() }
+        var stdout = ""
+        var stderr = ""
+        val outReader = Thread({ stdout = readAll(process.inputStream) }, "shizuku-out")
+        val errReader = Thread({ stderr = readAll(process.errorStream) }, "shizuku-err")
+        outReader.isDaemon = true
+        errReader.isDaemon = true
+        outReader.start()
+        errReader.start()
+        var exit = -1
+        val waiter = Thread({
+            exit = try {
+                process.waitFor()
+            } catch (e: Exception) {
+                -1
+            }
+        }, "shizuku-wait")
+        waiter.isDaemon = true
+        waiter.start()
+        waiter.join(timeoutMs)
+        if (waiter.isAlive) {
+            runCatching { process.destroyForcibly() }
+            return Outcome(
+                -1,
+                stdout,
+                stderr.ifBlank { "command timed out after ${timeoutMs}ms: $command" },
+            )
+        }
+        outReader.join(500L)
+        errReader.join(500L)
+        return Outcome(exit, stdout.trim(), stderr.trim())
+    }
+
+    private fun readAll(stream: java.io.InputStream): String = try {
+        stream.bufferedReader().readText()
+    } catch (_: Exception) {
+        ""
     }
 }

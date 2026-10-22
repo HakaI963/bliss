@@ -43,6 +43,14 @@ import com.altaris.linux.core.utils.InstallationQueueManager
 import com.altaris.linux.core.utils.InstallationState
 import com.altaris.linux.ui.theme.Prism
 import kotlinx.coroutines.delay
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.border
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.drawscope.Stroke
 
 /**
  * Compact live install status bar rendered directly under the top bar while
@@ -324,6 +332,156 @@ private fun QuietBarAction(
                 fontWeight = FontWeight.Medium,
                 maxLines = 1
             )
+        }
+    }
+}
+
+
+/**
+ * The download task button for the top bar.
+ *
+ * It exists only while a task is live: a hairline square with a ring that
+ * shows how far the download/install has got. Tapping it opens the task card
+ * (name, phase, detail, progress, open/cancel) — the same state the strip
+ * below the bar carries, without spending a row of its own.
+ */
+@Composable
+fun DownloadTaskButton(
+    onOpenProgress: (distroId: String) -> Unit,
+    onOpenTroubleshooting: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val state by InstallationQueueManager.installState.collectAsState()
+    val visible = state.isInstalling || state.failed || state.cancelledByUser
+    if (!visible) return
+
+    val scheme = MaterialTheme.colorScheme
+    val percent = state.overallPercent.coerceIn(0, 100)
+    val shape = RoundedCornerShape(6.dp)
+    var expanded by remember { mutableStateOf(false) }
+
+    Box {
+        Box(
+            modifier = Modifier
+                .size(34.dp)
+                .clip(shape)
+                .background(scheme.surface)
+                .border(1.dp, if (state.failed) scheme.error else scheme.outline, shape)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                ) { expanded = true },
+            contentAlignment = Alignment.Center,
+        ) {
+            if (state.isInstalling) {
+                Canvas(Modifier.size(22.dp)) {
+                    val stroke = 2f
+                    drawCircle(
+                        color = Color(0x33808080),
+                        radius = size.minDimension / 2f - stroke / 2f,
+                        style = Stroke(width = stroke),
+                    )
+                    drawArc(
+                        color = Color(0xFF808080),
+                        startAngle = -90f,
+                        sweepAngle = 360f * percent / 100f,
+                        useCenter = false,
+                        style = Stroke(width = stroke),
+                    )
+                }
+                Text(
+                    "$percent",
+                    fontSize = 8.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = scheme.onSurface,
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.Default.Download,
+                    contentDescription = "Download task",
+                    tint = if (state.failed) scheme.error else scheme.onSurface,
+                    modifier = Modifier.size(16.dp),
+                )
+            }
+        }
+
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            Column(
+                modifier = Modifier
+                    .width(258.dp)
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
+            ) {
+                Text(
+                    when {
+                        state.failed -> "Download failed"
+                        state.isInstalling -> "Downloading"
+                        state.cancelledByUser -> "Download cancelled"
+                        else -> "Download"
+                    },
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (state.failed) scheme.error else scheme.onSurface,
+                )
+                Text(
+                    state.currentTaskName.ifBlank { state.currentDistroId ?: "Linux environment" },
+                    fontSize = 11.5.sp,
+                    color = scheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Spacer(Modifier.height(8.dp))
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(3.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(scheme.surfaceVariant),
+                ) {
+                    Box(
+                        Modifier
+                            .fillMaxHeight()
+                            .fillMaxWidth((percent.coerceAtLeast(2)) / 100f)
+                            .background(if (state.failed) scheme.error else scheme.onSurface),
+                    )
+                }
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    if (state.phaseLabel.isNotBlank()) "${state.phaseLabel} · $percent%" else "$percent%",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = scheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (state.detail.isNotBlank()) {
+                    Text(
+                        state.detail,
+                        fontSize = 10.5.sp,
+                        lineHeight = 14.sp,
+                        color = scheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                Row(Modifier.padding(top = 4.dp)) {
+                    TextButton(
+                        onClick = {
+                            expanded = false
+                            val id = state.currentDistroId
+                            if (id != null) onOpenProgress(id) else onOpenTroubleshooting()
+                        },
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp),
+                    ) { Text("Open", fontSize = 12.sp) }
+                    Spacer(Modifier.weight(1f))
+                    TextButton(
+                        onClick = {
+                            expanded = false
+                            onDismiss()
+                        },
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp),
+                    ) { Text("Dismiss", fontSize = 12.sp) }
+                }
+            }
         }
     }
 }

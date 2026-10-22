@@ -63,6 +63,7 @@ fun AltarisCommandBar(
     onOpenPalette: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenHostShell: (() -> Unit)? = null,
+    taskButton: (@Composable () -> Unit)? = null,
 ) {
     val scheme = MaterialTheme.colorScheme
     Column(
@@ -103,6 +104,10 @@ fun AltarisCommandBar(
                         maxLines = 1,
                     )
                 }
+            }
+            if (taskButton != null) {
+                taskButton()
+                Spacer(Modifier.width(6.dp))
             }
             if (onOpenHostShell != null) {
                 BarButton(

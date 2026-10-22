@@ -45,7 +45,7 @@ jobs:
         run: |
           python3 scripts/assemble_bootstrap.py --package-name com.ivarna.fluxlinux
           chmod +x scripts/repack_bootstrap_for_appid.sh
-          ./scripts/repack_bootstrap_for_appid.sh com.ivarna.fluxlinux com.nopiece.bliss
+          ./scripts/repack_bootstrap_for_appid.sh com.ivarna.fluxlinux com.altaris.linux
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew

@@ -190,6 +190,21 @@ fun InstallConfigScreen(
         phase = if (p.finished && !p.failed) InstallPhase.DONE else InstallPhase.RUNNING
     }
 
+    // A rootfs whose download finished but whose setup never did (killed app,
+    // lost network) resumes on entry instead of offering a second install.
+    var resumedUnfinished by remember(distro.id) { mutableStateOf(false) }
+    LaunchedEffect(distro.id) {
+        if (resumedUnfinished || liveInstall != null) return@LaunchedEffect
+        val unfinished = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            com.altaris.linux.core.terminal.TerminalLauncher
+                .isDistroUnfinished(appCtx, distro.id)
+        }
+        if (unfinished && phase == InstallPhase.OPTIONS) {
+            resumedUnfinished = true
+            startInstall()
+        }
+    }
+
     val profile = DistroInstallProfile.forId(distro.id)
     val isChroot = distro.id.contains("chroot")
     val kdeAvailable = remember(distro.id) {

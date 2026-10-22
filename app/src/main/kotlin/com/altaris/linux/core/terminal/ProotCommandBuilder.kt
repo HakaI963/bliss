@@ -28,8 +28,8 @@ object ProotCommandBuilder {
 
     /** `KEY=value` list behind [guestLoginEnv]; [term] is the TERM value as written. */
     fun guestEnvVars(user: String, term: String): List<String> {
-        val u = if (user == "root") "root" else "flux"
-        val home = if (u == "root") "/root" else "/home/flux"
+        val u = if (user == "root") "root" else user
+        val home = if (u == "root") "/root" else "/home/$u"
         // Do not force LANG/LC_ALL here: missing en_US.UTF-8 prints
         // "cannot change locale" from /bin/sh before profile.d can pick.
         // Guest altaris-locale.sh / .zshrc select a locale that exists.
@@ -253,11 +253,14 @@ object ProotCommandBuilder {
         distro: String = "debian",
         loginShell: GuestLoginShell = GuestLoginShell.DEFAULT
     ): Pair<Array<String>, HashMap<String, String>> {
+        // The rootfs may only carry the alias user; resolve before building.
+        val rootfs = File("${TermuxHostPaths.PREFIX}/var/lib/proot-distro/containers/$distro/rootfs")
+        val loginUser = GuestUserResolver.resolve(user, GuestUserResolver.passwdOf(rootfs))
         // Host package env + interactive TERM (guest login inherits package identity)
         val envMap = HostCommandBuilder.envMap(ctx, forceHostSetup = false, includeTerm = true)
         if (!TerminalPreferences.isLegacyProotLauncher(ctx)) {
             val guestCmd = listOf("/usr/bin/env", "-i") +
-                guestEnvVars(user, envMap["TERM"] ?: "xterm-256color") +
+                guestEnvVars(loginUser, envMap["TERM"] ?: "xterm-256color") +
                 if (GuestLoginShell.isLoginSentinel(shellCmd)) {
                     listOf("/bin/sh", "-lc", GuestLoginShell.prootLoginScript(loginShell))
                 } else {
@@ -269,7 +272,7 @@ object ProotCommandBuilder {
                 termuxHome = TermuxHostPaths.HOME,
                 pkg = TermuxHostPaths.PACKAGE,
                 distro = distro,
-                user = user,
+                user = loginUser,
                 guestCmd = guestCmd,
                 hostEnv = envMap,
                 useSharedTmp = useSharedTmp,
@@ -278,7 +281,7 @@ object ProotCommandBuilder {
             Log.i("ProotCommandBuilder", "direct launch: layout not recognised for $distro, using proot-distro")
         }
         val shell = TermuxHostPaths.libBash(ctx).absolutePath
-        val args = buildArgs(shell, TermuxHostPaths.PROOT_DISTRO, shellCmd, user, useSharedTmp, distro, loginShell)
+        val args = buildArgs(shell, TermuxHostPaths.PROOT_DISTRO, shellCmd, loginUser, useSharedTmp, distro, loginShell)
         return args to envMap
     }
 }

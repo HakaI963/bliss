@@ -17,6 +17,8 @@ object TerminalPreferences {
     private const val KEY_SHORTCUT_BAR = "shortcut_bar_config"
     private const val KEY_BANNER_QUALITY = "banner_quality"
     private const val KEY_AUTO_FULLSCREEN = "auto_fullscreen"
+    private const val KEY_BUTTON_COLOR = "button_color"
+    private const val KEY_TEXT_COLOR = "text_color"
 
     const val FONT_MIN = 10
     const val FONT_MAX = 48
@@ -104,6 +106,25 @@ object TerminalPreferences {
             .apply()
     }
 
+    /**
+     * The key/button colour of the terminal's extra keys.
+     * 0 = follow the terminal's own dark surface (the default).
+     */
+    fun getButtonColor(context: Context): Int =
+        prefs(context).getInt(KEY_BUTTON_COLOR, 0)
 
+    fun setButtonColor(context: Context, argb: Int) {
+        prefs(context).edit().putInt(KEY_BUTTON_COLOR, argb).apply()
+    }
 
+    /**
+     * The label colour of the terminal's extra keys and chrome.
+     * 0 = follow the terminal's own text colour (the default).
+     */
+    fun getTextColor(context: Context): Int =
+        prefs(context).getInt(KEY_TEXT_COLOR, 0)
+
+    fun setTextColor(context: Context, argb: Int) {
+        prefs(context).edit().putInt(KEY_TEXT_COLOR, argb).apply()
+    }
 }

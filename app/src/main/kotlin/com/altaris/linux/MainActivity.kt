@@ -970,6 +970,28 @@ class MainActivity : ComponentActivity() {
                         onOpenPalette = onOpenPalette,
                         onOpenSettings = onOpenSettings,
                         onOpenHostShell = onOpenHostShell,
+                        taskButton = {
+                            com.altaris.linux.ui.components.DownloadTaskButton(
+                                onOpenProgress = { distroId ->
+                                    val target = com.altaris.linux.core.data.DistroRepository
+                                        .supportedDistros
+                                        .firstOrNull { it.id == distroId }
+                                    if (target != null) {
+                                        selectedDistro = target
+                                        currentScreen = Screen.INSTALL_WIZARD
+                                    } else {
+                                        currentScreen = Screen.TROUBLESHOOTING
+                                    }
+                                },
+                                onOpenTroubleshooting = {
+                                    currentScreen = Screen.TROUBLESHOOTING
+                                },
+                                onDismiss = {
+                                    com.altaris.linux.core.utils.InstallationQueueManager
+                                        .dismissTerminalState()
+                                },
+                            )
+                        },
                     )
                 }
 
@@ -1058,30 +1080,6 @@ class MainActivity : ComponentActivity() {
                                                     onOpenHostShell = openHostShell
                                                 )
                                             }
-                                            // Live install strip (all tabs while chrome is
-                                            // up): keeps downloads observable after the
-                                            // user leaves the install screen. Hidden with
-                                            // the rest of the chrome (terminal tab).
-                                            InstallTaskBar(
-                                                onOpenProgress = { distroId ->
-                                                    val target = com.altaris.linux.core.data.DistroRepository
-                                                        .supportedDistros
-                                                        .firstOrNull { it.id == distroId }
-                                                    if (target != null) {
-                                                        selectedDistro = target
-                                                        currentScreen = Screen.INSTALL_WIZARD
-                                                    } else {
-                                                        currentScreen = Screen.TROUBLESHOOTING
-                                                    }
-                                                },
-                                                onOpenTroubleshooting = {
-                                                    currentScreen = Screen.TROUBLESHOOTING
-                                                },
-                                                onDismiss = {
-                                                    com.altaris.linux.core.utils.InstallationQueueManager
-                                                        .dismissTerminalState()
-                                                }
-                                            )
                                         }
                                     }
                                 },

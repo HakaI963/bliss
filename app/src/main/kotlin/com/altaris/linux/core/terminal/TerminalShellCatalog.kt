@@ -123,7 +123,7 @@ object TerminalShellCatalog {
             TerminalShellDef(
                 "shell",
                 "$label Shell",
-                "User: altaris",
+                "Guest shell",
                 "proot",
                 icon,
                 distroId
@@ -131,7 +131,7 @@ object TerminalShellCatalog {
             TerminalShellDef(
                 "shell-root",
                 "$label Shell Rooted",
-                "User: root",
+                "Root shell",
                 "proot",
                 icon,
                 distroId
@@ -170,7 +170,7 @@ object TerminalShellCatalog {
             TerminalShellDef(
                 "shell",
                 "$label Shell",
-                "User: altaris",
+                "Guest shell",
                 "chroot",
                 icon,
                 id
@@ -178,7 +178,7 @@ object TerminalShellCatalog {
             TerminalShellDef(
                 "shell-root",
                 "$label Rooted",
-                "User: root",
+                "Root shell",
                 "chroot",
                 icon,
                 id

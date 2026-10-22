@@ -99,6 +99,17 @@ object DesktopLauncher {
 
     fun isSessionActive(): Boolean = _ui.value.phase != Phase.Idle || startInFlight
 
+
+    /** The desktop entry points the start scripts call, when the guest has them. */
+    private fun desktopBinariesPresent(root: File, desktop: String): Boolean {
+        val names = if (desktop == "kde") {
+            listOf("startplasma-x11", "startplasma-wayland", "plasmashell")
+        } else {
+            listOf("startxfce4", "xfce4-session")
+        }
+        return names.any { File(root, "usr/bin/$it").exists() }
+    }
+
     /**
      * @param desktop "xfce4" or "kde" (ALTARIS_DESKTOP for the start_gui*.sh scripts)
      * @param gpuRuntime null = installed driver; "software" = force llvmpipe (ALTARIS_GPU_RUNTIME)
@@ -152,6 +163,19 @@ object DesktopLauncher {
 
             val method = methodFor(distroId)
             val profile = com.altaris.linux.core.install.DistroInstallProfile.forId(distroId)
+
+            // A rootfs whose download finished but whose display packages never
+            // installed would start a session that dies on "command not found".
+            // Say so instead.
+            if (method != "chroot" && profile != null) {
+                val root = File(app.filesDir, "usr/var/lib/proot-distro/containers/${profile.prootName}/rootfs")
+                if (root.isDirectory && !desktopBinariesPresent(root, desktop)) {
+                    startInFlight = false
+                    toast(app, "Display setup unfinished — finish the display download first")
+                    finishStart(app, distroId, false, "Display not installed", onResult)
+                    return@prepareHost
+                }
+            }
             // Chroot FS probe may need root (SELinux hides /data/local/tmp from app uid).
             // Never call isChrootInstalled on the main thread without a warm cache.
             if (method == "chroot") {

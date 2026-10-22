@@ -1,37 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Adaptive-icon background: near-black base with a whisper of top-left
-     light (#15161F -> #0A0B0F) plus one extremely soft indigo glow behind
-     the mark. Deliberately restrained — no bright gradient. -->
+<!-- Adaptive-icon background: one flat near-black tone, no gradient, no glow. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <path android:pathData="M0,0 h108 v108 h-108 Z">
-        <aapt:attr name="android:fillColor">
-            <gradient
-                android:type="linear"
-                android:startX="0"
-                android:startY="0"
-                android:endX="108"
-                android:endY="108"
-                android:startColor="#FF15161F"
-                android:endColor="#FF0A0B0F" />
-        </aapt:attr>
-    </path>
-
-    <path android:pathData="M0,0 h108 v108 h-108 Z">
-        <aapt:attr name="android:fillColor">
-            <gradient
-                android:type="radial"
-                android:centerX="54"
-                android:centerY="58"
-                android:gradientRadius="62"
-                android:startColor="#592A2F52"
-                android:endColor="#002A2F52" />
-        </aapt:attr>
-    </path>
+    <path
+        android:fillColor="#FF101113"
+        android:pathData="M0,0 h108 v108 h-108 Z" />
 
 </vector>

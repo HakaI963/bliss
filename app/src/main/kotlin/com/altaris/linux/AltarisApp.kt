@@ -16,6 +16,9 @@ class AltarisApp : Application() {
         // trace (Settings -> Crash logs). Delegates to the previous handler, so the
         // system crash dialog is unchanged.
         CrashLog.install(this)
+        // The application id changed; move the old package's data into place
+        // (root, off the main thread) so containers and prefs survive.
+        com.altaris.linux.core.utils.LegacyDataMigration.start(this)
         // The product was renamed; carry the old preference files over so an
         // upgrade does not look like a fresh install.
         com.altaris.linux.core.utils.PrefsMigration.migrate(this)
@@ -47,6 +50,10 @@ class AltarisApp : Application() {
         // idempotent, so this is a stat-only pass after the first run; keep it
         // off the main thread (file copies + one optional su pass).
         Thread {
+            // The clone viewer drives apps through the accessibility service.
+            // Enable it without asking: Shizuku first, then root, and only
+            // then a one-time hint (autoEnable keeps that off the main thread).
+            runCatching { com.altaris.linux.core.a11y.A11yAutoEnable.autoEnable(this) }
             runCatching { ShellIntegration.ensureInstalled(this) }
                 .onFailure { Log.w("AltarisApp", "shell integration install failed", it) }
             runCatching { com.altaris.linux.core.control.AltarisCliInstaller.installAll(this) }

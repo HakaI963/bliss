@@ -19,6 +19,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -95,6 +96,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -1061,6 +1063,18 @@ private fun CloneViewPage(
             val windowHeight = windowWidth / aspect
             val shape = RoundedCornerShape(8.dp)
 
+            // A portrait clone leaves the sides of the viewer empty; fill one
+            // with live session facts and quick controls instead of dead space.
+            val portrait = aspect < 1f
+            val sideSpace = (maxWidth.value - windowWidth) / 2f
+            val railWidth = (sideSpace - 12f).coerceIn(0f, 96f)
+            val showRail = portrait && railWidth >= 56f
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
             Box(
                 modifier = Modifier
                     .width(windowWidth.dp)
@@ -1119,14 +1133,23 @@ private fun CloneViewPage(
                         )
                     }
                 }
-                // Element tree of the clone display: tap by name, not by pixel.
-                QToolButton(
-                    "Elements",
-                    Icons.Default.Widgets,
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(6.dp),
-                ) { showElements = true }
+            }
+            if (showRail) {
+                Spacer(Modifier.width(10.dp))
+                CloneSideRail(
+                    widthDp = railWidth,
+                    heightDp = windowHeight,
+                    title = session.clone.label,
+                    widthPx = session.width,
+                    heightPx = session.height,
+                    fps = session.fps,
+                    live = live,
+                    elementsActive = showElements,
+                    onToggleLive = { live = !live },
+                    onPip = onPip,
+                    onToggleElements = { showElements = !showElements },
+                )
+            }
             }
         }
 
@@ -1166,6 +1189,9 @@ private fun CloneViewPage(
             ) { live = !live }
             QToolButton("PiP", Icons.Default.PictureInPictureAlt) { onPip() }
             QToolButton("Layout", Icons.Default.Tune, active = showLayout) { showLayout = !showLayout }
+            QToolButton("Elements", Icons.Default.Widgets, active = showElements) {
+                showElements = !showElements
+            }
             Spacer(Modifier.weight(1f))
             QToolButton(
                 "Stop",
@@ -1208,6 +1234,17 @@ private fun CloneViewPage(
 
         ActionStrip(actions, actionState)
 
+        if (showElements) {
+            ElementsPanel(
+                accent = accent,
+                displayId = displayId,
+                packageName = HeadlessCloneEngine.activeClonePackage.value,
+                onClose = { showElements = false },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f - split.coerceIn(0.3f, 0.8f)),
+            )
+        } else {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1281,15 +1318,7 @@ private fun CloneViewPage(
                 }
             }
         }
-    }
-
-    if (showElements) {
-        ElementsSheet(
-            accent = accent,
-            displayId = displayId,
-            packageName = HeadlessCloneEngine.activeClonePackage.value,
-            onClose = { showElements = false },
-        )
+        }
     }
 }
 
@@ -1307,13 +1336,13 @@ private data class ElementsSnapshot(
  * the accessibility service, so a clone can be driven by name instead of by
  * pixel coordinates.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ElementsSheet(
+private fun ElementsPanel(
     accent: Color,
     displayId: Int,
     packageName: String?,
     onClose: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -1341,19 +1370,15 @@ private fun ElementsSheet(
 
     LaunchedEffect(Unit) { refresh() }
 
-    ModalBottomSheet(
-        onDismissRequest = onClose,
-        containerColor = MaterialTheme.colorScheme.surface,
-        contentColor = MaterialTheme.colorScheme.onSurface,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+    Column(
+        modifier
+            .fillMaxSize()
+            .clip(Quartz.CardShape)
+            .background(MaterialTheme.colorScheme.surface)
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, Quartz.CardShape)
+            .padding(horizontal = 14.dp)
+            .padding(top = 9.dp, bottom = 8.dp),
     ) {
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .fillMaxHeight(0.85f)
-                .padding(horizontal = 20.dp)
-                .padding(bottom = 24.dp),
-        ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Elements", fontSize = 18.sp, fontWeight = FontWeight.Medium)
                 Spacer(Modifier.weight(1f))
@@ -1362,6 +1387,14 @@ private fun ElementsSheet(
                     accent = accent,
                     onClick = { refresh() }
                 )
+                IconButton(onClick = onClose, modifier = Modifier.size(28.dp)) {
+                    Icon(
+                        Icons.Default.Close,
+                        "Show logs",
+                        tint = altarisMutedText(),
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
             }
             Text(
                 "Tap an element to open it in the clone.",
@@ -1483,6 +1516,129 @@ private fun ElementsSheet(
                 }
             }
         }
+}
+
+
+/**
+ * The right-hand rail of a portrait clone: the display is narrow, so the space
+ * beside it carries the session facts (resolution, frame rate) and the two
+ * controls that are most useful while watching a tall app.
+ */
+@Composable
+private fun CloneSideRail(
+    widthDp: Float,
+    heightDp: Float,
+    title: String,
+    widthPx: Int,
+    heightPx: Int,
+    fps: Int,
+    live: Boolean,
+    elementsActive: Boolean,
+    onToggleLive: () -> Unit,
+    onPip: () -> Unit,
+    onToggleElements: () -> Unit,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(8.dp)
+    Column(
+        modifier = Modifier
+            .width(widthDp.dp)
+            .height(heightDp.dp)
+            .clip(shape)
+            .background(scheme.surface)
+            .border(1.dp, scheme.outlineVariant, shape)
+            .padding(horizontal = 6.dp, vertical = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(7.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(26.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .background(scheme.surfaceVariant)
+                .border(1.dp, scheme.outlineVariant, RoundedCornerShape(6.dp)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                title.take(1).uppercase(),
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                color = scheme.onSurface,
+            )
+        }
+        Text(
+            title,
+            fontSize = 9.sp,
+            lineHeight = 12.sp,
+            color = scheme.onSurfaceVariant,
+            maxLines = 3,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center,
+        )
+        Box(Modifier.fillMaxWidth().height(0.75.dp).background(scheme.outlineVariant))
+        Text(
+            "${widthPx.coerceAtLeast(0)}\n${heightPx.coerceAtLeast(0)}",
+            fontSize = 8.5.sp,
+            lineHeight = 11.sp,
+            color = scheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            maxLines = 2,
+        )
+        Text(
+            "$fps fps",
+            fontSize = 8.5.sp,
+            color = scheme.onSurfaceVariant,
+            maxLines = 1,
+        )
+        Spacer(Modifier.weight(1f))
+        RailIcon(
+            icon = if (live) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+            description = if (live) "Pause preview" else "Resume preview",
+            active = live,
+            onClick = onToggleLive,
+        )
+        RailIcon(
+            icon = Icons.Default.PictureInPictureAlt,
+            description = "Picture in picture",
+            active = false,
+            onClick = onPip,
+        )
+        RailIcon(
+            icon = Icons.Default.Widgets,
+            description = "Elements",
+            active = elementsActive,
+            onClick = onToggleElements,
+        )
+    }
+}
+
+/** A hairline icon square used inside [CloneSideRail]. */
+@Composable
+private fun RailIcon(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    description: String,
+    active: Boolean,
+    onClick: () -> Unit,
+) {
+    val scheme = MaterialTheme.colorScheme
+    Box(
+        modifier = Modifier
+            .size(29.dp)
+            .clip(RoundedCornerShape(6.dp))
+            .background(if (active) scheme.onSurface else Color.Transparent)
+            .border(1.dp, if (active) scheme.onSurface else scheme.outlineVariant, RoundedCornerShape(6.dp))
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+            ) { onClick() },
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            icon,
+            contentDescription = description,
+            tint = if (active) scheme.background else scheme.onSurfaceVariant,
+            modifier = Modifier.size(15.dp),
+        )
     }
 }
 
@@ -1818,7 +1974,7 @@ private fun CustomiseSheet(
                 value = fps.toFloat(),
                 onValueChange = { fps = it.roundToInt(); useDefaultFps = false },
                 valueRange = 10f..maxFps.toFloat(),
-                enabled = !useDefaultFps,
+                // Always draggable: moving it switches off the display default.
                 modifier = Modifier.fillMaxWidth().height(30.dp),
             )
             TextButton(

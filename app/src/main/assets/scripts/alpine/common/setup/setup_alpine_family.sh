@@ -78,6 +78,43 @@ apk add --no-cache \
         exit 1
     }
 
+# 5. Guest user: flux (uid 1000). The app logs in as "flux"; "altaris" is
+# kept as an alias so the desktop helpers and /home/altaris paths keep working.
+if ! id flux >/dev/null 2>&1; then
+    echo "Altaris: Creating the guest account..."
+    if command -v useradd >/dev/null 2>&1; then
+        if ! id -u 1000 >/dev/null 2>&1; then
+            useradd -m -u 1000 -s /bin/bash flux 2>/dev/null \
+                || useradd -m -s /bin/bash flux 2>/dev/null \
+                || useradd -m -s /bin/sh flux
+        else
+            useradd -m -s /bin/bash flux 2>/dev/null || useradd -m -s /bin/sh flux
+        fi
+    elif command -v adduser >/dev/null 2>&1; then
+        adduser -D -s /bin/sh flux
+    fi
+    echo "flux:flux" | chpasswd 2>/dev/null || true
+fi
+
+# The alias user shares flux's uid/home so both names resolve.
+if id flux >/dev/null 2>&1 && ! id altaris >/dev/null 2>&1; then
+    _a_uid=$(id -u flux 2>/dev/null)
+    _a_gid=$(id -g flux 2>/dev/null)
+    if [ -n "$_a_uid" ] && [ -n "$_a_gid" ]; then
+        echo "altaris:x:${_a_uid}:${_a_gid}:Altaris:/home/flux:/bin/sh" >> /etc/passwd
+        echo "altaris:x:${_a_gid}:" >> /etc/group
+    fi
+fi
+if [ -d /home/flux ] && [ ! -e /home/altaris ]; then
+    ln -s /home/flux /home/altaris 2>/dev/null || true
+fi
+
+# Groups (best-effort — names differ slightly across Alpine releases)
+for g in wheel audio video netdev input; do
+    addgroup flux "$g" 2>/dev/null || true
+    addgroup altaris "$g" 2>/dev/null || true
+done
+
 # Session bus soft-depends on machine-id (empty /var/lib/dbus breaks some stacks)
 if command -v dbus-uuidgen >/dev/null 2>&1; then
     dbus-uuidgen --ensure=/etc/machine-id 2>/dev/null || true
@@ -190,31 +227,9 @@ BWRAP_EOF
 chmod 755 /usr/bin/bwrap
 fi
 
-# 5. User altaris (prefer uid 1000 when free — matches common XFCE defaults)
-if ! id altaris >/dev/null 2>&1; then
-    echo "Altaris: Creating user flux..."
-    if command -v useradd >/dev/null 2>&1; then
-        if ! id -u 1000 >/dev/null 2>&1; then
-            useradd -m -u 1000 -s /bin/bash flux 2>/dev/null \
-                || useradd -m -s /bin/bash flux 2>/dev/null \
-                || useradd -m -s /bin/sh flux
-        else
-            useradd -m -s /bin/bash flux 2>/dev/null || useradd -m -s /bin/sh flux
-        fi
-    else
-        adduser -D -s /bin/sh altaris
-    fi
-    echo "flux:flux" | chpasswd 2>/dev/null || true
-fi
-
-# Groups (best-effort — names differ slightly across Alpine releases)
-for g in wheel audio video netdev input; do
-    addgroup altaris "$g" 2>/dev/null || true
-done
-
 # 6. Sudo NOPASSWD
 mkdir -p /etc/sudoers.d
-echo "flux ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/flux
+printf '%s\n' "flux ALL=(ALL) NOPASSWD:ALL" "altaris ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/flux
 chmod 0440 /etc/sudoers.d/flux
 # Alpine ships @includedir; re-assert if a minimal sudoers was replaced
 if [ -f /etc/sudoers ] && ! grep -qE '@includedir[[:space:]]+/etc/sudoers\.d' /etc/sudoers 2>/dev/null; then

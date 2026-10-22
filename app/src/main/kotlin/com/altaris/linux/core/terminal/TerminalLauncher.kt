@@ -58,6 +58,29 @@ object TerminalLauncher {
         return guestRootfsHasShell(root)
     }
 
+    /**
+     * True when the rootfs is present but its setup never created a guest
+     * account — the state a killed or failed install leaves behind. Such a
+     * distro must not pretend to be installed, and opening it should resume
+     * the download instead of starting a dead shell.
+     */
+    fun isDistroUnfinished(ctx: Context, distroId: String): Boolean {
+        val profile = com.altaris.linux.core.install.DistroInstallProfile.forId(distroId)
+            ?: return false
+        val root = when (profile.method) {
+            "chroot" -> profile.chrootPath?.let { File(it) } ?: return false
+            else -> File(ctx.filesDir, "usr/var/lib/proot-distro/containers/${profile.prootName}/rootfs")
+        }
+        if (!root.isDirectory || !guestRootfsHasShell(root)) return false
+        val passwd = File(root, "etc/passwd")
+        if (!passwd.isFile) return true
+        val text = runCatching { passwd.readText() }.getOrDefault("")
+        if (text.isBlank()) return true
+        return !text.lineSequence().any {
+            it.startsWith("flux:") || it.startsWith("altaris:")
+        }
+    }
+
     /** Host-safe guest rootfs shell probe (absolute busybox symlinks OK). */
     fun guestRootfsHasShell(root: File): Boolean {
         if (!root.isDirectory) return false

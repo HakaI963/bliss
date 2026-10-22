@@ -36,6 +36,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -53,18 +54,23 @@ import com.altaris.linux.core.terminal.TerminalShellCatalog
 import com.altaris.linux.ui.components.MethodChip
 import com.altaris.linux.ui.components.MethodTab
 import com.altaris.linux.ui.components.MethodTabs
-import com.altaris.linux.ui.theme.AltarisBackground
-import com.altaris.linux.ui.theme.AltarisSwitchUncheckedTrack
-import com.altaris.linux.ui.theme.FrostHairline
-import com.altaris.linux.ui.theme.FrostSurface
-import com.altaris.linux.ui.theme.TextMuted
-import com.altaris.linux.ui.theme.TextPrimary
-import com.altaris.linux.ui.theme.TextSecondary
+import com.altaris.linux.ui.theme.MaterialTheme.colorScheme.background
+import com.altaris.linux.ui.theme.MaterialTheme.colorScheme.surfaceVariant
+import com.altaris.linux.ui.theme.MaterialTheme.colorScheme.outline
+import com.altaris.linux.ui.theme.MaterialTheme.colorScheme.surfaceVariant
+import com.altaris.linux.ui.theme.MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)
+import com.altaris.linux.ui.theme.MaterialTheme.colorScheme.onSurface
+import com.altaris.linux.ui.theme.MaterialTheme.colorScheme.onSurfaceVariant
 
 // Monochrome frost method colors — no cyan/magenta/beige neon.
-private val MethodProot = TextSecondary
-private val MethodChroot = TextSecondary
-private val MethodHost = TextPrimary
+private val MethodProot: Color
+    @Composable get() = MaterialTheme.colorScheme.onSurfaceVariant
+
+private val MethodChroot: Color
+    @Composable get() = MaterialTheme.colorScheme.onSurfaceVariant
+
+private val MethodHost: Color
+    @Composable get() = MaterialTheme.colorScheme.onSurface
 private val RowShape = RoundedCornerShape(14.dp)
 private val TileShape = RoundedCornerShape(12.dp)
 
@@ -163,7 +169,7 @@ fun TerminalToolSelector(
                 text = if (showAll) "All distros" else "Installed distros only",
                 fontSize = 10.sp,
                 fontWeight = FontWeight.Bold,
-                color = TextMuted,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
                 letterSpacing = 0.8.sp
             )
             Spacer(Modifier.weight(1f))
@@ -230,7 +236,7 @@ fun TerminalNewSessionPanel(
             .fillMaxWidth()
             .clip(shape)
             .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.98f))
-            .border(BorderStroke(0.75.dp, FrostHairline), shape)
+            .border(BorderStroke(0.75.dp, MaterialTheme.colorScheme.outline), shape)
     ) {
         Row(
             modifier = Modifier
@@ -243,14 +249,14 @@ fun TerminalNewSessionPanel(
                     text = "New session",
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
-                    color = TextPrimary
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             }
             IconButton(onClick = onDismiss, modifier = Modifier.size(36.dp)) {
                 Icon(
                     imageVector = Icons.Default.Close,
                     contentDescription = "Close",
-                    tint = TextSecondary,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(18.dp)
                 )
             }
@@ -318,8 +324,8 @@ private fun ShowAllToggle(showAll: Boolean, onToggle: () -> Unit) {
     Row(
         modifier = Modifier
             .clip(shape)
-            .background(if (showAll) TextPrimary else FrostSurface)
-            .border(0.75.dp, if (showAll) TextPrimary else FrostHairline, shape)
+            .background(if (showAll) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.surfaceVariant)
+            .border(0.75.dp, if (showAll) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.outline, shape)
             .clickable(onClick = onToggle)
             .padding(horizontal = 10.dp, vertical = 5.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -328,7 +334,7 @@ private fun ShowAllToggle(showAll: Boolean, onToggle: () -> Unit) {
             text = if (showAll) "Show installed" else "Show all",
             fontSize = 11.sp,
             fontWeight = FontWeight.SemiBold,
-            color = if (showAll) AltarisBackground else TextSecondary
+            color = if (showAll) MaterialTheme.colorScheme.background else MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }
@@ -339,22 +345,22 @@ private fun NoDistrosHint() {
         modifier = Modifier
             .fillMaxWidth()
             .clip(RowShape)
-            .background(FrostSurface)
-            .border(0.75.dp, FrostHairline, RowShape)
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .border(0.75.dp, MaterialTheme.colorScheme.outline, RowShape)
             .padding(14.dp)
     ) {
         Text(
             text = "No distros installed yet",
             fontSize = 13.sp,
             fontWeight = FontWeight.SemiBold,
-            color = TextPrimary
+            color = MaterialTheme.colorScheme.onSurface
         )
         Spacer(Modifier.height(4.dp))
         Text(
             text = "Install one from the Distros tab.",
             fontSize = 11.sp,
             lineHeight = 16.sp,
-            color = TextSecondary
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }
@@ -391,7 +397,7 @@ private fun TerminalSectionHeader(group: TerminalMethodGroup, modifier: Modifier
         Text(
             text = group.subtitle,
             fontSize = 11.sp,
-            color = TextMuted
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)
         )
     }
 }
@@ -418,8 +424,8 @@ private fun TerminalDistroRowCard(
     Box(
         modifier = modifier
             .clip(RowShape)
-            .background(if (row.installed) FrostSurface else FrostSurface.copy(alpha = 0.45f))
-            .border(BorderStroke(0.75.dp, FrostHairline), RowShape)
+            .background(if (row.installed) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f))
+            .border(BorderStroke(0.75.dp, MaterialTheme.colorScheme.outline), RowShape)
     ) {
         Row(
             modifier = Modifier
@@ -432,8 +438,8 @@ private fun TerminalDistroRowCard(
                 modifier = Modifier
                     .size(42.dp)
                     .clip(TileShape)
-                    .background(FrostSurface)
-                    .border(0.75.dp, FrostHairline, TileShape),
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .border(0.75.dp, MaterialTheme.colorScheme.outline, TileShape),
                 contentAlignment = Alignment.Center
             ) {
                 Image(
@@ -460,12 +466,12 @@ private fun TerminalDistroRowCard(
                     Spacer(Modifier.width(6.dp))
                     MethodChip(
                         label = row.method.uppercase(),
-                        color = if (row.installed) methodColor else TextMuted
+                        color = if (row.installed) methodColor else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)
                     )
                 }
                 Text(
                     text = reason ?: row.subtitle,
-                    color = if (reason != null) MaterialTheme.colorScheme.error else TextSecondary,
+                    color = if (reason != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 11.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -520,8 +526,8 @@ private fun SessionPill(
     primary: Boolean,
     onClick: () -> Unit
 ) {
-    val container = if (primary) TextPrimary else AltarisSwitchUncheckedTrack
-    val content = if (primary) AltarisBackground else TextPrimary
+    val container = if (primary) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.surfaceVariant
+    val content = if (primary) MaterialTheme.colorScheme.background else MaterialTheme.colorScheme.onSurface
     Row(
         modifier = Modifier
             .height(32.dp)

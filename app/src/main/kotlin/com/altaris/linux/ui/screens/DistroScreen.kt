@@ -164,6 +164,20 @@ fun DistroScreen(
         }
     }
 
+    // A rootfs whose setup never finished is shown as unfinished, not installed.
+    val unfinishedDistroIds by androidx.compose.runtime.produceState(
+        initialValue = emptySet<String>(),
+        refreshKey.value,
+        stateRefresh,
+    ) {
+        value = withContext(kotlinx.coroutines.Dispatchers.IO) {
+            DistroRepository.supportedDistros
+                .filter { TerminalLauncher.isDistroUnfinished(context, it.id) }
+                .map { it.id }
+                .toSet()
+        }
+    }
+
     var methodTab by remember { mutableStateOf(MethodTab.PROOT) }
     var selectedCategory by remember { mutableStateOf(DistroCategory.ALL) }
     // Backend filtering/sort logic (kept): method filter + sortForDistroPage.
@@ -322,14 +336,25 @@ fun DistroScreen(
                         .staggerIn(2, entrance)
                 ) {
                     filteredDistros.forEachIndexed { index, distro ->
+                        val unfinished = unfinishedDistroIds.contains(distro.id)
                         DistroRow(
                             distro = distro,
                             accent = accent,
                             installed = installedDistroIds.contains(distro.id),
+                            unfinished = unfinished,
                             onClick = if (distro.comingSoon) {
                                 { }
                             } else {
-                                { onNavigateToInstall(distro) }
+                                {
+                                    if (unfinished) {
+                                        android.widget.Toast.makeText(
+                                            context,
+                                            "Download unfinished — finishing the setup now",
+                                            android.widget.Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
+                                    onNavigateToInstall(distro)
+                                }
                             },
                             divider = index < filteredDistros.lastIndex,
                             modifier = Modifier.staggerIn(index, entrance)
@@ -347,6 +372,7 @@ private fun DistroRow(
     distro: Distro,
     accent: Color,
     installed: Boolean,
+    unfinished: Boolean = false,
     onClick: () -> Unit,
     divider: Boolean,
     modifier: Modifier = Modifier

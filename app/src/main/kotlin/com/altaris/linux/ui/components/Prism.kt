@@ -425,7 +425,8 @@ fun PrismSegmented(
         if (rowWidthPx > 0) {
             Box(
                 modifier = Modifier
-                    .offset { IntOffset(offsetX.value.roundToInt(), 0) }
+                    // offsetX is a Dp; the offset lambda works in pixels.
+                    .offset { IntOffset(with(density) { offsetX.toPx() }.roundToInt(), 0) }
                     .padding(horizontal = inset, vertical = inset)
                     .width(thumbWidth - inset * 2)
                     .height(34.dp - inset * 2)

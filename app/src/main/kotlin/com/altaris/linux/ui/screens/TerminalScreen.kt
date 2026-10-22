@@ -80,6 +80,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -151,6 +152,20 @@ fun TerminalScreen(
         onErrorContainer = Color(0xFFFFD9D6),
     )
     MaterialTheme(colorScheme = dark, typography = MaterialTheme.typography) {
+        // The status and navigation bars belong to the terminal while it is
+        // open: the terminal is always dark, in every identity.
+        val context = LocalContext.current
+        val window = activityWindow(context)
+        DisposableEffect(window) {
+            val previousStatus = window?.statusBarColor
+            val previousNav = window?.navigationBarColor
+            window?.statusBarColor = dark.background.toArgb()
+            window?.navigationBarColor = dark.background.toArgb()
+            onDispose {
+                window?.statusBarColor = previousStatus ?: dark.background.toArgb()
+                window?.navigationBarColor = previousNav ?: dark.background.toArgb()
+            }
+        }
         TerminalScreenContent(onBack = onBack, embeddedInBottomNav = embeddedInBottomNav)
     }
 }
@@ -801,13 +816,13 @@ private fun TerminalSessionTab(
 ) {
     val shape = RoundedCornerShape(percent = 50)
     val background by animateColorAsState(
-        targetValue = if (selected) MaterialTheme.colorScheme.onSurface
-        else MaterialTheme.colorScheme.surfaceVariant,
+        targetValue = if (selected) MaterialTheme.colorScheme.surfaceVariant
+        else Color.Transparent,
         animationSpec = spring(dampingRatio = 0.78f, stiffness = 380f),
         label = "sessionTabBackground"
     )
     val foreground by animateColorAsState(
-        targetValue = if (selected) MaterialTheme.colorScheme.background
+        targetValue = if (selected) MaterialTheme.colorScheme.onSurface
         else MaterialTheme.colorScheme.onSurfaceVariant,
         animationSpec = spring(dampingRatio = 0.78f, stiffness = 380f),
         label = "sessionTabForeground"

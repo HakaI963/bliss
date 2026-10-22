@@ -3,6 +3,7 @@ package com.altaris.linux.core.terminal
 import android.content.Context
 import com.altaris.linux.core.root.ChrootPaths
 import com.altaris.linux.core.root.RootShell
+import java.io.File
 
 /** Builds shell arguments and environment map for chroot Debian sessions (SSOT helper).
  *  Ported from termux-lib `ChrootCommandBuilder` (altaris_chroot.sh v2.2).
@@ -37,7 +38,8 @@ object ChrootCommandBuilder {
         val rootInner = buildRootInner(
             shellCmd, user,
             loginShellAltaris = altarisFlag,
-            loginShellRoot = rootFlag
+            loginShellRoot = rootFlag,
+            chrootPath = chrootPath
         )
         // Pin ALTARIS_CHROOT for Alpine/Debian multi-chroot coexistence
         val bb = RootShell.cachedBusyBox()
@@ -59,9 +61,12 @@ object ChrootCommandBuilder {
         user: String = "flux",
         helper: String = ChrootPaths.CHROOT_HELPER,
         loginShellAltaris: String = "zsh",
-        loginShellRoot: String = "bash"
+        loginShellRoot: String = "bash",
+        chrootPath: String = ChrootPaths.CHROOT_PATH
     ): String {
-        val u = if (user == "root") "root" else "flux"
+        // The chroot may only carry the alias user.
+        val u = if (user == "root") "root"
+        else GuestUserResolver.resolve(user, GuestUserResolver.passwdOf(File(chrootPath)))
         val workdir = GuestLoginShell.parseInteractiveWorkdir(shellCmd)
         val isInteractive = GuestLoginShell.isInteractiveLogin(shellCmd)
 
@@ -74,7 +79,7 @@ object ChrootCommandBuilder {
             }
             isInteractive -> {
                 val wd = workdir?.let { " --workdir ${shellSingleQuote(it)}" } ?: ""
-                "exec sh $helper login --user flux --shell $loginShellAltaris$wd"
+                "exec sh $helper login --user $u --shell $loginShellAltaris$wd"
             }
             isSimpleGuestCmd(shellCmd) -> {
                 val esc = shellCmd.replace("'", "'\\''")
@@ -94,11 +99,12 @@ object ChrootCommandBuilder {
         user: String = "flux",
         chrootPath: String = ChrootPaths.CHROOT_PATH
     ): HashMap<String, String> {
-        val u = if (user == "root") "root" else "flux"
+        val passwd = GuestUserResolver.passwdOf(File(chrootPath))
+        val u = if (user == "root") "root" else GuestUserResolver.resolve(user, passwd)
         val envMap = HashMap(System.getenv())
         envMap["PATH"] = "/system/bin:/system/xbin:/sbin:" + (envMap["PATH"] ?: "")
         envMap["TERM"] = "xterm-256color"
-        envMap["HOME"] = if (u == "root") "/root" else "/home/flux"
+        envMap["HOME"] = GuestUserResolver.homeOf(u, passwd)
         envMap["LANG"] = "C"
         envMap.remove("LC_ALL")
         envMap["XDG_RUNTIME_DIR"] = "/tmp"

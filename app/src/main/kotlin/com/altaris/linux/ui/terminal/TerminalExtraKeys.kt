@@ -45,6 +45,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
@@ -56,6 +57,7 @@ import androidx.compose.ui.unit.sp
 import com.altaris.linux.R
 import com.altaris.linux.ui.theme.AltarisBackground
 import com.altaris.linux.ui.theme.FrostHairline
+import com.altaris.linux.core.utils.TerminalPreferences
 import com.altaris.linux.ui.theme.FrostSurface
 import com.altaris.linux.ui.theme.TextPrimary
 import com.altaris.linux.ui.theme.TextSecondary
@@ -245,6 +247,10 @@ fun TerminalExtraKeys(
 ) {
     var fnVisible by remember { mutableStateOf(false) }
     var menuKeyId by remember { mutableStateOf<String?>(null) }
+    // The keys are always dark; the user may still pick their own shades.
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val buttonColor = remember { TerminalPreferences.getButtonColor(context) }
+    val textColor = remember { TerminalPreferences.getTextColor(context) }
     val fnScroll = rememberScrollState()
     val mainKeys = config.keys.filter { !it.fnRow }
     val fnKeys = config.keys.filter { it.fnRow }
@@ -319,12 +325,12 @@ fun TerminalExtraKeys(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(1.dp)
-                .background(FrostHairline)
+                .background(MaterialTheme.colorScheme.outline)
         )
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.background.copy(alpha = 0.92f))
+                .background(MaterialTheme.colorScheme.background)
                 .padding(horizontal = 6.dp, vertical = 5.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
@@ -333,6 +339,8 @@ fun TerminalExtraKeys(
                     keys = row,
                     keyHeight = keyHeight,
                     labelSize = labelSize,
+                    buttonColor = buttonColor,
+                    textColor = textColor,
                     modState = modState,
                     fnVisible = fnVisible,
                     menuKeyId = menuKeyId,
@@ -409,6 +417,8 @@ private fun ShortcutBarRow(
     keys: List<TerminalShortcutKey>,
     keyHeight: Dp,
     labelSize: TextUnit,
+    buttonColor: Int,
+    textColor: Int,
     modState: TerminalModifierState,
     fnVisible: Boolean,
     menuKeyId: String?,
@@ -459,6 +469,8 @@ private fun ShortcutBarKeyItem(
     key: TerminalShortcutKey,
     active: Boolean,
     locked: Boolean,
+    buttonColor: Int,
+    textColor: Int,
     menuOpen: Boolean,
     labelSize: TextUnit,
     modifier: Modifier = Modifier,
@@ -472,6 +484,8 @@ private fun ShortcutBarKeyItem(
         TerminalKey(
             label = if (painter == null) key.displayLabel() else null,
             painter = painter,
+            buttonColor = buttonColor,
+            textColor = textColor,
             contentDescription = key.payload,
             active = active,
             locked = locked,
@@ -576,6 +590,8 @@ private fun isKeyLocked(key: TerminalShortcutKey, modState: TerminalModifierStat
 private fun TerminalKey(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    buttonColor: Int,
+    textColor: Int,
     label: String? = null,
     painter: Painter? = null,
     contentDescription: String? = null,
@@ -587,10 +603,14 @@ private fun TerminalKey(
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val emphasized = active || pressed
+    val scheme = MaterialTheme.colorScheme
+    // The keys are always dark: the terminal never follows the app theme.
+    val keySurface = if (buttonColor != 0) Color(buttonColor) else scheme.surfaceVariant
+    val keyText = if (textColor != 0) Color(textColor) else scheme.onSurface
     val background = when {
-        active -> TextPrimary
-        pressed -> TextPrimary.copy(alpha = 0.85f)
-        else -> FrostSurface
+        active -> keyText
+        pressed -> keyText.copy(alpha = 0.85f)
+        else -> keySurface
     }
 
     Box(
@@ -600,7 +620,7 @@ private fun TerminalKey(
             .background(background)
             .border(
                 width = if (locked) 2.dp else 1.dp,
-                color = if (locked) AltarisBackground else FrostHairline,
+                color = if (locked) scheme.background else scheme.outline,
                 shape = KeyShape
             )
             .combinedClickable(
@@ -614,7 +634,7 @@ private fun TerminalKey(
             Icon(
                 painter = painter,
                 contentDescription = contentDescription,
-                tint = if (emphasized) AltarisBackground else TextSecondary,
+                tint = if (emphasized) scheme.background else keyText,
                 modifier = Modifier.size(18.dp)
             )
         } else if (label != null) {
@@ -622,7 +642,7 @@ private fun TerminalKey(
                 text = label,
                 fontSize = labelSize,
                 fontWeight = FontWeight.SemiBold,
-                color = if (emphasized) AltarisBackground else TextSecondary,
+                color = if (emphasized) scheme.background else keyText,
                 maxLines = 1
             )
         }
@@ -632,7 +652,7 @@ private fun TerminalKey(
                     .align(Alignment.TopEnd)
                     .padding(3.dp)
                     .size(5.dp)
-                    .background(AltarisBackground, CircleShape)
+                    .background(scheme.background, CircleShape)
             )
         }
     }

@@ -52,13 +52,13 @@ jobs:
           python3 scripts/assemble_bootstrap.py --package-name com.ivarna.fluxlinux
           ./scripts/verify_bootstrap.sh com.ivarna.fluxlinux
           chmod +x scripts/repack_bootstrap_for_appid.sh
-          ./scripts/repack_bootstrap_for_appid.sh com.ivarna.fluxlinux com.nopiece.bliss
-          ./scripts/verify_bootstrap.sh com.nopiece.bliss
+          ./scripts/repack_bootstrap_for_appid.sh com.ivarna.fluxlinux com.altaris.linux
+          ./scripts/verify_bootstrap.sh com.altaris.linux
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Build debug APK (altaris flavor, separate app com.nopiece.bliss)
+      - name: Build debug APK (altaris flavor, separate app com.altaris.linux)
         run: ./gradlew assembleAltarisDebug --stacktrace
         env:
           ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_HOME }}

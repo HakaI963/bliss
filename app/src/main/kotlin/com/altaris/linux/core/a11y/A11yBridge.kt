@@ -5,7 +5,6 @@ import android.net.Uri
 import android.os.Bundle
 import android.util.Log
 import com.altaris.linux.core.clone.HeadlessCloneEngine
-import com.altaris.linux.core.root.RootShell
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.Executors
@@ -182,46 +181,31 @@ object A11yBridge {
     }
 
     /**
-     * Enable the Altaris accessibility service with root (KernelSU / Magisk).
+     * Enable the Altaris accessibility service.
      *
-     * Writes `enabled_accessibility_services` and `accessibility_enabled` for
-     * the running application id, then verifies the setting. Returns JSON.
+     * The privileged write is done by [A11yAutoEnable]: Shizuku first (it
+     * works even when the app has no superuser grant), then root, and
+     * otherwise the user is asked to enable the service in the Android
+     * settings. Writes `enabled_accessibility_services` and
+     * `accessibility_enabled` for the running application id, then verifies
+     * the setting. Returns JSON.
      */
     fun ensureEnabled(context: Context): String {
-        val packageName = context.packageName
-        val component = AltarisAccessibilityService.componentFor(packageName)
-        return try {
-            if (!RootShell.isRootAvailable()) {
-                return errorJson("root not available — enable the service from Android settings instead")
+        val outcome = A11yAutoEnable.ensureEnabled(context)
+        return JSONObject()
+            .put("ok", outcome.ok)
+            .put("method", outcome.method.name.lowercase())
+            .put("component", outcome.component)
+            .apply {
+                if (outcome.ok) {
+                    put("accessibility_enabled", outcome.accessibilityEnabled)
+                    put("enabled_services", outcome.enabledServices)
+                } else {
+                    put("error", outcome.error ?: "could not enable the accessibility service")
+                    outcome.hint?.let { put("hint", it) }
+                }
             }
-            val current = readSetting(SETTING_SERVICES)
-            val list = current.split(':')
-                .map { it.trim() }
-                .filter { it.isNotEmpty() && it != "null" }
-                .toMutableList()
-            if (!list.contains(component)) list.add(component)
-            val value = list.joinToString(":")
-            val put = RootShell.captureResult("settings put secure $SETTING_SERVICES '$value'", 8_000L)
-            val on = RootShell.captureResult("settings put secure $SETTING_ENABLED 1", 8_000L)
-            if (put.exitCode != 0 || on.exitCode != 0) {
-                return errorJson(
-                    "could not enable the accessibility service (exit ${put.exitCode}/${on.exitCode})",
-                )
-            }
-            val after = readSetting(SETTING_SERVICES)
-            if (!after.contains(component)) {
-                return errorJson("service disabled by system — the setting did not stick")
-            }
-            JSONObject()
-                .put("ok", true)
-                .put("component", component)
-                .put("accessibility_enabled", readSetting(SETTING_ENABLED) == "1")
-                .put("enabled_services", after)
-                .toString()
-        } catch (t: Throwable) {
-            Log.w(TAG, "ensureEnabled failed", t)
-            errorJson(t.message ?: t.javaClass.simpleName)
-        }
+            .toString()
     }
 
     // ---------------------------------------------------------------- internals
@@ -248,16 +232,6 @@ object A11yBridge {
         return true
     }
 
-    private fun readSetting(key: String): String =
-        RootShell.capture("settings get secure $key", 5_000L)
-            .lineSequence()
-            .map { it.trim() }
-            .lastOrNull { it.isNotEmpty() }
-            .orEmpty()
-
     private fun errorJson(message: String): String =
         JSONObject().put("ok", false).put("error", message).toString()
-
-    private const val SETTING_SERVICES = "enabled_accessibility_services"
-    private const val SETTING_ENABLED = "accessibility_enabled"
 }
