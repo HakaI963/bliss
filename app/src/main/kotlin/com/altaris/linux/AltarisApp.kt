@@ -16,6 +16,9 @@ class AltarisApp : Application() {
         // trace (Settings -> Crash logs). Delegates to the previous handler, so the
         // system crash dialog is unchanged.
         CrashLog.install(this)
+        // The product was renamed; carry the old preference files over so an
+        // upgrade does not look like a fresh install.
+        com.altaris.linux.core.utils.PrefsMigration.migrate(this)
         if (!isMainProcess()) {
             // Shizuku re-creates this Application inside its :shell user-service
             // process. Host bootstrap/terminal setup must never run there.
