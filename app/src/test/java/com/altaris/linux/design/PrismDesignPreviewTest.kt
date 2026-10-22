@@ -31,7 +31,7 @@ import com.altaris.linux.ui.components.PrismChip
 import com.altaris.linux.ui.components.PrismRow
 import com.altaris.linux.ui.components.PrismSectionLabel
 import com.altaris.linux.ui.theme.AltarisScheme
-import com.altaris.linux.ui.theme.FolioTheme
+import com.altaris.linux.ui.theme.AltarisTheme
 import com.altaris.linux.ui.theme.Prism
 import org.junit.Rule
 import org.junit.Test
@@ -62,7 +62,7 @@ class PrismDesignPreviewTest {
 
     private fun board(scheme: AltarisScheme, name: String) {
         paparazzi.snapshot(name = name) {
-            FolioTheme(themeMode = ThemeMode.DARK, scheme = scheme) {
+            AltarisTheme(themeMode = ThemeMode.DARK, scheme = scheme) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background,
