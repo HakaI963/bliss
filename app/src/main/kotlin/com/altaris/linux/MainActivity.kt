@@ -1008,7 +1008,6 @@ class MainActivity : ComponentActivity() {
                                                 BottomTab.TOOLS -> DockDestination.TOOLS
                                                 else -> DockDestination.HOME
                                             },
-                                            accent = MaterialTheme.colorScheme.primary,
                                             onSelect = { destination ->
                                                 currentTab = when (destination) {
                                                     DockDestination.HOME -> BottomTab.HOME

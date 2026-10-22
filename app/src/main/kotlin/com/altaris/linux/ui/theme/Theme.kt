@@ -24,9 +24,8 @@ import com.altaris.linux.core.utils.ThemeMode
 val LocalAltarisPalette = staticCompositionLocalOf { AltarisPalettes.Graphite }
 
 /**
- * Builds the Material3 scheme for an identity. The optional accent skin only
- * replaces the primary role (and its container), exactly like the pre-scheme
- * picker did.
+ * Builds the Material3 scheme for an identity. The identity owns every
+ * colour; there is no separate accent skin any more.
  */
 private fun colorSchemeFor(palette: AltarisPalette): ColorScheme {
     val onError = if (palette.isDark) Color(0xFF3A0907) else Color.White
@@ -80,12 +79,12 @@ private fun applyLegacyTokens(palette: AltarisPalette) {
     AltarisSurface = palette.surface
     AltarisCard = palette.panel
     FrostSurface = palette.surface
-    FrostSurfaceElevated = palette.surfaceElevated
+    FrostSurfaceElevated = palette.panel
     FrostHairline = palette.border
     FrostTopSheen = palette.onSurface.copy(alpha = 0.10f)
     TextPrimary = palette.onSurface
     TextSecondary = palette.onSurfaceVariant
-    TextMuted = palette.outline
+    TextMuted = palette.border
     PrimaryAction = primary
     OnPrimaryAction = onPrimary
     StatusDot = primary
@@ -94,8 +93,8 @@ private fun applyLegacyTokens(palette: AltarisPalette) {
     AltarisSwitchCheckedTrack = primary
     AltarisSwitchCheckedThumb = onPrimary
     AltarisSwitchUncheckedTrack = palette.panel
-    AltarisSwitchUncheckedThumb = palette.outline
-    AltarisSwitchUncheckedBorder = palette.outline
+    AltarisSwitchUncheckedThumb = palette.border
+    AltarisSwitchUncheckedBorder = palette.border
 }
 
 /**
@@ -103,8 +102,8 @@ private fun applyLegacyTokens(palette: AltarisPalette) {
  *
  * [scheme] picks the identity (surfaces, glass, gradients). Passing the
  * default value means "follow the persisted choice", so the Settings picker
- * can switch identities without a restart. [accent] is the optional legacy
- * accent skin; null follows the persisted choice.
+ * can switch identities without a restart. Passing a scheme overrides the
+ * persisted choice for that composition.
  */
 @Composable
 fun AltarisTheme(
@@ -170,7 +169,6 @@ fun AltarisAppTheme(
         themeMode = themeMode,
         dynamicColor = dynamicColor,
         scheme = scheme,
-        accent = accent,
         content = content
     )
 }
