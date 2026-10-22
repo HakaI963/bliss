@@ -28,7 +28,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -62,27 +61,30 @@ import com.altaris.linux.core.system.SharedStorageAccess
 import com.altaris.linux.core.utils.StateManager
 import com.altaris.linux.core.utils.ThemeMode
 import com.altaris.linux.core.utils.ThemePalette
-import com.altaris.linux.ui.components.QCard
-import com.altaris.linux.ui.components.QDivider
-import com.altaris.linux.ui.components.QPill
-import com.altaris.linux.ui.components.QRow
-import com.altaris.linux.ui.components.QScreenTitle
-import com.altaris.linux.ui.components.QSectionHeader
-import com.altaris.linux.ui.components.Quartz
+import com.altaris.linux.ui.components.AltarisTitle
+import com.altaris.linux.ui.components.PrismCard
+import com.altaris.linux.ui.components.PrismIconTile
+import com.altaris.linux.ui.components.PrismOrb
+import com.altaris.linux.ui.components.PrismRow
+import com.altaris.linux.ui.components.PrismSectionLabel
+import com.altaris.linux.ui.components.PrismSegmented
 import com.altaris.linux.ui.theme.AltarisPalettes
 import com.altaris.linux.ui.theme.AltarisScheme
+import com.altaris.linux.ui.theme.AltarisSection
+import com.altaris.linux.ui.theme.Prism
 import com.altaris.linux.ui.theme.accentColor
-import com.altaris.linux.ui.theme.altarisMutedText
 import com.altaris.linux.ui.theme.rememberStaggerEntrance
+import com.altaris.linux.ui.theme.sectionAccent
 import com.altaris.linux.ui.theme.staggerIn
 
 /**
- * Settings hub — compact Quartz layout.
+ * Settings hub — Prism layout.
  *
- * Header: back arrow + title. Sections: Device status, Theme, Environment &
- * Host, Interface & Session, Containers, System & About — all as QCard groups
- * with QSectionHeader labels. Motion: the shared staggered entrance only.
- * Every row keeps its original callback/route; nothing was dropped.
+ * Header: back tile + screen title. Sections: Device status, Color scheme,
+ * Appearance, Environment & Host, Interface & Session, Containers, System &
+ * About — all as PrismCard groups under PrismSectionLabel captions. Motion:
+ * the shared staggered entrance only. Every row keeps its original
+ * callback/route; nothing was dropped.
  */
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
@@ -163,194 +165,209 @@ fun SettingsScreen(
     // Newest-first crash reports written by CrashLog (0 -> empty state).
     val crashLogCount = remember(lifecycleKey) { CrashLog.files(context).size }
 
+    // Settings share the Tools accent: they are part of the same section.
+    val accent = sectionAccent(AltarisSection.TOOLS)
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = Quartz.ScreenPad, vertical = 10.dp),
-        verticalArrangement = Arrangement.spacedBy(Quartz.Gap),
+            .padding(horizontal = Prism.Gutter, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(Prism.Stack),
     ) {
         val entrance = rememberStaggerEntrance()
 
-        // Compact header: back arrow + screen title (version rides the subtitle).
+        // Compact header: back tile + screen title (version rides the subtitle).
         Row(
             modifier = Modifier.staggerIn(0, entrance),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButton(onClick = onBack, modifier = Modifier.size(32.dp)) {
-                Icon(
-                    Icons.AutoMirrored.Rounded.ArrowBack,
-                    contentDescription = "Back",
-                    tint = MaterialTheme.colorScheme.onBackground,
-                    modifier = Modifier.size(20.dp),
-                )
-            }
-            Spacer(Modifier.width(4.dp))
-            QScreenTitle("Settings", "Altaris v${BuildConfig.VERSION_NAME} · Linux environments, on-device")
+            PrismIconTile(
+                icon = Icons.AutoMirrored.Rounded.ArrowBack,
+                accent = accent,
+                contentDescription = "Back",
+                onClick = onBack
+            )
+            Spacer(Modifier.width(10.dp))
+            AltarisTitle(
+                "Settings",
+                "Altaris v${BuildConfig.VERSION_NAME} · Linux environments, on-device",
+                accent,
+                Modifier.weight(1f)
+            )
         }
 
         // Device — live root probe + shared-storage grant (was the hero card).
-        QSectionHeader("Device", modifier = Modifier.staggerIn(1, entrance))
-        QCard(modifier = Modifier.staggerIn(1, entrance)) {
-            QRow(
+        SettingsGroup("Device", accent, Modifier.staggerIn(1, entrance)) {
+            PrismRow(
                 title = "Root access",
                 subtitle = if (rootAvailable) "Root available" else "No root · PRoot mode",
-                leading = { QDot(active = rootAvailable) },
+                accent = accent,
+                leading = { PrismOrb(active = rootAvailable, accent = accent) },
                 onClick = { onNavigateToRootCheck?.invoke() },
                 divider = true,
             )
-            QRow(
+            PrismRow(
                 title = "Shared storage",
                 subtitle = if (storageActive) "Allowed: /sdcard and USB drives in guests"
                 else "Not allowed: tap, then enable All files access",
-                leading = { QDot(active = storageActive) },
+                accent = accent,
+                leading = { PrismOrb(active = storageActive, accent = accent) },
                 onClick = { SharedStorageAccess.openSettings(context) },
             )
         }
 
         // Identity — the five Altaris schemes. Picking one restyles the app.
-        QSectionHeader("Color scheme", modifier = Modifier.staggerIn(2, entrance))
-        QCard(modifier = Modifier.staggerIn(2, entrance)) {
+        SettingsGroup("Color scheme", accent, Modifier.staggerIn(2, entrance)) {
             AltarisScheme.entries.forEachIndexed { index, entry ->
                 SchemeRow(
                     scheme = entry,
                     dark = darkMode,
                     selected = entry == scheme,
+                    accent = accent,
                     onClick = { StateManager.setScheme(context, entry) },
+                    divider = index < AltarisScheme.entries.lastIndex
                 )
-                if (index < AltarisScheme.entries.lastIndex) {
-                    QDivider(Modifier.padding(start = Quartz.CardPad))
-                }
             }
         }
 
         // Appearance — light/dark mode and accent. Surfaces stay neutral.
-        QSectionHeader("Appearance", modifier = Modifier.staggerIn(3, entrance))
-        QCard(modifier = Modifier.staggerIn(3, entrance)) {
+        SettingsGroup("Appearance", accent, Modifier.staggerIn(3, entrance)) {
             ThemeModeRow(
                 current = currentTheme,
+                accent = accent,
                 onSelect = { onThemeChanged?.invoke(it) },
             )
-            QDivider(Modifier.padding(start = Quartz.CardPad))
             ThemePaletteRow(
                 current = themePalette,
+                accent = accent,
                 onSelect = { StateManager.setThemePalette(context, it) },
             )
         }
 
         // Environment & Host
-        QSectionHeader("Environment & Host", modifier = Modifier.staggerIn(4, entrance))
-        QCard(modifier = Modifier.staggerIn(4, entrance)) {
+        SettingsGroup("Environment & Host", accent, Modifier.staggerIn(4, entrance)) {
             if (storageDeclared) {
-                QRow(
+                PrismRow(
                     title = "Shared storage",
                     subtitle = if (storageGranted) "Allowed: /sdcard and USB drives in guests"
                     else "Not allowed: tap, then enable All files access",
+                    accent = accent,
                     onClick = { SharedStorageAccess.openSettings(context) },
                     divider = true,
                 )
             }
             if (phantomApplicable) {
-                QRow(
+                PrismRow(
                     title = "Process killer fix",
                     subtitle = "Phantom killer: " + when (phantomState) {
                         PhantomProcessFixer.State.DISABLED -> "Disabled"
                         PhantomProcessFixer.State.ENABLED -> "Enabled — tap to fix"
                         else -> "Unknown — tap to fix"
                     },
+                    accent = accent,
                     onClick = { showPhantom = true },
                     divider = true,
                 )
             }
-            QRow(
+            PrismRow(
                 title = "Legacy Termux",
                 subtitle = "Leftover installs from app versions ≤ v1.8.0",
+                accent = accent,
                 onClick = { onNavigateToLegacyTermuxSettings?.invoke() },
             )
         }
 
         // Interface & Session
-        QSectionHeader("Interface & Session", modifier = Modifier.staggerIn(5, entrance))
-        QCard(modifier = Modifier.staggerIn(5, entrance)) {
-            QRow(
+        SettingsGroup("Interface & Session", accent, Modifier.staggerIn(5, entrance)) {
+            PrismRow(
                 title = "Terminal",
                 subtitle = "Font zoom, extra keys, guest shell",
+                accent = accent,
                 onClick = { onNavigateToTerminalSettings?.invoke() },
                 divider = true,
             )
-            QRow(
+            PrismRow(
                 title = "X11 Display",
                 subtitle = "Scale, fullscreen, embedded X11 input",
+                accent = accent,
                 onClick = { onNavigateToX11Settings?.invoke() },
                 divider = true,
             )
-            QRow(
+            PrismRow(
                 title = "Audio",
                 subtitle = "PulseAudio status, start, logs",
+                accent = accent,
                 onClick = { onNavigateToAudioSettings?.invoke() },
             )
         }
 
         // Containers
-        QSectionHeader("Containers", modifier = Modifier.staggerIn(6, entrance))
-        QCard(modifier = Modifier.staggerIn(6, entrance)) {
-            QRow(
+        SettingsGroup("Containers", accent, Modifier.staggerIn(6, entrance)) {
+            PrismRow(
                 title = "PRoot",
                 subtitle = "Installed containers, app-storage size",
+                accent = accent,
                 onClick = { onNavigateToProotSettings?.invoke() },
                 divider = true,
             )
-            QRow(
+            PrismRow(
                 title = "Chroot",
                 subtitle = "Installed roots, size, orphan cleanup",
+                accent = accent,
                 onClick = { onNavigateToChrootSettings?.invoke() },
             )
         }
 
         // System & About
-        QSectionHeader("System & About", modifier = Modifier.staggerIn(7, entrance))
-        QCard(modifier = Modifier.staggerIn(7, entrance)) {
+        SettingsGroup("System & About", accent, Modifier.staggerIn(7, entrance)) {
             if (onNavigateToOnboarding != null) {
-                QRow(
+                PrismRow(
                     title = "Show onboarding",
                     subtitle = "Replay the first-run tour",
+                    accent = accent,
                     onClick = { onNavigateToOnboarding() },
                     divider = true,
                 )
             }
             if (onNavigateToTroubleshooting != null) {
-                QRow(
+                PrismRow(
                     title = "Troubleshoot",
                     subtitle = "Diagnose common issues",
+                    accent = accent,
                     onClick = { onNavigateToTroubleshooting() },
                     divider = true,
                 )
             }
             if (onNavigateToCrashLogs != null) {
-                QRow(
+                PrismRow(
                     title = "Crash logs",
                     subtitle = when (crashLogCount) {
                         0 -> "No crash logs"
                         1 -> "1 saved report"
                         else -> "$crashLogCount saved reports"
                     },
+                    accent = accent,
                     onClick = { onNavigateToCrashLogs() },
                     divider = true,
                 )
             }
-            QRow(
+            PrismRow(
                 title = "About Altaris",
                 subtitle = "Author no_piece",
+                accent = accent,
                 divider = true,
             )
-            QRow(
+            PrismRow(
                 title = "Version",
                 subtitle = "v${BuildConfig.VERSION_NAME}",
+                accent = accent,
                 divider = true,
             )
-            QRow(
+            PrismRow(
                 title = "Documentation",
                 subtitle = "Setup guides and tutorials",
+                accent = accent,
                 onClick = { openUrl(context, "https://github.com/HakaI963/altaris#readme") },
             )
         }
@@ -366,18 +383,21 @@ fun SettingsScreen(
     }
 }
 
-/** Tiny status dot (7 dp): primary when active, muted when not. */
+/** A captioned group of settings rows. */
 @Composable
-private fun QDot(active: Boolean) {
-    Box(
-        modifier = Modifier
-            .size(7.dp)
-            .clip(CircleShape)
-            .background(
-                if (active) MaterialTheme.colorScheme.primary
-                else altarisMutedText().copy(alpha = 0.4f)
-            ),
-    )
+private fun SettingsGroup(
+    label: String,
+    accent: Color,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(Prism.Tight)
+    ) {
+        PrismSectionLabel(label, accent)
+        PrismCard(accent = accent) { content() }
+    }
 }
 
 /**
@@ -389,49 +409,40 @@ private fun SchemeRow(
     scheme: AltarisScheme,
     dark: Boolean,
     selected: Boolean,
+    accent: Color,
     onClick: () -> Unit,
+    divider: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val palette = remember(scheme, dark) { AltarisPalettes.of(scheme, dark) }
     val shape = RoundedCornerShape(12.dp)
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(shape)
-            .clickable(onClick = onClick)
-            .padding(horizontal = Quartz.CardPad, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            modifier = Modifier
-                .size(38.dp)
-                .clip(shape)
-                .background(Brush.linearGradient(palette.heroStops))
-                .border(1.dp, palette.onSurface.copy(alpha = 0.18f), shape)
-        )
-        Spacer(Modifier.width(14.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = scheme.label,
-                fontSize = Quartz.RowTitleSize,
-                fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onSurface,
+    PrismRow(
+        title = scheme.label,
+        subtitle = scheme.tagline,
+        accent = accent,
+        modifier = modifier,
+        leading = {
+            Box(
+                modifier = Modifier
+                    .size(38.dp)
+                    .clip(shape)
+                    .background(Brush.linearGradient(palette.heroStops))
+                    .border(1.dp, palette.onSurface.copy(alpha = 0.18f), shape)
             )
-            Text(
-                text = scheme.tagline,
-                fontSize = Quartz.RowSubSize,
-                color = altarisMutedText(),
-            )
-        }
-        if (selected) {
-            Icon(
-                Icons.Default.Check,
-                contentDescription = "Selected",
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(18.dp),
-            )
-        }
-    }
+        },
+        trailing = {
+            if (selected) {
+                Icon(
+                    Icons.Default.Check,
+                    contentDescription = "Selected",
+                    tint = accent,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+        },
+        onClick = onClick,
+        divider = divider
+    )
 }
 
 /**
@@ -441,6 +452,7 @@ private fun SchemeRow(
 @Composable
 private fun ThemeModeRow(
     current: ThemeMode,
+    accent: Color,
     onSelect: (ThemeMode) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -449,28 +461,32 @@ private fun ThemeModeRow(
         ThemeMode.SYSTEM -> ThemeMode.SYSTEM
         else -> ThemeMode.LIGHT
     }
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = Quartz.CardPad, vertical = 10.dp)
-    ) {
-        Text(
-            text = "Theme",
-            fontSize = Quartz.RowTitleSize,
-            fontWeight = FontWeight.Normal,
-            color = MaterialTheme.colorScheme.onSurface,
+    Column(modifier = modifier.fillMaxWidth()) {
+        PrismRow(
+            title = "Theme",
+            subtitle = "Dark is the default. Light is the same layout on paper surfaces.",
+            accent = accent
         )
-        Text(
-            text = "Dark is the default. Light is the same layout on paper surfaces.",
-            fontSize = Quartz.RowSubSize,
-            color = altarisMutedText(),
+        Spacer(Modifier.height(Prism.Tight))
+        PrismSegmented(
+            options = listOf("Dark", "Light", "System"),
+            selectedIndex = when (normalized) {
+                ThemeMode.DARK -> 0
+                ThemeMode.LIGHT -> 1
+                else -> 2
+            },
+            accent = accent,
+            modifier = Modifier.fillMaxWidth(),
+            onSelect = { index ->
+                onSelect(
+                    when (index) {
+                        0 -> ThemeMode.DARK
+                        1 -> ThemeMode.LIGHT
+                        else -> ThemeMode.SYSTEM
+                    }
+                )
+            }
         )
-        Spacer(Modifier.height(8.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            QPill("Dark", normalized == ThemeMode.DARK) { onSelect(ThemeMode.DARK) }
-            QPill("Light", normalized == ThemeMode.LIGHT) { onSelect(ThemeMode.LIGHT) }
-            QPill("System", normalized == ThemeMode.SYSTEM) { onSelect(ThemeMode.SYSTEM) }
-        }
     }
 }
 
@@ -480,27 +496,17 @@ private fun ThemeModeRow(
 @Composable
 private fun ThemePaletteRow(
     current: ThemePalette,
+    accent: Color,
     onSelect: (ThemePalette) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = Quartz.CardPad + 2.dp, vertical = 8.dp)
-    ) {
-        Text(
-            text = "Accent color",
-            fontSize = Quartz.RowTitleSize,
-            fontWeight = FontWeight.Normal,
-            color = MaterialTheme.colorScheme.onSurface,
+    Column(modifier = modifier.fillMaxWidth()) {
+        PrismRow(
+            title = "Accent color",
+            subtitle = "Scheme follows the selected identity; the others tint primary controls.",
+            accent = accent
         )
-        Text(
-            text = "Scheme follows the selected identity; the others tint primary controls.",
-            fontSize = Quartz.RowSubSize,
-            color = altarisMutedText(),
-            maxLines = 1,
-        )
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(Prism.Tight))
         Row(
             modifier = Modifier.horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -511,10 +517,12 @@ private fun ThemePaletteRow(
                     label = palette.label,
                     dotColor = palette.accentColor(),
                     selected = palette == current,
-                    onClick = { onSelect(palette) },
+                    accent = accent,
+                    onClick = { onSelect(palette) }
                 )
             }
         }
+        Spacer(Modifier.height(4.dp))
     }
 }
 
@@ -523,31 +531,36 @@ private fun PalettePill(
     label: String,
     dotColor: Color,
     selected: Boolean,
+    accent: Color,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val bg = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
-    val fg = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+    val shape = RoundedCornerShape(Prism.ChipRadius)
     Row(
         modifier = modifier
-            .clip(Quartz.PillShape)
-            .background(bg)
+            .clip(shape)
+            .background(if (selected) accent.copy(alpha = 0.20f) else Color.Transparent)
+            .border(
+                1.dp,
+                if (selected) accent.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outlineVariant,
+                shape
+            )
             .clickable(onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 5.dp),
+            .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(5.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Box(
             modifier = Modifier
-                .size(7.dp)
+                .size(8.dp)
                 .clip(CircleShape)
                 .background(dotColor)
         )
         Text(
-            text = label,
-            fontSize = 11.5.sp,
+            label,
+            fontSize = 12.sp,
             fontWeight = FontWeight.SemiBold,
-            color = fg,
+            color = if (selected) accent else MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
         )
     }

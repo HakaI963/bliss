@@ -3,7 +3,6 @@ package com.altaris.linux.ui.screens
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,8 +17,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -31,10 +30,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
@@ -43,17 +42,18 @@ import com.altaris.linux.core.data.Distro
 import com.altaris.linux.core.data.DistroRepository
 import com.altaris.linux.core.terminal.TerminalLauncher
 import com.altaris.linux.core.utils.StateManager
+import com.altaris.linux.ui.components.AltarisTitle
 import com.altaris.linux.ui.components.MethodTab
-import com.altaris.linux.ui.components.QCard
-import com.altaris.linux.ui.components.QChevron
-import com.altaris.linux.ui.components.QDivider
-import com.altaris.linux.ui.components.QEmptyState
-import com.altaris.linux.ui.components.QPill
-import com.altaris.linux.ui.components.QPrimaryButton
-import com.altaris.linux.ui.components.QScreenTitle
-import com.altaris.linux.ui.components.Quartz
+import com.altaris.linux.ui.components.PrismButton
+import com.altaris.linux.ui.components.PrismCard
+import com.altaris.linux.ui.components.PrismChip
+import com.altaris.linux.ui.components.PrismRow
+import com.altaris.linux.ui.components.PrismSegmented
+import com.altaris.linux.ui.theme.AltarisSection
+import com.altaris.linux.ui.theme.Prism
 import com.altaris.linux.ui.theme.altarisMutedText
 import com.altaris.linux.ui.theme.rememberStaggerEntrance
+import com.altaris.linux.ui.theme.sectionAccent
 import com.altaris.linux.ui.theme.staggerIn
 import dev.chrisbanes.haze.HazeState
 
@@ -170,27 +170,35 @@ fun DistroScreen(
     }
     val methodLabel = if (methodTab == MethodTab.CHROOT) "chroot" else "PRoot"
 
+    // The section accent colours the filters, the cards and the rows.
+    val accent = sectionAccent(AltarisSection.DISTROS)
+
     // Shared entrance clock: cards cascade in once; items scrolled into view
     // after the ~650ms window appear at rest (no endless list animation).
     val entrance = rememberStaggerEntrance()
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(top = 10.dp, bottom = 110.dp),
-        verticalArrangement = Arrangement.spacedBy(Quartz.Gap)
+        contentPadding = PaddingValues(
+            start = Prism.Gutter,
+            end = Prism.Gutter,
+            top = 10.dp,
+            bottom = 110.dp
+        ),
+        verticalArrangement = Arrangement.spacedBy(Prism.Stack)
     ) {
         item(key = "title") {
-            QScreenTitle(
+            AltarisTitle(
                 "Distros",
-                "Pick a Linux environment — PRoot without root, or Chroot for full speed.",
+                "Pick a Linux environment",
+                accent,
                 Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = Quartz.ScreenPad)
                     .staggerIn(0, entrance)
             )
         }
 
-        // Sticky controls: method + category pills stay reachable while the
+        // Sticky controls: method + category filters stay reachable while the
         // list scrolls (near-opaque scrim keeps text legible).
         stickyHeader(key = "controls") {
             Column(
@@ -199,214 +207,197 @@ fun DistroScreen(
                     .background(MaterialTheme.colorScheme.background.copy(alpha = 0.97f))
                     .padding(top = 8.dp)
             ) {
+                PrismSegmented(
+                    options = listOf("PRoot · $prootCount", "Chroot · $chrootCount"),
+                    selectedIndex = if (methodTab == MethodTab.PROOT) 0 else 1,
+                    accent = accent,
+                    modifier = Modifier.fillMaxWidth(),
+                    onSelect = { index ->
+                        methodTab = if (index == 0) MethodTab.PROOT else MethodTab.CHROOT
+                    }
+                )
+                Spacer(Modifier.height(Prism.Tight))
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = Quartz.ScreenPad),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    QPill(
-                        "PRoot · $prootCount",
-                        selected = methodTab == MethodTab.PROOT,
-                        onClick = { methodTab = MethodTab.PROOT }
-                    )
-                    QPill(
-                        "Chroot · $chrootCount",
-                        selected = methodTab == MethodTab.CHROOT,
-                        onClick = { methodTab = MethodTab.CHROOT }
-                    )
-                }
-                Spacer(Modifier.height(8.dp))
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState())
-                        .padding(horizontal = Quartz.ScreenPad),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(Prism.Tight)
                 ) {
                     DistroCategory.values().forEach { category ->
-                        QPill(
-                            category.label,
+                        PrismChip(
+                            text = category.label,
+                            accent = accent,
                             selected = category == selectedCategory,
                             onClick = { selectedCategory = category }
                         )
                     }
                 }
-                Spacer(Modifier.height(8.dp))
-                QDivider()
+                Spacer(Modifier.height(Prism.Tight))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(1.dp)
+                        .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+                )
             }
         }
 
         if (filteredDistros.isEmpty()) {
             item(key = "empty") {
-                QCard(
+                PrismCard(
+                    accent = accent,
                     modifier = Modifier
-                        .padding(horizontal = Quartz.ScreenPad)
+                        .fillMaxWidth()
                         .staggerIn(2, entrance)
                 ) {
-                    if (selectedCategory != DistroCategory.ALL) {
-                        QEmptyState(
-                            "Nothing matches this filter",
-                            "No $methodLabel distro in ${selectedCategory.label}. " +
-                                "Try another category."
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            if (selectedCategory != DistroCategory.ALL) {
+                                "Nothing matches this filter"
+                            } else {
+                                "No $methodLabel distros available"
+                            },
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
-                        Column(
-                            modifier = Modifier.padding(horizontal = Quartz.CardPad, vertical = 4.dp)
-                        ) {
-                            QPrimaryButton(
-                                "Show all",
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            if (selectedCategory != DistroCategory.ALL) {
+                                "No $methodLabel distro in ${selectedCategory.label}. Try another category."
+                            } else {
+                                "Switch the method toggle above to browse other environments."
+                            },
+                            fontSize = 12.sp,
+                            lineHeight = 16.sp,
+                            color = altarisMutedText()
+                        )
+                        if (selectedCategory != DistroCategory.ALL) {
+                            Spacer(Modifier.height(14.dp))
+                            PrismButton(
+                                text = "Show all",
+                                accent = accent,
+                                modifier = Modifier.fillMaxWidth(),
                                 onClick = { selectedCategory = DistroCategory.ALL }
                             )
                         }
-                        Spacer(Modifier.height(4.dp))
-                    } else {
-                        QEmptyState(
-                            "No $methodLabel distros available",
-                            "Switch the method toggle above to browse other " +
-                                "environments."
-                        )
                     }
                 }
             }
         } else {
-            itemsIndexed(
-                items = filteredDistros,
-                key = { _, distro -> distro.id },
-                contentType = { _, distro -> if (distro.comingSoon) "soon" else "full" }
-            ) { index, distro ->
-                // Row tap keeps the existing destination contract: DistroScreen
-                // taps route through onNavigateToInstall (MainActivity → INSTALL_WIZARD).
-                val cardModifier = Modifier
-                    .padding(horizontal = Quartz.ScreenPad)
-                    .staggerIn(index + 2, entrance)
-                if (distro.comingSoon) {
-                    DistroBrowseCard(
-                        distro = distro,
-                        installed = false,
-                        onClick = {},
-                        modifier = cardModifier
-                    )
-                } else {
-                    DistroBrowseCard(
-                        distro = distro,
-                        installed = installedDistroIds.contains(distro.id),
-                        onClick = { onNavigateToInstall(distro) },
-                        modifier = cardModifier
-                    )
+            // One PrismCard group holds the whole browse list; every distro is
+            // a PrismRow entry inside it.
+            item(key = "distro-group") {
+                PrismCard(
+                    accent = accent,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .staggerIn(2, entrance)
+                ) {
+                    filteredDistros.forEachIndexed { index, distro ->
+                        DistroRow(
+                            distro = distro,
+                            accent = accent,
+                            installed = installedDistroIds.contains(distro.id),
+                            onClick = if (distro.comingSoon) {
+                                { }
+                            } else {
+                                { onNavigateToInstall(distro) }
+                            },
+                            divider = index < filteredDistros.lastIndex,
+                            modifier = Modifier.staggerIn(index, entrance)
+                        )
+                    }
                 }
             }
         }
     }
 }
 
-// ─── Compact browse card: 34 dp tile, name + blurb + badges, status tag ──────
+// ─── Browse entry: logo, name + blurb + badges, status tag ───────────────────
 @Composable
-private fun DistroBrowseCard(
+private fun DistroRow(
     distro: Distro,
+    accent: Color,
     installed: Boolean,
     onClick: () -> Unit,
+    divider: Boolean,
     modifier: Modifier = Modifier
 ) {
     val badges = remember(distro.id) { distroBadgeLabels(distro) }
+    val subtitle = buildString {
+        append(distro.description)
+        if (badges.isNotEmpty()) {
+            append(" · ")
+            append(badges.joinToString(" · "))
+        }
+    }
 
-    QCard(modifier = modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onClick)
-                .padding(horizontal = Quartz.CardPad + 2.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // 34 dp frost tile — distro logo or its initial.
+    PrismRow(
+        title = distro.name,
+        subtitle = subtitle,
+        accent = accent,
+        modifier = modifier,
+        leading = {
             Box(
                 modifier = Modifier
-                    .size(34.dp)
-                    .clip(Quartz.TileShape)
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                    .size(32.dp)
+                    .clip(RoundedCornerShape(Prism.TileRadius))
+                    .background(accent.copy(alpha = 0.16f)),
                 contentAlignment = Alignment.Center
             ) {
                 if (distro.iconRes != null) {
                     Image(
                         painter = painterResource(id = distro.iconRes),
                         contentDescription = "${distro.name} logo",
-                        modifier = Modifier.size(22.dp)
+                        modifier = Modifier.size(20.dp)
                     )
                 } else {
                     Text(
                         distro.name.firstOrNull()?.uppercase() ?: "?",
-                        fontSize = 15.sp,
+                        fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = accent
                     )
                 }
             }
-
-            Spacer(Modifier.width(10.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    distro.name,
-                    fontSize = Quartz.RowTitleSize,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    distro.description,
-                    fontSize = Quartz.RowSubSize,
-                    color = altarisMutedText(),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                if (badges.isNotEmpty()) {
-                    Spacer(Modifier.height(2.dp))
-                    Text(
-                        badges.joinToString(" · "),
-                        fontSize = 9.5.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = altarisMutedText(),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-
-            Spacer(Modifier.width(8.dp))
-
+        },
+        trailing = {
             when {
-                distro.comingSoon -> StatusTag("Soon")
-                installed -> StatusTag("Installed", dot = true)
-                else -> QChevron()
+                distro.comingSoon -> StatusTag("Soon", accent)
+                installed -> StatusTag("Installed", accent, dot = true)
+                else -> Unit
             }
-        }
-    }
+        },
+        onClick = onClick,
+        divider = divider
+    )
 }
 
-// Tiny status chip (Soon / Installed) used on browse cards.
+// Tiny status chip (Soon / Installed) used on browse rows.
 @Composable
-private fun StatusTag(text: String, dot: Boolean = false) {
+private fun StatusTag(text: String, accent: Color, dot: Boolean = false) {
     Row(
         modifier = Modifier
-            .clip(Quartz.PillShape)
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .padding(horizontal = 8.dp, vertical = 3.dp),
+            .clip(RoundedCornerShape(Prism.ChipRadius))
+            .background(accent.copy(alpha = 0.14f))
+            .padding(horizontal = 9.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (dot) {
             Box(
                 modifier = Modifier
-                    .size(5.dp)
-                    .clip(Quartz.PillShape)
-                    .background(MaterialTheme.colorScheme.primary)
+                    .size(6.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(accent)
             )
-            Spacer(Modifier.width(5.dp))
+            Spacer(Modifier.width(6.dp))
         }
         Text(
             text,
             fontSize = 10.sp,
-            fontWeight = FontWeight.Medium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = FontWeight.SemiBold,
+            color = accent,
             maxLines = 1
         )
     }

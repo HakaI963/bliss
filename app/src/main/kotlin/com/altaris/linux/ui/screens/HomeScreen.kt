@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -25,11 +26,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.DesktopWindows
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Schedule
@@ -59,12 +62,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
@@ -81,19 +86,19 @@ import com.altaris.linux.core.desktop.DesktopSessionQuery
 import com.altaris.linux.core.root.RootShell
 import com.altaris.linux.core.terminal.TerminalLauncher
 import com.altaris.linux.core.utils.StateManager
-import com.altaris.linux.ui.components.ActiveDesktopCard
-import com.altaris.linux.ui.components.QCard
+import com.altaris.linux.ui.components.AltarisTitle
+import com.altaris.linux.ui.components.PrismButton
+import com.altaris.linux.ui.components.PrismCard
+import com.altaris.linux.ui.components.PrismChip
+import com.altaris.linux.ui.components.PrismIconTile
+import com.altaris.linux.ui.components.PrismOrb
 import com.altaris.linux.ui.components.QDivider
-import com.altaris.linux.ui.components.QEmptyState
-import com.altaris.linux.ui.components.QIconTile
-import com.altaris.linux.ui.components.QPrimaryButton
-import com.altaris.linux.ui.components.QRow
-import com.altaris.linux.ui.components.QScreenTitle
-import com.altaris.linux.ui.components.QSectionHeader
-import com.altaris.linux.ui.components.Quartz
 import com.altaris.linux.ui.components.isChrootCard
+import com.altaris.linux.ui.theme.AltarisSection
+import com.altaris.linux.ui.theme.Prism
 import com.altaris.linux.ui.theme.altarisMutedText
 import com.altaris.linux.ui.theme.rememberStaggerEntrance
+import com.altaris.linux.ui.theme.sectionAccent
 import com.altaris.linux.ui.theme.staggerIn
 import dev.chrisbanes.haze.HazeState
 import kotlinx.coroutines.launch
@@ -184,9 +189,8 @@ fun HomeScreen(
         )
     }
 
-    // PRoot / Chroot split (backend logic preserved; UI groups below).
+    // PRoot guests lead the bento; the method itself is shown on every tile.
     val prootInstalled = installedDistros.filter { !it.isChrootCard() }
-    val chrootInstalled = installedDistros.filter { it.isChrootCard() }
     var rootAvailable by remember { mutableStateOf(false) }
 
     fun probeRoot(force: Boolean = false) {
@@ -272,6 +276,48 @@ fun HomeScreen(
         }
     }
 
+    /** Shell action of a container tile: chroot guests need root first. */
+    fun openShell(distro: Distro) {
+        if (distro.isChrootCard() && !rootAvailable) {
+            android.widget.Toast.makeText(
+                context,
+                "Grant superuser to Altaris first",
+                android.widget.Toast.LENGTH_SHORT
+            ).show()
+        } else {
+            onOpenTerminal(distro.id, false)
+        }
+    }
+
+    /** Tile tap: opens the launch-mode sheet (shell / root / desktop). */
+    fun openLaunchSheet(distro: Distro) {
+        if (distro.isChrootCard() && !rootAvailable) {
+            android.widget.Toast.makeText(
+                context,
+                "Grant superuser to Altaris first",
+                android.widget.Toast.LENGTH_SHORT
+            ).show()
+        } else if (session != null && session.distroId != distro.id) {
+            android.widget.Toast.makeText(
+                context,
+                "Stop ${session.distroName} ${session.type} first",
+                android.widget.Toast.LENGTH_SHORT
+            ).show()
+        } else {
+            distroToLaunch.value = distro
+        }
+    }
+
+    // The section accent colours every surface of this screen.
+    val accent = sectionAccent(AltarisSection.HOME)
+
+    // Bento order: the container that owns the running desktop leads, then the
+    // first PRoot guest, then the rest.
+    val heroDistro = session?.distroId?.let { id -> installedDistros.firstOrNull { it.id == id } }
+        ?: prootInstalled.firstOrNull()
+        ?: installedDistros.firstOrNull()
+    val bentoDistros = installedDistros.filter { it.id != heroDistro?.id }
+
     // Shared entrance clock: sections cascade in on first composition only;
     // rows restored/added later (session start, install finish) appear at rest.
     val entrance = rememberStaggerEntrance()
@@ -279,28 +325,42 @@ fun HomeScreen(
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(
-            start = Quartz.ScreenPad,
-            end = Quartz.ScreenPad,
+            start = Prism.Gutter,
+            end = Prism.Gutter,
             top = 10.dp,
             bottom = 110.dp
         ),
-        verticalArrangement = Arrangement.spacedBy(Quartz.Gap)
+        verticalArrangement = Arrangement.spacedBy(Prism.Stack)
     ) {
         item(key = "title") {
-            QScreenTitle(
+            AltarisTitle(
                 "Home",
-                "Your Linux environments.",
+                "Your Linux environments",
+                accent,
                 Modifier
                     .fillMaxWidth()
                     .staggerIn(0, entrance)
             )
         }
 
+        // Quick actions — the same destinations the old navigation rows offered.
+        item(key = "quick-actions") {
+            QuickActions(
+                accent = accent,
+                shellDistro = heroDistro,
+                onOpenTerminal = onShowTerminal,
+                onOpenShell = { heroDistro?.let { openShell(it) } },
+                onBrowseDistros = onBrowseDistros,
+                modifier = Modifier.staggerIn(1, entrance)
+            )
+        }
+
         // ── Active desktop card (single session, top of the list) ──
         if (session != null) {
             item(key = "active-desktop") {
-                ActiveDesktopCard(
+                ActiveSessionCard(
                     session = session,
+                    accent = accent,
                     onOpen = { DesktopLauncher.reopenDisplay(context) },
                     onStop = {
                         try {
@@ -314,160 +374,116 @@ fun HomeScreen(
                     onLogs = { copyDesktopLog() },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .staggerIn(1, entrance)
+                        .staggerIn(2, entrance)
                 )
             }
         }
 
         if (installedDistros.isEmpty()) {
             item(key = "env-empty") {
-                Column(
+                PrismCard(
+                    accent = accent,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .staggerIn(2, entrance)
+                        .staggerIn(3, entrance)
                 ) {
-                    QSectionHeader("Environments")
-                    Spacer(Modifier.height(6.dp))
-                    QCard {
-                        QEmptyState(
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
                             "No environments installed",
-                            "Install a distro to open shells and desktops."
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
-                        Column(
-                            modifier = Modifier.padding(horizontal = Quartz.CardPad, vertical = 4.dp)
-                        ) {
-                            QPrimaryButton("Browse Distros", onClick = onBrowseDistros)
-                        }
                         Spacer(Modifier.height(4.dp))
+                        Text(
+                            "Install a distro to open shells and desktops.",
+                            fontSize = 12.sp,
+                            lineHeight = 16.sp,
+                            color = altarisMutedText()
+                        )
+                        Spacer(Modifier.height(14.dp))
+                        PrismButton(
+                            text = "Browse Distros",
+                            accent = accent,
+                            icon = Icons.Filled.Layers,
+                            modifier = Modifier.fillMaxWidth(),
+                            onClick = { onBrowseDistros() }
+                        )
                     }
                 }
             }
         } else {
-            if (prootInstalled.isNotEmpty()) {
-                item(key = "proot-title") {
-                    QSectionHeader(
-                        "PRoot · ${prootInstalled.size}",
-                        Modifier
-                            .fillMaxWidth()
-                            .staggerIn(2, entrance)
-                    )
-                }
-                item(key = "proot-group") {
-                    QCard(Modifier.staggerIn(3, entrance)) {
-                        prootInstalled.forEachIndexed { index, distro ->
-                            InstalledEnvRow(
-                                distro = distro,
-                                isChroot = false,
-                                rootAvailable = rootAvailable,
-                                session = session,
-                                desktopUi = desktopUi,
-                                onShell = {
-                                    val needsRoot = distro.isChrootCard()
-                                    if (needsRoot && !rootAvailable) {
-                                        android.widget.Toast.makeText(
-                                            context,
-                                            "Grant superuser to Altaris first",
-                                            android.widget.Toast.LENGTH_SHORT
-                                        ).show()
-                                    } else {
-                                        onOpenTerminal(distro.id, false)
-                                    }
-                                },
-                                onOpenLaunch = {
-                                    if (session != null && session.distroId != distro.id) {
-                                        android.widget.Toast.makeText(
-                                            context,
-                                            "Stop ${session.distroName} ${session.type} first",
-                                            android.widget.Toast.LENGTH_SHORT
-                                        ).show()
-                                    } else {
-                                        distroToLaunch.value = distro
-                                    }
-                                },
-                                onLaunchXfce = { launchDesktopFromRow(distro, isChrootRow = false, kde = false) },
-                                onLaunchKde = { launchDesktopFromRow(distro, isChrootRow = false, kde = true) },
-                                onSettings = { onNavigateToSettings(distro) },
-                                divider = index < prootInstalled.lastIndex
-                            )
-                        }
-                    }
-                }
-            }
-            if (chrootInstalled.isNotEmpty()) {
-                item(key = "chroot-title") {
-                    Column(
+            // ── Bento: one wide hero tile + the smaller tiles ──
+            heroDistro?.let { hero ->
+                item(key = "bento-hero") {
+                    EnvHeroTile(
+                        distro = hero,
+                        accent = accent,
+                        rootAvailable = rootAvailable,
+                        session = session,
+                        desktopUi = desktopUi,
+                        onShell = { openShell(hero) },
+                        onOpenLaunch = { openLaunchSheet(hero) },
+                        onLaunchXfce = {
+                            launchDesktopFromRow(hero, isChrootRow = hero.isChrootCard(), kde = false)
+                        },
+                        onLaunchKde = {
+                            launchDesktopFromRow(hero, isChrootRow = hero.isChrootCard(), kde = true)
+                        },
+                        onSettings = { onNavigateToSettings(hero) },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .staggerIn(4, entrance)
-                    ) {
-                        QSectionHeader("Chroot · ${chrootInstalled.size}")
-                        if (!rootAvailable) {
-                            Text(
-                                "Installed, but no root given to the app. Grant superuser to start these guests.",
-                                color = altarisMutedText(),
-                                fontSize = 11.sp,
-                                modifier = Modifier.padding(start = 4.dp, top = 2.dp)
-                            )
-                        }
-                    }
+                            .staggerIn(3, entrance)
+                    )
                 }
-                item(key = "chroot-group") {
-                    QCard(Modifier.staggerIn(5, entrance)) {
-                        chrootInstalled.forEachIndexed { index, distro ->
-                            InstalledEnvRow(
+            }
+
+            var bentoIndex = 4
+            bentoDistros.chunked(2).forEach { pair ->
+                item(key = "bento-row-${pair.first().id}") {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(Prism.Stack)
+                    ) {
+                        pair.forEach { distro ->
+                            EnvTile(
                                 distro = distro,
-                                isChroot = true,
+                                accent = accent,
                                 rootAvailable = rootAvailable,
                                 session = session,
                                 desktopUi = desktopUi,
-                                onShell = {
-                                    if (!rootAvailable) {
-                                        android.widget.Toast.makeText(
-                                            context,
-                                            "Grant superuser to Altaris first",
-                                            android.widget.Toast.LENGTH_SHORT
-                                        ).show()
-                                    } else {
-                                        onOpenTerminal(distro.id, false)
-                                    }
+                                onShell = { openShell(distro) },
+                                onOpenLaunch = { openLaunchSheet(distro) },
+                                onLaunchXfce = {
+                                    launchDesktopFromRow(distro, isChrootRow = distro.isChrootCard(), kde = false)
                                 },
-                                onOpenLaunch = {
-                                    if (!rootAvailable) {
-                                        android.widget.Toast.makeText(
-                                            context,
-                                            "Grant superuser to Altaris first",
-                                            android.widget.Toast.LENGTH_SHORT
-                                        ).show()
-                                    } else if (session != null && session.distroId != distro.id) {
-                                        android.widget.Toast.makeText(
-                                            context,
-                                            "Stop ${session.distroName} ${session.type} first",
-                                            android.widget.Toast.LENGTH_SHORT
-                                        ).show()
-                                    } else {
-                                        distroToLaunch.value = distro
-                                    }
+                                onLaunchKde = {
+                                    launchDesktopFromRow(distro, isChrootRow = distro.isChrootCard(), kde = true)
                                 },
-                                onLaunchXfce = { launchDesktopFromRow(distro, isChrootRow = true, kde = false) },
-                                onLaunchKde = { launchDesktopFromRow(distro, isChrootRow = true, kde = true) },
                                 onSettings = { onNavigateToSettings(distro) },
-                                divider = index < chrootInstalled.lastIndex
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .staggerIn(bentoIndex, entrance)
                             )
+                            bentoIndex++
+                        }
+                        if (pair.size == 1) {
+                            Spacer(Modifier.weight(1f))
                         }
                     }
                 }
             }
+
             // Per-row distro ids (logs availability still honours the host log file).
             item(key = "env-footnote") {
                 val anyLogs = com.altaris.linux.core.desktop.GuiDesktopLog.hasContent(context)
                 if (anyLogs && session == null) {
-                    TextButton(
-                        onClick = { showDesktopLogs = true },
-                        modifier = Modifier.staggerIn(6, entrance),
-                        colors = ButtonDefaults.textButtonColors(contentColor = altarisMutedText())
-                    ) {
-                        Text("View last desktop log", fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold)
-                    }
+                    PrismChip(
+                        text = "View last desktop log",
+                        accent = accent,
+                        modifier = Modifier.staggerIn(bentoIndex, entrance),
+                        onClick = { showDesktopLogs = true }
+                    )
                 }
             }
         }
@@ -491,7 +507,7 @@ fun HomeScreen(
         ) {
             Surface(
                 modifier = Modifier.fillMaxWidth(0.92f),
-                shape = Quartz.CardShape,
+                shape = RoundedCornerShape(Prism.SheetRadius),
                 color = MaterialTheme.colorScheme.surface,
                 tonalElevation = 6.dp,
                 border = BorderStroke(
@@ -503,21 +519,11 @@ fun HomeScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = Quartz.CardPad + 2.dp),
+                            .padding(horizontal = Prism.Gutter),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        if (distro.iconRes != null) {
-                            Image(
-                                painter = painterResource(id = distro.iconRes),
-                                contentDescription = null,
-                                modifier = Modifier
-                                    .size(34.dp)
-                                    .clip(Quartz.TileShape)
-                            )
-                        } else {
-                            QIconTile(bitmap = null, fallback = Icons.Filled.PlayArrow, size = 34.dp)
-                        }
-                        Spacer(Modifier.width(10.dp))
+                        DistroTileIcon(distro, accent, 38.dp)
+                        Spacer(Modifier.width(12.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 "Start ${distro.name}",
@@ -538,18 +544,20 @@ fun HomeScreen(
                         icon = Icons.Filled.Terminal,
                         label = "Open Shell",
                         subtitle = "User session",
+                        accent = accent,
                         onClick = {
                             onOpenTerminal(distro.id, false)
                             distroToLaunch.value = null
                         }
                     )
 
-                    QDivider(Modifier.padding(horizontal = Quartz.CardPad + 2.dp))
+                    QDivider(Modifier.padding(horizontal = Prism.Gutter))
 
                     LaunchModeAction(
                         icon = Icons.Filled.AdminPanelSettings,
                         label = "Open Root Shell",
                         subtitle = "Privileged session",
+                        accent = accent,
                         onClick = {
                             onOpenTerminal(distro.id, true)
                             distroToLaunch.value = null
@@ -557,11 +565,12 @@ fun HomeScreen(
                     )
 
                     if (llmInstalled && modelInstalled) {
-                        QDivider(Modifier.padding(horizontal = Quartz.CardPad + 2.dp))
+                        QDivider(Modifier.padding(horizontal = Prism.Gutter))
                         LaunchModeAction(
                             icon = Icons.Filled.Psychology,
                             label = "Run Qwen2.5-1.5B",
                             subtitle = "In-app model session",
+                            accent = accent,
                             onClick = {
                                 val scriptManager = ScriptManager(context)
                                 val scriptContent = scriptManager.getScriptContent(
@@ -592,11 +601,12 @@ fun HomeScreen(
                     val isCurrentSessionXfce = session != null && session.distroId == distro.id && session.type == DesktopSession.Type.XFCE4
                     // Only offer what is actually installed (or already running).
                     if (xfceInstalled || isCurrentSessionXfce) {
-                        QDivider(Modifier.padding(horizontal = Quartz.CardPad + 2.dp))
+                        QDivider(Modifier.padding(horizontal = Prism.Gutter))
                         LaunchModeAction(
                             icon = Icons.Filled.DesktopWindows,
                             label = if (isCurrentSessionXfce) "Open XFCE4" else "Launch XFCE4",
                             subtitle = if (isCurrentSessionXfce) "Running on :0" else "Graphical desktop",
+                            accent = accent,
                             onClick = {
                                 if (session != null && session.distroId != distro.id) {
                                     android.widget.Toast.makeText(
@@ -629,11 +639,12 @@ fun HomeScreen(
 
                     val isCurrentSessionKde = session != null && session.distroId == distro.id && session.type == DesktopSession.Type.KDE
                     if (kdeInstalled || isCurrentSessionKde) {
-                        QDivider(Modifier.padding(horizontal = Quartz.CardPad + 2.dp))
+                        QDivider(Modifier.padding(horizontal = Prism.Gutter))
                         LaunchModeAction(
                             icon = Icons.Filled.Widgets,
                             label = if (isCurrentSessionKde) "Open KDE Plasma" else "Launch KDE Plasma",
                             subtitle = if (isCurrentSessionKde) "Running on :0" else "GPU mode picker",
+                            accent = accent,
                             onClick = {
                                 if (session != null && session.distroId != distro.id) {
                                     android.widget.Toast.makeText(
@@ -658,11 +669,12 @@ fun HomeScreen(
                     }
 
                     if (isGuiRunning) {
-                        QDivider(Modifier.padding(horizontal = Quartz.CardPad + 2.dp))
+                        QDivider(Modifier.padding(horizontal = Prism.Gutter))
                         LaunchModeAction(
                             icon = Icons.Filled.Stop,
                             label = if (runningType == "kde") "Stop KDE Plasma" else "Stop XFCE4",
                             subtitle = "End desktop session",
+                            accent = accent,
                             danger = true,
                             onClick = {
                                 DesktopLauncher.stop(context, distro.id)
@@ -696,6 +708,7 @@ fun HomeScreen(
     // ─── Graphical Desktop live logs ───
     if (showDesktopLogs) {
         DesktopLogsDialog(
+            accent = accent,
             logText = if (desktopUi.logText.isNotBlank()) {
                 desktopUi.logText
             } else {
@@ -735,6 +748,7 @@ fun HomeScreen(
             distroToLaunch.value = null
         }
         KdeGpuPickerDialog(
+            accent = accent,
             distro = distro,
             onDismiss = { showKdeGpuPicker.value = null },
             onSelectHardware = { launchKde(null) },
@@ -743,16 +757,136 @@ fun HomeScreen(
     }
 }
 
-// ─── Altaris installed environment row ─────────────────────────────────────────
-// Quartz row: 32 dp tile + name + env-type muted + Shell/XFCE/KDE chips + gear.
-// Row tap opens the launch-mode dialog (shell / root / desktop); Shell chip is a
-// quick Shell open; XFCE/KDE chips launch the desktop directly (KDE via the GPU
-// picker) and hide while this distro owns the active session, so the top
-// active-desktop card stays the single source of Open/Stop.
+// ─── Quick actions ───────────────────────────────────────────────────────────
+// Three squircle tiles: the terminal tab, a shell in the primary container and
+// the distro browser. They call the callbacks the old rows called.
 @Composable
-private fun InstalledEnvRow(
+private fun QuickActions(
+    accent: Color,
+    shellDistro: Distro?,
+    onOpenTerminal: () -> Unit,
+    onOpenShell: () -> Unit,
+    onBrowseDistros: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(Prism.Stack),
+        verticalAlignment = Alignment.Top
+    ) {
+        QuickActionTile(Icons.Filled.Terminal, "Terminal", accent, onOpenTerminal)
+        if (shellDistro != null) {
+            QuickActionTile(Icons.Filled.PlayArrow, "Shell", accent, onOpenShell)
+        }
+        QuickActionTile(Icons.Filled.Layers, "Distros", accent, onBrowseDistros)
+    }
+}
+
+@Composable
+private fun QuickActionTile(
+    icon: ImageVector,
+    label: String,
+    accent: Color,
+    onClick: () -> Unit
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.width(78.dp)
+    ) {
+        PrismIconTile(
+            icon = icon,
+            accent = accent,
+            contentDescription = label,
+            onClick = onClick
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            label,
+            fontSize = 11.sp,
+            color = altarisMutedText(),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+// ─── Active desktop session ──────────────────────────────────────────────────
+// The running desktop owns Open/Stop; the bento below never duplicates it.
+@Composable
+private fun ActiveSessionCard(
+    session: DesktopSession,
+    accent: Color,
+    onOpen: () -> Unit,
+    onStop: () -> Unit,
+    onLogs: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val isRunning = session.phase == DesktopSession.Phase.Running
+    val deName = if (session.type == DesktopSession.Type.KDE) "KDE Plasma" else "XFCE4"
+    val titleText = if (isRunning) {
+        "${session.distroName} desktop is running"
+    } else {
+        "Starting ${session.distroName} desktop…"
+    }
+    val subtitleText = "$deName on :0 · ${if (isRunning) "running" else "starting"}"
+
+    PrismCard(accent = accent, modifier = modifier) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            AccentIconBox(Icons.Filled.DesktopWindows, accent, 42.dp)
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    titleText,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    subtitleText,
+                    fontSize = 12.sp,
+                    color = altarisMutedText(),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            PrismOrb(active = isRunning, accent = accent)
+        }
+        Spacer(Modifier.height(14.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(Prism.Tight)) {
+            PrismButton(
+                text = "Open X11",
+                accent = accent,
+                icon = Icons.Filled.PlayArrow,
+                modifier = Modifier.weight(1f),
+                onClick = onOpen
+            )
+            PrismIconTile(
+                icon = Icons.Filled.ContentCopy,
+                accent = accent,
+                contentDescription = "Copy log",
+                size = 52.dp,
+                onClick = onLogs
+            )
+            PrismIconTile(
+                icon = Icons.Filled.Stop,
+                accent = accent,
+                contentDescription = "Stop desktop",
+                size = 52.dp,
+                onClick = onStop
+            )
+        }
+    }
+}
+
+// ─── Container hero tile ─────────────────────────────────────────────────────
+// The container the user most likely wants: big name, method, and every
+// action the old environment row offered.
+@Composable
+private fun EnvHeroTile(
     distro: Distro,
-    isChroot: Boolean,
+    accent: Color,
     rootAvailable: Boolean,
     session: DesktopSession?,
     desktopUi: DesktopLauncher.UiState,
@@ -761,102 +895,281 @@ private fun InstalledEnvRow(
     onLaunchXfce: () -> Unit,
     onLaunchKde: () -> Unit,
     onSettings: () -> Unit,
-    divider: Boolean = false
+    modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val isChroot = distro.isChrootCard()
+    val (suffix, running) = envStatus(context, distro, isChroot, rootAvailable, desktopUi)
+    val (showXfce, showKde) = envDesktopFlags(context, distro, session)
+
+    PrismCard(accent = accent, modifier = modifier) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(Prism.TileRadius))
+                .clickable(onClick = onOpenLaunch)
+                .heightIn(min = 56.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            DistroTileIcon(distro, accent, 44.dp)
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    distro.name.removeSuffix(" (Rooted)"),
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    (if (isChroot) "Chroot" else "PRoot") + suffix,
+                    fontSize = 12.sp,
+                    color = altarisMutedText(),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            PrismOrb(active = running, accent = accent)
+            Spacer(Modifier.width(4.dp))
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = altarisMutedText(),
+                modifier = Modifier.size(18.dp)
+            )
+        }
+        Spacer(Modifier.height(12.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(Prism.Tight)) {
+            PrismButton(
+                text = "Shell",
+                accent = accent,
+                icon = Icons.Filled.Terminal,
+                modifier = Modifier.weight(1f),
+                onClick = onShell
+            )
+            if (showXfce) {
+                PrismIconTile(
+                    icon = Icons.Filled.DesktopWindows,
+                    accent = accent,
+                    contentDescription = "Launch XFCE4",
+                    size = 52.dp,
+                    onClick = onLaunchXfce
+                )
+            }
+            if (showKde) {
+                PrismIconTile(
+                    icon = Icons.Filled.Widgets,
+                    accent = accent,
+                    contentDescription = "Launch KDE Plasma",
+                    size = 52.dp,
+                    onClick = onLaunchKde
+                )
+            }
+            PrismIconTile(
+                icon = Icons.Filled.Settings,
+                accent = accent,
+                contentDescription = "Distro settings",
+                size = 52.dp,
+                onClick = onSettings
+            )
+        }
+    }
+}
+
+// ─── Container tile ──────────────────────────────────────────────────────────
+// The compact bento tile: name, method and the same actions as the hero.
+@Composable
+private fun EnvTile(
+    distro: Distro,
+    accent: Color,
+    rootAvailable: Boolean,
+    session: DesktopSession?,
+    desktopUi: DesktopLauncher.UiState,
+    onShell: () -> Unit,
+    onOpenLaunch: () -> Unit,
+    onLaunchXfce: () -> Unit,
+    onLaunchKde: () -> Unit,
+    onSettings: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val isChroot = distro.isChrootCard()
+    val (suffix, running) = envStatus(context, distro, isChroot, rootAvailable, desktopUi)
+    val (showXfce, showKde) = envDesktopFlags(context, distro, session)
+
+    PrismCard(accent = accent, modifier = modifier) {
+        Column {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(Prism.TileRadius))
+                    .clickable(onClick = onOpenLaunch)
+                    .heightIn(min = 52.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                DistroTileIcon(distro, accent, 36.dp)
+                Spacer(Modifier.width(10.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        distro.name.removeSuffix(" (Rooted)"),
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        (if (isChroot) "Chroot" else "PRoot") + suffix,
+                        fontSize = 11.sp,
+                        color = altarisMutedText(),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                if (running) {
+                    PrismOrb(active = true, accent = accent)
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(Prism.Tight)) {
+                PrismIconTile(
+                    icon = Icons.Filled.Terminal,
+                    accent = accent,
+                    contentDescription = "Open shell",
+                    onClick = onShell
+                )
+                PrismIconTile(
+                    icon = Icons.Filled.Settings,
+                    accent = accent,
+                    contentDescription = "Distro settings",
+                    onClick = onSettings
+                )
+            }
+            if (showXfce || showKde) {
+                Spacer(Modifier.height(Prism.Tight))
+                Row(horizontalArrangement = Arrangement.spacedBy(Prism.Tight)) {
+                    if (showXfce) {
+                        PrismIconTile(
+                            icon = Icons.Filled.DesktopWindows,
+                            accent = accent,
+                            contentDescription = "Launch XFCE4",
+                            onClick = onLaunchXfce
+                        )
+                    }
+                    if (showKde) {
+                        PrismIconTile(
+                            icon = Icons.Filled.Widgets,
+                            accent = accent,
+                            contentDescription = "Launch KDE Plasma",
+                            onClick = onLaunchKde
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ─── Shared bits ─────────────────────────────────────────────────────────────
+
+/** Status suffix of a container tile: needs root, starting or running. */
+private fun envStatus(
+    context: Context,
+    distro: Distro,
+    isChroot: Boolean,
+    rootAvailable: Boolean,
+    desktopUi: DesktopLauncher.UiState
+): Pair<String, Boolean> {
     val desktopForThis = desktopUi.distroId == null || desktopUi.distroId == distro.id
     val isStarting = desktopForThis && desktopUi.phase == DesktopLauncher.Phase.Starting
     val isRunning = StateManager.isGuiRunning(context, distro.id) ||
         (desktopForThis && desktopUi.phase == DesktopLauncher.Phase.Running)
-    val statusSuffix = when {
+    val suffix = when {
         isChroot && !rootAvailable -> " · needs root"
         isStarting -> " · starting"
         isRunning -> " · running"
         else -> ""
     }
-
-    // Desktop launch chips: only when the component is installed for this distro
-    // and the distro does not already own the active session (the top card owns
-    // open/stop then — no duplicate launch buttons).
-    val desktopActiveForThis = session != null && session.distroId == distro.id
-    val showXfceLaunch = !desktopActiveForThis &&
-        StateManager.isComponentInstalled(context, distro.id, "xfce4_desktop")
-    val showKdeLaunch = !desktopActiveForThis &&
-        StateManager.isComponentInstalled(context, distro.id, "kde_plasma")
-
-    QRow(
-        title = distro.name.removeSuffix(" (Rooted)"),
-        subtitle = (if (isChroot) "Chroot" else "PRoot") + statusSuffix,
-        leading = {
-            if (distro.iconRes != null) {
-                Image(
-                    painter = painterResource(id = distro.iconRes),
-                    contentDescription = null,
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clip(Quartz.TileShape)
-                )
-            } else {
-                QIconTile(bitmap = null, fallback = Icons.Filled.Terminal, size = 32.dp)
-            }
-        },
-        trailing = {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                EnvActionChip("Shell", onClick = onShell, accent = true)
-                if (showXfceLaunch) {
-                    EnvActionChip("XFCE", onClick = onLaunchXfce)
-                }
-                if (showKdeLaunch) {
-                    EnvActionChip("KDE", onClick = onLaunchKde)
-                }
-                IconButton(
-                    onClick = onSettings,
-                    modifier = Modifier.size(30.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Settings,
-                        contentDescription = "Distro settings",
-                        tint = altarisMutedText(),
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
-            }
-        },
-        onClick = onOpenLaunch,
-        divider = divider
-    )
+    return suffix to isRunning
 }
 
-// Compact row-action chip: 10.5 sp label, tonal fill, no glow. Shell uses the
-// theme primary so the single quickest action stays the most prominent one.
+/**
+ * Desktop launch tiles: only when the component is installed for this distro
+ * and the distro does not already own the active session (the active card owns
+ * open/stop then — no duplicate launch buttons).
+ */
+private fun envDesktopFlags(
+    context: Context,
+    distro: Distro,
+    session: DesktopSession?
+): Pair<Boolean, Boolean> {
+    val desktopActiveForThis = session != null && session.distroId == distro.id
+    val xfce = !desktopActiveForThis &&
+        StateManager.isComponentInstalled(context, distro.id, "xfce4_desktop")
+    val kde = !desktopActiveForThis &&
+        StateManager.isComponentInstalled(context, distro.id, "kde_plasma")
+    return xfce to kde
+}
+
+/** A squircle icon plate tinted with the section accent. */
 @Composable
-private fun EnvActionChip(
-    label: String,
-    onClick: () -> Unit,
-    accent: Boolean = false
+private fun AccentIconBox(
+    icon: ImageVector,
+    accent: Color,
+    size: Dp
 ) {
-    val bg = if (accent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
-    val fg = if (accent) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
-    Text(
-        label,
-        fontSize = 10.5.sp,
-        fontWeight = FontWeight.SemiBold,
-        color = fg,
-        maxLines = 1,
+    Box(
         modifier = Modifier
-            .clip(RoundedCornerShape(8.dp))
-            .background(bg)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 9.dp, vertical = 6.dp)
-    )
+            .size(size)
+            .clip(RoundedCornerShape(Prism.TileRadius))
+            .background(accent.copy(alpha = 0.16f)),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = accent,
+            modifier = Modifier.size(size * 0.46f)
+        )
+    }
+}
+
+/** The distro logo (or a shell glyph) on an accent plate. */
+@Composable
+private fun DistroTileIcon(
+    distro: Distro,
+    accent: Color,
+    size: Dp
+) {
+    Box(
+        modifier = Modifier
+            .size(size)
+            .clip(RoundedCornerShape(Prism.TileRadius))
+            .background(accent.copy(alpha = 0.16f)),
+        contentAlignment = Alignment.Center
+    ) {
+        if (distro.iconRes != null) {
+            Image(
+                painter = painterResource(id = distro.iconRes),
+                contentDescription = null,
+                modifier = Modifier.size(size * 0.62f)
+            )
+        } else {
+            Icon(
+                imageVector = Icons.Filled.Terminal,
+                contentDescription = null,
+                tint = accent,
+                modifier = Modifier.size(size * 0.44f)
+            )
+        }
+    }
 }
 
 // ─── Desktop start/stop log dialog (compact) ─────────────────────────────────
 @Composable
 private fun DesktopLogsDialog(
+    accent: Color,
     logText: String,
     phase: DesktopLauncher.Phase,
     onDismiss: () -> Unit,
@@ -887,7 +1200,7 @@ private fun DesktopLogsDialog(
             modifier = Modifier
                 .fillMaxWidth(0.92f)
                 .fillMaxHeight(0.75f),
-            shape = Quartz.CardShape,
+            shape = RoundedCornerShape(Prism.SheetRadius),
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 6.dp,
             border = BorderStroke(
@@ -895,7 +1208,7 @@ private fun DesktopLogsDialog(
                 MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)
             )
         ) {
-            Column(Modifier.padding(Quartz.ScreenPad)) {
+            Column(Modifier.padding(Prism.Gutter)) {
                 Row(
                     Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
@@ -951,10 +1264,13 @@ private fun DesktopLogsDialog(
                     )
                 }
                 Spacer(Modifier.height(10.dp))
-                QPrimaryButton(
-                    "Open X11",
-                    onClick = onOpenX11,
-                    enabled = phase != DesktopLauncher.Phase.Idle
+                PrismButton(
+                    text = "Open X11",
+                    accent = accent,
+                    icon = Icons.Filled.PlayArrow,
+                    enabled = phase != DesktopLauncher.Phase.Idle,
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = onOpenX11
                 )
                 Spacer(Modifier.height(6.dp))
                 OutlinedButton(
@@ -979,53 +1295,51 @@ private fun DesktopLogsDialog(
     }
 }
 
-// ─── Launch mode action row (compact Quartz row) ─────────────────────────────
+// ─── Launch mode action row (compact) ───────────────────────────────────────
 @Composable
 private fun LaunchModeAction(
     icon: ImageVector,
     label: String,
     subtitle: String,
+    accent: Color,
     onClick: () -> Unit,
     danger: Boolean = false
 ) {
-    val accent = if (danger) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
+    val tint = if (danger) MaterialTheme.colorScheme.error else accent
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(horizontal = Quartz.CardPad + 2.dp, vertical = 8.dp),
+            .padding(horizontal = Prism.Gutter, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
             modifier = Modifier
-                .size(30.dp)
-                .clip(Quartz.TileShape)
-                .background(
-                    if (danger) MaterialTheme.colorScheme.error.copy(alpha = 0.12f)
-                    else MaterialTheme.colorScheme.surfaceVariant
-                ),
+                .size(34.dp)
+                .clip(RoundedCornerShape(Prism.TileRadius))
+                .background(tint.copy(alpha = 0.16f)),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = if (danger) MaterialTheme.colorScheme.error else altarisMutedText(),
-                modifier = Modifier.size(16.dp)
+                tint = tint,
+                modifier = Modifier.size(17.dp)
             )
         }
-        Spacer(Modifier.width(10.dp))
+        Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 label,
-                fontSize = Quartz.RowTitleSize,
+                fontSize = 14.5.sp,
                 fontWeight = FontWeight.Medium,
-                color = accent,
+                color = if (danger) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
             Text(
                 subtitle,
-                fontSize = Quartz.RowSubSize,
+                fontSize = 12.sp,
                 color = altarisMutedText(),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -1037,6 +1351,7 @@ private fun LaunchModeAction(
 // ─── KDE GPU Picker Dialog (compact) ─────────────────────────────────────────
 @Composable
 private fun KdeGpuPickerDialog(
+    accent: Color,
     distro: com.altaris.linux.core.data.Distro,
     onDismiss: () -> Unit,
     onSelectHardware: () -> Unit,
@@ -1052,7 +1367,7 @@ private fun KdeGpuPickerDialog(
     ) {
         Surface(
             modifier = Modifier.fillMaxWidth(0.92f),
-            shape = Quartz.CardShape,
+            shape = RoundedCornerShape(Prism.SheetRadius),
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 8.dp,
             border = BorderStroke(
@@ -1064,11 +1379,11 @@ private fun KdeGpuPickerDialog(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = Quartz.CardPad + 2.dp),
+                        .padding(horizontal = Prism.Gutter),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    QIconTile(bitmap = null, fallback = Icons.Filled.Widgets, size = 34.dp)
-                    Spacer(Modifier.width(10.dp))
+                    AccentIconBox(Icons.Filled.Widgets, accent, 38.dp)
+                    Spacer(Modifier.width(12.dp))
                     Column {
                         Text(
                             "KDE Plasma",
@@ -1085,10 +1400,11 @@ private fun KdeGpuPickerDialog(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = Quartz.CardPad + 2.dp),
+                        .padding(horizontal = Prism.Gutter),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     GpuOptionCard(
+                        accent = accent,
                         modifier = Modifier.fillMaxWidth(),
                         title = "Hardware",
                         subtitle = "Installed GPU driver",
@@ -1097,6 +1413,7 @@ private fun KdeGpuPickerDialog(
                         onClick = onSelectHardware
                     )
                     GpuOptionCard(
+                        accent = accent,
                         modifier = Modifier.fillMaxWidth(),
                         title = "Software",
                         subtitle = "LLVMpipe",
@@ -1111,7 +1428,8 @@ private fun KdeGpuPickerDialog(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = Quartz.CardPad + 2.dp),
+                        .padding(horizontal = Prism.Gutter)
+                        .padding(vertical = 4.dp),
                     verticalAlignment = Alignment.Top
                 ) {
                     Icon(
@@ -1154,6 +1472,7 @@ private fun KdeGpuPickerDialog(
 // ─── GPU option row inside the KDE picker dialog ─────────────────────────────
 @Composable
 private fun GpuOptionCard(
+    accent: Color,
     modifier: Modifier = Modifier,
     title: String,
     subtitle: String,
@@ -1161,29 +1480,15 @@ private fun GpuOptionCard(
     badgeText: String?,
     onClick: () -> Unit
 ) {
-    QCard(modifier = modifier) {
+    PrismCard(accent = accent, modifier = modifier) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable(onClick = onClick)
-                .padding(horizontal = Quartz.CardPad, vertical = 8.dp),
+                .clickable(onClick = onClick),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
-                modifier = Modifier
-                    .size(32.dp)
-                    .clip(Quartz.TileShape)
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.DesktopWindows,
-                    contentDescription = null,
-                    tint = altarisMutedText(),
-                    modifier = Modifier.size(17.dp)
-                )
-            }
-            Spacer(Modifier.width(10.dp))
+            AccentIconBox(Icons.Filled.DesktopWindows, accent, 34.dp)
+            Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
@@ -1198,7 +1503,7 @@ private fun GpuOptionCard(
                             badgeText,
                             fontSize = 9.5.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = altarisMutedText(),
                             maxLines = 1,
                             modifier = Modifier
                                 .clip(RoundedCornerShape(6.dp))
@@ -1209,7 +1514,7 @@ private fun GpuOptionCard(
                 }
                 Text(
                     subtitle,
-                    fontSize = Quartz.RowSubSize,
+                    fontSize = 12.sp,
                     color = altarisMutedText(),
                     maxLines = 1
                 )

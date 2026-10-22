@@ -14,19 +14,20 @@ import androidx.compose.ui.unit.dp
 import dev.chrisbanes.haze.HazeState
 
 /**
- * Altaris shell. Kept under the old name so existing callers compile.
- * Midnight grid backdrop, transparent scaffold, floating dock.
+ * The Altaris shell: layered backdrop, transparent scaffold and a floating
+ * dock. The backdrop reacts to touches through [spotlight].
  */
 @Composable
 fun GlassScaffold(
     hazeState: HazeState,
     blurContent: Boolean = true,
+    spotlight: PrismSpotlight? = null,
     topBar: @Composable () -> Unit = {},
     bottomBar: @Composable () -> Unit = {},
     content: @Composable () -> Unit
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
-        AltarisAnimatedBackground()
+        PrismBackdrop(spotlight = spotlight)
         Scaffold(
             containerColor = Color.Transparent,
             topBar = topBar,

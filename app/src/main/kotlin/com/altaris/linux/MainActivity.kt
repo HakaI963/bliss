@@ -29,9 +29,16 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.input.pointer.awaitPointerEventScope
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.filled.Apps
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Layers
+import androidx.compose.material.icons.filled.Terminal
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.foundation.shape.CircleShape
@@ -47,7 +54,12 @@ import androidx.compose.ui.unit.dp
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.rememberPermissionState
 import com.altaris.linux.ui.components.BottomTab
-import com.altaris.linux.ui.components.GlassBottomNavigation
+import com.altaris.linux.ui.components.AltarisCommandBar
+import com.altaris.linux.ui.components.AltarisDock
+import com.altaris.linux.ui.components.CommandPaletteOverlay
+import com.altaris.linux.ui.components.DockDestination
+import com.altaris.linux.ui.components.PaletteAction
+import com.altaris.linux.ui.components.PrismSpotlight
 import com.altaris.linux.ui.components.GlassScaffold
 import com.altaris.linux.ui.components.InstallTaskBar
 import com.altaris.linux.ui.theme.AltarisTheme
@@ -617,6 +629,13 @@ class MainActivity : ComponentActivity() {
                 }
                 var currentTab by remember { mutableStateOf(BottomTab.HOME) }
 
+                // The command palette is the new navigation surface: one
+                // searchable list that jumps to screens and actions.
+                var paletteOpen by remember { mutableStateOf(false) }
+
+                // The backdrop lights up under the finger.
+                val spotlight = remember { PrismSpotlight() }
+
                 // Drain external intent requests (one-shot; request side never
                 // reads tab state back, so no loop can form).
                 LaunchedEffect(Unit) {
@@ -862,114 +881,27 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                // Helper for Top Bar — Altaris wordmark + live signal chip.
+                // The floating command bar: mark, status and the jump button.
                 @Composable
-                fun TopBar(
-                    hazeState: HazeState,
-                    onOpenDisplay: () -> Unit,
+                fun ShellCommandBar(
                     displayLive: Boolean,
                     cloneRunning: Boolean,
-                    onOpenClone: () -> Unit,
+                    onOpenPalette: () -> Unit,
                     onOpenSettings: () -> Unit,
                 ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(MaterialTheme.colorScheme.background.copy(alpha = 0.94f))
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .windowInsetsPadding(WindowInsets.statusBars)
-                                .height(54.dp)
-                                .padding(start = 18.dp, end = 6.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(7.dp)
-                                        .clip(CircleShape)
-                                        .background(MaterialTheme.colorScheme.primary)
-                                )
-                                Spacer(modifier = Modifier.width(9.dp))
-                                Text(
-                                    text = "ALTARIS",
-                                    style = com.altaris.linux.ui.theme.AltarisWordmarkStyle,
-                                    color = MaterialTheme.colorScheme.onBackground
-                                )
-                            }
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Row(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(50))
-                                        .background(
-                                            if (displayLive || cloneRunning) MaterialTheme.colorScheme.primaryContainer
-                                            else MaterialTheme.colorScheme.surfaceVariant
-                                        )
-                                        .border(
-                                            1.dp,
-                                            if (displayLive || cloneRunning) MaterialTheme.colorScheme.primary.copy(alpha = 0.28f)
-                                            else MaterialTheme.colorScheme.outlineVariant,
-                                            RoundedCornerShape(50)
-                                        )
-                                        .clickable(
-                                            enabled = displayLive || cloneRunning,
-                                            onClick = { if (cloneRunning) onOpenClone() else onOpenDisplay() }
-                                        )
-                                        .padding(horizontal = 10.dp, vertical = 5.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(5.dp)
-                                            .clip(CircleShape)
-                                            .background(
-                                                if (displayLive || cloneRunning) MaterialTheme.colorScheme.primary
-                                                else MaterialTheme.colorScheme.outline
-                                            )
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        text = when {
-                                            cloneRunning -> "CLONE"
-                                            displayLive -> "LIVE"
-                                            else -> "READY"
-                                        },
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = if (displayLive || cloneRunning) MaterialTheme.colorScheme.onPrimaryContainer
-                                        else MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                                Spacer(modifier = Modifier.width(2.dp))
-                                IconButton(onClick = onOpenSettings) {
-                                    Icon(
-                                        Icons.Default.Settings,
-                                        contentDescription = "Settings",
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
-                        }
-                        Box(
-                            Modifier
-                                .fillMaxWidth()
-                                .height(1.dp)
-                                .background(
-                                    Brush.horizontalGradient(
-                                        listOf(
-                                            MaterialTheme.colorScheme.primary.copy(alpha = 0.42f),
-                                            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
-                                            androidx.compose.ui.graphics.Color.Transparent,
-                                        )
-                                    )
-                                )
-                        )
-                    }
+                    AltarisCommandBar(
+                        accent = MaterialTheme.colorScheme.primary,
+                        statusLabel = when {
+                            cloneRunning -> "CLONE RUNNING"
+                            displayLive -> "DISPLAY LIVE"
+                            else -> "READY"
+                        },
+                        live = displayLive || cloneRunning,
+                        onOpenPalette = onOpenPalette,
+                        onOpenSettings = onOpenSettings,
+                    )
                 }
-                
+
                 // Show appropriate screen based on state
                 AnimatedContent(
                     targetState = currentScreen,
@@ -1031,6 +963,7 @@ class MainActivity : ComponentActivity() {
 
                             GlassScaffold(
                                 hazeState = hazeState,
+                                spotlight = spotlight,
                                 // No per-tab blur toggle: the haze source must stay
                                 // mounted while the TopBar/dock hazeChild nodes are up
                                 // (see GlassScaffold) — leaving HOME used to unmount it
@@ -1038,14 +971,10 @@ class MainActivity : ComponentActivity() {
                                 topBar = {
                                     if (showChrome) {
                                         Column {
-                                            TopBar(
-                                                hazeState = hazeState,
-                                                onOpenDisplay = {
-                                                    com.altaris.linux.core.desktop.DesktopLauncher.reopenDisplay(this@MainActivity)
-                                                },
+                                            ShellCommandBar(
                                                 displayLive = session != null,
                                                 cloneRunning = activeClone != null,
-                                                onOpenClone = { currentTab = BottomTab.APPS },
+                                                onOpenPalette = { paletteOpen = true },
                                                 onOpenSettings = { currentScreen = Screen.SETTINGS }
                                             )
                                             // Live install strip (all tabs while chrome is
@@ -1077,10 +1006,23 @@ class MainActivity : ComponentActivity() {
                                 },
                                 bottomBar = {
                                     if (showChrome) {
-                                        GlassBottomNavigation(
-                                            selectedTab = currentTab,
-                                            onTabSelected = { currentTab = it },
-                                            hazeState = hazeState
+                                        AltarisDock(
+                                            selected = when (currentTab) {
+                                                BottomTab.DISTROS -> DockDestination.DISTROS
+                                                BottomTab.APPS -> DockDestination.APPS
+                                                BottomTab.TOOLS -> DockDestination.TOOLS
+                                                else -> DockDestination.HOME
+                                            },
+                                            accent = MaterialTheme.colorScheme.primary,
+                                            onSelect = { destination ->
+                                                currentTab = when (destination) {
+                                                    DockDestination.HOME -> BottomTab.HOME
+                                                    DockDestination.DISTROS -> BottomTab.DISTROS
+                                                    DockDestination.APPS -> BottomTab.APPS
+                                                    DockDestination.TOOLS -> BottomTab.TOOLS
+                                                }
+                                            },
+                                            onCommand = { paletteOpen = true },
                                         )
                                     }
                                 }
@@ -1088,6 +1030,17 @@ class MainActivity : ComponentActivity() {
                                 Box(
                                     modifier = Modifier
                                         .fillMaxSize()
+                                        .pointerInput(Unit) {
+                                            awaitPointerEventScope {
+                                                while (true) {
+                                                    val event = awaitPointerEvent()
+                                                    val change = event.changes.firstOrNull { it.pressed }
+                                                    if (change != null) {
+                                                        spotlight.onTouch(change.position)
+                                                    }
+                                                }
+                                            }
+                                        }
                                         // Overlap math. The floating nav is a
                                         // 64dp pill with 16dp top padding inside a
                                         // `navigationBarsPadding()` box, so its top
@@ -1386,6 +1339,75 @@ class MainActivity : ComponentActivity() {
                              }
                         }
                     }
+                }
+
+                // The command palette floats above the whole shell.
+                if (paletteOpen) {
+                    CommandPaletteOverlay(
+                        actions = buildList {
+                            add(
+                                PaletteAction(
+                                    id = "home",
+                                    title = "Home",
+                                    subtitle = "Your Linux environments",
+                                    icon = Icons.Default.Home,
+                                    accent = MaterialTheme.colorScheme.primary,
+                                    onSelect = { currentTab = BottomTab.HOME },
+                                )
+                            )
+                            add(
+                                PaletteAction(
+                                    id = "distros",
+                                    title = "Distros",
+                                    subtitle = "Install and manage containers",
+                                    icon = Icons.Default.Layers,
+                                    accent = MaterialTheme.colorScheme.secondary,
+                                    onSelect = { currentTab = BottomTab.DISTROS },
+                                )
+                            )
+                            add(
+                                PaletteAction(
+                                    id = "apps",
+                                    title = "Apps",
+                                    subtitle = "Clone and run Android apps",
+                                    icon = Icons.Default.Apps,
+                                    accent = MaterialTheme.colorScheme.tertiary,
+                                    onSelect = { currentTab = BottomTab.APPS },
+                                )
+                            )
+                            add(
+                                PaletteAction(
+                                    id = "tools",
+                                    title = "Tools",
+                                    subtitle = "Clone folder, MCP and agent actions",
+                                    icon = Icons.Default.Tune,
+                                    accent = MaterialTheme.colorScheme.primary,
+                                    onSelect = { currentTab = BottomTab.TOOLS },
+                                )
+                            )
+                            add(
+                                PaletteAction(
+                                    id = "terminal",
+                                    title = "Terminal",
+                                    subtitle = "Open a guest shell",
+                                    icon = Icons.Default.Terminal,
+                                    accent = MaterialTheme.colorScheme.secondary,
+                                    onSelect = { currentTab = BottomTab.TERMINAL },
+                                )
+                            )
+                            add(
+                                PaletteAction(
+                                    id = "settings",
+                                    title = "Settings",
+                                    subtitle = "Theme, storage, diagnostics",
+                                    icon = Icons.Default.Settings,
+                                    accent = MaterialTheme.colorScheme.tertiary,
+                                    onSelect = { currentScreen = Screen.SETTINGS },
+                                )
+                            )
+                        },
+                        onDismiss = { paletteOpen = false },
+                    )
                 }
             }
         }

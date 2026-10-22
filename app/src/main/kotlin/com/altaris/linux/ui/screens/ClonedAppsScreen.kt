@@ -44,7 +44,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -106,21 +105,25 @@ import com.altaris.linux.core.a11y.A11yNodes
 import com.altaris.linux.core.clone.HeadlessCloneEngine
 import com.altaris.linux.core.clone.HeadlessCloneEngine.CloneApp
 import com.altaris.linux.core.clone.HeadlessCloneEngine.Quality
-import com.altaris.linux.ui.components.QCard
+import com.altaris.linux.ui.components.AltarisTitle
+import com.altaris.linux.ui.components.PrismButton
+import com.altaris.linux.ui.components.PrismCard
+import com.altaris.linux.ui.components.PrismChip
+import com.altaris.linux.ui.components.PrismIconTile
+import com.altaris.linux.ui.components.PrismOrb
+import com.altaris.linux.ui.components.PrismRow
+import com.altaris.linux.ui.components.PrismSegmented
+import com.altaris.linux.ui.components.PrismSectionLabel
 import com.altaris.linux.ui.components.QDivider
-import com.altaris.linux.ui.components.QEmptyState
 import com.altaris.linux.ui.components.QIconTile
-import com.altaris.linux.ui.components.QPill
-import com.altaris.linux.ui.components.QPrimaryButton
-import com.altaris.linux.ui.components.QRow
-import com.altaris.linux.ui.components.QScreenTitle
-import com.altaris.linux.ui.components.QSectionHeader
-import com.altaris.linux.ui.components.QSecondaryButton
 import com.altaris.linux.ui.components.QTextField
 import com.altaris.linux.ui.components.QToggleRow
 import com.altaris.linux.ui.components.QToolButton
 import com.altaris.linux.ui.components.Quartz
+import com.altaris.linux.ui.theme.AltarisSection
+import com.altaris.linux.ui.theme.Prism
 import com.altaris.linux.ui.theme.altarisMutedText
+import com.altaris.linux.ui.theme.sectionAccent
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -188,6 +191,9 @@ fun ClonedAppsScreen(startOnPreference: Boolean = false) {
     var section by CloneUiState.section
     var groupKey by CloneUiState.groupKey
     var viewing by CloneUiState.viewing
+    // The section accent colours every surface of this screen.
+    val accent = sectionAccent(AltarisSection.APPS)
+    val runningCount = clones.count { it.status == "running" }
     LaunchedEffect(Unit) {
         if (startOnPreference) CloneUiState.section.value = AppsSection.PREFERENCE
     }
@@ -312,24 +318,32 @@ fun ClonedAppsScreen(startOnPreference: Boolean = false) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = Quartz.ScreenPad)
+            .padding(horizontal = Prism.Gutter)
             .padding(top = 10.dp),
     ) {
-        QScreenTitle(
+        AltarisTitle(
             "Apps",
             if (connected) "Private clone display · shell connected"
             else "Run cloned apps on a private virtual display.",
+            accent
         )
-        Spacer(Modifier.height(8.dp))
-        SectionSwitch(
-            selected = section,
-            runningCount = clones.count { it.status == "running" },
-            onSelect = {
+        Spacer(Modifier.height(Prism.Stack))
+        PrismSegmented(
+            options = listOf(
+                "Installed",
+                if (runningCount > 0) "Running $runningCount" else "Running",
+                "Preference"
+            ),
+            selectedIndex = section.ordinal,
+            accent = accent,
+            modifier = Modifier.fillMaxWidth(),
+            onSelect = { index ->
+                val target = AppsSection.entries[index]
                 // Switching between Installed / Running / Preference must
                 // actually show that section. The clone keeps running.
                 if (viewing != null) closeViewer()
-                section = it
-                if (it == AppsSection.INSTALLED) {
+                section = target
+                if (target == AppsSection.INSTALLED) {
                     HeadlessCloneEngine.refreshClones()
                 } else {
                     groupKey = null
@@ -344,7 +358,7 @@ fun ClonedAppsScreen(startOnPreference: Boolean = false) {
             Text(
                 it,
                 fontSize = 11.5.sp,
-                color = MaterialTheme.colorScheme.primary,
+                color = accent,
                 modifier = Modifier.padding(top = 5.dp),
             )
         }
@@ -380,6 +394,7 @@ fun ClonedAppsScreen(startOnPreference: Boolean = false) {
 
             section == AppsSection.RUNNING -> RunningSection(
                 modifier = Modifier.weight(1f),
+                accent = accent,
                 clones = clones.filter { it.status == "running" },
                 connected = connected,
                 onView = ::openViewer,
@@ -387,6 +402,7 @@ fun ClonedAppsScreen(startOnPreference: Boolean = false) {
 
             section == AppsSection.PREFERENCE -> PreferenceSection(
                 modifier = Modifier.weight(1f),
+                accent = accent,
                 shizukuInstalled = shizukuInstalled,
                 shizukuRunning = shizukuRunning,
                 permission = permission,
@@ -425,6 +441,7 @@ fun ClonedAppsScreen(startOnPreference: Boolean = false) {
 
             selectedGroup == null -> InstalledFolders(
                 modifier = Modifier.weight(1f),
+                accent = accent,
                 groups = groups,
                 connected = connected,
                 onOpenGroup = { groupKey = it.key },
@@ -433,6 +450,7 @@ fun ClonedAppsScreen(startOnPreference: Boolean = false) {
 
             else -> CloneFolder(
                 modifier = Modifier.weight(1f),
+                accent = accent,
                 group = selectedGroup,
                 connected = connected,
                 onBack = { groupKey = null },
@@ -445,6 +463,7 @@ fun ClonedAppsScreen(startOnPreference: Boolean = false) {
     customiseClone?.let { clone ->
         CustomiseSheet(
             clone = clone,
+            accent = accent,
             maxFps = maxFps,
             defaultFps = fpsValue,
             onSave = { width, height, fps ->
@@ -461,6 +480,7 @@ fun ClonedAppsScreen(startOnPreference: Boolean = false) {
 
     if (showInstalledPicker) {
         InstalledAppPicker(
+            accent = accent,
             apps = deviceApps,
             onPick = { app ->
                 showInstalledPicker = false
@@ -474,136 +494,88 @@ fun ClonedAppsScreen(startOnPreference: Boolean = false) {
 // ---------------------------------------------------------------- sections
 
 @Composable
-private fun SectionSwitch(
-    selected: AppsSection,
-    runningCount: Int,
-    onSelect: (AppsSection) -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(40.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f))
-            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp))
-            .padding(3.dp),
-        horizontalArrangement = Arrangement.spacedBy(3.dp),
-    ) {
-        SectionTab(
-            label = "Installed", selected = selected == AppsSection.INSTALLED,
-            modifier = Modifier.weight(1f),
-        ) { onSelect(AppsSection.INSTALLED) }
-        SectionTab(
-            label = if (runningCount > 0) "Running $runningCount" else "Running",
-            selected = selected == AppsSection.RUNNING,
-            modifier = Modifier.weight(1f),
-        ) { onSelect(AppsSection.RUNNING) }
-        SectionTab(
-            label = "Preference", selected = selected == AppsSection.PREFERENCE,
-            modifier = Modifier.weight(1f),
-        ) { onSelect(AppsSection.PREFERENCE) }
-    }
-}
-
-@Composable
-private fun SectionTab(
-    label: String,
-    selected: Boolean,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit,
-) {
-    Box(
-        modifier = modifier
-            .fillMaxHeight()
-            .clip(RoundedCornerShape(9.dp))
-            .background(
-                if (selected) MaterialTheme.colorScheme.surface
-                else Color.Transparent
-            )
-            .then(
-                if (selected) Modifier.border(
-                    1.dp,
-                    MaterialTheme.colorScheme.outlineVariant,
-                    RoundedCornerShape(9.dp)
-                ) else Modifier
-            )
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            label,
-            fontSize = 12.5.sp,
-            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
-            color = if (selected) MaterialTheme.colorScheme.primary
-            else MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-}
-
-@Composable
 private fun RunningSection(
     modifier: Modifier,
+    accent: Color,
     clones: List<CloneApp>,
     connected: Boolean,
     onView: (CloneApp) -> Unit,
 ) {
     if (clones.isEmpty()) {
         Box(modifier = modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
-            QCard {
-                QEmptyState(
-                    "Nothing running",
-                    "Open a clone from Installed, or launch one from an agent. Running clones stay here.",
-                )
+            PrismCard(accent = accent) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        "Nothing running",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "Open a clone from Installed, or launch one from an agent. Running clones stay here.",
+                        fontSize = 12.sp,
+                        lineHeight = 16.sp,
+                        color = altarisMutedText()
+                    )
+                }
             }
         }
         return
     }
     LazyColumn(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(Prism.Stack),
         contentPadding = PaddingValues(bottom = 108.dp),
     ) {
-        items(clones, key = { it.packageName }) { clone ->
-            QCard {
-                QRow(
-                    title = clone.label,
-                    subtitle = clone.packageName,
-                    leading = { QIconTile(clone.icon, size = 38.dp) },
-                    trailing = {
-                        Box(
-                            Modifier.size(8.dp).clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.primary)
+        item(key = "running-group") {
+            PrismCard(accent = accent) {
+                clones.forEachIndexed { index, clone ->
+                    PrismRow(
+                        title = clone.label,
+                        subtitle = clone.packageName,
+                        accent = accent,
+                        leading = { QIconTile(clone.icon, size = 36.dp) },
+                        trailing = { PrismOrb(active = true, accent = accent) },
+                        divider = index < clones.lastIndex
+                    )
+                    Text(
+                        cloneMeta(clone),
+                        fontSize = 10.5.sp,
+                        lineHeight = 14.sp,
+                        color = altarisMutedText(),
+                        modifier = Modifier.padding(
+                            start = Prism.Gutter * 2, end = Prism.Gutter, bottom = 6.dp,
+                        ),
+                    )
+                    Row(
+                        modifier = Modifier.padding(
+                            start = Prism.Gutter * 2,
+                            end = Prism.Gutter,
+                            bottom = 10.dp
+                        ),
+                        horizontalArrangement = Arrangement.spacedBy(Prism.Tight),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        PrismButton(
+                            text = "Resume",
+                            accent = accent,
+                            enabled = connected,
+                            icon = Icons.Default.PlayArrow,
+                            modifier = Modifier.weight(1f),
+                            onClick = { onView(clone) }
                         )
-                    },
-                )
-                Text(
-                    cloneMeta(clone),
-                    fontSize = 10.5.sp,
-                    lineHeight = 14.sp,
-                    color = altarisMutedText(),
-                    modifier = Modifier.padding(
-                        start = Quartz.CardPad, end = Quartz.CardPad, bottom = 5.dp,
-                    ),
-                )
-                Row(
-                    modifier = Modifier.padding(
-                        start = Quartz.CardPad, end = Quartz.CardPad, bottom = 8.dp,
-                    ),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    QPrimaryButton(
-                        "Resume",
-                        enabled = connected,
-                        icon = Icons.Default.PlayArrow,
-                    ) { onView(clone) }
-                    QSecondaryButton(
-                        "Stop",
-                        icon = Icons.Default.Stop,
-                    ) { HeadlessCloneEngine.stopClone(clone.packageName) }
-                    QSecondaryButton(
-                        "Logs",
-                        icon = Icons.Default.List,
-                    ) { onView(clone) }
+                        PrismChip(
+                            text = "Stop",
+                            accent = accent,
+                            onClick = { HeadlessCloneEngine.stopClone(clone.packageName) }
+                        )
+                        PrismChip(
+                            text = "Logs",
+                            accent = accent,
+                            onClick = { onView(clone) }
+                        )
+                    }
                 }
             }
         }
@@ -613,6 +585,7 @@ private fun RunningSection(
 @Composable
 private fun PreferenceSection(
     modifier: Modifier,
+    accent: Color,
     shizukuInstalled: Boolean,
     shizukuRunning: Boolean,
     permission: Boolean,
@@ -639,25 +612,12 @@ private fun PreferenceSection(
             .verticalScroll(rememberScrollState())
             .padding(bottom = 108.dp),
     ) {
-        QSectionHeader("Shizuku")
-        QCard {
-            Column(
-                modifier = Modifier.padding(horizontal = Quartz.CardPad, vertical = 10.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
+        PrismSectionLabel("Shizuku", accent)
+        Spacer(Modifier.height(Prism.Tight))
+        PrismCard(accent = accent) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        Modifier
-                            .size(8.dp)
-                            .clip(CircleShape)
-                            .background(
-                                when {
-                                    connected -> MaterialTheme.colorScheme.primary
-                                    shizukuRunning && permission -> MaterialTheme.colorScheme.tertiary
-                                    else -> MaterialTheme.colorScheme.error
-                                }
-                            )
-                    )
+                    PrismOrb(active = connected, accent = accent)
                     Spacer(Modifier.width(9.dp))
                     Text(
                         when {
@@ -671,12 +631,11 @@ private fun PreferenceSection(
                         fontWeight = FontWeight.Medium,
                         modifier = Modifier.weight(1f),
                     )
-                    TextButton(
-                        onClick = onRefresh,
-                        contentPadding = PaddingValues(horizontal = 8.dp),
-                    ) {
-                        Text("Refresh", fontSize = 12.sp)
-                    }
+                    PrismChip(
+                        text = "Refresh",
+                        accent = accent,
+                        onClick = onRefresh
+                    )
                 }
                 Text(
                     "Clone installs, display capture and input run through the Shizuku shell.",
@@ -685,26 +644,50 @@ private fun PreferenceSection(
                     color = altarisMutedText(),
                 )
                 when {
-                    !shizukuInstalled -> QPrimaryButton("Get Shizuku") { onGetShizuku() }
-                    !shizukuRunning -> QPrimaryButton("Open Shizuku") { onOpenShizuku() }
-                    !permission -> QPrimaryButton("Grant permission") { onGrant() }
-                    !connected -> QPrimaryButton("Start shell engine") { onStart() }
+                    !shizukuInstalled -> PrismButton(
+                        text = "Get Shizuku",
+                        accent = accent,
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = { onGetShizuku() }
+                    )
+                    !shizukuRunning -> PrismButton(
+                        text = "Open Shizuku",
+                        accent = accent,
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = { onOpenShizuku() }
+                    )
+                    !permission -> PrismButton(
+                        text = "Grant permission",
+                        accent = accent,
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = { onGrant() }
+                    )
+                    !connected -> PrismButton(
+                        text = "Start shell engine",
+                        accent = accent,
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = { onStart() }
+                    )
                 }
             }
         }
 
-        QSectionHeader("Clone")
-        QCard {
-            QRow(
+        Spacer(Modifier.height(Prism.Stack))
+        PrismSectionLabel("Clone", accent)
+        Spacer(Modifier.height(Prism.Tight))
+        PrismCard(accent = accent) {
+            PrismRow(
                 title = "From APK file",
                 subtitle = "Pick a single .apk stored on this phone",
+                accent = accent,
                 leading = { QIconTile(bitmap = null, fallback = Icons.Default.Android, size = 34.dp) },
                 onClick = { if (connected && !busy) onApk() },
                 divider = true,
             )
-            QRow(
+            PrismRow(
                 title = "From installed app",
                 subtitle = "Copy an app already on this phone",
+                accent = accent,
                 leading = { QIconTile(bitmap = null, fallback = Icons.Default.Android, size = 34.dp) },
                 onClick = { if (connected && !busy) onInstalled() },
             )
@@ -713,17 +696,16 @@ private fun PreferenceSection(
                     "Start the shell engine before creating a clone.",
                     fontSize = 11.5.sp,
                     color = altarisMutedText(),
-                    modifier = Modifier.padding(horizontal = Quartz.CardPad, vertical = 8.dp),
+                    modifier = Modifier.padding(top = 2.dp, bottom = 6.dp),
                 )
             }
         }
 
-        QSectionHeader("Display")
-        QCard {
-            Column(
-                modifier = Modifier.padding(horizontal = Quartz.CardPad, vertical = 10.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
+        Spacer(Modifier.height(Prism.Stack))
+        PrismSectionLabel("Display", accent)
+        Spacer(Modifier.height(Prism.Tight))
+        PrismCard(accent = accent) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         "Frame rate",
@@ -731,7 +713,7 @@ private fun PreferenceSection(
                         fontWeight = FontWeight.Medium,
                         modifier = Modifier.weight(1f),
                     )
-                    Text("$fps fps", fontSize = 12.5.sp, color = MaterialTheme.colorScheme.primary)
+                    Text("$fps fps", fontSize = 12.5.sp, color = accent)
                     Text(" · max $maxFps", fontSize = 11.sp, color = altarisMutedText())
                 }
                 Slider(
@@ -747,9 +729,14 @@ private fun PreferenceSection(
                 )
                 Spacer(Modifier.height(4.dp))
                 Text("Quality", fontSize = 13.5.sp, fontWeight = FontWeight.Medium)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(Prism.Tight)) {
                     Quality.entries.forEach { entry ->
-                        QPill(entry.label, quality == entry) { onQuality(entry) }
+                        PrismChip(
+                            text = entry.label,
+                            accent = accent,
+                            selected = quality == entry,
+                            onClick = { onQuality(entry) }
+                        )
                     }
                 }
                 Text(
@@ -772,6 +759,7 @@ private fun PreferenceSection(
 @Composable
 private fun InstalledFolders(
     modifier: Modifier,
+    accent: Color,
     groups: List<CloneGroup>,
     connected: Boolean,
     onOpenGroup: (CloneGroup) -> Unit,
@@ -779,7 +767,7 @@ private fun InstalledFolders(
 ) {
     LazyColumn(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(Prism.Stack),
         contentPadding = PaddingValues(bottom = 108.dp),
     ) {
         if (groups.isNotEmpty()) {
@@ -788,60 +776,73 @@ private fun InstalledFolders(
                     "Recently used first · package, created and last-opened time",
                     fontSize = 10.sp,
                     color = altarisMutedText(),
-                    modifier = Modifier.padding(start = 4.dp, bottom = 1.dp),
+                    modifier = Modifier.padding(bottom = 1.dp),
                 )
             }
         }
         if (groups.isEmpty()) {
             item {
-                QCard {
-                    QEmptyState(
-                        "No clones yet",
-                        if (connected) "Open Preference to clone an APK or an installed app."
-                        else "Connect Shizuku in Preference to get started.",
-                    )
-                    Box(
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = Quartz.CardPad, vertical = 4.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        QPrimaryButton("Open Preference") { onOpenPreference() }
+                PrismCard(accent = accent) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            "No clones yet",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            if (connected) "Open Preference to clone an APK or an installed app."
+                            else "Connect Shizuku in Preference to get started.",
+                            fontSize = 12.sp,
+                            lineHeight = 16.sp,
+                            color = altarisMutedText()
+                        )
+                        Spacer(Modifier.height(14.dp))
+                        PrismButton(
+                            text = "Open Preference",
+                            accent = accent,
+                            modifier = Modifier.fillMaxWidth(),
+                            onClick = { onOpenPreference() }
+                        )
                     }
-                    Spacer(Modifier.height(8.dp))
                 }
             }
         } else {
-            items(groups, key = { it.key }) { group ->
-                QCard {
-                    QRow(
-                        title = group.label,
-                        subtitle = folderSubtitle(group),
-                        leading = {
-                            QIconTile(
-                                bitmap = group.clones.firstOrNull()?.icon,
-                                fallback = Icons.Default.Android,
-                                size = 38.dp,
-                            )
-                        },
-                        trailing = {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    Icons.Default.Folder,
-                                    contentDescription = null,
-                                    tint = altarisMutedText(),
-                                    modifier = Modifier.size(17.dp),
+            item(key = "folder-group") {
+                PrismCard(accent = accent) {
+                    groups.forEachIndexed { index, group ->
+                        PrismRow(
+                            title = group.label,
+                            subtitle = folderSubtitle(group),
+                            accent = accent,
+                            leading = {
+                                QIconTile(
+                                    bitmap = group.clones.firstOrNull()?.icon,
+                                    fallback = Icons.Default.Android,
+                                    size = 36.dp,
                                 )
-                                Spacer(Modifier.width(6.dp))
-                                Text(
-                                    group.clones.size.toString(),
-                                    fontSize = 12.sp,
-                                    color = altarisMutedText(),
-                                )
-                            }
-                        },
-                        onClick = { onOpenGroup(group) },
-                    )
+                            },
+                            trailing = {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        Icons.Default.Folder,
+                                        contentDescription = null,
+                                        tint = accent,
+                                        modifier = Modifier.size(17.dp),
+                                    )
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(
+                                        group.clones.size.toString(),
+                                        fontSize = 12.sp,
+                                        color = accent,
+                                    )
+                                }
+                            },
+                            onClick = { onOpenGroup(group) },
+                            divider = index < groups.lastIndex
+                        )
+                    }
                 }
             }
         }
@@ -851,6 +852,7 @@ private fun InstalledFolders(
 @Composable
 private fun CloneFolder(
     modifier: Modifier,
+    accent: Color,
     group: CloneGroup,
     connected: Boolean,
     onBack: () -> Unit,
@@ -859,7 +861,7 @@ private fun CloneFolder(
 ) {
     LazyColumn(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(Prism.Stack),
         contentPadding = PaddingValues(bottom = 108.dp),
     ) {
         item {
@@ -869,15 +871,13 @@ private fun CloneFolder(
                     .fillMaxWidth()
                     .padding(vertical = 2.dp),
             ) {
-                IconButton(onClick = onBack, modifier = Modifier.size(36.dp)) {
-                    Icon(
-                        Icons.AutoMirrored.Rounded.ArrowBack,
-                        contentDescription = "Back to Installed",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(20.dp),
-                    )
-                }
-                Spacer(Modifier.width(4.dp))
+                PrismIconTile(
+                    icon = Icons.AutoMirrored.Rounded.ArrowBack,
+                    accent = accent,
+                    contentDescription = "Back to Installed",
+                    onClick = onBack
+                )
+                Spacer(Modifier.width(6.dp))
                 Column(Modifier.weight(1f)) {
                     Text(
                         group.label,
@@ -894,61 +894,66 @@ private fun CloneFolder(
                 }
             }
         }
-        items(group.clones, key = { it.packageName }) { clone ->
-            QCard {
-                QRow(
-                    title = clone.label,
-                    subtitle = clone.packageName,
-                    leading = {
-                        QIconTile(
-                            bitmap = clone.icon,
-                            fallback = Icons.Default.Android,
-                            size = 38.dp,
+        item(key = "clone-group") {
+            PrismCard(accent = accent) {
+                group.clones.forEachIndexed { index, clone ->
+                    PrismRow(
+                        title = clone.label,
+                        subtitle = clone.packageName,
+                        accent = accent,
+                        leading = {
+                            QIconTile(
+                                bitmap = clone.icon,
+                                fallback = Icons.Default.Android,
+                                size = 36.dp,
+                            )
+                        },
+                        trailing = {
+                            if (clone.status == "running") {
+                                PrismOrb(active = true, accent = accent)
+                            }
+                        },
+                        divider = index < group.clones.lastIndex
+                    )
+                    Text(
+                        cloneMeta(clone),
+                        fontSize = 10.5.sp,
+                        lineHeight = 14.sp,
+                        color = altarisMutedText(),
+                        modifier = Modifier.padding(
+                            start = Prism.Gutter * 2, end = Prism.Gutter, bottom = 6.dp,
+                        ),
+                    )
+                    Row(
+                        modifier = Modifier.padding(
+                            start = Prism.Gutter * 2,
+                            end = Prism.Gutter,
+                            bottom = 10.dp,
+                        ),
+                        horizontalArrangement = Arrangement.spacedBy(Prism.Tight),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        PrismButton(
+                            text = if (clone.status == "running") "Resume" else "View",
+                            accent = accent,
+                            enabled = connected,
+                            icon = Icons.Default.PlayArrow,
+                            modifier = Modifier.weight(1f),
+                            onClick = { onView(clone) }
                         )
-                    },
-                    trailing = {
                         if (clone.status == "running") {
-                            Box(
-                                Modifier
-                                    .size(8.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.primary)
+                            PrismChip(
+                                text = "Stop",
+                                accent = accent,
+                                onClick = { HeadlessCloneEngine.stopClone(clone.packageName) }
                             )
                         }
-                    },
-                )
-                Text(
-                    cloneMeta(clone),
-                    fontSize = 10.5.sp,
-                    lineHeight = 14.sp,
-                    color = altarisMutedText(),
-                    modifier = Modifier.padding(
-                        start = Quartz.CardPad, end = Quartz.CardPad, bottom = 5.dp,
-                    ),
-                )
-                Row(
-                    modifier = Modifier.padding(
-                        start = Quartz.CardPad,
-                        end = Quartz.CardPad,
-                        bottom = 8.dp,
-                    ),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    QPrimaryButton(
-                        if (clone.status == "running") "Resume" else "View",
-                        enabled = connected,
-                        icon = Icons.Default.PlayArrow,
-                    ) { onView(clone) }
-                    if (clone.status == "running") {
-                        QSecondaryButton(
-                            "Stop",
-                            icon = Icons.Default.Stop,
-                        ) { HeadlessCloneEngine.stopClone(clone.packageName) }
+                        PrismChip(
+                            text = "Customise",
+                            accent = accent,
+                            onClick = { onCustomise(clone) }
+                        )
                     }
-                    QSecondaryButton(
-                        "Customise",
-                        icon = Icons.Default.Tune,
-                    ) { onCustomise(clone) }
                 }
             }
         }
@@ -1279,6 +1284,7 @@ private fun CloneViewPage(
 
     if (showElements) {
         ElementsSheet(
+            accent = accent,
             displayId = displayId,
             packageName = HeadlessCloneEngine.activeClonePackage.value,
             onClose = { showElements = false },
@@ -1303,6 +1309,7 @@ private data class ElementsSnapshot(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ElementsSheet(
+    accent: Color,
     displayId: Int,
     packageName: String?,
     onClose: () -> Unit,
@@ -1349,12 +1356,11 @@ private fun ElementsSheet(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Elements", fontSize = 18.sp, fontWeight = FontWeight.Medium)
                 Spacer(Modifier.weight(1f))
-                TextButton(
-                    onClick = { refresh() },
-                    contentPadding = PaddingValues(horizontal = 8.dp),
-                ) {
-                    Text("Refresh", fontSize = 12.sp)
-                }
+                PrismChip(
+                    text = "Refresh",
+                    accent = accent,
+                    onClick = { refresh() }
+                )
             }
             Text(
                 "Tap an element to open it in the clone.",
@@ -1363,15 +1369,7 @@ private fun ElementsSheet(
             )
             Spacer(Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    Modifier
-                        .size(8.dp)
-                        .clip(CircleShape)
-                        .background(
-                            if (running) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.error,
-                        )
-                )
+                PrismOrb(active = running, accent = accent)
                 Spacer(Modifier.width(9.dp))
                 Text(
                     status,
@@ -1380,25 +1378,29 @@ private fun ElementsSheet(
                     modifier = Modifier.weight(1f),
                 )
                 if (!running) {
-                    QSecondaryButton("Enable") {
-                        scope.launch {
-                            val result = withContext(Dispatchers.IO) {
-                                A11yBridge.ensureEnabled(context)
-                            }
-                            val obj = runCatching { JSONObject(result) }.getOrNull()
-                            if (obj?.optBoolean("ok", false) == true) {
-                                enableNote = "Accessibility service enabled."
-                                refresh()
-                            } else {
-                                val error = obj?.optString("error").orEmpty()
-                                enableNote = if (error.contains("root", ignoreCase = true)) {
-                                    "Root is unavailable — enable the service from Android settings."
+                    PrismButton(
+                        text = "Enable",
+                        accent = accent,
+                        onClick = {
+                            scope.launch {
+                                val result = withContext(Dispatchers.IO) {
+                                    A11yBridge.ensureEnabled(context)
+                                }
+                                val obj = runCatching { JSONObject(result) }.getOrNull()
+                                if (obj?.optBoolean("ok", false) == true) {
+                                    enableNote = "Accessibility service enabled."
+                                    refresh()
                                 } else {
-                                    error.ifBlank { "The accessibility service could not be enabled." }
+                                    val error = obj?.optString("error").orEmpty()
+                                    enableNote = if (error.contains("root", ignoreCase = true)) {
+                                        "Root is unavailable — enable the service from Android settings."
+                                    } else {
+                                        error.ifBlank { "The accessibility service could not be enabled." }
+                                    }
                                 }
                             }
                         }
-                    }
+                    )
                 }
             }
             (enableNote ?: note)?.let {
@@ -1437,9 +1439,10 @@ private fun ElementsSheet(
 
                 else -> LazyColumn(Modifier.fillMaxWidth()) {
                     itemsIndexed(nodes) { _, node ->
-                        QRow(
+                        PrismRow(
                             title = node.label.ifBlank { node.type },
                             subtitle = elementSubtitle(node),
+                            accent = accent,
                             onClick = {
                                 scope.launch {
                                     var result = withContext(Dispatchers.IO) {
@@ -1669,6 +1672,7 @@ private fun ViewerFrame(
 @Composable
 private fun CustomiseSheet(
     clone: CloneApp,
+    accent: Color,
     maxFps: Int,
     defaultFps: Int,
     onSave: (width: Int, height: Int, fps: Int) -> Unit,
@@ -1745,23 +1749,43 @@ private fun CustomiseSheet(
 
             Text("Resolution", fontSize = 13.5.sp, fontWeight = FontWeight.Medium)
             Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                QPill("Auto", widthText.isBlank() && heightText.isBlank()) {
+                PrismChip(
+                    text = "Auto",
+                    accent = accent,
+                    selected = widthText.isBlank() && heightText.isBlank(),
+                ) {
                     widthText = ""
                     heightText = ""
                     error = null
                 }
-                QPill("720×1280", widthText == "720" && heightText == "1280") {
+                PrismChip(
+                    text = "720×1280",
+                    accent = accent,
+                    selected = widthText == "720" && heightText == "1280",
+                ) {
                     applyPreset(720, 1280)
                 }
-                QPill("1080×1920", widthText == "1080" && heightText == "1920") {
+                PrismChip(
+                    text = "1080×1920",
+                    accent = accent,
+                    selected = widthText == "1080" && heightText == "1920",
+                ) {
                     applyPreset(1080, 1920)
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                QPill("1280×720", widthText == "1280" && heightText == "720") {
+                PrismChip(
+                    text = "1280×720",
+                    accent = accent,
+                    selected = widthText == "1280" && heightText == "720",
+                ) {
                     applyPreset(1280, 720)
                 }
-                QPill("1920×1080", widthText == "1920" && heightText == "1080") {
+                PrismChip(
+                    text = "1920×1080",
+                    accent = accent,
+                    selected = widthText == "1920" && heightText == "1080",
+                ) {
                     applyPreset(1920, 1080)
                 }
             }
@@ -1786,7 +1810,7 @@ private fun CustomiseSheet(
                 Text(
                     if (useDefaultFps) "Default · $defaultFps fps" else "$fps fps",
                     fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.primary,
+                    color = accent,
                 )
             }
             Slider(
@@ -1829,7 +1853,11 @@ private fun CustomiseSheet(
                 }
                 Spacer(Modifier.weight(1f))
                 TextButton(onClick = onClose) { Text("Cancel", fontSize = 12.5.sp) }
-                QPrimaryButton("Save") { save() }
+                PrismButton(
+                    text = "Save",
+                    accent = accent,
+                    onClick = { save() }
+                )
             }
 
             if (confirmingDelete) {
@@ -1870,6 +1898,7 @@ private fun CustomiseSheet(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun InstalledAppPicker(
+    accent: Color,
     apps: List<HeadlessCloneEngine.DeviceApp>,
     onPick: (HeadlessCloneEngine.DeviceApp) -> Unit,
     onClose: () -> Unit,
@@ -1926,9 +1955,10 @@ private fun InstalledAppPicker(
 
                 else -> LazyColumn(Modifier.fillMaxSize()) {
                     items(filtered, key = { it.packageName }) { app ->
-                        QRow(
+                        PrismRow(
                             title = app.label,
                             subtitle = app.packageName,
+                            accent = accent,
                             leading = {
                                 QIconTile(
                                     bitmap = app.icon,
