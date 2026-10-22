@@ -50,7 +50,7 @@ fun rememberStaggerEntrance(): Boolean {
     if (isScreenshotRun()) return false
     var entering by remember { mutableStateOf(true) }
     LaunchedEffect(Unit) {
-        delay(AltarisMotion.StaggerWindowMs)
+        delay(AltarisTimings.StaggerWindowMs)
         entering = false
     }
     return entering
@@ -137,7 +137,7 @@ fun rememberStaggerProgress(index: Int, entrance: Boolean): Float {
     var shown by remember { mutableStateOf(!entrance) }
     LaunchedEffect(entrance, index) {
         if (entrance) {
-            delay(index.coerceIn(0, AltarisMotion.StaggerMaxIndex) * AltarisMotion.StaggerStepMs)
+            delay(index.coerceIn(0, AltarisTimings.StaggerMaxIndex) * AltarisTimings.StaggerStepMs)
             shown = true
         }
     }
@@ -150,7 +150,7 @@ fun rememberStaggerProgress(index: Int, entrance: Boolean): Float {
 
 /**
  * Entrance animation: fade + rise, delayed by [index] steps of
- * [AltarisMotion.StaggerStepMs]. One-shot per composition; see [rememberStaggerEntrance].
+ * [AltarisTimings.StaggerStepMs]. One-shot per composition; see [rememberStaggerEntrance].
  */
 @Composable
 fun Modifier.staggerIn(
