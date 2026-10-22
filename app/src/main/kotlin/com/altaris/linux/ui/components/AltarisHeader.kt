@@ -171,7 +171,7 @@ fun AltarisTitle(
             Text(
                 text = subtitle,
                 fontSize = 11.5.sp,
-                color = inkSoft,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
             )
         }
