@@ -21,13 +21,12 @@ import dev.chrisbanes.haze.HazeState
 fun GlassScaffold(
     hazeState: HazeState,
     blurContent: Boolean = true,
-    spotlight: PrismSpotlight? = null,
     topBar: @Composable () -> Unit = {},
     bottomBar: @Composable () -> Unit = {},
     content: @Composable () -> Unit
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
-        PrismBackdrop(spotlight = spotlight)
+        PrismBackdrop()
         Scaffold(
             containerColor = Color.Transparent,
             topBar = topBar,

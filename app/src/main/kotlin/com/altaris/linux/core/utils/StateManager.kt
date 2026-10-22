@@ -2,6 +2,7 @@ package com.altaris.linux.core.utils
 
 import android.content.Context
 import android.content.pm.PackageManager
+import com.altaris.linux.R
 import com.altaris.linux.ui.theme.AltarisScheme
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -24,52 +25,49 @@ object StateManager {
     // Persisted in "theme_prefs" (the same file ThemeMode uses, see
     // ThemePreferences) so the pick survives restarts. The observable lets
     // AltarisTheme and the Settings picker react with no extra plumbing.
-    private val _themePalette = MutableStateFlow(ThemePalette.SCHEME)
-    val themePalette: StateFlow<ThemePalette> = _themePalette.asStateFlow()
 
-    /**
-     * Read the persisted palette (defaults to SCHEME) and hydrate the flow.
-     */
-    fun getThemePalette(context: Context): ThemePalette {
+    // ── Home artwork ───────────────────────────────────────────────────────
+    // The anime art shown in the home banner. Stored as a drawable name so the
+    // value survives a resource re-order.
+    private val _homeArt = MutableStateFlow(R.drawable.splash_art_catgirl)
+    val homeArt: StateFlow<Int> = _homeArt.asStateFlow()
+
+    fun getHomeArt(context: Context): Int {
         val prefs = context.getSharedPreferences("theme_prefs", Context.MODE_PRIVATE)
-        val paletteName = prefs.getString("theme_palette", ThemePalette.SCHEME.name)
-        val palette = try {
-            ThemePalette.valueOf(paletteName ?: ThemePalette.SCHEME.name)
-        } catch (e: IllegalArgumentException) {
-            ThemePalette.SCHEME
-        }
-        _themePalette.value = palette
-        return palette
+        val name = prefs.getString("home_art", null)
+        val art = name?.let { runCatching { resources.getIdentifier(it, "drawable", packageName) }.getOrNull() }
+            ?: R.drawable.splash_art_catgirl
+        _homeArt.value = art
+        return art
     }
 
-    /**
-     * Persist [palette] and publish it to the flow.
-     */
-    fun setThemePalette(context: Context, palette: ThemePalette) {
+    fun setHomeArt(context: Context, artRes: Int) {
         val prefs = context.getSharedPreferences("theme_prefs", Context.MODE_PRIVATE)
-        prefs.edit().putString("theme_palette", palette.name).apply()
-        android.util.Log.d("StateManager", "Theme palette set to: ${palette.name}")
-        _themePalette.value = palette
+        val name = runCatching { resources.getResourceEntryName(artRes) }.getOrNull()
+        if (name != null) {
+            prefs.edit().putString("home_art", name).apply()
+        }
+        _homeArt.value = artRes
     }
 
     // ── Colour scheme (Altaris identity) ──────────────────────────────────
     // Persisted under the "scheme" key of the same "theme_prefs" file (see
     // ThemePreferences.getScheme/setScheme). The observable lets AltarisTheme
     // and the Settings picker restyle the app with no extra plumbing.
-    private val _scheme = MutableStateFlow(AltarisScheme.IRIDESCENT)
+    private val _scheme = MutableStateFlow(AltarisScheme.GRAPHITE)
     val scheme: StateFlow<AltarisScheme> = _scheme.asStateFlow()
 
     /**
-     * Read the persisted identity (defaults to IRIDESCENT) and hydrate the
+     * Read the persisted identity (defaults to GRAPHITE) and hydrate the
      * flow.
      */
     fun getScheme(context: Context): AltarisScheme {
         val prefs = context.getSharedPreferences("theme_prefs", Context.MODE_PRIVATE)
-        val schemeName = prefs.getString("scheme", AltarisScheme.IRIDESCENT.name)
+        val schemeName = prefs.getString("scheme", AltarisScheme.GRAPHITE.name)
         val scheme = try {
-            AltarisScheme.valueOf(schemeName ?: AltarisScheme.IRIDESCENT.name)
+            AltarisScheme.valueOf(schemeName ?: AltarisScheme.GRAPHITE.name)
         } catch (e: IllegalArgumentException) {
-            AltarisScheme.IRIDESCENT
+            AltarisScheme.GRAPHITE
         }
         _scheme.value = scheme
         return scheme

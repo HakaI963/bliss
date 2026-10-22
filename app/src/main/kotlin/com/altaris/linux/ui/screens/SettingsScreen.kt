@@ -60,8 +60,8 @@ import com.altaris.linux.core.system.PhantomProcessFixer
 import com.altaris.linux.core.system.SharedStorageAccess
 import com.altaris.linux.core.utils.StateManager
 import com.altaris.linux.core.utils.ThemeMode
-import com.altaris.linux.core.utils.ThemePalette
 import com.altaris.linux.ui.components.AltarisTitle
+import com.altaris.linux.ui.components.ArtworkThumb
 import com.altaris.linux.ui.components.PrismCard
 import com.altaris.linux.ui.components.PrismIconTile
 import com.altaris.linux.ui.components.PrismOrb
@@ -117,10 +117,10 @@ fun SettingsScreen(
     val context = LocalContext.current
 
     // Theme palette (persisted via StateManager; applied by AltarisTheme).
-    val themePalette by StateManager.themePalette.collectAsState()
 
     // Colour scheme (persisted via StateManager; applied by AltarisTheme).
     val scheme by StateManager.scheme.collectAsState()
+    val homeArt by StateManager.homeArt.collectAsState()
 
     // The swatches follow the active mode, like the surfaces do.
     val darkMode = when (currentTheme) {
@@ -222,7 +222,6 @@ fun SettingsScreen(
             AltarisScheme.entries.forEachIndexed { index, entry ->
                 SchemeRow(
                     scheme = entry,
-                    dark = darkMode,
                     selected = entry == scheme,
                     accent = accent,
                     onClick = { StateManager.setScheme(context, entry) },
@@ -231,18 +230,33 @@ fun SettingsScreen(
             }
         }
 
-        // Appearance — light/dark mode and accent. Surfaces stay neutral.
+        // Appearance — the theme mode still switches the system bars, the
+        // identity above owns the palette.
         SettingsGroup("Appearance", accent, Modifier.staggerIn(3, entrance)) {
             ThemeModeRow(
                 current = currentTheme,
                 accent = accent,
                 onSelect = { onThemeChanged?.invoke(it) },
             )
-            ThemePaletteRow(
-                current = themePalette,
-                accent = accent,
-                onSelect = { StateManager.setThemePalette(context, it) },
-            )
+        }
+
+        // Home artwork — the anime banner on the home screen.
+        SettingsGroup("Home artwork", accent, Modifier.staggerIn(4, entrance)) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = Prism.Gutter, vertical = 14.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                ArtworkThumbs.forEach { art ->
+                    ArtworkThumb(
+                        artRes = art,
+                        selected = art == homeArt,
+                        onClick = { StateManager.setHomeArt(context, art) },
+                    )
+                }
+            }
         }
 
         // Environment & Host
@@ -407,14 +421,13 @@ private fun SettingsGroup(
 @Composable
 private fun SchemeRow(
     scheme: AltarisScheme,
-    dark: Boolean,
     selected: Boolean,
     accent: Color,
     onClick: () -> Unit,
     divider: Boolean = false,
     modifier: Modifier = Modifier
 ) {
-    val palette = remember(scheme, dark) { AltarisPalettes.of(scheme, dark) }
+    val palette = remember(scheme) { AltarisPalettes.of(scheme) }
     val shape = RoundedCornerShape(12.dp)
     PrismRow(
         title = scheme.label,
@@ -426,7 +439,7 @@ private fun SchemeRow(
                 modifier = Modifier
                     .size(38.dp)
                     .clip(shape)
-                    .background(Brush.linearGradient(palette.heroStops))
+                    .background(palette.panel)
                     .border(1.dp, palette.onSurface.copy(alpha = 0.18f), shape)
             )
         },
@@ -494,38 +507,6 @@ private fun ThemeModeRow(
  * Accent row: four compact choices. Surfaces remain AOSP neutral.
  */
 @Composable
-private fun ThemePaletteRow(
-    current: ThemePalette,
-    accent: Color,
-    onSelect: (ThemePalette) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Column(modifier = modifier.fillMaxWidth()) {
-        PrismRow(
-            title = "Accent color",
-            subtitle = "Scheme follows the selected identity; the others tint primary controls.",
-            accent = accent
-        )
-        Spacer(Modifier.height(Prism.Tight))
-        Row(
-            modifier = Modifier.horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            ThemePalette.entries.forEach { palette ->
-                PalettePill(
-                    label = palette.label,
-                    dotColor = palette.accentColor(),
-                    selected = palette == current,
-                    accent = accent,
-                    onClick = { onSelect(palette) }
-                )
-            }
-        }
-        Spacer(Modifier.height(4.dp))
-    }
-}
-
 @Composable
 private fun PalettePill(
     label: String,

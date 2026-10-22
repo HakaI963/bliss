@@ -37,6 +37,9 @@ object BootstrapInstaller {
     private const val ASSET_NAME = "bootstrap.tar"
     private const val TMP_DIR = ".bootstrap_extract_tmp"
 
+    /** The previous host prefix is moved aside under this name during a promote. */
+    private const val OLD_USR_SUFFIX = "usr.previous"
+
     /** Bump when the extract/rewrite pipeline changes (invalidates old trees). */
     const val EXTRACT_VERSION = 4
 
@@ -92,6 +95,9 @@ object BootstrapInstaller {
             // full re-extract path below re-applies applyPackageToExtractedPrefix.
             return true
         }
+        // The container tree is moved aside before the prefix is replaced; the
+        // failure path puts it back, so a broken extract never loses a guest.
+        var preservedAside: File? = null
         return try {
             val tmpDir = File(ctx.filesDir, TMP_DIR)
             tmpDir.deleteRecursively()
@@ -122,18 +128,44 @@ object BootstrapInstaller {
 
             // Preserve installed proot containers (usr/var/lib/proot-distro).
             val preserved = preserveProotDistro(ctx)
+            preservedAside = preserved
 
-            // Promote tmp → filesDir (replace any partial/corrupt usr tree).
+            // Promote tmp → filesDir. The old tree is moved aside instead of
+            // being deleted, so a failed promotion can be rolled back and the
+            // installed containers never disappear.
             val tmpUsr = File(tmpDir, "usr")
             val dstUsr = File(ctx.filesDir, "usr")
             if (!File(tmpUsr, "lib/libtermux-exec.so").isFile) {
                 throw IllegalStateException("extract missing usr/lib/libtermux-exec.so")
             }
-            if (dstUsr.exists()) dstUsr.deleteRecursively()
-            if (!tmpUsr.renameTo(dstUsr)) {
-                // Same-FS rename should not fail; fall back to copy.
-                tmpUsr.copyRecursively(dstUsr, overwrite = true)
-                tmpUsr.deleteRecursively()
+            val oldUsr = File(ctx.filesDir, "$OLD_USR_SUFFIX")
+            oldUsr.deleteRecursively()
+            val hadOldUsr = dstUsr.exists()
+            if (hadOldUsr && !dstUsr.renameTo(oldUsr)) {
+                // Same-FS rename should not fail; fall back to a copy.
+                dstUsr.copyRecursively(oldUsr, overwrite = true)
+                dstUsr.deleteRecursively()
+            }
+            var promoted = false
+            try {
+                if (!tmpUsr.renameTo(dstUsr)) {
+                    dstUsr.parentFile?.mkdirs()
+                    tmpUsr.copyRecursively(dstUsr, overwrite = true)
+                    tmpUsr.deleteRecursively()
+                }
+                promoted = true
+            } finally {
+                if (!promoted && hadOldUsr) {
+                    // Roll the previous prefix back so the app stays usable.
+                    Log.w(TAG, "promote failed — restoring the previous host prefix")
+                    dstUsr.deleteRecursively()
+                    if (!oldUsr.renameTo(dstUsr)) {
+                        oldUsr.copyRecursively(dstUsr, overwrite = true)
+                        oldUsr.deleteRecursively()
+                    }
+                } else if (promoted) {
+                    oldUsr.deleteRecursively()
+                }
             }
             tmpDir.deleteRecursively()
 
@@ -161,6 +193,17 @@ object BootstrapInstaller {
             onError("Extract failed: ${e.message}")
             clearMarker(ctx)
             File(ctx.filesDir, TMP_DIR).deleteRecursively()
+            preservedAside?.let { aside ->
+                runCatching {
+                    val target = File(ctx.filesDir, "usr/var/lib/proot-distro")
+                    target.parentFile?.mkdirs()
+                    if (!aside.renameTo(target)) {
+                        aside.copyRecursively(target, overwrite = true)
+                        aside.deleteRecursively()
+                    }
+                    Log.i(TAG, "restored proot-distro containers after a failed extract")
+                }.onFailure { Log.w(TAG, "could not restore proot-distro", it) }
+            }
             false
         }
     }

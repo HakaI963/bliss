@@ -71,27 +71,15 @@ enum class AltarisSection {
 }
 
 /**
- * Accent colour of a section, derived from the active identity.
+ * Accent colour of a section.
  *
- * The accents come from the identity's own gradient stops, so every scheme
- * stays coherent while each section still looks different.
+ * Altaris is monochrome: every section shares the identity's action colour,
+ * so the chrome never competes with the terminal or the clone display.
  */
 @Composable
-fun sectionAccent(section: AltarisSection): Color {
-    val palette = LocalAltarisPalette.current
-    val accents = palette.accentStops
-    val hero = palette.heroStops
-    return when (section) {
-        AltarisSection.HOME -> accents.getOrElse(0) { palette.primary }
-        AltarisSection.DISTROS -> accents.getOrElse(1) { palette.secondary }
-        AltarisSection.APPS -> accents.getOrElse(2) { palette.tertiary }
-        AltarisSection.TOOLS -> hero.getOrElse(1) { palette.primary }
-        AltarisSection.TERMINAL -> hero.getOrElse(2) { palette.secondary }
-        AltarisSection.CLONE -> hero.getOrElse(3) { palette.tertiary }
-    }
-}
+fun sectionAccent(section: AltarisSection): Color = LocalAltarisPalette.current.action
 
-/** Gradient stops for a section accent: the accent itself plus a soft fade. */
+/** A neutral ramp for a section accent. */
 @Composable
 fun sectionAccentBrush(section: AltarisSection): List<Color> {
     val accent = sectionAccent(section)

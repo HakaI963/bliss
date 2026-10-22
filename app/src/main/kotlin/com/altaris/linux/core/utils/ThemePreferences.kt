@@ -19,19 +19,6 @@ enum class ThemeMode {
     SYSTEM
 }
 
-/**
- * Accent skins. The active Altaris identity owns the surfaces; an accent only
- * tints the primary controls. [label] is the user-facing name in Settings.
- * The enum keys are persisted, so they are not renamed even when the visible
- * label changes.
- */
-enum class ThemePalette(val label: String) {
-    SCHEME("Scheme"),
-    CARBON("Mint"),
-    SLATE("Glacier"),
-    PLUM("Violet"),
-    SAND("Amber")
-}
 
 class ThemePreferences(context: Context) {
     private val prefs: SharedPreferences = context.getSharedPreferences("theme_prefs", Context.MODE_PRIVATE)
@@ -71,11 +58,11 @@ class ThemePreferences(context: Context) {
      * fall back to the default identity so a downgrade never breaks the UI.
      */
     fun getScheme(): AltarisScheme {
-        val name = prefs.getString("scheme", AltarisScheme.IRIDESCENT.name)
+        val name = prefs.getString("scheme", AltarisScheme.GRAPHITE.name)
         return try {
-            AltarisScheme.valueOf(name ?: AltarisScheme.IRIDESCENT.name)
+            AltarisScheme.valueOf(name ?: AltarisScheme.GRAPHITE.name)
         } catch (e: IllegalArgumentException) {
-            AltarisScheme.IRIDESCENT
+            AltarisScheme.GRAPHITE
         }
     }
 

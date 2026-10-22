@@ -1,13 +1,10 @@
 package com.altaris.linux.ui.components
 
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -15,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -23,29 +21,27 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.altaris.linux.core.install.OnboardingInstallRunner
 import com.altaris.linux.core.utils.InstallationQueueManager
 import com.altaris.linux.core.utils.InstallationState
-import com.altaris.linux.ui.theme.AltarisDanger
-import com.altaris.linux.ui.theme.FrostHairline
-import com.altaris.linux.ui.theme.StatusDot
-import com.altaris.linux.ui.theme.TextMuted
-import com.altaris.linux.ui.theme.TextPrimary
-import com.altaris.linux.ui.theme.TextSecondary
+import com.altaris.linux.ui.theme.Prism
 import kotlinx.coroutines.delay
 
 /**
@@ -55,11 +51,14 @@ import kotlinx.coroutines.delay
  * Observes [InstallationQueueManager.installState], which
  * [com.altaris.linux.core.install.OnboardingInstallRunner] updates on every
  * progress tick — so the bar stays honest while the user browses elsewhere:
- *  - installing → pulsing progress line + phase + percent, tap opens the panel
+ *  - installing → the distro name, the phase, the percentage and a 2 dp
+ *    progress line; the row opens the panel, the quiet action cancels
  *  - cancelled  → "Install cancelled — tap for details", dismissible
  *  - failed     → "Install failed — tap for logs", dismissible
- *  - done       → brief "Installed ✓", then auto-hides
+ *  - done       → brief "Installed", then auto-hides
  *  - idle       → renders nothing (zero height)
+ *
+ * The bar is monochrome: no accent, no pulse, no decoration.
  */
 @Composable
 fun InstallTaskBar(
@@ -98,24 +97,21 @@ fun InstallTaskBar(
         state.isInstalling -> InstallingBar(state = state, onClick = openDetails, modifier = modifier)
         state.cancelledByUser -> TerminalBar(
             label = "Install cancelled — tap for details",
-            dotColor = TextMuted,
-            textColor = TextSecondary,
+            mark = null,
             onClick = openDetails,
             onDismiss = onDismiss,
             modifier = modifier
         )
         state.failed -> TerminalBar(
             label = "Install failed — tap for logs",
-            dotColor = AltarisDanger,
-            textColor = AltarisDanger,
+            mark = MaterialTheme.colorScheme.error,
             onClick = openDetails,
             onDismiss = onDismiss,
             modifier = modifier
         )
         state.done -> TerminalBar(
-            label = "Installed ✓",
-            dotColor = StatusDot,
-            textColor = TextPrimary,
+            label = "Installed",
+            mark = MaterialTheme.colorScheme.onSurface,
             onClick = openDetails,
             onDismiss = onDismiss,
             modifier = modifier
@@ -124,6 +120,7 @@ fun InstallTaskBar(
     }
 }
 
+/** The shell every bar state shares: a flat surface with a hairline below. */
 @Composable
 private fun InstallBarShell(
     onClick: () -> Unit,
@@ -133,7 +130,7 @@ private fun InstallBarShell(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.background.copy(alpha = 0.92f))
+            .background(MaterialTheme.colorScheme.surface)
             .clickable(onClick = onClick)
     ) {
         content()
@@ -141,12 +138,13 @@ private fun InstallBarShell(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(0.5.dp)
-                .background(FrostHairline)
+                .height(1.dp)
+                .background(MaterialTheme.colorScheme.outline)
         )
     }
 }
 
+/** The live state: name, phase, percentage, a thin line and a quiet cancel. */
 @Composable
 private fun InstallingBar(
     state: InstallationState,
@@ -155,15 +153,6 @@ private fun InstallingBar(
 ) {
     val percent = state.overallPercent.coerceIn(0, 100)
     val hasPercent = state.overallPercent in 0..100
-    val pulse by rememberInfiniteTransition(label = "taskBarPulse").animateFloat(
-        initialValue = 0.45f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(900, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "taskBarPulseAlpha"
-    )
     val phaseLine = listOf(state.phaseLabel, state.detail)
         .filter { it.isNotBlank() }
         .joinToString(" — ")
@@ -172,73 +161,60 @@ private fun InstallingBar(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .padding(top = 4.dp, bottom = 8.dp)
+                .padding(horizontal = Prism.Gutter)
+                .padding(top = 6.dp, bottom = 8.dp)
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(7.dp)
-                        .clip(CircleShape)
-                        .background(TextPrimary.copy(alpha = pulse))
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    text = "Installing ${state.currentTaskName}",
-                    color = TextPrimary,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = Prism.TouchTarget),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = state.currentTaskName.ifBlank { "Installing" },
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    if (phaseLine.isNotBlank()) {
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            text = phaseLine,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 11.5.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
                 if (hasPercent) {
-                    Spacer(Modifier.width(8.dp))
+                    Spacer(Modifier.width(Prism.Tight))
                     Text(
                         text = "$percent%",
-                        color = TextPrimary,
-                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontSize = 13.sp,
                         fontWeight = FontWeight.Bold
                     )
                 }
-            }
-            Spacer(Modifier.height(6.dp))
-            // Shimmer track: unknown percent pulses an indeterminate sliver.
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(3.dp)
-                    .clip(RoundedCornerShape(2.dp))
-                    .background(Color.White.copy(alpha = 0.08f))
-            ) {
-                val fraction = if (hasPercent) percent / 100f else 0.25f
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth(fraction.coerceIn(0.05f, 1f))
-                        .fillMaxHeight()
-                        .clip(RoundedCornerShape(2.dp))
-                        .background(TextPrimary.copy(alpha = pulse))
+                Spacer(Modifier.width(Prism.Tight))
+                QuietBarAction(
+                    text = "Cancel",
+                    onClick = { OnboardingInstallRunner.cancelActive() }
                 )
             }
-            if (phaseLine.isNotBlank()) {
-                Spacer(Modifier.height(5.dp))
-                Text(
-                    text = phaseLine,
-                    color = TextSecondary,
-                    fontSize = 11.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
+            TaskProgressLine(progress = if (hasPercent) percent / 100f else 0.3f)
         }
     }
 }
 
+/** The terminal states: one line, a mark and a dismiss control. */
 @Composable
 private fun TerminalBar(
     label: String,
-    dotColor: Color,
-    textColor: Color,
+    mark: Color?,
     onClick: () -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
@@ -247,37 +223,107 @@ private fun TerminalBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 16.dp, end = 4.dp)
-                .height(36.dp),
+                .padding(start = Prism.Gutter, end = 6.dp)
+                .heightIn(min = Prism.TouchTarget),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
-                modifier = Modifier
-                    .size(7.dp)
-                    .clip(CircleShape)
-                    .background(dotColor)
-            )
-            Spacer(Modifier.width(8.dp))
+            if (mark != null) {
+                Box(
+                    modifier = Modifier
+                        .size(6.dp)
+                        .clip(CircleShape)
+                        .background(mark)
+                )
+                Spacer(Modifier.width(Prism.Tight))
+            }
             Text(
                 text = label,
-                color = textColor,
-                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 12.5.sp,
                 fontWeight = FontWeight.Medium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f)
             )
-            IconButton(
-                onClick = onDismiss,
-                modifier = Modifier.size(32.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Close,
-                    contentDescription = "Dismiss install status",
-                    tint = TextMuted,
-                    modifier = Modifier.size(16.dp)
-                )
-            }
+            QuietBarAction(
+                text = "",
+                icon = Icons.Filled.Close,
+                contentDescription = "Dismiss install status",
+                onClick = onDismiss
+            )
+        }
+    }
+}
+
+/** The 2 dp progress line of the strip. */
+@Composable
+private fun TaskProgressLine(
+    progress: Float,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(2.dp)
+            .clip(RoundedCornerShape(1.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(progress.coerceIn(0f, 1f))
+                .fillMaxHeight()
+                .clip(RoundedCornerShape(1.dp))
+                .background(MaterialTheme.colorScheme.onSurface)
+        )
+    }
+}
+
+/**
+ * A quiet control inside the strip: a text action or an icon button. It never
+ * shifts the layout — only its opacity reacts to the press.
+ */
+@Composable
+private fun QuietBarAction(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    icon: ImageVector? = null,
+    contentDescription: String? = null
+) {
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val alpha by animateFloatAsState(
+        targetValue = if (pressed) 0.55f else 1f,
+        label = "barActionPress"
+    )
+    Row(
+        modifier = modifier
+            .heightIn(min = Prism.TouchTarget)
+            .clip(RoundedCornerShape(Prism.ChipRadius))
+            .clickable(
+                interactionSource = interaction,
+                indication = null,
+                onClick = onClick
+            )
+            .graphicsLayer { this.alpha = alpha }
+            .padding(horizontal = 10.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (icon != null) {
+            Icon(
+                imageVector = icon,
+                contentDescription = contentDescription,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(16.dp)
+            )
+        } else {
+            Text(
+                text = text,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1
+            )
         }
     }
 }

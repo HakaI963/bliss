@@ -58,7 +58,6 @@ import com.altaris.linux.ui.components.AltarisDock
 import com.altaris.linux.ui.components.CommandPaletteOverlay
 import com.altaris.linux.ui.components.DockDestination
 import com.altaris.linux.ui.components.PaletteAction
-import com.altaris.linux.ui.components.PrismSpotlight
 import com.altaris.linux.ui.components.GlassScaffold
 import com.altaris.linux.ui.components.InstallTaskBar
 import com.altaris.linux.ui.theme.AltarisTheme
@@ -632,8 +631,6 @@ class MainActivity : ComponentActivity() {
                 // searchable list that jumps to screens and actions.
                 var paletteOpen by remember { mutableStateOf(false) }
 
-                // The backdrop lights up under the finger.
-                val spotlight = remember { PrismSpotlight() }
 
                 // Drain external intent requests (one-shot; request side never
                 // reads tab state back, so no loop can form).
@@ -962,7 +959,6 @@ class MainActivity : ComponentActivity() {
 
                             GlassScaffold(
                                 hazeState = hazeState,
-                                spotlight = spotlight,
                                 // No per-tab blur toggle: the haze source must stay
                                 // mounted while the TopBar/dock hazeChild nodes are up
                                 // (see GlassScaffold) — leaving HOME used to unmount it
@@ -1021,7 +1017,6 @@ class MainActivity : ComponentActivity() {
                                                     DockDestination.TOOLS -> BottomTab.TOOLS
                                                 }
                                             },
-                                            onCommand = { paletteOpen = true },
                                         )
                                     }
                                 }
@@ -1029,17 +1024,6 @@ class MainActivity : ComponentActivity() {
                                 Box(
                                     modifier = Modifier
                                         .fillMaxSize()
-                                        .pointerInput(Unit) {
-                                            awaitPointerEventScope {
-                                                while (true) {
-                                                    val event = awaitPointerEvent()
-                                                    val change = event.changes.firstOrNull { it.pressed }
-                                                    if (change != null) {
-                                                        spotlight.onTouch(change.position)
-                                                    }
-                                                }
-                                            }
-                                        }
                                         // Overlap math. The floating nav is a
                                         // 64dp pill with 16dp top padding inside a
                                         // `navigationBarsPadding()` box, so its top

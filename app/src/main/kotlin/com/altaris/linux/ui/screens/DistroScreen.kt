@@ -19,6 +19,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -48,6 +51,7 @@ import com.altaris.linux.ui.components.PrismButton
 import com.altaris.linux.ui.components.PrismCard
 import com.altaris.linux.ui.components.PrismChip
 import com.altaris.linux.ui.components.PrismRow
+import com.altaris.linux.ui.components.PrismSectionLabel
 import com.altaris.linux.ui.components.PrismSegmented
 import com.altaris.linux.ui.theme.AltarisSection
 import com.altaris.linux.ui.theme.Prism
@@ -287,6 +291,19 @@ fun DistroScreen(
         } else {
             // One PrismCard group holds the whole browse list; every distro is
             // a PrismRow entry inside it.
+            item(key = "distro-label") {
+                PrismSectionLabel(
+                    text = if (selectedCategory == DistroCategory.ALL) {
+                        "All distributions · ${filteredDistros.size}"
+                    } else {
+                        "${selectedCategory.label} · ${filteredDistros.size}"
+                    },
+                    accent = accent,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .staggerIn(1, entrance)
+                )
+            }
             item(key = "distro-group") {
                 PrismCard(
                     accent = accent,
@@ -366,12 +383,35 @@ private fun DistroRow(
             when {
                 distro.comingSoon -> StatusTag("Soon", accent)
                 installed -> StatusTag("Installed", accent, dot = true)
-                else -> Unit
+                else -> InstallAffordance()
             }
         },
         onClick = onClick,
         divider = divider
     )
+}
+
+/** The download entry point of a browse row: a quiet label and a chevron. */
+@Composable
+private fun InstallAffordance() {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        Text(
+            text = "Install",
+            fontSize = 11.5.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1
+        )
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+            modifier = Modifier.size(16.dp)
+        )
+    }
 }
 
 // Tiny status chip (Soon / Installed) used on browse rows.

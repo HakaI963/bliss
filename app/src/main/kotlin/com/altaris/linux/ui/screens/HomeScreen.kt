@@ -87,6 +87,8 @@ import com.altaris.linux.core.root.RootShell
 import com.altaris.linux.core.terminal.TerminalLauncher
 import com.altaris.linux.core.utils.StateManager
 import com.altaris.linux.ui.components.AltarisTitle
+import com.altaris.linux.ui.components.HomeHero
+import com.altaris.linux.ui.components.PrismChip
 import com.altaris.linux.ui.components.PrismButton
 import com.altaris.linux.ui.components.PrismCard
 import com.altaris.linux.ui.components.PrismChip
@@ -310,6 +312,10 @@ fun HomeScreen(
 
     // The section accent colours every surface of this screen.
     val accent = sectionAccent(AltarisSection.HOME)
+    // The banner artwork, changeable in Settings.
+    val context = LocalContext.current
+    val homeArt by StateManager.homeArt.collectAsState()
+    LaunchedEffect(Unit) { StateManager.getHomeArt(context) }
 
     // Bento order: the container that owns the running desktop leads, then the
     // first PRoot guest, then the rest.
@@ -333,13 +339,30 @@ fun HomeScreen(
         verticalArrangement = Arrangement.spacedBy(Prism.Stack)
     ) {
         item(key = "title") {
+            // The banner: the anime artwork next to the wordmark.
+            HomeHero(
+                artRes = homeArt,
+                title = "Altaris",
+                subtitle = "Your Linux environments",
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .staggerIn(0, entrance),
+                trailing = {
+                    PrismChip(
+                        text = "Distros",
+                        accent = accent,
+                        onClick = onBrowseDistros,
+                    )
+                },
+            )
+            Spacer(Modifier.height(Prism.Stack))
             AltarisTitle(
                 "Home",
                 "Your Linux environments",
                 accent,
                 Modifier
                     .fillMaxWidth()
-                    .staggerIn(0, entrance)
+                    .staggerIn(1, entrance)
             )
         }
 

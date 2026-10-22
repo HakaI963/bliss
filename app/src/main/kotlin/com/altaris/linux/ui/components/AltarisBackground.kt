@@ -5,14 +5,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 
 /**
- * Altaris backdrop: the animated AGSL aurora of the active identity.
- *
- * The aurora is a slow sixteen-second loop of three drifting blooms; on
- * devices without AGSL (and inside Paparazzi) it degrades to the same
- * palette painted as a static gradient. The glass surfaces and press
- * feedback provide the depth on top of it.
+ * The app backdrop. Kept as its own entry point so screens can request the
+ * identity's quiet surface without knowing how it is painted.
  */
 @Composable
 fun AltarisAnimatedBackground(modifier: Modifier = Modifier) {
-    AltarisBackdrop(modifier = modifier.fillMaxSize())
+    PrismBackdrop(modifier = modifier.fillMaxSize())
 }

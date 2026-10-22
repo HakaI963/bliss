@@ -1,24 +1,20 @@
 package com.altaris.linux.ui.install
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -28,22 +24,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.RadioButton
-import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -53,16 +41,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.altaris.linux.ui.theme.AltarisBackground
-import com.altaris.linux.ui.theme.FrostHairline
-import com.altaris.linux.ui.theme.FrostSurface
-import com.altaris.linux.ui.theme.StatusDot
-import com.altaris.linux.ui.theme.TextMuted
-import com.altaris.linux.ui.theme.TextPrimary
-import com.altaris.linux.ui.theme.TextSecondary
+import com.altaris.linux.ui.components.PrismButton
+import com.altaris.linux.ui.components.PrismCard
+import com.altaris.linux.ui.theme.AltarisSection
+import com.altaris.linux.ui.theme.Prism
+import com.altaris.linux.ui.theme.sectionAccent
 
 /**
- * Shared install progress UI for onboarding + Distros [InstallConfigScreen].
+ * Shared install progress UI for the Distros wizard.
+ *
+ * Monochrome by design: one card carries the phase, the percentage and a
+ * thin rounded progress line; the console keeps its monospace pane; the
+ * actions are one primary button plus one quiet text button.
  *
  * [onCancel] renders an explicit "Cancel install" action while running — back
  * navigation leaves the install running in the background (task bar takes
@@ -83,7 +73,7 @@ fun InstallProgressPanel(
     onDone: (() -> Unit)? = null,
     onCancel: (() -> Unit)? = null,
     isDone: Boolean = false,
-    /** No measurable percent — animate the bar and hide the frozen number. */
+    /** No measurable percent — the bar shows a quiet unknown sliver. */
     indeterminate: Boolean = false,
     modifier: Modifier = Modifier
 ) {
@@ -94,243 +84,170 @@ fun InstallProgressPanel(
         }
     }
 
-    val colors = MaterialTheme.colorScheme
-    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
-    val pulseAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.4f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1000, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "pulseAlpha"
-    )
+    val accent = sectionAccent(AltarisSection.DISTROS)
+    val scheme = MaterialTheme.colorScheme
 
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(20.dp)
+            .navigationBarsPadding()
+            .padding(horizontal = Prism.Gutter)
+            .padding(top = Prism.Gutter, bottom = Prism.Gutter)
     ) {
-        // Header Section
+        Text(
+            text = when {
+                failed -> "Setup failed"
+                isDone -> "Install complete"
+                else -> "Setting up environment"
+            },
+            fontSize = 24.sp,
+            lineHeight = 29.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = (-0.4).sp,
+            color = scheme.onBackground
+        )
+        Spacer(Modifier.height(5.dp))
+        Text(
+            text = when {
+                failed -> "An error occurred during execution"
+                isDone -> "All base packages and configs are installed"
+                else -> "Downloading rootfs & configuring packages"
+            },
+            fontSize = 13.sp,
+            color = scheme.onSurfaceVariant
+        )
+
+        Spacer(Modifier.height(Prism.Stack))
+
+        // Progress card: phase, percentage and the thin progress line.
+        PrismCard(accent = accent, modifier = Modifier.fillMaxWidth()) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = if (phaseLabel.isNotBlank()) phaseLabel else "Working…",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = scheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                Spacer(Modifier.width(Prism.Tight))
+                Text(
+                    text = if (indeterminate && !failed && !isDone) "—" else "$percent%",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (failed) scheme.error else scheme.onSurface
+                )
+            }
+
+            Spacer(Modifier.height(Prism.Stack))
+
+            ProgressLine(
+                progress = when {
+                    failed -> 1f
+                    isDone -> 1f
+                    indeterminate -> 0.3f
+                    else -> percent / 100f
+                },
+                fill = if (failed) scheme.error else scheme.onSurface
+            )
+
+            if (detail.isNotBlank()) {
+                Spacer(Modifier.height(Prism.Tight))
+                Text(
+                    text = detail,
+                    fontSize = 12.sp,
+                    lineHeight = 17.sp,
+                    color = scheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            if (failed && errorMessage != null) {
+                Spacer(Modifier.height(Prism.Tight))
+                Row(verticalAlignment = Alignment.Top) {
+                    Icon(
+                        imageVector = Icons.Filled.ErrorOutline,
+                        contentDescription = null,
+                        tint = scheme.error,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(Modifier.width(Prism.Tight))
+                    Text(
+                        text = errorMessage,
+                        fontSize = 12.sp,
+                        lineHeight = 17.sp,
+                        color = scheme.error
+                    )
+                }
+            }
+
+            if (isDone) {
+                Spacer(Modifier.height(Prism.Tight))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Filled.CheckCircle,
+                        contentDescription = null,
+                        tint = scheme.onSurface,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(Modifier.width(Prism.Tight))
+                    Text(
+                        text = "The guest is ready to launch.",
+                        fontSize = 12.sp,
+                        color = scheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+
+        Spacer(Modifier.height(Prism.Stack))
+
+        // Console toggle + the live log pane.
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = when {
-                        failed -> "Setup Failed"
-                        isDone -> "Install Complete"
-                        else -> "Setting Up Environment"
-                    },
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = colors.onBackground
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = when {
-                        failed -> "An error occurred during execution"
-                        isDone -> "All base packages and configs are installed"
-                        else -> "Downloading rootfs & configuring packages"
-                    },
-                    fontSize = 13.sp,
-                    color = colors.onBackground.copy(alpha = 0.65f)
-                )
-            }
-
-            // Status Indicator Badge
-            Box(
-                modifier = Modifier
-                    .size(44.dp)
-                    .clip(CircleShape)
-                    .background(
-                        when {
-                            failed -> colors.error.copy(alpha = 0.15f)
-                            isDone -> StatusDot.copy(alpha = 0.15f)
-                            else -> TextPrimary.copy(alpha = 0.10f)
-                        }
-                    )
-                    .border(
-                        1.dp,
-                        when {
-                            failed -> colors.error.copy(alpha = 0.4f)
-                            isDone -> StatusDot.copy(alpha = 0.4f)
-                            else -> FrostHairline
-                        },
-                        CircleShape
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = when {
-                        failed -> Icons.Filled.ErrorOutline
-                        isDone -> Icons.Filled.CheckCircle
-                        else -> Icons.Filled.Refresh
-                    },
-                    contentDescription = null,
-                    tint = when {
-                        failed -> colors.error
-                        isDone -> StatusDot
-                        else -> TextPrimary.copy(alpha = pulseAlpha)
-                    },
-                    modifier = Modifier.size(24.dp)
-                )
-            }
+            Text(
+                text = "Terminal output",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                color = scheme.onSurfaceVariant
+            )
+            QuietAction(
+                text = if (showLog) "Hide console" else "Show console",
+                onClick = onToggleLog
+            )
         }
 
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(Prism.Tight))
 
-        // Progress Glass Card
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(16.dp))
-                .background(colors.surface.copy(alpha = 0.75f))
-                .border(0.75.dp, FrostHairline, RoundedCornerShape(16.dp))
-                .padding(16.dp)
-        ) {
-            Column {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.Bottom
-                ) {
-                    Text(
-                        text = if (phaseLabel.isNotBlank()) phaseLabel else "Working…",
-                        fontWeight = FontWeight.SemiBold,
-                        color = colors.onSurface,
-                        fontSize = 15.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = if (indeterminate && !failed && !isDone) "…" else "$percent%",
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = when {
-                            failed -> colors.error
-                            isDone -> StatusDot
-                            else -> TextPrimary
-                        }
-                    )
-                }
-
-                Spacer(Modifier.height(10.dp))
-
-                // Progress Bar — determinate only when the phase reports real
-                // progress; otherwise animate so the card never reads as stuck.
-                val barColor = when {
-                    failed -> colors.error
-                    isDone -> StatusDot
-                    else -> TextPrimary
-                }
-                val barModifier = Modifier
+        if (showLog) {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
                     .fillMaxWidth()
-                    .height(8.dp)
-                    .clip(RoundedCornerShape(4.dp))
-                if (indeterminate && !failed && !isDone) {
-                    LinearProgressIndicator(
-                        modifier = barModifier,
-                        color = barColor,
-                        trackColor = colors.surfaceVariant.copy(alpha = 0.5f)
+                    .clip(RoundedCornerShape(Prism.TileRadius))
+                    .background(scheme.surfaceVariant)
+                    .border(
+                        width = 1.dp,
+                        color = scheme.outlineVariant,
+                        shape = RoundedCornerShape(Prism.TileRadius)
                     )
-                } else {
-                    LinearProgressIndicator(
-                        progress = { percent / 100f },
-                        modifier = barModifier,
-                        color = barColor,
-                        trackColor = colors.surfaceVariant.copy(alpha = 0.5f)
-                    )
-                }
-
-                if (detail.isNotBlank()) {
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        text = detail,
-                        fontSize = 12.sp,
-                        color = colors.onSurface.copy(alpha = 0.7f),
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-
-                if (failed && errorMessage != null) {
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        text = errorMessage,
-                        color = colors.error,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-            }
-        }
-
-        Spacer(Modifier.height(12.dp))
-
-        // Log Viewer Toggle Row
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Filled.Code,
-                    contentDescription = null,
-                    tint = TextSecondary,
-                    modifier = Modifier.size(16.dp)
-                )
-                Spacer(Modifier.width(6.dp))
-                Text(
-                    text = "Terminal Output",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = colors.onBackground.copy(alpha = 0.85f)
-                )
-            }
-
-            TextButton(
-                onClick = onToggleLog,
-                colors = ButtonDefaults.textButtonColors(contentColor = TextPrimary)
-            ) {
-                Text(
-                    if (showLog) "Hide Console" else "Show Console",
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 13.sp
-                )
-            }
-        }
-
-        // Live Log Terminal Window
-        AnimatedVisibility(
-            visible = showLog,
-            modifier = Modifier.weight(1f)
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-                    .border(0.75.dp, FrostHairline, RoundedCornerShape(14.dp))
                     .padding(12.dp)
                     .verticalScroll(logScroll)
             ) {
                 Text(
                     text = logText.ifBlank { "Initializing installation stream…" },
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 11.sp,
+                    lineHeight = 16.sp,
                     fontFamily = FontFamily.Monospace,
-                    lineHeight = 16.sp
+                    color = scheme.onSurfaceVariant
                 )
             }
-        }
-
-        if (!showLog) {
+        } else {
             Spacer(Modifier.weight(1f))
         }
 
@@ -338,101 +255,110 @@ fun InstallProgressPanel(
         // Only shown when the host screen supports leave-in-background (onCancel
         // wired); onboarding keeps its back-cancels behavior and passes null.
         if (!failed && !isDone && onCancel != null) {
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(Prism.Tight))
             Text(
                 text = "Going back keeps this install running — watch the live " +
                     "install bar at the top of the app.",
                 fontSize = 12.sp,
-                color = colors.onBackground.copy(alpha = 0.6f),
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                lineHeight = 17.sp,
+                color = scheme.onSurfaceVariant,
                 modifier = Modifier.fillMaxWidth()
             )
         }
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(Prism.Stack))
 
-        // Action Buttons
+        // Actions: one primary button plus one quiet text button.
         when {
             failed -> {
-                Button(
-                    onClick = onRetry,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(54.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = TextPrimary,
-                        contentColor = AltarisBackground
-                    ),
-                    shape = CircleShape
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Refresh,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text("Retry Setup", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                }
-
+                PrismButton(
+                    text = "Retry setup",
+                    accent = accent,
+                    icon = Icons.Filled.Refresh,
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = onRetry
+                )
                 if (onBack != null) {
-                    Spacer(Modifier.height(8.dp))
-                    Button(
+                    Spacer(Modifier.height(Prism.Tight))
+                    QuietAction(
+                        text = "Back to configuration",
                         onClick = onBack,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(54.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = FrostSurface,
-                            contentColor = TextPrimary
-                        ),
-                        border = BorderStroke(0.75.dp, FrostHairline),
-                        shape = CircleShape
-                    ) {
-                        Text("Back to Configuration", fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
-                    }
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
             }
 
             isDone && onDone != null -> {
-                Button(
-                    onClick = onDone,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(54.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = TextPrimary,
-                        contentColor = AltarisBackground
-                    ),
-                    shape = CircleShape
-                ) {
-                    Text("Continue", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                }
+                PrismButton(
+                    text = "Continue",
+                    accent = accent,
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = onDone
+                )
             }
 
             !isDone && onCancel != null -> {
-                Button(
+                QuietAction(
+                    text = "Cancel install",
                     onClick = onCancel,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(54.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = FrostSurface,
-                        contentColor = colors.error
-                    ),
-                    border = BorderStroke(0.75.dp, FrostHairline),
-                    shape = CircleShape
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Close,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text("Cancel install", fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
-                }
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
         }
     }
+}
+
+/**
+ * The progress treatment of the app: a thin, rounded, monochrome line with a
+ * quiet track.
+ */
+@Composable
+private fun ProgressLine(
+    progress: Float,
+    modifier: Modifier = Modifier,
+    fill: Color = MaterialTheme.colorScheme.onSurface,
+    track: Color = MaterialTheme.colorScheme.surfaceVariant
+) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(2.dp)
+            .clip(RoundedCornerShape(1.dp))
+            .background(track)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(progress.coerceIn(0f, 1f))
+                .fillMaxHeight()
+                .clip(RoundedCornerShape(1.dp))
+                .background(fill)
+        )
+    }
+}
+
+/** A quiet text button — the secondary action of a screen. */
+@Composable
+private fun QuietAction(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Text(
+        text = text,
+        fontSize = 13.sp,
+        fontWeight = FontWeight.Medium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        maxLines = 1,
+        modifier = modifier
+            .heightIn(min = Prism.TouchTarget)
+            .clip(RoundedCornerShape(Prism.ChipRadius))
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick
+            )
+            .padding(horizontal = 10.dp, vertical = 12.dp)
+    )
 }
 
 /** Shared dark/light theme selectable card for install wizards. */
@@ -444,44 +370,57 @@ fun InstallThemePickRow(
     selected: Boolean,
     onSelect: () -> Unit
 ) {
-    val shape = RoundedCornerShape(14.dp)
-    val colors = MaterialTheme.colorScheme
-    val borderColor = if (selected) TextPrimary else FrostHairline
-
+    val scheme = MaterialTheme.colorScheme
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(shape)
+            .heightIn(min = Prism.TouchTarget)
+            .clip(RoundedCornerShape(Prism.TileRadius))
             .background(
-                if (selected) TextPrimary.copy(alpha = 0.12f)
-                else colors.surface.copy(alpha = 0.75f)
+                if (selected) scheme.onSurface.copy(alpha = 0.10f) else scheme.surface
             )
-            .border(if (selected) 1.5.dp else 1.dp, borderColor, shape)
+            .border(
+                width = if (selected) 1.5.dp else 1.dp,
+                color = if (selected) scheme.onSurface.copy(alpha = 0.55f) else scheme.outlineVariant,
+                shape = RoundedCornerShape(Prism.TileRadius)
+            )
             .clickable(onClick = onSelect)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        RadioButton(
-            selected = selected,
-            onClick = onSelect,
-            colors = RadioButtonDefaults.colors(
-                selectedColor = TextPrimary,
-                unselectedColor = colors.onSurface.copy(alpha = 0.4f)
-            )
-        )
-        Spacer(Modifier.width(8.dp))
-        Column(Modifier.weight(1f)) {
+        Box(
+            modifier = Modifier
+                .size(18.dp)
+                .clip(CircleShape)
+                .background(if (selected) scheme.onSurface else Color.Transparent)
+                .border(
+                    width = 1.dp,
+                    color = if (selected) scheme.onSurface else scheme.outline,
+                    shape = CircleShape
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            if (selected) {
+                Icon(
+                    imageVector = Icons.Filled.CheckCircle,
+                    contentDescription = null,
+                    tint = scheme.surface,
+                    modifier = Modifier.size(12.dp)
+                )
+            }
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = title,
-                fontWeight = FontWeight.Bold,
-                color = colors.onSurface,
-                fontSize = 15.sp
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 15.sp,
+                color = scheme.onSurface
             )
-            Spacer(Modifier.height(2.dp))
             Text(
                 text = desc,
                 fontSize = 12.sp,
-                color = colors.onSurface.copy(alpha = 0.65f)
+                color = scheme.onSurfaceVariant
             )
         }
     }

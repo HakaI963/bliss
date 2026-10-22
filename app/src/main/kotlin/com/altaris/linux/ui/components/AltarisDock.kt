@@ -8,7 +8,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -21,13 +20,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Android
 import androidx.compose.material.icons.filled.Apps
-import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.Android
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Layers
+import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.Tune
@@ -43,15 +41,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -69,15 +63,11 @@ enum class BottomTab(val title: String, val icon: ImageVector) {
     APPS("Apps", Icons.Default.Android),
     TOOLS("Tools", Icons.Default.Build),
     TERMINAL("Terminal", Icons.Default.Terminal),
-    SETTINGS("Settings", Icons.Default.Settings)
+    SETTINGS("Settings", Icons.Default.Settings),
 }
 
 /**
- * The Altaris dock.
- *
- * Four destinations and one raised command button in the middle. The active
- * destination is marked by a pill that slides between the items, and pressing
- * an item nudges its neighbours aside, so the whole dock reacts.
+ * The destinations of the dock.
  */
 enum class DockDestination(val title: String, val icon: ImageVector) {
     HOME("Home", Icons.Default.Home),
@@ -86,131 +76,86 @@ enum class DockDestination(val title: String, val icon: ImageVector) {
     TOOLS("Tools", Icons.Default.Tune),
 }
 
-private data class DockSlot(
-    val destination: DockDestination?,
-    val isCommand: Boolean = false,
-)
-
 private val DockSlots = listOf(
-    DockSlot(DockDestination.HOME),
-    DockSlot(DockDestination.DISTROS),
-    DockSlot(null, isCommand = true),
-    DockSlot(DockDestination.APPS),
-    DockSlot(DockDestination.TOOLS),
+    DockDestination.HOME,
+    DockDestination.DISTROS,
+    DockDestination.APPS,
+    DockDestination.TOOLS,
 )
 
+/**
+ * The Altaris dock.
+ *
+ * A flat capsule with a hairline border, four destinations and one active
+ * marker that slides between them. Pressing an item nudges its neighbours
+ * aside, so the dock reacts as one object.
+ */
 @Composable
 fun AltarisDock(
     selected: DockDestination,
-    accent: Color,
     modifier: Modifier = Modifier,
     onSelect: (DockDestination) -> Unit,
-    onCommand: () -> Unit,
 ) {
-    val haptics = LocalHapticFeedback.current
+    val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
     val shape = RoundedCornerShape(Prism.DockRadius)
     var rowWidth by remember { mutableIntStateOf(0) }
     var pressedIndex by remember { mutableStateOf(-1) }
     val slotWidth = if (rowWidth > 0) rowWidth / DockSlots.size else 0
-    val activeIndex = DockSlots.indexOfFirst { it.destination == selected }
+    val activeIndex = DockSlots.indexOfFirst { it == selected }
     val thumbOffset by animateFloatAsState(
         targetValue = (activeIndex.coerceAtLeast(0) * slotWidth).toFloat(),
         animationSpec = spring(dampingRatio = 0.72f, stiffness = 460f),
         label = "dockThumb",
     )
-    val commandActive by animateFloatAsState(
-        targetValue = if (pressedIndex == 2) 1f else 0f,
-        animationSpec = AltarisMotion.effects,
-        label = "commandPress",
-    )
+    val scheme = MaterialTheme.colorScheme
 
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(Prism.DockHeight + 14.dp),
+            .height(Prism.DockHeight),
         contentAlignment = Alignment.BottomCenter,
     ) {
-        // The sliding active pill, drawn under the items.
+        // The sliding active marker, drawn under the items.
         if (slotWidth > 0 && activeIndex >= 0) {
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
-                    .offset { IntOffset(thumbOffset.toInt(), (-2).dp.roundToPx()) }
-                    .size(width = slotWidth.dp, height = (Prism.DockHeight - 18.dp))
-                    .padding(horizontal = 8.dp)
+                    .offset { IntOffset(thumbOffset.toInt(), 0) }
+                    .size(width = slotWidth.dp, height = (Prism.DockHeight - 16.dp))
+                    .padding(horizontal = 10.dp)
                     .clip(RoundedCornerShape(Prism.DockRadius))
-                    .background(
-                        Brush.verticalGradient(
-                            listOf(accent.copy(alpha = 0.26f), accent.copy(alpha = 0.08f))
-                        )
-                    )
+                    .background(scheme.onSurface.copy(alpha = 0.10f))
             )
         }
-        // The dock body: a glass capsule with a gradient hairline.
+
+        // The dock body: a flat capsule with a hairline border.
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .shadow(
-                    elevation = 20.dp,
-                    shape = shape,
-                    clip = false,
-                    ambientColor = accent.copy(alpha = 0.30f),
-                    spotColor = accent.copy(alpha = 0.30f),
-                )
                 .clip(shape)
-                .background(
-                    Brush.verticalGradient(
-                        listOf(
-                            MaterialTheme.colorScheme.surface.copy(alpha = 0.97f),
-                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.92f),
-                        )
-                    )
-                )
-                .border(
-                    width = 1.dp,
-                    brush = Brush.horizontalGradient(
-                        listOf(
-                            accent.copy(alpha = 0.34f),
-                            Color.White.copy(alpha = 0.10f),
-                            accent.copy(alpha = 0.18f),
-                        )
-                    ),
-                    shape = shape,
-                )
+                .background(scheme.surface)
+                .border(1.dp, scheme.outline, shape)
                 .padding(horizontal = 6.dp, vertical = 8.dp)
                 .onSizeChanged { rowWidth = it.width },
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            DockSlots.forEachIndexed { index, slot ->
-                if (slot.isCommand) {
-                    CommandButton(
-                        accent = accent,
-                        pressed = pressedIndex == index,
-                        onClick = {
-                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            onCommand()
-                        },
-                        modifier = Modifier.weight(1f),
-                    )
-                } else {
-                    val destination = slot.destination ?: return@forEachIndexed
-                    DockItem(
-                        destination = destination,
-                        selected = destination == selected,
-                        accent = accent,
-                        pressed = pressedIndex == index,
-                        nudge = neighbourNudge(index, pressedIndex),
-                        onPressChange = { active -> pressedIndex = if (active) index else -1 },
-                        onClick = {
-                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            onSelect(destination)
-                        },
-                        modifier = Modifier.weight(1f),
-                    )
-                }
+            DockSlots.forEachIndexed { index, destination ->
+                DockItem(
+                    destination = destination,
+                    selected = destination == selected,
+                    pressed = pressedIndex == index,
+                    nudge = neighbourNudge(index, pressedIndex),
+                    onPressChange = { active -> pressedIndex = if (active) index else -1 },
+                    onClick = {
+                        haptics.performHapticFeedback(
+                            androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove
+                        )
+                        onSelect(destination)
+                    },
+                    modifier = Modifier.weight(1f),
+                )
             }
         }
-
     }
 }
 
@@ -226,7 +171,6 @@ private fun neighbourNudge(index: Int, pressedIndex: Int): Float {
 private fun DockItem(
     destination: DockDestination,
     selected: Boolean,
-    accent: Color,
     pressed: Boolean,
     nudge: Float,
     onPressChange: (Boolean) -> Unit,
@@ -236,7 +180,7 @@ private fun DockItem(
     val interaction = remember { MutableInteractionSource() }
     val isPressed by interaction.collectIsPressedAsState()
     val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.9f else if (selected) 1.06f else 1f,
+        targetValue = if (isPressed) 0.9f else if (selected) 1.04f else 1f,
         animationSpec = AltarisMotion.effects,
         label = "dockItemScale",
     )
@@ -246,10 +190,11 @@ private fun DockItem(
         label = "dockItemNudge",
     )
     val lift by animateFloatAsState(
-        targetValue = if (selected) -3f else 0f,
+        targetValue = if (selected) -2f else 0f,
         animationSpec = AltarisMotion.spatial,
         label = "dockItemLift",
     )
+    val scheme = MaterialTheme.colorScheme
     Column(
         modifier = modifier
             .graphicsLayer {
@@ -274,13 +219,13 @@ private fun DockItem(
             }
             .padding(vertical = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
+        verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
     ) {
         Icon(
             imageVector = destination.icon,
             contentDescription = destination.title,
-            tint = if (selected) accent else MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(21.dp),
+            tint = if (selected) scheme.onSurface else scheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp),
         )
         Spacer(Modifier.height(3.dp))
         Text(
@@ -288,72 +233,8 @@ private fun DockItem(
             fontSize = 9.5.sp,
             letterSpacing = 0.2.sp,
             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-            color = if (selected) accent else MaterialTheme.colorScheme.onSurfaceVariant,
+            color = if (selected) scheme.onSurface else scheme.onSurfaceVariant,
             maxLines = 1,
         )
     }
 }
-
-/** The raised command button in the middle of the dock. */
-@Composable
-private fun CommandButton(
-    accent: Color,
-    pressed: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val interaction = remember { MutableInteractionSource() }
-    val isPressed by interaction.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.9f else 1f,
-        animationSpec = AltarisMotion.effects,
-        label = "commandScale",
-    )
-    val glow by animateFloatAsState(
-        targetValue = if (isPressed) 1f else 0.35f,
-        animationSpec = AltarisMotion.effects,
-        label = "commandGlow",
-    )
-    Box(
-        modifier = modifier
-            .offset(y = (-9).dp)
-            .size(Prism.CommandSize)
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-            }
-            .shadow(
-                elevation = 10.dp + 12.dp * glow,
-                shape = RoundedCornerShape(Prism.TileRadius),
-                clip = false,
-                ambientColor = accent.copy(alpha = 0.55f),
-                spotColor = accent.copy(alpha = 0.55f),
-            )
-            .clip(RoundedCornerShape(Prism.TileRadius))
-            .background(
-                Brush.linearGradient(
-                    listOf(accent, accent.copy(alpha = 0.62f))
-                )
-            )
-            .border(
-                width = 1.dp,
-                color = Color.White.copy(alpha = 0.40f),
-                shape = RoundedCornerShape(Prism.TileRadius),
-            )
-            .clickable(
-                interactionSource = interaction,
-                indication = null,
-                onClick = onClick,
-            ),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            imageVector = Icons.Default.Bolt,
-            contentDescription = "Command palette",
-            tint = Color.White,
-            modifier = Modifier.size(24.dp),
-        )
-    }
-}
-
-/** Reports the pressed state of a dock item to the parent. */

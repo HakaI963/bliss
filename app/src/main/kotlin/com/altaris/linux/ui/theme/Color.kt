@@ -8,38 +8,37 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
-import com.altaris.linux.core.utils.ThemePalette
 
 // ── Altaris palette ─────────────────────────────────────────────────────────
 // Observable top-level tokens keep legacy Frost/Quartz call sites in sync with
 // the active identity. New code should use MaterialTheme.colorScheme directly.
 
-var AltarisBackground by mutableStateOf(Color(0xFF0E0F13))
+var AltarisBackground by mutableStateOf(Color(0xFF0D0D0D))
     internal set
-var AltarisSurface by mutableStateOf(Color(0xFF191B22))
+var AltarisSurface by mutableStateOf(Color(0xFF111111))
     internal set
-var AltarisCard by mutableStateOf(Color(0xFF23262F))
+var AltarisCard by mutableStateOf(Color(0xFF171717))
     internal set
-var FrostSurface by mutableStateOf(Color(0xFF191B22))
+var FrostSurface by mutableStateOf(Color(0xFF111111))
     internal set
-var FrostSurfaceElevated by mutableStateOf(Color(0xFF23262F))
+var FrostSurfaceElevated by mutableStateOf(Color(0xFF171717))
     internal set
-var FrostHairline by mutableStateOf(Color(0xFF22252C))
+var FrostHairline by mutableStateOf(Color(0xFF292929))
     internal set
 var FrostTopSheen by mutableStateOf(Color.White.copy(alpha = 0.26f))
     internal set
 
-var TextPrimary by mutableStateOf(Color(0xFFFAFAFF))
+var TextPrimary by mutableStateOf(Color(0xFFF5F5F5))
     internal set
-var TextSecondary by mutableStateOf(Color(0xFFA9A9B8))
+var TextSecondary by mutableStateOf(Color(0xFF929292))
     internal set
 var TextMuted by mutableStateOf(Color(0xFF2E313C))
     internal set
-var PrimaryAction by mutableStateOf(Color(0xFFE9E7FF))
+var PrimaryAction by mutableStateOf(Color(0xFFF5F5F5))
     internal set
-var OnPrimaryAction by mutableStateOf(Color(0xFF16141F))
+var OnPrimaryAction by mutableStateOf(Color(0xFF111111))
     internal set
-var StatusDot by mutableStateOf(Color(0xFFE9E7FF))
+var StatusDot by mutableStateOf(Color(0xFFF5F5F5))
     internal set
 var AltarisDanger by mutableStateOf(Color(0xFFFF8A80))
     internal set
@@ -47,39 +46,15 @@ var AltarisDangerContainer by mutableStateOf(Color(0xFF4A1512))
     internal set
 
 // Frost switch tokens, kept for the existing switch call sites.
-var AltarisSwitchCheckedTrack by mutableStateOf(Color(0xFFE9E7FF))
+var AltarisSwitchCheckedTrack by mutableStateOf(Color(0xFFF5F5F5))
     internal set
-var AltarisSwitchCheckedThumb by mutableStateOf(Color(0xFF16141F))
+var AltarisSwitchCheckedThumb by mutableStateOf(Color(0xFF111111))
     internal set
-var AltarisSwitchUncheckedTrack by mutableStateOf(Color(0xFF23262F))
+var AltarisSwitchUncheckedTrack by mutableStateOf(Color(0xFF171717))
     internal set
 var AltarisSwitchUncheckedThumb by mutableStateOf(Color(0xFF2E313C))
     internal set
 var AltarisSwitchUncheckedBorder by mutableStateOf(Color(0xFF2E313C))
-    internal set
-
-/**
- * Gradient stops of the active identity. Custom-painted surfaces (hero
- * panels, the aurora backdrop) read these instead of hard-coding colours.
- */
-var HeroGradientStops by mutableStateOf(
-    listOf(
-        Color(0xFFFFD6F5),
-        Color(0xFFD9C8FF),
-        Color(0xFFBFE9FF),
-        Color(0xFFC9FFE6),
-    )
-)
-    internal set
-
-/** Tight accent gradient (three stops) used by primary actions. */
-var AccentGradientStops by mutableStateOf(
-    listOf(
-        Color(0xFFE9E7FF),
-        Color(0xFF9BE7FF),
-        Color(0xFFFFC0F0),
-    )
-)
     internal set
 
 /** Hairline used by the legacy glass containers; now a flat hairline. */
@@ -111,22 +86,7 @@ fun altarisSheenBrush(palette: AltarisPalette): Brush = Brush.horizontalGradient
     )
 )
 
-// ── Accent palette ──────────────────────────────────────────────────────────
-// The identity owns the surfaces; these accents only colour primary controls.
-val SlatePrimary = Color(0xFF0E6F8A)
-val PlumPrimary = Color(0xFF6B52A8)
-val SandPrimary = Color(0xFF8A5D20)
-val CarbonPrimary = Color(0xFF7CF5C8)
 
-/** Swatch dot for the accent picker. */
-fun ThemePalette.accentColor(): Color = when (this) {
-    ThemePalette.CARBON -> CarbonPrimary
-    ThemePalette.SLATE -> SlatePrimary
-    ThemePalette.PLUM -> PlumPrimary
-    ThemePalette.SAND -> SandPrimary
-    // "Scheme" follows the active identity, so the swatch mirrors it.
-    ThemePalette.SCHEME -> PrimaryAction
-}
 
 @Composable
 fun altarisMutedText(): Color = MaterialTheme.colorScheme.onSurfaceVariant

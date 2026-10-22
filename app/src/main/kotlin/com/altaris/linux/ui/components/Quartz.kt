@@ -396,7 +396,7 @@ fun QPrimaryButton(
     )
     val haptics = LocalHapticFeedback.current
     val palette = LocalAltarisPalette.current
-    val stops = palette.accentStops
+    val stops = listOf(palette.action, palette.onSurface.copy(alpha = 0.88f), palette.action)
     val transition = rememberInfiniteTransition()
     val sweep = transition.animateFloat(
         initialValue = 0f,

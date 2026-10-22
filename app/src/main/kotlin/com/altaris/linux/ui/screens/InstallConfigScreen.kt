@@ -1,9 +1,13 @@
 package com.altaris.linux.ui.screens
 
 import android.widget.Toast
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,33 +16,27 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Brush
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Terminal
-import androidx.compose.material3.CenterAlignedTopAppBar
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.RadioButton
-import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -50,12 +48,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.altaris.linux.core.data.Distro
@@ -65,32 +64,33 @@ import com.altaris.linux.core.install.DistroInstallProfile
 import com.altaris.linux.core.install.InstallExtra
 import com.altaris.linux.core.install.OnboardingInstallRunner
 import com.altaris.linux.ui.components.AltarisSwitch
-import com.altaris.linux.ui.components.FrostContainer
-import com.altaris.linux.ui.components.FrostDivider
-import com.altaris.linux.ui.components.FrostGroupTitle
-import com.altaris.linux.ui.components.FrostPill
 import com.altaris.linux.ui.components.GlassScaffold
+import com.altaris.linux.ui.components.PrismButton
+import com.altaris.linux.ui.components.PrismCard
+import com.altaris.linux.ui.components.PrismChip
+import com.altaris.linux.ui.components.PrismRow
+import com.altaris.linux.ui.components.PrismSectionLabel
+import com.altaris.linux.ui.components.PrismSegmented
 import com.altaris.linux.ui.install.InstallProgressPanel
-import com.altaris.linux.ui.theme.TextMuted
-import com.altaris.linux.ui.theme.TextPrimary
-import com.altaris.linux.ui.theme.TextSecondary
+import com.altaris.linux.ui.theme.AltarisSection
+import com.altaris.linux.ui.theme.Prism
+import com.altaris.linux.ui.theme.rememberStaggerEntrance
+import com.altaris.linux.ui.theme.sectionAccent
+import com.altaris.linux.ui.theme.staggerIn
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.hazeChild
-import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
-import dev.chrisbanes.haze.materials.HazeMaterials
 
 /**
  * Thin install wizard: desktop toggles (XFCE4 / KDE Plasma — any combination,
  * none = terminal-only) + theme + optional hardware acceleration (no feature
  * modules). Uses [OnboardingInstallRunner] for both proot and chroot.
- * Grouped-sheet layout: Desktop / Extras / Appearance / Includes / Actions with
- * compact pills.
+ *
+ * The sheet is rebuilt in the Prism language: cards, rows, a segmented theme
+ * control and one pinned action row. The installer itself is untouched.
  *
  * Back navigation is allowed while an install runs: the runner + foreground
  * service continue in the background, the in-app task bar takes over, and a
  * re-entered screen adopts the live session (see [OnboardingInstallRunner.live]).
  */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class)
 @Composable
 fun InstallConfigScreen(
     distro: Distro,
@@ -199,6 +199,15 @@ fun InstallConfigScreen(
     val kdeSelected = DesktopChoice.KDE in selectedDesktops
     val terminalOnly = selectedDesktops.isEmpty()
 
+    val accent = sectionAccent(AltarisSection.DISTROS)
+    val entrance = rememberStaggerEntrance()
+
+    // The size each optional module pulls in — factual, straight from the
+    // component catalogue.
+    val componentSizes = remember(distro.id) {
+        distro.components.associate { it.id to it.sizeEstimate }
+    }
+
     val baseLine = when {
         distro.id.startsWith("alpine") -> "Alpine 3.24 minirootfs"
         distro.id.startsWith("fedora") -> "Fedora 44 container rootfs"
@@ -225,37 +234,57 @@ fun InstallConfigScreen(
         append("App modules can be added later from Distro Settings.")
     }
 
-    val includes: List<Pair<ImageVector, String>> = buildList {
+    val includes: List<Triple<ImageVector, String, String?>> = buildList {
         add(
-            Icons.Default.Download to when {
-                distro.id.startsWith("alpine") -> "Alpine 3.24 minirootfs (~4 MB + apk packages)"
-                distro.id.startsWith("fedora") -> "Fedora 44 container rootfs"
-                distro.id.startsWith("void") -> "Void Linux (glibc aarch64) rootfs"
-                distro.id.startsWith("opensuse") -> "openSUSE Tumbleweed rootfs"
-                else -> "${profile?.displayName ?: distro.name} rootfs"
-            }
+            Triple(
+                Icons.Default.Download,
+                when {
+                    distro.id.startsWith("alpine") -> "Alpine 3.24 minirootfs (~4 MB + apk packages)"
+                    distro.id.startsWith("fedora") -> "Fedora 44 container rootfs"
+                    distro.id.startsWith("void") -> "Void Linux (glibc aarch64) rootfs"
+                    distro.id.startsWith("opensuse") -> "openSUSE Tumbleweed rootfs"
+                    else -> "${profile?.displayName ?: distro.name} rootfs"
+                },
+                null
+            )
         )
         when {
             terminalOnly ->
-                add(Icons.Default.CheckCircle to "Terminal base — no desktop packages")
+                add(Triple(Icons.Default.CheckCircle, "Terminal base — no desktop packages", null))
             xfceSelected && kdeSelected -> {
-                add(Icons.Default.CheckCircle to "XFCE4 desktop")
-                add(Icons.Default.CheckCircle to "KDE Plasma desktop")
+                add(Triple(Icons.Default.CheckCircle, "XFCE4 desktop", componentSizes["xfce4_desktop"]))
+                add(Triple(Icons.Default.CheckCircle, "KDE Plasma desktop", componentSizes["kde_plasma"]))
             }
-            xfceSelected -> add(Icons.Default.CheckCircle to "XFCE4 desktop")
-            else -> add(Icons.Default.CheckCircle to "KDE Plasma desktop")
+            xfceSelected -> add(Triple(Icons.Default.CheckCircle, "XFCE4 desktop", componentSizes["xfce4_desktop"]))
+            else -> add(Triple(Icons.Default.CheckCircle, "KDE Plasma desktop", componentSizes["kde_plasma"]))
         }
         if (!terminalOnly && hwAccel && profile?.hwAccelScript != null) {
-            add(Icons.Default.CheckCircle to "Mesa / VirGL hardware acceleration")
+            add(
+                Triple(
+                    Icons.Default.CheckCircle,
+                    "Mesa / VirGL hardware acceleration",
+                    componentSizes["hw_accel"]
+                )
+            )
         }
         if (!terminalOnly) {
             add(
-                Icons.Default.CheckCircle to when {
-                    xfceSelected && kdeSelected ->
-                        "XFCE4 + KDE Plasma theming / wallpapers / Zsh"
-                    kdeSelected -> "KDE Plasma theming / wallpapers / Zsh"
-                    else -> "Altaris theme / wallpapers / fonts"
-                }
+                Triple(
+                    Icons.Default.CheckCircle,
+                    when {
+                        xfceSelected && kdeSelected ->
+                            "XFCE4 + KDE Plasma theming / wallpapers / Zsh"
+                        kdeSelected -> "KDE Plasma theming / wallpapers / Zsh"
+                        else -> "Altaris theme / wallpapers / fonts"
+                    },
+                    if (kdeSelected && xfceSelected) {
+                        componentSizes["kde_customization"] ?: componentSizes["customization"]
+                    } else if (kdeSelected) {
+                        componentSizes["kde_customization"]
+                    } else {
+                        componentSizes["customization"]
+                    }
+                )
             )
         }
     }
@@ -276,40 +305,18 @@ fun InstallConfigScreen(
     GlassScaffold(
         hazeState = hazeState,
         topBar = {
-            CenterAlignedTopAppBar(
-                title = {
-                    Text(
-                        when (phase) {
-                            InstallPhase.OPTIONS -> "Install ${distro.name}"
-                            InstallPhase.RUNNING -> if (failed) "Install failed" else "Installing…"
-                            InstallPhase.DONE -> "Install complete"
-                        },
-                        style = MaterialTheme.typography.headlineSmall,
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
+            WizardTopBar(
+                title = when (phase) {
+                    InstallPhase.OPTIONS -> "Install ${distro.name}"
+                    InstallPhase.RUNNING -> if (failed) "Install failed" else "Installing…"
+                    InstallPhase.DONE -> "Install complete"
                 },
-                navigationIcon = {
-                    IconButton(
-                        onClick = {
-                            // Back never cancels: the install keeps running in the
-                            // background (task bar + FGS), cancellation is explicit
-                            // via the progress panel's "Cancel install".
-                            onBack()
-                        }
-                    ) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
-                            tint = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
+                subtitle = when (phase) {
+                    InstallPhase.OPTIONS -> if (isChroot) "Chroot guest" else "PRoot guest"
+                    InstallPhase.RUNNING -> phaseLabel.ifBlank { "Working…" }
+                    InstallPhase.DONE -> "Base desktop installed"
                 },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = Color.Transparent),
-                modifier = Modifier.hazeChild(
-                    state = hazeState,
-                    shape = androidx.compose.ui.graphics.RectangleShape,
-                    style = HazeMaterials.thin()
-                )
+                onBack = onBack
             )
         }
     ) {
@@ -317,180 +324,280 @@ fun InstallConfigScreen(
             InstallPhase.OPTIONS -> Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 16.dp)
-                    .padding(top = 16.dp, bottom = 48.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                Text(
-                    rootfsLine,
-                    fontSize = 13.sp,
-                    color = TextMuted,
-                    lineHeight = 18.sp,
-                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp)
-                )
-
-                FrostGroupTitle("Desktop")
-                FrostContainer {
-                    // Base line is read-only: rootfs + shell are always installed.
-                    InfoSheetRow(
-                        icon = Icons.Default.Terminal,
-                        title = "Terminal base (always included)",
-                        subtitle = "Rootfs + shell — desktops below are optional"
-                    )
-                    FrostDivider()
-                    ToggleSheetRow(
-                        icon = Icons.Default.Palette,
-                        title = "XFCE4 desktop",
-                        subtitle = "Lightweight classic desktop",
-                        checked = xfceSelected,
-                        onCheckedChange = { on ->
-                            selectedDesktops = if (on) {
-                                selectedDesktops + DesktopChoice.XFCE
-                            } else {
-                                selectedDesktops - DesktopChoice.XFCE
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = Prism.Gutter)
+                        .padding(top = Prism.Stack, bottom = Prism.Stack),
+                    verticalArrangement = Arrangement.spacedBy(Prism.Stack)
+                ) {
+                    // Summary of what the install pulls in.
+                    PrismCard(
+                        accent = accent,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .staggerIn(0, entrance)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (distro.iconRes != null) {
+                                Image(
+                                    painter = painterResource(id = distro.iconRes),
+                                    contentDescription = "${distro.name} logo",
+                                    modifier = Modifier
+                                        .size(34.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                )
+                                Spacer(Modifier.width(13.dp))
                             }
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = distro.name,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Spacer(Modifier.height(3.dp))
+                                Text(
+                                    text = rootfsLine,
+                                    fontSize = 12.sp,
+                                    lineHeight = 17.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Spacer(Modifier.width(Prism.Tight))
+                            PrismChip(
+                                text = if (isChroot) "CHROOT" else "PROOT",
+                                accent = accent
+                            )
                         }
+                    }
+
+                    // Desktop selection.
+                    PrismSectionLabel(
+                        text = "Desktop",
+                        accent = accent,
+                        modifier = Modifier.staggerIn(1, entrance)
                     )
-                    if (kdeAvailable) {
-                        FrostDivider()
-                        ToggleSheetRow(
-                            icon = Icons.Default.Brush,
-                            title = "KDE Plasma",
-                            subtitle = "Feature-rich, highly customizable desktop",
-                            checked = kdeSelected,
-                            onCheckedChange = { on ->
-                                selectedDesktops = if (on) {
-                                    selectedDesktops + DesktopChoice.KDE
+                    PrismCard(
+                        accent = accent,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .staggerIn(1, entrance)
+                    ) {
+                        PrismRow(
+                            title = "Terminal base (always included)",
+                            subtitle = "Rootfs + shell — desktops below are optional",
+                            accent = accent,
+                            leading = { OptionIcon(Icons.Default.Terminal) },
+                            divider = true
+                        )
+                        PrismRow(
+                            title = "XFCE4 desktop",
+                            subtitle = "Lightweight classic desktop",
+                            accent = accent,
+                            leading = { OptionIcon(Icons.Default.Palette) },
+                            trailing = {
+                                AltarisSwitch(
+                                    checked = xfceSelected,
+                                    onCheckedChange = { on ->
+                                        selectedDesktops = if (on) {
+                                            selectedDesktops + DesktopChoice.XFCE
+                                        } else {
+                                            selectedDesktops - DesktopChoice.XFCE
+                                        }
+                                    }
+                                )
+                            },
+                            onClick = {
+                                selectedDesktops = if (xfceSelected) {
+                                    selectedDesktops - DesktopChoice.XFCE
                                 } else {
-                                    selectedDesktops - DesktopChoice.KDE
+                                    selectedDesktops + DesktopChoice.XFCE
+                                }
+                            },
+                            divider = kdeAvailable
+                        )
+                        if (kdeAvailable) {
+                            PrismRow(
+                                title = "KDE Plasma",
+                                subtitle = "Feature-rich, highly customizable desktop",
+                                accent = accent,
+                                leading = { OptionIcon(Icons.Default.Brush) },
+                                trailing = {
+                                    AltarisSwitch(
+                                        checked = kdeSelected,
+                                        onCheckedChange = { on ->
+                                            selectedDesktops = if (on) {
+                                                selectedDesktops + DesktopChoice.KDE
+                                            } else {
+                                                selectedDesktops - DesktopChoice.KDE
+                                            }
+                                        }
+                                    )
+                                },
+                                onClick = {
+                                    selectedDesktops = if (kdeSelected) {
+                                        selectedDesktops - DesktopChoice.KDE
+                                    } else {
+                                        selectedDesktops + DesktopChoice.KDE
+                                    }
+                                },
+                                divider = true
+                            )
+                        }
+                        PrismRow(
+                            title = if (terminalOnly) "Terminal only" else "Selected desktops install together",
+                            subtitle = if (terminalOnly) {
+                                "No desktop packages — toggle one above to add a desktop."
+                            } else {
+                                "Any combination is fine; XFCE4 and KDE Plasma can coexist."
+                            },
+                            accent = accent,
+                            leading = { OptionIcon(Icons.Default.CheckCircle) }
+                        )
+                    }
+
+                    // Extras.
+                    PrismSectionLabel(
+                        text = "Extras",
+                        accent = accent,
+                        modifier = Modifier.staggerIn(2, entrance)
+                    )
+                    PrismCard(
+                        accent = accent,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .staggerIn(2, entrance)
+                    ) {
+                        PrismRow(
+                            title = "Hardware acceleration",
+                            subtitle = if (terminalOnly) {
+                                "Not applicable to terminal-only installs"
+                            } else {
+                                "Installs GPU drivers (Turnip / VirGL) when supported"
+                            },
+                            accent = accent,
+                            leading = { OptionIcon(Icons.Default.Speed) },
+                            trailing = {
+                                AltarisSwitch(
+                                    checked = hwAccel && !terminalOnly,
+                                    enabled = !terminalOnly,
+                                    onCheckedChange = { hwAccel = it }
+                                )
+                            },
+                            divider = isChroot
+                        )
+                        if (isChroot) {
+                            PrismRow(
+                                title = "Root required",
+                                subtitle = "Grant superuser (KernelSU / Magisk) when prompted.",
+                                accent = accent,
+                                leading = { OptionIcon(Icons.Default.Info) }
+                            )
+                        }
+                    }
+
+                    // Appearance.
+                    PrismSectionLabel(
+                        text = "Appearance",
+                        accent = accent,
+                        modifier = Modifier.staggerIn(3, entrance)
+                    )
+                    PrismCard(
+                        accent = accent,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .staggerIn(3, entrance)
+                    ) {
+                        PrismSegmented(
+                            options = listOf("Dark", "Light"),
+                            selectedIndex = if (selectedTheme == "dark") 0 else 1,
+                            accent = accent,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .graphicsLayer {
+                                    alpha = if (terminalOnly) 0.45f else 1f
+                                },
+                            onSelect = { index ->
+                                if (!terminalOnly) {
+                                    selectedTheme = if (index == 0) "dark" else "light"
                                 }
                             }
                         )
-                    }
-                    FrostDivider()
-                    InfoSheetRow(
-                        icon = Icons.Default.CheckCircle,
-                        title = if (terminalOnly) "Terminal only" else "Selected desktops install together",
-                        subtitle = if (terminalOnly) {
-                            "No desktop packages — toggle one above to add a desktop."
-                        } else {
-                            "Any combination is fine; XFCE4 and KDE Plasma can coexist."
-                        }
-                    )
-                }
-                Spacer(modifier = Modifier.height(12.dp))
-
-                FrostGroupTitle("Extras")
-                FrostContainer {
-                    SwitchSheetRow(
-                        icon = Icons.Default.Speed,
-                        title = "Hardware acceleration",
-                        subtitle = if (terminalOnly) {
-                            "Not applicable to terminal-only installs"
-                        } else {
-                            "Installs GPU drivers (Turnip / VirGL) when supported"
-                        },
-                        checked = hwAccel && !terminalOnly,
-                        enabled = !terminalOnly,
-                        onCheckedChange = { hwAccel = it }
-                    )
-                    if (isChroot) {
-                        FrostDivider()
-                        InfoSheetRow(
-                            icon = Icons.Default.Info,
-                            title = "Root required",
-                            subtitle = "Grant superuser (KernelSU / Magisk) when prompted."
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.height(12.dp))
-
-                FrostGroupTitle("Appearance")
-                FrostContainer {
-                    ThemeSheetRow(
-                        icon = Icons.Default.DarkMode,
-                        title = "Dark",
-                        subtitle = "Sleek default",
-                        selected = selectedTheme == "dark",
-                        onSelect = { selectedTheme = "dark" },
-                        enabled = !terminalOnly
-                    )
-                    FrostDivider()
-                    ThemeSheetRow(
-                        icon = Icons.Default.LightMode,
-                        title = "Light",
-                        subtitle = "Bright desktop",
-                        selected = selectedTheme == "light",
-                        onSelect = { selectedTheme = "light" },
-                        enabled = !terminalOnly
-                    )
-                }
-                Spacer(modifier = Modifier.height(12.dp))
-
-                FrostGroupTitle("Includes")
-                FrostContainer {
-                    includes.forEachIndexed { index, (icon, label) ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 18.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = icon,
-                                contentDescription = null,
-                                tint = TextSecondary,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(14.dp))
+                        if (terminalOnly) {
+                            Spacer(Modifier.height(Prism.Tight))
                             Text(
-                                text = label,
-                                fontSize = 13.sp,
-                                color = TextSecondary,
-                                modifier = Modifier.weight(1f)
+                                text = "The theme applies to desktop installs only.",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
-                        if (index < includes.lastIndex) FrostDivider()
                     }
-                }
-                Spacer(modifier = Modifier.height(12.dp))
 
-                FrostGroupTitle("Actions")
-                FrostContainer {
-                    Row(
+                    // What the install brings in.
+                    PrismSectionLabel(
+                        text = "Includes",
+                        accent = accent,
+                        modifier = Modifier.staggerIn(4, entrance)
+                    )
+                    PrismCard(
+                        accent = accent,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { startInstall() }
-                            .padding(horizontal = 18.dp, vertical = 14.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                            .staggerIn(4, entrance)
                     ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                actionsTitle,
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = TextPrimary
-                            )
-                            Text(
-                                actionsSubtitle,
-                                fontSize = 12.sp,
-                                color = TextMuted,
-                                maxLines = 1
+                        includes.forEachIndexed { index, (_, label, size) ->
+                            IncludeRow(
+                                label = label,
+                                size = size,
+                                divider = index < includes.lastIndex
                             )
                         }
-                        FrostPill(text = "Install", primary = true, onClick = { startInstall() })
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Icon(
-                            Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-                            contentDescription = null,
-                            tint = TextMuted,
-                            modifier = Modifier.size(20.dp)
+                    }
+                }
+
+                // The single action row, pinned above the gesture inset.
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.surface)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(1.dp)
+                            .background(MaterialTheme.colorScheme.outline)
+                    )
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .navigationBarsPadding()
+                            .padding(horizontal = Prism.Gutter, vertical = Prism.Tight),
+                        verticalArrangement = Arrangement.spacedBy(Prism.Tight)
+                    ) {
+                        Text(
+                            text = actionsSubtitle,
+                            fontSize = 11.5.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        PrismButton(
+                            text = actionsTitle,
+                            accent = accent,
+                            icon = Icons.Default.Download,
+                            modifier = Modifier.fillMaxWidth(),
+                            onClick = { startInstall() }
                         )
                     }
                 }
-                Spacer(modifier = Modifier.height(32.dp))
             }
+
             InstallPhase.RUNNING, InstallPhase.DONE -> InstallProgressPanel(
                 percent = percent,
                 phaseLabel = phaseLabel,
@@ -519,136 +626,140 @@ fun InstallConfigScreen(
 /** Finished live sessions older than this are not re-attached on entry. */
 private const val LIVE_ATTACH_WINDOW_MS = 5 * 60 * 1000L
 
-/** 36dp rounded icon chip shared by the option rows. */
+/** The wizard header: a back control, the title and the current phase. */
 @Composable
-private fun SheetIconChip(icon: ImageVector) {
+private fun WizardTopBar(
+    title: String,
+    subtitle: String,
+    onBack: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.background)
+            .statusBarsPadding()
+            .padding(horizontal = Prism.Gutter, vertical = Prism.Tight),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        BackControl(onClick = onBack)
+        Spacer(Modifier.width(Prism.Tight))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onBackground,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = subtitle,
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+/** The back control of the wizard header — a 48 dp target, no layout shift. */
+@Composable
+private fun BackControl(onClick: () -> Unit) {
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val alpha by animateFloatAsState(
+        targetValue = if (pressed) 0.55f else 1f,
+        label = "wizardBack"
+    )
     Box(
         modifier = Modifier
-            .size(36.dp)
-            .clip(RoundedCornerShape(10.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f))
+            .size(Prism.TouchTarget)
+            .clip(CircleShape)
+            .clickable(
+                interactionSource = interaction,
+                indication = null,
+                onClick = onClick
+            )
+            .graphicsLayer { this.alpha = alpha },
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+            contentDescription = "Back",
+            tint = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.size(20.dp)
+        )
+    }
+}
+
+/** A monochrome icon plate used as the leading slot of an option row. */
+@Composable
+private fun OptionIcon(icon: ImageVector) {
+    Box(
+        modifier = Modifier
+            .size(34.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
             .border(
-                1.dp,
-                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f),
-                RoundedCornerShape(10.dp)
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.outlineVariant,
+                shape = RoundedCornerShape(12.dp)
             ),
         contentAlignment = Alignment.Center
     ) {
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = TextSecondary,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(18.dp)
         )
     }
 }
 
+/**
+ * One line of the manifest: what the install brings in and how much it
+ * weighs. The size stays in the secondary colour.
+ */
 @Composable
-private fun ThemeSheetRow(
-    icon: ImageVector,
-    title: String,
-    subtitle: String,
-    selected: Boolean,
-    onSelect: () -> Unit,
-    enabled: Boolean = true
+private fun IncludeRow(
+    label: String,
+    size: String?,
+    divider: Boolean
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(enabled = enabled) { onSelect() }
-            .padding(horizontal = 18.dp, vertical = 12.dp)
-            .alpha(if (enabled) 1f else 0.5f),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        SheetIconChip(icon)
-        Spacer(modifier = Modifier.width(14.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(title, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = TextPrimary)
-            Text(subtitle, fontSize = 12.sp, color = TextMuted)
+    Column {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            OptionIcon(Icons.Default.CheckCircle)
+            Spacer(Modifier.width(13.dp))
+            Text(
+                text = label,
+                fontSize = 13.sp,
+                lineHeight = 18.sp,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f)
+            )
+            if (!size.isNullOrBlank()) {
+                Spacer(Modifier.width(Prism.Tight))
+                Text(
+                    text = size,
+                    fontSize = 11.5.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1
+                )
+            }
         }
-        RadioButton(
-            selected = selected,
-            onClick = onSelect,
-            enabled = enabled,
-            colors = RadioButtonDefaults.colors(selectedColor = TextPrimary)
-        )
-    }
-}
-
-@Composable
-private fun SwitchSheetRow(
-    icon: ImageVector,
-    title: String,
-    subtitle: String,
-    checked: Boolean,
-    enabled: Boolean,
-    onCheckedChange: (Boolean) -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 18.dp, vertical = 12.dp)
-            .alpha(if (enabled) 1f else 0.5f),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        SheetIconChip(icon)
-        Spacer(modifier = Modifier.width(14.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(title, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = TextPrimary)
-            Text(subtitle, fontSize = 12.sp, color = TextMuted)
-        }
-        Spacer(modifier = Modifier.width(12.dp))
-        AltarisSwitch(
-            checked = checked,
-            onCheckedChange = onCheckedChange,
-            enabled = enabled
-        )
-    }
-}
-
-/** Multi-select desktop toggle: whole row flips the option, not just the switch. */
-@Composable
-private fun ToggleSheetRow(
-    icon: ImageVector,
-    title: String,
-    subtitle: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onCheckedChange(!checked) }
-            .padding(horizontal = 18.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        SheetIconChip(icon)
-        Spacer(modifier = Modifier.width(14.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(title, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = TextPrimary)
-            Text(subtitle, fontSize = 12.sp, color = TextMuted)
-        }
-        Spacer(modifier = Modifier.width(12.dp))
-        AltarisSwitch(
-            checked = checked,
-            onCheckedChange = onCheckedChange
-        )
-    }
-}
-
-@Composable
-private fun InfoSheetRow(icon: ImageVector, title: String, subtitle: String) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 18.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        SheetIconChip(icon)
-        Spacer(modifier = Modifier.width(14.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(title, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = TextPrimary)
-            Text(subtitle, fontSize = 12.sp, color = TextMuted)
+        if (divider) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(MaterialTheme.colorScheme.outlineVariant)
+            )
         }
     }
 }
