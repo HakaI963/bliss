@@ -85,24 +85,9 @@ fun CrashLogScreen(onBack: () -> Unit) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
-            CenterAlignedTopAppBar(
-                title = {
-                    Text(
-                        text = if (open == null) "Crash logs" else prettyTime(open),
-                        style = MaterialTheme.typography.headlineSmall,
-                        color = MaterialTheme.colorScheme.onBackground,
-                        maxLines = 1
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = { if (open != null) openFile = null else onBack() }) {
-                        Icon(
-                            Icons.Rounded.ArrowBack,
-                            contentDescription = "Back",
-                            tint = MaterialTheme.colorScheme.onBackground
-                        )
-                    }
-                },
+            com.altaris.linux.ui.components.AltarisSubHeader(
+                title = if (open == null) "Crash logs" else prettyTime(open),
+                onBack = { if (open != null) openFile = null else onBack() },
                 actions = {
                     if (open == null && files.isNotEmpty()) {
                         IconButton(
@@ -115,14 +100,12 @@ fun CrashLogScreen(onBack: () -> Unit) {
                             Icon(
                                 Icons.Default.Delete,
                                 contentDescription = "Delete all crash logs",
-                                tint = MaterialTheme.colorScheme.onBackground
+                                tint = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.size(19.dp),
                             )
                         }
                     }
                 },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = Color.Transparent
-                )
             )
         }
     ) { innerPadding ->

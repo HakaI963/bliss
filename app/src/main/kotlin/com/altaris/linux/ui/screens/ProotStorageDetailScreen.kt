@@ -38,6 +38,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.altaris.linux.ui.components.AltarisSubHeader
 import com.altaris.linux.core.chroot.GuestStorageCatalog
 import com.altaris.linux.core.data.DistroRepository
 import com.altaris.linux.core.proot.ProotInfoStore
@@ -138,26 +139,9 @@ fun ProotStorageDetailScreen(
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
-            CenterAlignedTopAppBar(
-                title = {
-                    Text(
-                        pageTitle,
-                        style = MaterialTheme.typography.headlineSmall,
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            Icons.Rounded.ArrowBack,
-                            contentDescription = "Back",
-                            tint = MaterialTheme.colorScheme.onBackground
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = Color.Transparent
-                )
+            AltarisSubHeader(
+                title = pageTitle,
+                onBack = onBack,
             )
         }
     ) { innerPadding ->

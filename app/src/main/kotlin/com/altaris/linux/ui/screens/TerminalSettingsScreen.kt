@@ -48,6 +48,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.altaris.linux.ui.components.AltarisSubHeader
 import com.altaris.linux.core.banner.BannerArtWriter
 import com.altaris.linux.core.terminal.GuestLoginShell
 import com.altaris.linux.core.utils.TerminalPreferences
@@ -95,26 +96,9 @@ fun TerminalSettingsScreen(
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
-            CenterAlignedTopAppBar(
-                title = {
-                    Text(
-                        "Terminal",
-                        style = MaterialTheme.typography.headlineSmall,
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            Icons.Rounded.ArrowBack,
-                            contentDescription = "Back",
-                            tint = MaterialTheme.colorScheme.onBackground
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = Color.Transparent
-                )
+            AltarisSubHeader(
+                title = "Terminal",
+                onBack = onBack,
             )
         }
     ) { innerPadding ->

@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -215,41 +216,37 @@ fun DistroAppearanceScreen(
     GlassScaffold(
         hazeState = hazeState,
         topBar = {
-            CenterAlignedTopAppBar(
-                title = {
-                    Text(
-                        "Appearance",
-                        style = MaterialTheme.typography.headlineSmall,
-                        color = MaterialTheme.colorScheme.onBackground
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .height(56.dp)
+                    .padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                IconButton(onClick = onBack, modifier = Modifier.size(36.dp)) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Back",
+                        tint = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.size(19.dp),
                     )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
-                            tint = MaterialTheme.colorScheme.onBackground
-                        )
-                    }
-                },
-                actions = {
-                    Box(modifier = Modifier.padding(end = 12.dp)) {
-                        FrostPill(
-                            text = if (applying) "Applying…" else "Apply",
-                            primary = true,
-                            onClick = { applyNow() }
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = Color.Transparent
-                ),
-                modifier = Modifier.hazeChild(
-                    state = hazeState,
-                    shape = androidx.compose.ui.graphics.RectangleShape,
-                    style = HazeMaterials.thin()
+                }
+                Text(
+                    "Appearance",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(start = 8.dp),
                 )
-            )
+                FrostPill(
+                    text = if (applying) "Applying…" else "Apply",
+                    primary = true,
+                    onClick = { applyNow() }
+                )
+            }
         },
         content = {
             LazyColumn(

@@ -49,17 +49,9 @@ fun RootAccessScreen(
     Scaffold(
         containerColor = Color.Transparent,
         topBar = {
-            CenterAlignedTopAppBar(
-                title = { Text("Root Access", color = androidx.compose.material3.MaterialTheme.colorScheme.onBackground) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.Rounded.ArrowBack, "Back", tint = androidx.compose.material3.MaterialTheme.colorScheme.onBackground)
-                    }
-                },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = Color.Transparent
-                ),
-                modifier = Modifier.background(Color.Transparent)
+            com.altaris.linux.ui.components.AltarisSubHeader(
+                title = "Root Access",
+                onBack = onBack,
             )
         }
     ) { innerPadding ->
