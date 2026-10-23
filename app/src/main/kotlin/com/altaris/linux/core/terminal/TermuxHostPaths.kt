@@ -169,6 +169,10 @@ object TermuxHostPaths {
             |export PATH="$nld:$BIN:/system/bin"
             |export TERM="${'$'}{TERM:-xterm-256color}"
             |export HISTFILE="${'$'}HOME/.bash_history"
+            |# ble.sh inspects these on startup and complains when they are empty
+            |# on Android (where the shell is not started by login).
+            |export USER="${'$'}{USER:-altaris}"
+            |export LANG="${'$'}{LANG:-en_US.UTF-8}"
             |PS1='\[\e[1;35m\]altaris\[\e[0m\]:\[\e[1;34m\]\w\[\e[0m\]${'$'} '
             |# One-shot prefix rc sourcing. The guard stops recursion: the prefix
             |# profile sources ${'$'}HOME/.bashrc again for interactive bash.

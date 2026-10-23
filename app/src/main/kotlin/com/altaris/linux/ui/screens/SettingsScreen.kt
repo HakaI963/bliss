@@ -250,16 +250,6 @@ fun SettingsScreen(
 
         // Environment & Host
         SettingsGroup("Environment & Host", accent, Modifier.staggerIn(4, entrance)) {
-            if (storageDeclared) {
-                PrismRow(
-                    title = "Shared storage",
-                    subtitle = if (storageGranted) "Allowed: /sdcard and USB drives in guests"
-                    else "Not allowed: tap, then enable All files access",
-                    accent = accent,
-                    onClick = { SharedStorageAccess.openSettings(context) },
-                    divider = true,
-                )
-            }
             if (phantomApplicable) {
                 PrismRow(
                     title = "Process killer fix",

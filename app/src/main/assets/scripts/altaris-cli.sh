@@ -1,5 +1,5 @@
 #!/bin/sh
-# Altaris local control CLI (`altaris`, with `altaris` kept as an alias).
+# Altaris local control CLI (`altaris`, with `bliss` kept as an alias).
 # Installed into the host prefix and every guest distro. Everything goes to the
 # app's loopback control server; no root is needed here.
 

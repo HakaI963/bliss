@@ -121,7 +121,7 @@ Rules:
 - Input is in virtual-display pixels: altaris_tap, altaris_swipe, altaris_text, altaris_key.
 - Use altaris_logs after a crash; use altaris_stop_clone when done.
 - Screenshots and OCR are available even when the viewer is not open.
-- The same operations are available in any distro terminal as `altaris ...` (or the legacy `altaris` alias).
+- The same operations are available in any distro terminal as `altaris ...` (or the legacy `bliss` alias).
 
 If a task needs visual confirmation, take a screenshot after every action group.
 The UI action feed in the clone viewer shows your taps, swipes, text and keys."""
@@ -309,7 +309,7 @@ private fun ControlCard(
         )
         PrismRow(
             title = "Guest CLI",
-            subtitle = "altaris · altaris alias",
+            subtitle = "altaris · bliss alias",
             accent = accent
         )
         Spacer(Modifier.height(Prism.Tight))
@@ -489,7 +489,7 @@ private fun CliCard(context: Context, accent: Color) {
     PrismSectionLabel("Commands", accent)
     PrismCard(accent = accent) {
         Text(
-            "Installed as `altaris` (with a `altaris` compatibility alias) in the host and every proot/chroot guest.",
+            "Installed as `altaris` (with a `bliss` compatibility alias) in the host and every proot/chroot guest.",
             fontSize = 12.sp,
             color = altarisMutedText()
         )

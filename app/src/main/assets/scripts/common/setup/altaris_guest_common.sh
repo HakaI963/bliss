@@ -1726,7 +1726,7 @@ _altaris_shell_bootstrap() {
     if command -v zsh >/dev/null 2>&1; then
         _zp=$(command -v zsh)
         grep -qxF "$_zp" /etc/shells 2>/dev/null || echo "$_zp" >> /etc/shells 2>/dev/null || true
-        for _u in altaris altaris; do
+        for _u in flux altaris; do
             id "$_u" >/dev/null 2>&1 && chsh -s "$_zp" "$_u" >/dev/null 2>&1 || true
         done
         unset _zp

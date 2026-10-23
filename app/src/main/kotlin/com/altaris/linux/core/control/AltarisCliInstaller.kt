@@ -11,7 +11,7 @@ import java.io.File
 
 /**
  * Installs the `altaris` helper into the host prefix and every guest rootfs.
- * `altaris` remains as a compatibility alias. The helper is a thin HTTP client
+ * `bliss` remains as a compatibility alias. The helper is a thin HTTP client
  * for [ControlServer]; it does not need root or the app's UID inside the guest.
  */
 object AltarisCliInstaller {

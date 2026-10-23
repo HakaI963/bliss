@@ -28,21 +28,30 @@ object DistroFsCache {
     @Volatile
     private var snapshot: Snapshot? = null
 
-    /** Drop the cached snapshot; the next read re-probes the filesystem. */
+    /** Current generation; a snapshot with a lower one is stale. */
+    val currentGeneration: Int get() = generation
+
+    /**
+     * Mark the cached snapshot stale. It is kept so screens can paint the last
+     * known state instantly (stale-while-revalidate) instead of flashing an
+     * empty list while the probe runs.
+     */
     fun invalidate() {
         generation += 1
-        snapshot = null
     }
 
-    /** The last snapshot, or null before the first probe. */
-    fun peek(): Snapshot? = snapshot?.takeIf { it.generation == generation }
+    /** The last snapshot, fresh or stale, or null before the first probe. */
+    fun peek(): Snapshot? = snapshot
+
+    /** The last snapshot only when it matches [generation]. */
+    fun peekFresh(): Snapshot? = snapshot?.takeIf { it.generation == generation }
 
     /** Probe (or reuse) the installed/unfinished sets. Blocking — IO only. */
     fun get(context: Context): Snapshot {
-        val cached = peek()
+        val cached = peekFresh()
         if (cached != null) return cached
         return synchronized(this) {
-            val again = peek()
+            val again = peekFresh()
             if (again != null) {
                 again
             } else {

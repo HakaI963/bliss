@@ -154,7 +154,9 @@ fun DistroScreen(
         refreshKey.value,
         stateRefresh,
     ) {
-        if (value == null) {
+        if (value == null ||
+            value?.generation != com.altaris.linux.core.terminal.DistroFsCache.currentGeneration
+        ) {
             value = withContext(kotlinx.coroutines.Dispatchers.IO) {
                 com.altaris.linux.core.terminal.DistroFsCache.get(context)
             }

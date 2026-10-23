@@ -193,17 +193,26 @@ fun HomeScreen(
 
     // Installed Distros Detection — filesystem truth: a stale
     // "installed" pref without a rootfs on disk must show Install, not a broken shell.
-    val installedDistros by androidx.compose.runtime.produceState(
-        initialValue = emptyList<com.altaris.linux.core.data.Distro>(),
+    // The probe is shared with the Distros tab and painted from the last
+    // snapshot first, so Home never flashes "No environments yet" while it
+    // re-checks (which took seconds on a chroot install).
+    val fsSnapshot by androidx.compose.runtime.produceState(
+        initialValue = com.altaris.linux.core.terminal.DistroFsCache.peek(),
         refreshKey.value,
     ) {
-        value = withContext(kotlinx.coroutines.Dispatchers.IO) {
-            DistroRepository.sortForDistroPage(
-                DistroRepository.supportedDistros.filter {
-                    TerminalLauncher.isDistroInstalledOnFs(context, it.id)
-                }
-            )
+        if (value == null ||
+            value?.generation != com.altaris.linux.core.terminal.DistroFsCache.currentGeneration
+        ) {
+            value = withContext(kotlinx.coroutines.Dispatchers.IO) {
+                com.altaris.linux.core.terminal.DistroFsCache.get(context)
+            }
         }
+    }
+    val installedDistros = remember(fsSnapshot) {
+        val ids = fsSnapshot?.installed.orEmpty()
+        DistroRepository.sortForDistroPage(
+            DistroRepository.supportedDistros.filter { it.id in ids }
+        )
     }
 
     // PRoot guests lead the bento; the method itself is shown on every tile.
@@ -417,7 +426,23 @@ fun HomeScreen(
             )
         }
 
-        if (installedDistros.isEmpty()) {
+        if (fsSnapshot == null) {
+            item(key = "env-checking") {
+                PrismCard(
+                    accent = accent,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .staggerIn(3, entrance)
+                ) {
+                    Text(
+                        "Checking environments…",
+                        fontSize = 12.sp,
+                        color = altarisMutedText(),
+                        modifier = Modifier.padding(vertical = 6.dp),
+                    )
+                }
+            }
+        } else if (installedDistros.isEmpty()) {
             item(key = "env-empty") {
                 PrismCard(
                     accent = accent,

@@ -119,16 +119,15 @@ fun AltarisTheme(
     }
     val persistedScheme by StateManager.scheme.collectAsState()
 
-    val darkTheme = when (themeMode) {
-        ThemeMode.LIGHT -> false
-        ThemeMode.DARK -> true
-        else -> isSystemInDarkTheme()
-    }
     // An explicit scheme wins; otherwise the persisted one does.
     val activeScheme = scheme ?: persistedScheme
-    val palette = remember(activeScheme, darkTheme) {
+    val palette = remember(activeScheme) {
         AltarisPalettes.of(activeScheme)
     }
+    // The identity is the light/dark decision. ThemeMode is kept for old
+    // callers, but a Warm Neutral app must not keep white status-bar icons
+    // just because the legacy preference still says "dark".
+    val darkTheme = palette.isDark
     val colorScheme = remember(palette) {
         colorSchemeFor(palette)
     }

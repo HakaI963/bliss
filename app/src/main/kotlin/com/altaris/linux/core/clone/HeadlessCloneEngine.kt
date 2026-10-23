@@ -261,8 +261,19 @@ object HeadlessCloneEngine {
 
     fun startService() {
         val c = ensureClient() ?: return
+        // Already bound: a no-op, and definitely not another "starting" notice.
+        if (c.isServiceConnected()) {
+            connected.value = true
+            refreshState()
+            return
+        }
         val reason = c.startService()
-        setNotice(reason ?: "Starting shell engine…")
+        if (reason != null) {
+            setNotice(reason)
+            if (!c.isServiceConnected()) connected.value = false
+        } else {
+            setNotice("Starting shell engine…")
+        }
         refreshState()
     }
 
