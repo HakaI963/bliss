@@ -280,6 +280,9 @@ object ProotCommandBuilder {
     ): Pair<Array<String>, HashMap<String, String>> {
         // The rootfs may only carry the alias user; resolve before building.
         val rootfs = File("${TermuxHostPaths.PREFIX}/var/lib/proot-distro/containers/$distro/rootfs")
+        // A rootfs moved from the legacy package id has unreadable symlinks
+        // (FBE key from the old app). Repair before resolving passwd/user.
+        RootfsKeyRepair.ensureRepaired(ctx, rootfs)
         GuestUserMigration.ensureAltaris(rootfs)
         val loginUser = GuestUserResolver.resolve(user, GuestUserResolver.passwdOf(rootfs))
         // Host package env + interactive TERM (guest login inherits package identity)

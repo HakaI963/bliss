@@ -438,15 +438,18 @@ private fun TerminalScreenContent(
     // Closing the last tab means leaving the terminal. The old in-place
     // "pick a distro" screen is gone: it was the legacy terminal UI.
     if (sessions.isEmpty()) {
+        // Leave on the next frame. Keep the terminal's dark surface for that
+        // frame instead of returning an empty (theme background) composable:
+        // in the light identity that was a white flash after the last tab.
         LaunchedEffect("terminal-empty") {
-            // Closing the last tab leaves the terminal route. Drop the IME
-            // first: otherwise the terminal measures short while the home
-            // screen measures full height, and the route size animation makes
-            // the content appear to unfold from a corner.
             terminalViewRef?.let { com.altaris.linux.ui.terminal.hideIme(it) }
-            kotlinx.coroutines.delay(140)
             onBack?.invoke()
         }
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(androidx.compose.ui.graphics.Color(0xFF05080B))
+        )
         return
     }
 

@@ -500,7 +500,13 @@ private fun ShortcutBarKeyItem(
             onLongClick = onLongPress,
             modifier = Modifier.fillMaxSize()
         )
-        DropdownMenu(expanded = menuOpen, onDismissRequest = onMenuDismiss) {
+        DropdownMenu(
+            expanded = menuOpen,
+            onDismissRequest = onMenuDismiss,
+            containerColor = androidx.compose.ui.graphics.Color(0xFF15181C),
+            tonalElevation = 0.dp,
+            shadowElevation = 0.dp,
+        ) {
             ShortcutMenuEntry("Edit key", Icons.Default.Edit) {
                 onMenuDismiss()
                 actions.onEditKey(key)
@@ -524,12 +530,19 @@ private fun ShortcutBarKeyItem(
 @Composable
 private fun ShortcutMenuEntry(label: String, icon: ImageVector, onClick: () -> Unit) {
     DropdownMenuItem(
-        text = { Text(text = label, fontSize = 13.sp, color = TextPrimary, maxLines = 1) },
+        text = {
+            Text(
+                text = label,
+                fontSize = 13.sp,
+                color = androidx.compose.ui.graphics.Color(0xFFECECE7),
+                maxLines = 1,
+            )
+        },
         leadingIcon = {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = TextSecondary,
+                tint = androidx.compose.ui.graphics.Color(0xFF9AA0A6),
                 modifier = Modifier.size(16.dp)
             )
         },

@@ -62,6 +62,27 @@ object GuestUserMigration {
 
         // 4. sudo/doas for the new name.
         ensureSudo(rootfs)
+
+        // 5. A migrated home may predate the Altaris profile (Arch's setup
+        // never wrote one). An empty ~/.zshrc is enough to stop zsh's
+        // newuser-install wizard; GuestZshrcRepair upgrades it with the full
+        // profile on the next session.
+        ensureZshrc(rootfs)
+    }
+
+    private fun ensureZshrc(rootfs: File) {
+        val home = File(rootfs, PRIMARY_HOME.removePrefix("/"))
+        if (!home.isDirectory) return
+        val rc = File(home, ".zshrc")
+        if (rc.isFile) return
+        runCatching {
+            rc.writeText(
+                "# Altaris guest shell — generated on first launch.\n" +
+                    "export PATH=\"\$HOME/.local/bin:/opt/nodejs/bin:/usr/local/sbin:" +
+                    "/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\"\n" +
+                    "[ -r /etc/profile.d/altaris-locale.sh ] && . /etc/profile.d/altaris-locale.sh\n"
+            )
+        }
     }
 
     private fun renameAccount(rootfs: File, passwdFile: File) {

@@ -67,8 +67,11 @@ class AltarisApp : Application() {
                     "usr/var/lib/proot-distro/containers",
                 )
                 containers.listFiles().orEmpty().forEach { dir ->
+                    val rootfs = java.io.File(dir, "rootfs")
+                    com.altaris.linux.core.terminal.RootfsKeyRepair
+                        .ensureRepaired(this, rootfs)
                     com.altaris.linux.core.terminal.GuestUserMigration
-                        .ensureAltaris(java.io.File(dir, "rootfs"))
+                        .ensureAltaris(rootfs)
                 }
             }
             runCatching { ShellIntegration.ensureInstalled(this) }

@@ -1476,10 +1476,13 @@ private fun AnimatedContentTransitionScope<Screen>.altarisRouteTransition(): Con
     val fadeInSpec = tween<Float>(200, easing = FastOutSlowInEasing)
     val fadeOutSpec = tween<Float>(160, easing = FastOutSlowInEasing)
     val transform = when {
+        // Leaving the terminal is instantaneous: its dark surface must not
+        // cross-fade through the light identity's background.
+        initialState == Screen.TERMINAL ->
+            fadeIn(tween(0)) togetherWith fadeOut(tween(0))
         fadeOnly ->
-            // Terminal and the install wizard own the whole window. A plain
-            // cross-fade reads as one surface replacing another; no horizontal
-            // or diagonal movement.
+            // The install wizard owns the whole window; a short fade reads as
+            // one surface replacing another, with no horizontal movement.
             (fadeIn(tween(200, easing = FastOutSlowInEasing)) +
                 slideInVertically(tween(240, easing = FastOutSlowInEasing)) { h -> h / 40 }) togetherWith
                 (fadeOut(tween(150, easing = FastOutSlowInEasing)) +

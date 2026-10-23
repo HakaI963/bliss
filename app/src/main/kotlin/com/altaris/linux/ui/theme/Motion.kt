@@ -48,13 +48,23 @@ object AltarisTimings {
 @Composable
 fun rememberStaggerEntrance(): Boolean {
     if (isScreenshotRun()) return false
-    var entering by remember { mutableStateOf(true) }
+    // Process-wide one-shot: returning from the terminal (or any other route)
+    // used to replay the whole page entrance, which reads as a blank frame in
+    // the light identity. Only the first screen of a launch cascades in.
+    var entering by remember { mutableStateOf(!staggerPlayed) }
     LaunchedEffect(Unit) {
-        delay(AltarisTimings.StaggerWindowMs)
-        entering = false
+        staggerPlayed = true
+        if (entering) {
+            delay(AltarisTimings.StaggerWindowMs)
+            entering = false
+        }
     }
     return entering
 }
+
+/** Set after the first stagger window in this process. */
+@Volatile
+private var staggerPlayed = false
 
 /**
  * True while rendering under Paparazzi (CI screenshots) or in a Compose

@@ -733,10 +733,16 @@ alias ls='ls --color=auto' 2>/dev/null
             }
             "proot" -> {
                 val prootName = resolveProotName(distroId)
-                File(
+                val rootfs = File(
                     ctx.filesDir,
-                    "usr/var/lib/proot-distro/containers/$prootName/rootfs/home/flux/.zshrc"
+                    "usr/var/lib/proot-distro/containers/$prootName/rootfs"
                 )
+                // The account was renamed flux -> altaris; use the real passwd
+                // home so a migrated /home/flux symlink is never traversed.
+                val passwd = GuestUserResolver.passwdOf(rootfs)
+                val user = GuestUserResolver.resolve("altaris", passwd)
+                val home = GuestUserResolver.homeOf(user, passwd)
+                File(rootfs, home.trimStart('/') + "/.zshrc")
             }
             else -> null
         }
