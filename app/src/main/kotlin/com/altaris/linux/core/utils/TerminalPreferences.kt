@@ -1,6 +1,7 @@
 package com.altaris.linux.core.utils
 
 import android.content.Context
+import kotlinx.coroutines.flow.asStateFlow
 import com.altaris.linux.core.terminal.GuestLoginShell
 
 /**
@@ -8,6 +9,10 @@ import com.altaris.linux.core.terminal.GuestLoginShell
  * Mirrors nativecode-ai `pref_show_extra_keys` / font size behaviour.
  */
 object TerminalPreferences {
+
+    /** Bumped whenever a look preference changes, so open surfaces recompose. */
+    private val _lookRevision = kotlinx.coroutines.flow.MutableStateFlow(0)
+    val lookRevision: kotlinx.coroutines.flow.StateFlow<Int> = _lookRevision.asStateFlow()
 
     private const val PREFS_NAME = "altaris_terminal_prefs"
     private const val KEY_FONT_SIZE = "font_size"
@@ -115,6 +120,7 @@ object TerminalPreferences {
 
     fun setButtonColor(context: Context, argb: Int) {
         prefs(context).edit().putInt(KEY_BUTTON_COLOR, argb).apply()
+        _lookRevision.value += 1
     }
 
     /**
@@ -126,5 +132,6 @@ object TerminalPreferences {
 
     fun setTextColor(context: Context, argb: Int) {
         prefs(context).edit().putInt(KEY_TEXT_COLOR, argb).apply()
+        _lookRevision.value += 1
     }
 }

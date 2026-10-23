@@ -81,6 +81,12 @@ object A11yAutoEnable {
     @Volatile
     private var watchingShizuku = false
 
+    @Volatile
+    private var binderListener: Shizuku.OnBinderReceivedListener? = null
+
+    @Volatile
+    private var permissionListener: Shizuku.OnRequestPermissionResultListener? = null
+
     // Lazy so JVM unit tests never touch Looper unless a callback path runs.
     private val mainHandler: Handler by lazy { Handler(Looper.getMainLooper()) }
 
@@ -119,9 +125,9 @@ object A11yAutoEnable {
                 )
             }
             // Shizuku first: it does not need a superuser grant for the app.
-            val shizuku = enableViaShizuku(component)
+            val shizuku = enableViaShizuku(component, context)
             if (shizuku != null) return shizuku
-            val root = enableViaRoot(component)
+            val root = enableViaRoot(component, context)
             if (root != null) return root
             Outcome(
                 ok = false,
@@ -205,7 +211,7 @@ object A11yAutoEnable {
     }.getOrDefault(false)
 
     /** Write the secure settings through the Shizuku server. Null when unusable. */
-    private fun enableViaShizuku(component: String): Outcome? {
+    private fun enableViaShizuku(component: String, context: Context): Outcome? {
         if (!ShizukuShell.available()) return null
         val uid = ShizukuShell.uid()
         // Only shell (2000) and root (0) may write secure settings; an app
@@ -227,11 +233,11 @@ object A11yAutoEnable {
             override fun put(key: String, value: String): Boolean =
                 ShizukuShell.run("settings put secure $key ${quote(value)}").ok
         }
-        return applySettings(shell, component, Method.SHIZUKU)
+        return applySettings(shell, component, Method.SHIZUKU, context)
     }
 
     /** Write the secure settings as root. Null when root is unusable. */
-    private fun enableViaRoot(component: String): Outcome? {
+    private fun enableViaRoot(component: String, context: Context): Outcome? {
         if (!RootShell.isRootAvailable()) return null
         val shell = object : SecureSettingsShell {
             override fun get(key: String): String? {
@@ -246,7 +252,7 @@ object A11yAutoEnable {
                     8_000L,
                 ).exitCode == 0
         }
-        return applySettings(shell, component, Method.ROOT)
+        return applySettings(shell, component, Method.ROOT, context)
     }
 
     /**
@@ -257,13 +263,15 @@ object A11yAutoEnable {
         shell: SecureSettingsShell,
         component: String,
         method: Method,
+        context: Context,
     ): Outcome? {
         val current = shell.get(SETTING_SERVICES) ?: return null
-        val list = current.split(':')
+        val original = current.split(':')
             .map { it.trim() }
             .filter { it.isNotEmpty() && it != "null" }
-            .toMutableList()
-        if (!list.contains(component)) {
+        val list = original.toMutableList()
+        val alreadyListed = list.contains(component)
+        if (!alreadyListed) {
             list.add(component)
             if (!shell.put(SETTING_SERVICES, list.joinToString(":"))) return null
         }
@@ -271,8 +279,21 @@ object A11yAutoEnable {
             if (!shell.put(SETTING_ENABLED, "1")) return null
         }
         // The platform may veto the write — read it back before claiming success.
-        val after = shell.get(SETTING_SERVICES) ?: return null
+        var after = shell.get(SETTING_SERVICES) ?: return null
         if (!after.split(':').any { it.trim() == component }) return null
+
+        // An app update kills the bound service, and Android then keeps it in
+        // "Crashed services" — re-writing the same setting does not rebind it.
+        // Toggle the component once so the platform starts it again.
+        if (!serviceRunning(context)) {
+            val without = original.filter { it != component }
+            shell.put(SETTING_SERVICES, without.joinToString(":"))
+            Thread.sleep(180)
+            shell.put(SETTING_SERVICES, list.joinToString(":"))
+            Thread.sleep(450)
+            after = shell.get(SETTING_SERVICES) ?: after
+        }
+
         return Outcome(
             ok = true,
             method = method,
@@ -300,20 +321,43 @@ object A11yAutoEnable {
         }
     }
 
-    /** Retry the auto-enable once the Shizuku server shows up. */
+    /** Retry the auto-enable once Shizuku is up *and* authorised. */
     private fun watchForShizuku(context: Context) {
         if (watchingShizuku) return
-        if (ShizukuShell.running()) return
+        // Nothing to wait for when the shell is already usable.
+        if (ShizukuShell.running() && ShizukuShell.granted()) return
         watchingShizuku = true
-        val listener = object : Shizuku.OnBinderReceivedListener {
+        val binder = object : Shizuku.OnBinderReceivedListener {
             override fun onBinderReceived() {
-                Shizuku.removeBinderReceivedListener(this)
-                watchingShizuku = false
+                stopWatchingShizuku()
                 autoEnable(context)
             }
         }
-        runCatching { Shizuku.addBinderReceivedListenerSticky(listener) }
-            .onFailure { watchingShizuku = false }
+        val permission = object : Shizuku.OnRequestPermissionResultListener {
+            override fun onRequestPermissionResult(requestCode: Int, grantResult: Int) {
+                stopWatchingShizuku()
+                autoEnable(context)
+            }
+        }
+        binderListener = binder
+        permissionListener = permission
+        val binderOk = runCatching {
+            Shizuku.addBinderReceivedListenerSticky(binder)
+        }.isSuccess
+        val permissionOk = runCatching {
+            Shizuku.addRequestPermissionResultListener(permission)
+        }.isSuccess
+        if (!binderOk && !permissionOk) stopWatchingShizuku()
+    }
+
+    private fun stopWatchingShizuku() {
+        binderListener?.let { runCatching { Shizuku.removeBinderReceivedListener(it) } }
+        permissionListener?.let {
+            runCatching { Shizuku.removeRequestPermissionResultListener(it) }
+        }
+        binderListener = null
+        permissionListener = null
+        watchingShizuku = false
     }
 
     /** A privileged shell that can read and write secure settings. */

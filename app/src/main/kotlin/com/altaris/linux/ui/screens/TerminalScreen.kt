@@ -106,7 +106,6 @@ import com.altaris.linux.ui.terminal.TerminalKeyInjector
 import com.altaris.linux.ui.terminal.TerminalModifierState
 import com.altaris.linux.ui.terminal.TerminalNewSessionPanel
 import com.altaris.linux.ui.terminal.TerminalShortcutKey
-import com.altaris.linux.ui.terminal.TerminalToolSelector
 import com.altaris.linux.ui.terminal.TerminalToolsSheet
 import com.altaris.linux.ui.terminal.newShortcutKeyId
 import com.altaris.linux.ui.theme.AltarisBackground
@@ -121,7 +120,7 @@ import com.termux.view.TerminalViewClient
  * In-app terminal with multi-session tabs + nativecode-style tool selector grid
  * + full ExtraKeys toolbar (injectKey / ModifierState lock).
  *
- * Empty state = compact proot/chroot session rows (`TerminalToolSelector`); active state =
+ * Active state =
  * interactive `TerminalView` (focus + IME + clipboard) with a compact, fully
  * configurable ExtraKeys toolbar. Plan: docs/plans/terminal-grid-extrakeys-interactive.md.
  */
@@ -258,7 +257,7 @@ private fun TerminalScreenContent(
     }
 
     // Back closes the panel first; the panel also collapses itself once a session
-    // lands (and whenever no session remains — the empty-state selector is right there).
+    // lands, and closing the last tab leaves the route.
     BackHandler(enabled = showNewSessionPanel) { showNewSessionPanel = false }
     LaunchedEffect(sessions.isEmpty()) {
         if (sessions.isEmpty()) showNewSessionPanel = false
@@ -436,6 +435,13 @@ private fun TerminalScreenContent(
         }
     }
 
+    // Closing the last tab means leaving the terminal. The old in-place
+    // "pick a distro" screen is gone: it was the legacy terminal UI.
+    if (sessions.isEmpty()) {
+        LaunchedEffect("terminal-empty") { onBack?.invoke() }
+        return
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -481,10 +487,9 @@ private fun TerminalScreenContent(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier
-                    .padding(start = 9.dp)
-                    .weight(1f, fill = false)
+                    .padding(start = 9.dp, end = 8.dp)
+                    .weight(1f)
             )
-            Spacer(Modifier.weight(1f))
             IconButton(
                 onClick = { toggleExtraKeys() },
                 modifier = Modifier.size(36.dp)
@@ -671,13 +676,16 @@ private fun TerminalScreenContent(
                     }
                 }
             } else {
-                // Empty state: installed-only session rows with the original icons.
-                TerminalToolSelector(
-                    onOpen = { type, title, method, distroId ->
-                        openCard(type, title, method, distroId)
-                    },
-                    modifier = Modifier.fillMaxSize()
-                )
+                // Transient frame after a tab switch (or before the first session
+                // attaches). The old full-screen distro picker lived here; it is
+                // gone — closing the last tab leaves the terminal entirely.
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(
+                        "Opening session…",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
 
 

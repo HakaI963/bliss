@@ -38,6 +38,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -249,8 +250,9 @@ fun TerminalExtraKeys(
     var menuKeyId by remember { mutableStateOf<String?>(null) }
     // The keys are always dark; the user may still pick their own shades.
     val context = androidx.compose.ui.platform.LocalContext.current
-    val buttonColor = remember { TerminalPreferences.getButtonColor(context) }
-    val textColor = remember { TerminalPreferences.getTextColor(context) }
+    val lookRevision by TerminalPreferences.lookRevision.collectAsState()
+    val buttonColor = remember(lookRevision) { TerminalPreferences.getButtonColor(context) }
+    val textColor = remember(lookRevision) { TerminalPreferences.getTextColor(context) }
     val fnScroll = rememberScrollState()
     val mainKeys = config.keys.filter { !it.fnRow }
     val fnKeys = config.keys.filter { it.fnRow }
@@ -609,8 +611,10 @@ private fun TerminalKey(
     val emphasized = active || pressed
     val scheme = MaterialTheme.colorScheme
     // The keys are always dark: the terminal never follows the app theme.
-    val keySurface = if (buttonColor != 0) Color(buttonColor) else scheme.surfaceVariant
-    val keyText = if (textColor != 0) Color(textColor) else scheme.onSurface
+    // Slight graphite, never pure black: the keys should read as a surface
+    // that belongs to the dark terminal, not as holes in it.
+    val keySurface = if (buttonColor != 0) Color(buttonColor) else Color(0xFF191D22)
+    val keyText = if (textColor != 0) Color(textColor) else Color(0xFFECECE7)
     val background = when {
         active -> keyText
         pressed -> keyText.copy(alpha = 0.85f)

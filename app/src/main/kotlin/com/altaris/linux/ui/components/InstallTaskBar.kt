@@ -112,7 +112,7 @@ fun InstallTaskBar(
         )
         state.failed -> TerminalBar(
             label = "Install failed — tap for logs",
-            mark = MaterialTheme.colorScheme.error,
+            mark = MaterialTheme.colorScheme.onSurface,
             onClick = openDetails,
             onDismiss = onDismiss,
             modifier = modifier
@@ -356,6 +356,10 @@ fun DownloadTaskButton(
     if (!visible) return
 
     val scheme = MaterialTheme.colorScheme
+    // -1 means "no usable fraction yet" (package setup reports phases, not a
+    // percentage). Coercing it to 0 made the button read "0" during the whole
+    // install and look broken, so keep it indeterminate instead.
+    val indeterminate = state.overallPercent < 0
     val percent = state.overallPercent.coerceIn(0, 100)
     val shape = RoundedCornerShape(6.dp)
     var expanded by remember { mutableStateOf(false) }
@@ -366,23 +370,29 @@ fun DownloadTaskButton(
                 .size(34.dp)
                 .clip(shape)
                 .background(scheme.surface)
-                .border(1.dp, if (state.failed) scheme.error else scheme.outline, shape)
+                .border(1.dp, scheme.outline, shape)
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
                 ) { expanded = true },
             contentAlignment = Alignment.Center,
         ) {
-            if (state.isInstalling) {
+            if (state.isInstalling && indeterminate) {
+                androidx.compose.material3.CircularProgressIndicator(
+                    modifier = Modifier.size(18.dp),
+                    color = scheme.onSurface,
+                    strokeWidth = 2.dp,
+                )
+            } else if (state.isInstalling) {
                 Canvas(Modifier.size(22.dp)) {
                     val stroke = 2f
                     drawCircle(
-                        color = Color(0x33808080),
+                        color = scheme.outline.copy(alpha = 0.35f),
                         radius = size.minDimension / 2f - stroke / 2f,
                         style = Stroke(width = stroke),
                     )
                     drawArc(
-                        color = Color(0xFF808080),
+                        color = scheme.onSurface,
                         startAngle = -90f,
                         sweepAngle = 360f * percent / 100f,
                         useCenter = false,
@@ -399,7 +409,7 @@ fun DownloadTaskButton(
                 Icon(
                     imageVector = Icons.Default.Download,
                     contentDescription = "Download task",
-                    tint = if (state.failed) scheme.error else scheme.onSurface,
+                    tint = scheme.onSurface,
                     modifier = Modifier.size(16.dp),
                 )
             }
@@ -420,7 +430,7 @@ fun DownloadTaskButton(
                     },
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = if (state.failed) scheme.error else scheme.onSurface,
+                    color = scheme.onSurface,
                 )
                 Text(
                     state.currentTaskName.ifBlank { state.currentDistroId ?: "Linux environment" },
@@ -437,16 +447,22 @@ fun DownloadTaskButton(
                         .clip(RoundedCornerShape(2.dp))
                         .background(scheme.surfaceVariant),
                 ) {
+                    val fraction = if (indeterminate) 0.35f else percent.coerceAtLeast(2) / 100f
                     Box(
                         Modifier
                             .fillMaxHeight()
-                            .fillMaxWidth((percent.coerceAtLeast(2)) / 100f)
-                            .background(if (state.failed) scheme.error else scheme.onSurface),
+                            .fillMaxWidth(fraction)
+                            .background(scheme.onSurface),
                     )
                 }
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    if (state.phaseLabel.isNotBlank()) "${state.phaseLabel} · $percent%" else "$percent%",
+                    when {
+                        indeterminate && state.phaseLabel.isNotBlank() -> state.phaseLabel
+                        indeterminate -> state.detail.ifBlank { "Working…" }
+                        state.phaseLabel.isNotBlank() -> "${state.phaseLabel} · $percent%"
+                        else -> "$percent%"
+                    },
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Medium,
                     color = scheme.onSurface,

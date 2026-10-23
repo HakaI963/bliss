@@ -110,7 +110,7 @@ final class AppCatalog {
                     .append(" ; ");
         }
         command.append("/system/bin/am start --display ").append(displayId)
-                .append(" -f 0x10000000")
+                .append(" -f 0x10800000") // NEW_TASK | EXCLUDE_FROM_RECENTS
                 .append(" -n ").append(quote(component.flattenToShortString()));
         return run(command.toString());
     }

@@ -11,10 +11,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -46,10 +44,11 @@ fun PhantomProcessDialog(warning: Boolean, onDismiss: () -> Unit) {
         msg = err?.let { "Failed: $it" } ?: "Applied. Restart the terminal/desktop."
     }
 
-    // App primary is near-black in dark / cream in light, so default Button/TextButton/OutlinedButton
-    // colors vanish on the dialog surface. Use secondary (cream in dark, dark in light) instead.
+    // Monochrome actions: the filled button is ink-on-paper, the secondary one
+    // is a hairline outline. The old secondary-coloured buttons were a grey
+    // block with unreadable labels.
     val cs = MaterialTheme.colorScheme
-    val btn = ButtonDefaults.buttonColors(containerColor = cs.secondary, contentColor = cs.onSecondary)
+    val ink = cs.onSurface
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = cs.surface,
@@ -73,9 +72,10 @@ fun PhantomProcessDialog(warning: Boolean, onDismiss: () -> Unit) {
                     fontSize = 14.sp
                 )
                 msg?.let { Text(it, fontSize = 13.sp) }
-                Button(
+                PrismButton(
+                    text = "Fix with Root",
+                    accent = ink,
                     modifier = Modifier.fillMaxWidth(),
-                    colors = btn,
                     onClick = {
                         msg = "Requesting root..."
                         scope.launch {
@@ -83,10 +83,11 @@ fun PhantomProcessDialog(warning: Boolean, onDismiss: () -> Unit) {
                             done(err)
                         }
                     }
-                ) { Text("Fix with Root") }
-                Button(
+                )
+                PrismButton(
+                    text = "Fix with Shizuku",
+                    accent = ink,
                     modifier = Modifier.fillMaxWidth(),
-                    colors = btn,
                     onClick = {
                         fun run() = scope.launch {
                             val err = withContext(Dispatchers.IO) { PhantomProcessFixer.applyShizuku() }
@@ -101,24 +102,25 @@ fun PhantomProcessDialog(warning: Boolean, onDismiss: () -> Unit) {
                             }
                         }
                     }
-                ) { Text("Fix with Shizuku") }
+                )
                 Text("Or from a PC over adb:", fontSize = 13.sp)
                 Text(PhantomProcessFixer.adbCommands, fontSize = 11.sp)
-                OutlinedButton(
+                PrismSecondaryButton(
+                    text = "Copy adb commands",
+                    accent = ink,
                     modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = cs.secondary),
                     onClick = {
                         val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                         cm.setPrimaryClip(ClipData.newPlainText("ADB Commands", PhantomProcessFixer.adbCommands))
                         Toast.makeText(context, "Commands copied to clipboard", Toast.LENGTH_SHORT).show()
                     }
-                ) { Text("Copy adb commands") }
+                )
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss, colors = ButtonDefaults.textButtonColors(contentColor = cs.secondary)) { Text("Close") } },
+        confirmButton = { TextButton(onClick = onDismiss, colors = ButtonDefaults.textButtonColors(contentColor = ink)) { Text("Close") } },
         dismissButton = if (warning) {
             {
-                TextButton(colors = ButtonDefaults.textButtonColors(contentColor = cs.secondary), onClick = {
+                TextButton(colors = ButtonDefaults.textButtonColors(contentColor = cs.onSurfaceVariant), onClick = {
                     PhantomProcessFixer.hideWarningForever(context)
                     onDismiss()
                 }) { Text("Don't show again") }

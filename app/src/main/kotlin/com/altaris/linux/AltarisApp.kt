@@ -38,6 +38,10 @@ class AltarisApp : Application() {
         // Shizuku clone engine is initialised lazily when the Apps/Tools UI opens.
         HeadlessCloneEngine.onAppCreate(this)
         HeadlessCloneEngine.attach(this)
+        // Start the shell engine once; it reconnects on its own when Shizuku
+        // comes back, so the Apps screen never needs a manual start.
+        runCatching { com.altaris.linux.core.clone.CloneEngineAutoStart.start(this) }
+            .onFailure { Log.w("AltarisApp", "clone engine auto-start failed", it) }
         // Localhost CLI/MCP control plane. It is process-scoped: no permanent
         // foreground notification, while the service is best-effort keep-alive.
         com.altaris.linux.core.control.CloneControlService.clearLegacyNotification(this)
@@ -54,6 +58,7 @@ class AltarisApp : Application() {
             // Enable it without asking: Shizuku first, then root, and only
             // then a one-time hint (autoEnable keeps that off the main thread).
             runCatching { com.altaris.linux.core.a11y.A11yAutoEnable.autoEnable(this) }
+            runCatching { com.altaris.linux.core.terminal.DistroFsCache.warm(this) }
             runCatching { ShellIntegration.ensureInstalled(this) }
                 .onFailure { Log.w("AltarisApp", "shell integration install failed", it) }
             runCatching { com.altaris.linux.core.control.AltarisCliInstaller.installAll(this) }

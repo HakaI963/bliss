@@ -212,6 +212,15 @@ fun ClonedAppsScreen(startOnPreference: Boolean = false) {
         HeadlessCloneEngine.bootstrap()
         HeadlessCloneEngine.refreshClones()
     }
+    // Opening the screen is the natural moment to make sure the engine is up
+    // and the accessibility service is enabled (Shizuku first, then root).
+    LaunchedEffect(Unit) {
+        withContext(Dispatchers.IO) {
+            runCatching { com.altaris.linux.core.clone.CloneEngineAutoStart.retry(context) }
+            runCatching { com.altaris.linux.core.a11y.A11yAutoEnable.autoEnable(context) }
+        }
+    }
+
     LaunchedEffect(connected) {
         if (connected) {
             HeadlessCloneEngine.refreshClones()
@@ -270,9 +279,15 @@ fun ClonedAppsScreen(startOnPreference: Boolean = false) {
 
     /** Stop the clone process and release the display. */
     fun stopViewer() {
-        val pkg = viewing?.clone?.packageName ?: activeClonePackage
-        if (pkg != null) HeadlessCloneEngine.stopClone(pkg)
+        val pkg = viewing?.clone?.packageName
+            ?: HeadlessCloneEngine.activeClonePackage.value
+        // Close the viewer even when there is no package: the user asked to stop.
         viewing = null
+        if (pkg != null) {
+            HeadlessCloneEngine.stopClone(pkg)
+        } else {
+            HeadlessCloneEngine.setNotice("Nothing is running in this viewer")
+        }
     }
 
     fun openViewer(clone: CloneApp) {
@@ -1144,11 +1159,6 @@ private fun CloneViewPage(
                     widthPx = session.width,
                     heightPx = session.height,
                     fps = session.fps,
-                    live = live,
-                    elementsActive = showElements,
-                    onToggleLive = { live = !live },
-                    onPip = onPip,
-                    onToggleElements = { showElements = !showElements },
                 )
             }
             }
@@ -1197,7 +1207,6 @@ private fun CloneViewPage(
             QToolButton(
                 "Stop",
                 Icons.Default.Stop,
-                destructive = true,
             ) { onStop() }
         }
 
@@ -1424,6 +1433,8 @@ private fun ElementsPanel(
                                 val obj = runCatching { JSONObject(result) }.getOrNull()
                                 if (obj?.optBoolean("ok", false) == true) {
                                     enableNote = "Accessibility service enabled."
+                                    // The platform binds the service asynchronously.
+                                    kotlinx.coroutines.delay(900)
                                     refresh()
                                 } else {
                                     val error = obj?.optString("error").orEmpty()
@@ -1533,11 +1544,6 @@ private fun CloneSideRail(
     widthPx: Int,
     heightPx: Int,
     fps: Int,
-    live: Boolean,
-    elementsActive: Boolean,
-    onToggleLive: () -> Unit,
-    onPip: () -> Unit,
-    onToggleElements: () -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(8.dp)
@@ -1592,53 +1598,16 @@ private fun CloneSideRail(
             maxLines = 1,
         )
         Spacer(Modifier.weight(1f))
-        RailIcon(
-            icon = if (live) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-            description = if (live) "Pause preview" else "Resume preview",
-            active = live,
-            onClick = onToggleLive,
-        )
-        RailIcon(
-            icon = Icons.Default.PictureInPictureAlt,
-            description = "Picture in picture",
-            active = false,
-            onClick = onPip,
-        )
-        RailIcon(
-            icon = Icons.Default.Widgets,
-            description = "Elements",
-            active = elementsActive,
-            onClick = onToggleElements,
-        )
-    }
-}
-
-/** A hairline icon square used inside [CloneSideRail]. */
-@Composable
-private fun RailIcon(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    description: String,
-    active: Boolean,
-    onClick: () -> Unit,
-) {
-    val scheme = MaterialTheme.colorScheme
-    Box(
-        modifier = Modifier
-            .size(29.dp)
-            .clip(RoundedCornerShape(6.dp))
-            .background(if (active) scheme.onSurface else Color.Transparent)
-            .border(1.dp, if (active) scheme.onSurface else scheme.outlineVariant, RoundedCornerShape(6.dp))
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-            ) { onClick() },
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            icon,
-            contentDescription = description,
-            tint = if (active) scheme.background else scheme.onSurfaceVariant,
-            modifier = Modifier.size(15.dp),
+        // No controls here: Live, PiP and Elements already sit in the dock
+        // directly below the display, and duplicating them made the viewer
+        // feel crowded. The rail carries facts only.
+        Text(
+            "PORTRAIT",
+            fontSize = 8.sp,
+            fontWeight = FontWeight.SemiBold,
+            letterSpacing = 0.8.sp,
+            color = scheme.onSurfaceVariant.copy(alpha = 0.7f),
+            textAlign = TextAlign.Center,
         )
     }
 }

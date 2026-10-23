@@ -507,7 +507,11 @@ object HeadlessCloneEngine {
 
     /** Stop the clone and release the virtual display (viewer Stop button). */
     fun stopClone(packageName: String) {
-        val c = requireConnected() ?: return
+        val c = requireConnected()
+        if (c == null) {
+            setNotice("Shell engine is not connected — reconnect in Preference, then stop again")
+            return
+        }
         scope.launch {
             try {
                 val error = resultError(c.cloneKill(packageName))
@@ -1151,7 +1155,7 @@ object HeadlessCloneEngine {
         else obj.optString("error").ifBlank { "Engine request failed" }
     }
 
-    private fun setNotice(text: String) {
+    fun setNotice(text: String) {
         val value = text.trim()
         if (value.isEmpty()) return
         notice.value = value

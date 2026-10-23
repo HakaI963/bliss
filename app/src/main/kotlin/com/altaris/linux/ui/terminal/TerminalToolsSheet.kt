@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.KeyboardHide
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.Tune
+import com.altaris.linux.core.utils.TerminalPreferences
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -119,12 +120,12 @@ fun TerminalToolsSheet(
                 text = "Tools",
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Bold,
-                color = TextPrimary
+                color = MaterialTheme.colorScheme.onSurface
             )
             Text(
                 text = sessionTitle?.takeIf { it.isNotBlank() } ?: "No session open",
                 fontSize = 11.sp,
-                color = TextSecondary,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(top = 1.dp)
@@ -194,6 +195,27 @@ fun TerminalToolsSheet(
                 )
             }
 
+            // ── Key colours: the extra keys are dark by default; let the
+            // user choose their own graphite and label shades here.
+            ToolSectionLabel("Key colours")
+            Text(
+                text = "The shell stays dark in every identity. Pick the key background and label colour.",
+                fontSize = 11.sp,
+                lineHeight = 15.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 6.dp),
+            )
+            TerminalKeyColorRow(
+                label = "Background",
+                isText = false,
+            )
+            Spacer(Modifier.height(6.dp))
+            TerminalKeyColorRow(
+                label = "Label",
+                isText = true,
+            )
+            Spacer(Modifier.height(10.dp))
+
             // ── Session: restart, keys bar, font size, close ─────────────────
             ToolSectionLabel("Session")
             Row(
@@ -233,15 +255,15 @@ fun TerminalToolsSheet(
                         .weight(1.2f)
                         .height(ToolTileHeight)
                         .clip(ToolTileShape)
-                        .background(FrostSurface)
-                        .border(ToolEdgeWidth, FrostHairline, ToolTileShape),
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .border(ToolEdgeWidth, MaterialTheme.colorScheme.outline, ToolTileShape),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = "$fontSize pt",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = TextSecondary
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 ToolTile(
@@ -342,14 +364,14 @@ private fun ToolSectionLabel(text: String) {
         text = text,
         fontSize = 10.sp,
         fontWeight = FontWeight.Bold,
-        color = TextMuted,
+        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
         letterSpacing = 0.8.sp,
         modifier = Modifier.padding(start = 2.dp, top = 12.dp, bottom = 6.dp)
     )
 }
 
 /**
- * Frost action chip: FrostSurface + hairline, white pill when active.
+ * Frost action chip: MaterialTheme.colorScheme.surfaceVariant + hairline, white pill when active.
  * Disabled = muted text + dimmed fill; danger = AltarisDanger text (still no color fill).
  */
 @Composable
@@ -363,15 +385,15 @@ private fun ToolTile(
     danger: Boolean = false
 ) {
     val background = when {
-        active -> TextPrimary
-        enabled -> FrostSurface
-        else -> FrostSurface.copy(alpha = 0.4f)
+        active -> MaterialTheme.colorScheme.onSurface
+        enabled -> MaterialTheme.colorScheme.surfaceVariant
+        else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
     }
     val foreground = when {
-        active -> AltarisBackground
-        !enabled -> TextMuted
+        active -> MaterialTheme.colorScheme.background
+        !enabled -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)
         danger -> AltarisDanger
-        else -> TextPrimary
+        else -> MaterialTheme.colorScheme.onSurface
     }
 
     Row(
@@ -379,7 +401,7 @@ private fun ToolTile(
             .height(ToolTileHeight)
             .clip(ToolTileShape)
             .background(background)
-            .border(ToolEdgeWidth, FrostHairline, ToolTileShape)
+            .border(ToolEdgeWidth, MaterialTheme.colorScheme.outline, ToolTileShape)
             .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -416,8 +438,8 @@ private fun TerminalConfirmDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface,
-        titleContentColor = TextPrimary,
-        textContentColor = TextSecondary,
+        titleContentColor = MaterialTheme.colorScheme.onSurface,
+        textContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
         title = {
             Text(title, fontSize = 16.sp, fontWeight = FontWeight.Bold)
         },
@@ -435,10 +457,99 @@ private fun TerminalConfirmDialog(
         dismissButton = {
             TextButton(
                 onClick = onDismiss,
-                colors = ButtonDefaults.textButtonColors(contentColor = TextSecondary)
+                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant)
             ) {
                 Text("Cancel")
             }
         }
     )
+}
+
+
+/** The extra-key background shades, from the automatic default to graphite. */
+private val KeyBackgroundSwatches = listOf(
+    0,
+    0xFF14161A.toInt(),
+    0xFF191D22.toInt(),
+    0xFF20262C.toInt(),
+    0xFF2A3138.toInt(),
+    0xFF0E1012.toInt(),
+)
+
+/** The extra-key label shades. */
+private val KeyTextSwatches = listOf(
+    0,
+    0xFFECECE7.toInt(),
+    0xFFC9D3CE.toInt(),
+    0xFFA7B4AE.toInt(),
+    0xFFFFFFFF.toInt(),
+    0xFFEFE6D6.toInt(),
+)
+
+/** One row of colour swatches backed by [TerminalPreferences]. */
+@Composable
+private fun TerminalKeyColorRow(label: String, isText: Boolean) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var selected by remember {
+        mutableStateOf(
+            if (isText) TerminalPreferences.getTextColor(context)
+            else TerminalPreferences.getButtonColor(context)
+        )
+    }
+    val swatches = if (isText) KeyTextSwatches else KeyBackgroundSwatches
+    val scheme = MaterialTheme.colorScheme
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = label,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.SemiBold,
+            letterSpacing = 0.6.sp,
+            color = scheme.onSurfaceVariant,
+        )
+        Row(
+            modifier = Modifier.padding(top = 5.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            swatches.forEach { argb ->
+                val auto = argb == 0
+                val isSelected = selected == argb
+                Box(
+                    modifier = Modifier
+                        .size(30.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(
+                            when {
+                                auto -> androidx.compose.ui.graphics.Color(0xFF191D22)
+                                else -> androidx.compose.ui.graphics.Color(argb)
+                            }
+                        )
+                        .border(
+                            width = if (isSelected) 2.dp else 1.dp,
+                            color = if (isSelected) scheme.onSurface else scheme.outline,
+                            shape = RoundedCornerShape(6.dp),
+                        )
+                        .clickable(
+                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                            indication = null,
+                        ) {
+                            selected = argb
+                            if (isText) TerminalPreferences.setTextColor(context, argb)
+                            else TerminalPreferences.setButtonColor(context, argb)
+                        },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (auto) {
+                        Text(
+                            "A",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = androidx.compose.ui.graphics.Color(0xFFECECE7),
+                        )
+                    }
+                }
+            }
+        }
+    }
 }

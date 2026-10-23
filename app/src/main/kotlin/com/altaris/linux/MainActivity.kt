@@ -99,16 +99,8 @@ enum class Screen {
 
 class MainActivity : ComponentActivity() {
 
-    // TEMPORARY (dev only): window-capture requests, see ui/debug/WindowCapture.
-    private val captureRequests = kotlinx.coroutines.flow.MutableStateFlow(0)
-    private var captureShare = false
-
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
-        if (BuildConfig.DEBUG && com.altaris.linux.ui.debug.WindowCapture.wantsCapture(intent)) {
-            captureShare = com.altaris.linux.ui.debug.WindowCapture.wantsShare(intent)
-            captureRequests.value = captureRequests.value + 1
-        }
         handleScriptCallback(intent)
         if (intent.getStringExtra("EXTRA_TARGET_PAGE") == "terminal") {
             // FGS notification tap → jump to in-app terminal (bottom-nav tab)
@@ -594,10 +586,6 @@ class MainActivity : ComponentActivity() {
         if (savedInstanceState == null) {
             dispatchLegacyTermuxCallback(intent)
         }
-        if (BuildConfig.DEBUG && com.altaris.linux.ui.debug.WindowCapture.wantsCapture(intent)) {
-            captureShare = com.altaris.linux.ui.debug.WindowCapture.wantsShare(intent)
-            captureRequests.value = captureRequests.value + 1
-        }
         requestNotificationPermissionIfNeeded()
         setContent {
             // Midnight is the default. Day and System are explicit user choices.
@@ -610,28 +598,6 @@ class MainActivity : ComponentActivity() {
                         else -> ThemeMode.DARK
                     }
                 )
-            }
-
-            // TEMPORARY (dev only): in-app window capture.
-            val captureSignal by captureRequests.collectAsState()
-            LaunchedEffect(captureSignal) {
-                if (captureSignal > 0) {
-                    kotlinx.coroutines.delay(900)
-                    val file = com.altaris.linux.ui.debug.WindowCapture.capture(
-                        this@MainActivity,
-                        window.decorView
-                    )
-                    if (file != null) {
-                        android.widget.Toast.makeText(
-                            this@MainActivity,
-                            "Captured ${file.absolutePath}",
-                            android.widget.Toast.LENGTH_LONG
-                        ).show()
-                        if (captureShare) {
-                            com.altaris.linux.ui.debug.WindowCapture.share(this@MainActivity, file)
-                        }
-                    }
-                }
             }
 
             AltarisTheme(themeMode = currentThemeMode) {
@@ -1270,7 +1236,10 @@ class MainActivity : ComponentActivity() {
                         }
                         Screen.TROUBLESHOOTING -> {
                             com.altaris.linux.ui.screens.TroubleshootingScreen(
-                                onBack = { currentScreen = Screen.SETTINGS }
+                                onBack = { currentScreen = Screen.SETTINGS },
+                                onOpenLogs = { currentScreen = Screen.CRASH_LOGS },
+                                onOpenRoot = { currentScreen = Screen.ROOT_ACCESS },
+                                onOpenSettings = { currentScreen = Screen.SETTINGS },
                             )
                         }
                         Screen.TERMINAL -> {

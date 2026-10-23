@@ -63,6 +63,9 @@ object LegacyDataMigration {
                 rm -rf "${'$'}NEW/files"
                 mv "${'$'}OLD/files" "${'$'}NEW/files" || exit 3
                 chown -R $uid:$uid "${'$'}NEW/files" || exit 4
+                # SELinux labels carry the old app's categories; without this
+                # the new uid can see the files but not open them.
+                restorecon -R "${'$'}NEW/files" 2>/dev/null || true
             fi
             mkdir -p "${'$'}NEW/shared_prefs"
             for f in "${'$'}OLD"/shared_prefs/*.xml; do
@@ -74,6 +77,7 @@ object LegacyDataMigration {
                 cp -a "${'$'}OLD/databases" "${'$'}NEW/databases" 2>/dev/null
             fi
             chown -R $uid:$uid "${'$'}NEW/shared_prefs" 2>/dev/null
+            restorecon -R "${'$'}NEW/shared_prefs" 2>/dev/null || true
             exit 0
         """.trimIndent()
         val code = RootShell.executeSync(cmd)

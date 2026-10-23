@@ -18,6 +18,7 @@ object StateManager {
     val refreshTrigger: kotlinx.coroutines.flow.StateFlow<Int> = _refreshTrigger.asStateFlow()
     
     fun triggerRefresh() {
+        com.altaris.linux.core.terminal.DistroFsCache.invalidate()
         _refreshTrigger.value += 1
     }
 

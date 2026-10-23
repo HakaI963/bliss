@@ -146,37 +146,22 @@ fun DistroScreen(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    // Installed state = filesystem truth (plan P4-T13); the browse page now keeps
-    // installed cards visible with a chip, so a stale pref can never hide a card
-    // whose rootfs is actually gone.
-    // The probe touches the filesystem: keep it off the main thread, or the
-    // first frame of this screen stalls.
-    val installedDistroIds by androidx.compose.runtime.produceState(
-        initialValue = emptySet<String>(),
+    // Installed state = filesystem truth (plan P4-T13), probed once per
+    // generation and cached process-wide. Entering the tab no longer walks
+    // every rootfs, so the switch is as fast as Home/Apps.
+    val fsSnapshot by androidx.compose.runtime.produceState(
+        initialValue = com.altaris.linux.core.terminal.DistroFsCache.peek(),
         refreshKey.value,
         stateRefresh,
     ) {
-        value = withContext(kotlinx.coroutines.Dispatchers.IO) {
-            DistroRepository.supportedDistros
-                .filter { TerminalLauncher.isDistroInstalledOnFs(context, it.id) }
-                .map { it.id }
-                .toSet()
+        if (value == null) {
+            value = withContext(kotlinx.coroutines.Dispatchers.IO) {
+                com.altaris.linux.core.terminal.DistroFsCache.get(context)
+            }
         }
     }
-
-    // A rootfs whose setup never finished is shown as unfinished, not installed.
-    val unfinishedDistroIds by androidx.compose.runtime.produceState(
-        initialValue = emptySet<String>(),
-        refreshKey.value,
-        stateRefresh,
-    ) {
-        value = withContext(kotlinx.coroutines.Dispatchers.IO) {
-            DistroRepository.supportedDistros
-                .filter { TerminalLauncher.isDistroUnfinished(context, it.id) }
-                .map { it.id }
-                .toSet()
-        }
-    }
+    val installedDistroIds = fsSnapshot?.installed ?: emptySet()
+    val unfinishedDistroIds = fsSnapshot?.unfinished ?: emptySet()
 
     var methodTab by remember { mutableStateOf(MethodTab.PROOT) }
     var selectedCategory by remember { mutableStateOf(DistroCategory.ALL) }
