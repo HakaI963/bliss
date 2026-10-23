@@ -23,8 +23,8 @@ object ProotCommandBuilder {
      * Drops host `TMPDIR`/`PROOT_TMP_DIR`/`PATH` so guest uid 1000 never tries
      * to write the host glue dir or exec host `proot`.
      */
-    fun guestLoginEnv(user: String): String =
-        "env -i " + guestEnvVars(user, "\"\${TERM:-xterm-256color}\"").joinToString(" ")
+    fun guestLoginEnv(user: String, envExe: String = "env"): String =
+        "$envExe -i " + guestEnvVars(user, "\"\${TERM:-xterm-256color}\"").joinToString(" ")
 
     /** `KEY=value` list behind [guestLoginEnv]; [term] is the TERM value as written. */
     fun guestEnvVars(user: String, term: String): List<String> {
@@ -122,7 +122,12 @@ object ProotCommandBuilder {
     ): Pair<Array<String>, HashMap<String, String>>? {
         val rootfs = File("$prefix/var/lib/proot-distro/containers/$distro/rootfs")
         val sysdata = File(rootfs.parentFile, "sysdata")
-        if (!rootfs.isDirectory || !File(sysdata, "sys_empty").isDirectory) return null
+        if (!rootfs.isDirectory) return null
+        if (!File(sysdata, "sys_empty").isDirectory) {
+            // Legacy containers lost this directory in the package migration;
+            // it is only an empty /sys/fs/selinux bind target.
+            if (!File(sysdata, "sys_empty").mkdirs()) return null
+        }
         if (File("${rootfs.path}$prefix/bin/login").isFile) return null // termux-type
         val pw = runCatching { File(rootfs, "etc/passwd").readLines() }.getOrNull()
             ?.map { it.split(":") }
@@ -222,15 +227,17 @@ object ProotCommandBuilder {
         user: String = "altaris",
         useSharedTmp: Boolean = true,
         distro: String = "debian",
-        loginShell: GuestLoginShell = GuestLoginShell.DEFAULT
+        loginShell: GuestLoginShell = GuestLoginShell.DEFAULT,
+        envExe: String = "env",
+        shellExe: String = "/bin/sh",
     ): Array<String> {
         val sharedTmpFlag = if (useSharedTmp) "--shared-tmp" else ""
-        val env = guestLoginEnv(user)
+        val env = guestLoginEnv(user, envExe)
         return if (GuestLoginShell.isLoginSentinel(shellCmd)) {
             arrayOf(
                 shell, "-c",
                 "exec python $prootDistro login $distro $sharedTmpFlag --user $user -- " +
-                    "$env ${GuestLoginShell.prootLoginCascade(loginShell)}"
+                    "$env $shellExe -lc '${GuestLoginShell.prootLoginScript(loginShell)}'"
             )
         } else {
             // Single-quote guest payload so host bash never expands $HOME/$PATH/etc.
@@ -240,58 +247,27 @@ object ProotCommandBuilder {
             arrayOf(
                 shell, "-c",
                 "exec python $prootDistro login $distro $sharedTmpFlag --user $user -- " +
-                    "$env /bin/sh -c '$escaped'"
+                    "$env $shellExe -c '$escaped'"
             )
         }
     }
 
     /**
-     * Resolves a guest executable to a *real file* inside the rootfs.
+     * Picks an executable proot can launch as the *first* guest process.
      *
-     * proot resolves the first exec itself, on the host. Alpine's
-     * `/usr/bin/env -> /bin/busybox` is an absolute symlink, so the host looks
-     * for Android's missing `/bin/busybox` and reports "'/usr/bin/env' not
-     * found". The same happens for `/bin/sh -> /bin/busybox`. Follow the link
-     * chain inside the guest and, for busybox, use applet dispatch.
+     * proot resolves that first exec itself, on the host. An absolute symlink
+     * such as Alpine's `/usr/bin/env -> /bin/busybox` therefore points at
+     * Android's missing `/bin/busybox` and proot reports "not found". A
+     * relative symlink (Debian's `/bin/sh -> dash`) resolves inside the rootfs
+     * and is fine. [File.isFile] gives us exactly that distinction; busybox
+     * gets applet dispatch because its applets are absolute symlinks.
      */
     private fun guestExec(rootfs: File, path: String, applet: String): List<String> {
-        val resolved = resolveGuestPath(rootfs, path) ?: path
-        return if (resolved.substringAfterLast('/') == "busybox") {
-            listOf(resolved, applet)
-        } else {
-            listOf(resolved)
-        }
-    }
-
-    private fun resolveGuestPath(rootfs: File, start: String): String? {
-        var path = start
-        repeat(10) {
-            val host = File(rootfs, path.trimStart('/'))
-            if (!java.nio.file.Files.isSymbolicLink(host.toPath())) {
-                return if (host.isFile) path else null
-            }
-            val target = runCatching {
-                java.nio.file.Files.readSymbolicLink(host.toPath()).toString()
-            }.getOrNull() ?: return null
-            path = if (target.startsWith("/")) {
-                target
-            } else {
-                normalizeGuest(path.substringBeforeLast('/', "") + "/" + target)
-            }
-        }
-        return null
-    }
-
-    private fun normalizeGuest(path: String): String {
-        val parts = ArrayDeque<String>()
-        for (part in path.split('/')) {
-            when (part) {
-                "", "." -> Unit
-                ".." -> if (parts.isNotEmpty()) parts.removeLast()
-                else -> parts.addLast(part)
-            }
-        }
-        return "/" + parts.joinToString("/")
+        val host = File(rootfs, path.trimStart('/'))
+        if (host.isFile) return listOf(path)
+        val busybox = File(rootfs, "bin/busybox")
+        if (busybox.isFile) return listOf("/bin/busybox", applet)
+        return listOf(path)
     }
 
     fun build(
@@ -322,6 +298,10 @@ object ProotCommandBuilder {
                 } else {
                     listOf("-c", shellCmd)
                 }
+            Log.i(
+                "ProotCommandBuilder",
+                "direct $distro user=$loginUser exec=${guestCmd.take(2).joinToString(" ")}",
+            )
             buildDirect(
                 proot = TermuxHostPaths.libProot(ctx).absolutePath,
                 prefix = TermuxHostPaths.PREFIX,
@@ -337,7 +317,11 @@ object ProotCommandBuilder {
             Log.i("ProotCommandBuilder", "direct launch: layout not recognised for $distro, using proot-distro")
         }
         val shell = TermuxHostPaths.libBash(ctx).absolutePath
-        val args = buildArgs(shell, TermuxHostPaths.PROOT_DISTRO, shellCmd, loginUser, useSharedTmp, distro, loginShell)
+        val args = buildArgs(
+            shell, TermuxHostPaths.PROOT_DISTRO, shellCmd, loginUser, useSharedTmp, distro, loginShell,
+            envExe = guestExec(rootfs, "/usr/bin/env", "env").joinToString(" "),
+            shellExe = guestExec(rootfs, "/bin/sh", "sh").joinToString(" "),
+        )
         return args to envMap
     }
 }
