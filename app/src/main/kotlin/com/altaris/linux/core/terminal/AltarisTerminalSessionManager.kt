@@ -243,7 +243,7 @@ object AltarisTerminalSessionManager {
     ): Boolean {
         // Mirror openSessionAfterHost: focus the existing tab when one matches
         // (this path never carries a distroId, so only distroId-less tabs reuse).
-        if (reuseExisting && reuseExistingTab(type, shellCmd, null)) return true
+        if (reuseExisting && reuseExistingTab(ctx, type, shellCmd, null)) return true
         return GuestSessionFactory.openSession(ctx, type, title, shellCmd, method)
     }
 
@@ -270,7 +270,7 @@ object AltarisTerminalSessionManager {
         // Same reuse rule for the HOST card: focus the existing host login shell
         // tab instead of stacking a second one (install/command host tabs keep
         // shellCmd = null and are never matched).
-        if (reuseExisting && reuseExistingTab("host", GuestSessionFactory.HOST_SHELL_CMD, null)) {
+        if (reuseExisting && reuseExistingTab(ctx, "host", GuestSessionFactory.HOST_SHELL_CMD, null)) {
             onResult(SessionOpenResult.OPENED)
             return
         }
