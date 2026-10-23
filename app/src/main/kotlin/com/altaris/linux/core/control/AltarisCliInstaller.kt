@@ -86,7 +86,14 @@ object AltarisCliInstaller {
     }
 
     private fun writeAsset(ctx: Context, target: File, marker: File?) {
-        val script = readAsset(ctx) ?: return
+        val asset = readAsset(ctx) ?: return
+        // Android has no /bin/sh; the host prefix runs on /system/bin/sh.
+        // Guests keep the POSIX shebang (their /bin/sh is real).
+        val script = if (marker == null) {
+            asset.replaceFirst("#!/bin/sh", "#!/system/bin/sh")
+        } else {
+            asset
+        }
         val compat = File(target.parentFile, COMPAT)
         if (marker != null && marker.isFile && target.isFile && compat.isFile &&
             target.length() == script.length.toLong() && compat.length() == script.length.toLong()
