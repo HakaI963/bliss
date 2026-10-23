@@ -10,7 +10,7 @@ class ChrootPathsTest {
 
     @Test
     fun helper_version_is_v210() {
-        assertEquals("altaris-chroot v2.11", ChrootPaths.CHROOT_HELPER_VERSION)
+        assertEquals("altaris-chroot v2.14", ChrootPaths.CHROOT_HELPER_VERSION)
     }
 
     @Test
