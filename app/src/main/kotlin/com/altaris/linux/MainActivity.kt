@@ -1514,9 +1514,9 @@ private fun AnimatedContentTransitionScope<BottomTab>.altarisTabTransition(): Co
     // near-invisible scale. Distance is deliberately tiny (1/14 of the
     // width) — visible, but never a full page slide.
     val enterFade = tween<Float>(180, easing = FastOutSlowInEasing)
-    val enterSlide = tween<Int>(230, easing = FastOutSlowInEasing)
+    val enterSlide = tween<IntOffset>(230, easing = FastOutSlowInEasing)
     val exitFade = tween<Float>(120, easing = FastOutSlowInEasing)
-    val exitSlide = tween<Int>(170, easing = FastOutSlowInEasing)
+    val exitSlide = tween<IntOffset>(170, easing = FastOutSlowInEasing)
     return (fadeIn(enterFade) + slideInHorizontally(enterSlide) { width -> width / 14 }) togetherWith
         (fadeOut(exitFade) + slideOutHorizontally(exitSlide) { width -> -width / 22 }) using
         SizeTransform(clip = false)
