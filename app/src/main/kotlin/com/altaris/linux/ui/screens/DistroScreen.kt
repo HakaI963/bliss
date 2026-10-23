@@ -411,6 +411,8 @@ private fun DistroRow(
             when {
                 distro.comingSoon -> StatusTag("Soon", accent)
                 installed -> StatusTag("Installed", accent, dot = true)
+                // A rootfs left mid-download must say so before the tap.
+                unfinished -> StatusTag("Unfinished", accent)
                 else -> InstallAffordance()
             }
         },
