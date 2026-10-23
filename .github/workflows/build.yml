@@ -94,6 +94,6 @@ jobs:
           APK=app/build/outputs/apk/altaris/debug/app-altaris-debug.apk
           TAG="altaris-debug-${GITHUB_SHA::7}"
           SHA=$(sha256sum "$APK" | awk '{print $1}')
-          gh release create "$TAG" --title "Altaris 1.0.4 — chroot tty + distro tab icon fix" \
-            --notes "Altaris 1.0.4 fixes two chroot issues. (1) 'tty: ttyname error: Inappropriate ioctl for device' at session start: ensure_devpts mounted a private devpts (newinstance), so the guest's /dev/pts did not contain the pty the session runs on and ttyname(0) failed with ENOTTY. The helper now bind-mounts the host /dev/pts (detected by comparing st_dev) and only falls back to a private devpts when the bind is refused, so /dev/tty and TUI tools work. (2) The distro icon in the session tab pill was drawn through a ColorFilter.tint, which flattened every full-colour logo into a solid silhouette; the tint now applies only to the vector placeholder. Helper bumped to v2.15 so the staged copy on device refreshes. APK SHA-256: $SHA" || true
+          gh release create "$TAG" --title "Altaris 1.0.5 — app clone install fix" \
+            --notes "Altaris 1.0.5 fixes clone installs failing with INSTALL_PARSE_FAILED_BAD_PACKAGE_NAME: 'Invalid manifest package: bad character'. The clone package was 'com.altaris.apps.' + an 8-char hex id, but Android requires every package segment to start with a letter, so any id beginning with 0-9 (10 of 16) produced an uninstallable APK. The generated id now starts with a letter, so every clone gets a valid package name. APK SHA-256: $SHA" || true
           gh release upload "$TAG" "$APK" --clobber

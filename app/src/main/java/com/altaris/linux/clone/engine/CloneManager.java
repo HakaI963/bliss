@@ -1301,9 +1301,20 @@ final class CloneManager {
         return className;
     }
 
+    /**
+     * Android package-name validation requires every dot-separated segment to
+     * start with a letter. randomId() is 8 hex chars, so a bare id starts with a
+     * digit 10 times out of 16 and the whole install session is rejected with
+     * INSTALL_PARSE_FAILED_BAD_PACKAGE_NAME: "Invalid manifest package: bad
+     * character". Prefixing a letter makes every generated name valid.
+     */
+    private static String randomPackageId() {
+        return "c" + randomId();
+    }
+
     private String newClonePackage() {
         for (int i = 0; i < 32; i++) {
-            String candidate = CLONE_PREFIX + randomId();
+            String candidate = CLONE_PREFIX + randomPackageId();
             if (!packageInstalled(candidate)) {
                 return candidate;
             }
