@@ -32,16 +32,22 @@ object RootfsKeyRepair {
     private const val TAG = "RootfsKeyRepair"
     private const val MARKER_DIR = ".rootfs-key-repair"
 
+    /** Serializes the app-start pass and a terminal-open pass. */
+    private val repairLock = Any()
+
     fun ensureRepaired(ctx: Context, rootfs: File?) {
         if (rootfs == null || !rootfs.isDirectory) return
-        if (marker(ctx, rootfs).isFile) return
-        if (!ShizukuShell.available()) return
-        runCatching { repair(ctx.applicationContext, rootfs) }
-            .onFailure { Log.w(TAG, "repair ${rootfs.name} failed: ${it.message}") }
+        synchronized(repairLock) {
+            if (marker(ctx, rootfs).isFile) return
+            if (!ShizukuShell.available()) return
+            runCatching { repair(ctx.applicationContext, rootfs) }
+                .onFailure { Log.w(TAG, "repair ${rootfs.name} failed: ${it.message}") }
+        }
     }
 
     private fun repair(ctx: Context, rootfs: File) {
-        val manifest = File(ctx.cacheDir, "altaris-symlinks-${rootfs.name}.tsv")
+        val key = keyOf(rootfs)
+        val manifest = File(ctx.cacheDir, "altaris-symlinks-$key.tsv")
         // A previous pass removed the links but the app died before recreating
         // them. The manifest is the source of truth until it is consumed.
         if (manifest.isFile && manifest.length() > 0L) {
@@ -62,7 +68,7 @@ object RootfsKeyRepair {
         Log.i(TAG, "repairing ${rootfs.name}: brokenLinks=$broken unreadable=${unreadable.size}")
 
         if (unreadable.isNotEmpty()) {
-            val list = File(ctx.cacheDir, "altaris-unreadable-${rootfs.name}.txt")
+            val list = File(ctx.cacheDir, "altaris-unreadable-$key.txt")
             list.writeText(unreadable.joinToString("\n") { it.absolutePath })
             val uid = Process.myUid()
             val script = buildString {
@@ -138,8 +144,12 @@ object RootfsKeyRepair {
         return failed == 0
     }
 
+    /** Every container rootfs is named `rootfs`; use the container dir. */
+    private fun keyOf(rootfs: File): String =
+        rootfs.parentFile?.name?.ifBlank { null } ?: rootfs.name
+
     private fun marker(ctx: Context, rootfs: File): File =
-        File(File(ctx.filesDir, MARKER_DIR), rootfs.name)
+        File(File(ctx.filesDir, MARKER_DIR), keyOf(rootfs))
 
     private fun markDone(ctx: Context, rootfs: File) {
         runCatching {
