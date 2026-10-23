@@ -878,9 +878,15 @@ _altaris_try_install() {
             apk add --no-cache "$@"
         fi
     elif command -v dnf5 >/dev/null 2>&1; then
-        dnf5 -y --setopt=install_weak_deps=False --setopt=tsflags=nodocs install "$@"
+        # noscripts is not optional under proot: icon-cache/udev/systemd
+        # triggers can sleep forever and make the install look stalled.
+        dnf5 -y --setopt=install_weak_deps=False \
+            --setopt=tsflags=nodocs,noscripts \
+            --setopt=max_parallel_downloads=10 install "$@"
     elif command -v dnf >/dev/null 2>&1; then
-        dnf -y --setopt=install_weak_deps=False --setopt=tsflags=nodocs install "$@"
+        dnf -y --setopt=install_weak_deps=False \
+            --setopt=tsflags=nodocs,noscripts \
+            --setopt=max_parallel_downloads=10 install "$@"
     elif command -v zypper >/dev/null 2>&1; then
         zypper --non-interactive install --no-recommends --auto-agree-with-licenses "$@"
     elif command -v xbps-install >/dev/null 2>&1; then
@@ -904,6 +910,14 @@ _altaris_guest_pactl() {
 }
 
 _altaris_install_pulse_client() {
+    # The XFCE panel plugin is a desktop-only extra. A terminal-only install
+    # (ALTARIS_DESKTOPS=none) must not pull its icon/GTK dependency chain in;
+    # unset keeps the historical desktop behavior.
+    _pulse_plugin="xfce4-pulseaudio-plugin"
+    _pulse_plugin_apk="xfce4-pulseaudio"
+    case " ${ALTARIS_DESKTOPS:-${ALTARIS_DESKTOP:-}} " in
+        *" none "*) _pulse_plugin=""; _pulse_plugin_apk="" ;;
+    esac
     _have=$(_altaris_guest_pactl || true)
     if [ -n "$_have" ]; then
         _altaris_log "pulse client already present ($_have)"
@@ -914,30 +928,30 @@ _altaris_install_pulse_client() {
         return 0
     fi
     if command -v apt-get >/dev/null 2>&1; then
-        _altaris_try_install libpulse0 pulseaudio-utils xfce4-pulseaudio-plugin \
+        _altaris_try_install libpulse0 pulseaudio-utils $_pulse_plugin \
             || _altaris_try_install libpulse0 pulseaudio-utils || true
     elif _altaris_is_chimera 2>/dev/null; then
-        _altaris_try_install libpulse libpulse-progs xfce4-pulseaudio-plugin \
+        _altaris_try_install libpulse libpulse-progs $_pulse_plugin \
             || _altaris_try_install libpulse libpulse-progs || true
     elif command -v apk >/dev/null 2>&1; then
-        _altaris_try_install libpulse pulseaudio-utils xfce4-pulseaudio \
+        _altaris_try_install libpulse pulseaudio-utils $_pulse_plugin_apk \
             || _altaris_try_install libpulse pulseaudio-utils || true
     elif command -v dnf5 >/dev/null 2>&1 || command -v dnf >/dev/null 2>&1; then
-        _altaris_try_install pulseaudio-libs pulseaudio-utils xfce4-pulseaudio-plugin \
+        _altaris_try_install pulseaudio-libs pulseaudio-utils $_pulse_plugin \
             || _altaris_try_install pulseaudio-libs pulseaudio-utils || true
         _altaris_mask_pipewire_pulse
     elif command -v zypper >/dev/null 2>&1; then
-        _altaris_try_install libpulse0 pulseaudio-utils xfce4-pulseaudio-plugin \
+        _altaris_try_install libpulse0 pulseaudio-utils $_pulse_plugin \
             || _altaris_try_install libpulse0 pulseaudio-utils \
             || _altaris_try_install libpulse0 || true
         _altaris_mask_pipewire_pulse
     elif command -v xbps-install >/dev/null 2>&1; then
         # Never fall back to the `pulseaudio` server package.
-        _altaris_try_install pulseaudio-utils xfce4-pulseaudio-plugin \
+        _altaris_try_install pulseaudio-utils $_pulse_plugin \
             || _altaris_try_install pulseaudio-utils \
             || _altaris_try_install libpulseaudio || true
     elif command -v pacman >/dev/null 2>&1; then
-        _altaris_try_install libpulse xfce4-pulseaudio-plugin \
+        _altaris_try_install libpulse $_pulse_plugin \
             || _altaris_try_install libpulse || true
     fi
     _have=$(_altaris_guest_pactl || true)

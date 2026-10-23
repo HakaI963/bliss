@@ -1598,9 +1598,9 @@ private fun CloneSideRail(
         )
         Box(Modifier.fillMaxWidth().height(0.75.dp).background(scheme.outlineVariant))
         Text(
-            // Always show the measured rate: a static clone is 0 fps, not a
-            // missing value. The cap is listed right below.
-            "$liveFps fps",
+            // A static clone has no meaningful rate; "idle" reads better than
+            // a fake 0 fps. The cap is listed right below.
+            if (liveFps > 0) "$liveFps fps" else "idle",
             fontSize = 10.sp,
             lineHeight = 12.sp,
             fontWeight = FontWeight.SemiBold,

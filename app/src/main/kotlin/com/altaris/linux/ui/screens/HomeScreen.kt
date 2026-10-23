@@ -341,9 +341,15 @@ fun HomeScreen(
 
     // The section accent colours every surface of this screen.
     val accent = sectionAccent(AltarisSection.HOME)
-    // The banner artwork, changeable in Settings.
+    // The banner artwork, changeable in Settings. A cropped custom photo wins
+    // when the user selected it; the bundled scene remains the fallback.
     val homeArt by StateManager.homeArt.collectAsState()
-    LaunchedEffect(Unit) { StateManager.getHomeArt(context) }
+    val customHomeArt by StateManager.customHomeArt.collectAsState()
+    val homeArtIsCustom by StateManager.homeArtIsCustom.collectAsState()
+    LaunchedEffect(Unit) {
+        StateManager.getHomeArt(context)
+        StateManager.getCustomHomeArt(context)
+    }
 
     // Bento order: the container that owns the running desktop leads, then the
     // first PRoot guest, then the rest.
@@ -370,6 +376,7 @@ fun HomeScreen(
             // The scene: the anime artwork that carries the identity.
             HomeHero(
                 artRes = homeArt,
+                customArt = if (homeArtIsCustom) customHomeArt else null,
                 title = "ALTARIS",
                 subtitle = "LINUX ON DEVICE",
                 modifier = Modifier

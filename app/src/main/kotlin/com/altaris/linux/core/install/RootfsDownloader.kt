@@ -83,8 +83,10 @@ object RootfsDownloader {
      * download.
      */
     private val MIRROR_PREFIXES = listOf(
-        "https://ghfast.top/",
+        // Fastest observed with large release assets; measured at 7–10 MB/s
+        // while the origin was often throttled or hanging.
         "https://gh-proxy.com/",
+        "https://ghfast.top/",
         "https://ghproxy.net/",
         "https://github.moeyy.xyz/",
         "https://gh.llkk.cc/"
@@ -208,17 +210,18 @@ object RootfsDownloader {
 
         if (isCancelled()) return false
 
-        // 3. Network download with Range resume, trying the origin URL first
-        // and then each public GitHub mirror (release-assets redirect host is
-        // blocked by many ISPs). A SHA gate failure deletes the `.partial`
-        // before the next candidate so a bad mirror cannot poison the resume;
-        // transport failures keep it (all mirrors serve identical bytes).
+        // 3. Network download with Range resume, trying the public GitHub
+        // mirrors first and the origin URL last (release-assets is often
+        // throttled while the proxies run at full speed). A SHA gate failure
+        // deletes the `.partial` before the next candidate so a bad mirror
+        // cannot poison the resume; transport failures keep it (all mirrors
+        // serve identical bytes).
         // On the final candidate the partial is kept (D5 resume semantics).
         // Cancellation stops the whole loop immediately.
         val sources = mirrorUrls(archive.url)
         for ((index, sourceUrl) in sources.withIndex()) {
             if (isCancelled()) return false
-            if (index > 0) Log.w(TAG, "mirror failed, trying next: $sourceUrl")
+            if (index > 0) Log.w(TAG, "download source failed, trying next: $sourceUrl")
             when (download(destDir, dest, archive, sourceUrl, client, isCancelled, onProgress)) {
                 DownloadAttempt.OK -> return true
                 DownloadAttempt.GATE_FAILED -> {
@@ -239,14 +242,14 @@ object RootfsDownloader {
     private enum class DownloadAttempt { OK, FAILED, GATE_FAILED }
 
     /**
-     * Download candidates for [url]: the origin URL first, then each public
-     * GitHub proxy prefix + [url] when [url] is a GitHub release asset
+     * Download candidates for [url]: each public GitHub proxy prefix + [url]
+     * first, then the origin URL last, when [url] is a GitHub release asset
      * (`https://github.com/<owner>/<repo>/releases/download/...`).
      * Non-release URLs return `listOf(url)`. Pure and unit-testable.
      */
     internal fun mirrorUrls(url: String): List<String> {
         if (!GITHUB_RELEASE_RE.matches(url)) return listOf(url)
-        return listOf(url) + MIRROR_PREFIXES.map { prefix -> prefix + url }
+        return MIRROR_PREFIXES.map { prefix -> prefix + url } + url
     }
 
     // ── network ─────────────────────────────────────────────────────────────

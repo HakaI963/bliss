@@ -841,8 +841,8 @@ class MainActivity : ComponentActivity() {
                     tab: BottomTab,
                     hazeState: HazeState
                 ) {
-                    // Tab motion: crossfade + subtle upward rise; the Terminal tab is
-                    // a fade-only AndroidView surface. The dock springs on its own.
+                    // Tab motion: fade + a short horizontal carry; the Terminal tab
+                    // is a fade-only AndroidView surface. The dock springs on its own.
                     AnimatedContent(
                         targetState = tab,
                         transitionSpec = { altarisTabTransition() },
@@ -1509,13 +1509,15 @@ private fun AnimatedContentTransitionScope<Screen>.altarisRouteTransition(): Con
 }
 
 private fun AnimatedContentTransitionScope<BottomTab>.altarisTabTransition(): ContentTransform {
-    // One motion language for every dock destination. The old Apps↔Tools
-    // exception made two adjacent tabs feel broken; this is one short
-    // fade + scale for all four.
-    val fadeInSpec = tween<Float>(180, easing = FastOutSlowInEasing)
-    val fadeOutSpec = tween<Float>(130, easing = FastOutSlowInEasing)
-    val scaleSpec = tween<Float>(190, easing = FastOutSlowInEasing)
-    return (fadeIn(fadeInSpec) + scaleIn(scaleSpec, initialScale = 0.985f)) togetherWith
-        (fadeOut(fadeOutSpec) + scaleOut(scaleSpec, targetScale = 1.004f)) using
+    // One motion language for every dock destination: a short fade plus a
+    // small horizontal carry so a switch is clearly felt, not just a
+    // near-invisible scale. Distance is deliberately tiny (1/14 of the
+    // width) — visible, but never a full page slide.
+    val enterFade = tween<Float>(180, easing = FastOutSlowInEasing)
+    val enterSlide = tween<Int>(230, easing = FastOutSlowInEasing)
+    val exitFade = tween<Float>(120, easing = FastOutSlowInEasing)
+    val exitSlide = tween<Int>(170, easing = FastOutSlowInEasing)
+    return (fadeIn(enterFade) + slideInHorizontally(enterSlide) { width -> width / 14 }) togetherWith
+        (fadeOut(exitFade) + slideOutHorizontally(exitSlide) { width -> -width / 22 }) using
         SizeTransform(clip = false)
 }

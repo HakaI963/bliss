@@ -88,6 +88,6 @@ jobs:
           APK=app/build/outputs/apk/altaris/debug/app-altaris-debug.apk
           TAG="altaris-debug-${GITHUB_SHA::7}"
           SHA=$(sha256sum "$APK" | awk '{print $1}')
-          gh release create "$TAG" --title "Altaris 3.20.0 — accessibility navigation and the Iridescent identity" \
-            --notes "Altaris 3.20 replaces screenshot+OCR navigation with a real accessibility node tree: an AccessibilityService in its own process reads the UI of the clone display, so elements can be tapped, typed into and scrolled by name (new /uiauto endpoints and altaris_ui_* MCP tools, plus an Elements panel in the clone viewer). The identity system is new as well: five bright schemes with dark and light variants, an animated AGSL aurora backdrop and spring press feedback, with Iridescent as the default. It also keeps the 3.19 work: universal shell profile, bundled nghttp3/ngtcp2 runtime repair, hidden control plane, desktop-only agent scanning, `altaris` CLI with a `altaris` alias. APK SHA-256: $SHA" || true
+          gh release create "$TAG" --title "Altaris 1.0.0 — custom home artwork and faster installs" \
+            --notes "Altaris 1.0.0 adds custom home artwork with an in-app crop for any photo, restores the Distros tab motion, shows idle instead of a fake 0 fps, and makes Fedora/glibc installs finish reliably by skipping hanging RPM scriptlets. It keeps the 3.20 work: flat monochrome identities, accessibility navigation, the clone viewer Elements panel, universal shell profile, hidden control plane and the `altaris` CLI. APK SHA-256: $SHA" || true
           gh release upload "$TAG" "$APK" --clobber

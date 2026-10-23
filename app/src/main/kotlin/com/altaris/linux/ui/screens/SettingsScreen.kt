@@ -2,8 +2,12 @@ package com.altaris.linux.ui.screens
 
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
 import android.net.Uri
 import android.util.Log
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -63,7 +67,10 @@ import com.altaris.linux.core.utils.ThemeMode
 import com.altaris.linux.ui.components.AltarisTitle
 import com.altaris.linux.ui.components.ArtworkThumb
 import com.altaris.linux.ui.components.ArtworkThumbs
+import com.altaris.linux.ui.components.CustomArtworkCropDialog
+import com.altaris.linux.ui.components.CustomArtworkThumb
 import com.altaris.linux.ui.components.PrismCard
+import com.altaris.linux.ui.components.decodeCustomArtwork
 import com.altaris.linux.ui.components.PrismIconTile
 import com.altaris.linux.ui.components.PrismOrb
 import com.altaris.linux.ui.components.PrismRow
@@ -76,6 +83,10 @@ import com.altaris.linux.ui.theme.Prism
 import com.altaris.linux.ui.theme.rememberStaggerEntrance
 import com.altaris.linux.ui.theme.sectionAccent
 import com.altaris.linux.ui.theme.staggerIn
+import java.io.File
+import java.io.FileOutputStream
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * Settings hub — Prism layout.
@@ -121,6 +132,36 @@ fun SettingsScreen(
     // Colour scheme (persisted via StateManager; applied by AltarisTheme).
     val scheme by StateManager.scheme.collectAsState()
     val homeArt by StateManager.homeArt.collectAsState()
+    val customArt by StateManager.customHomeArt.collectAsState()
+    val customArtActive by StateManager.homeArtIsCustom.collectAsState()
+
+    // Custom banner: pick a photo, decode it off the main thread, crop it to
+    // the exact HomeHero aspect, then persist the result under filesDir.
+    var cropUri by remember { mutableStateOf<Uri?>(null) }
+    var cropSource by remember { mutableStateOf<Bitmap?>(null) }
+    val pickCustomArt = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        if (uri != null) cropUri = uri
+    }
+    val openCropPicker: () -> Unit = {
+        pickCustomArt.launch(
+            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+        )
+    }
+    LaunchedEffect(Unit) {
+        StateManager.getHomeArt(context)
+        StateManager.getCustomHomeArt(context)
+    }
+    LaunchedEffect(cropUri) {
+        val uri = cropUri ?: return@LaunchedEffect
+        val decoded = withContext(Dispatchers.IO) { decodeCustomArtwork(context, uri) }
+        if (decoded != null) {
+            cropSource = decoded
+        } else {
+            cropUri = null
+        }
+    }
 
     // The swatches follow the active mode, like the surfaces do.
     val darkMode = when (currentTheme) {
@@ -241,11 +282,100 @@ fun SettingsScreen(
                 ArtworkThumbs.forEach { art ->
                     ArtworkThumb(
                         artRes = art,
-                        selected = art == homeArt,
+                        selected = !customArtActive && art == homeArt,
                         onClick = { StateManager.setHomeArt(context, art) },
                     )
                 }
+                CustomArtworkThumb(
+                    artFile = customArt,
+                    selected = customArtActive,
+                    onClick = {
+                        if (customArt != null) {
+                            StateManager.selectCustomHomeArt(context)
+                        } else {
+                            openCropPicker()
+                        }
+                    },
+                    onChoose = openCropPicker,
+                )
             }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = when {
+                        customArt == null -> "Use your own photo, cropped to the banner."
+                        customArtActive -> "Custom artwork selected."
+                        else -> "Custom artwork saved — tap its tile to use it."
+                    },
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
+                )
+                if (customArt != null) {
+                    Text(
+                        text = "Remove",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .clickable { StateManager.clearCustomHomeArt(context) }
+                            .padding(horizontal = 6.dp, vertical = 4.dp),
+                    )
+                }
+                Text(
+                    text = if (customArt == null) "Choose" else "Replace",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .clickable { openCropPicker() }
+                        .padding(horizontal = 6.dp, vertical = 4.dp),
+                )
+            }
+        }
+
+        // The crop sheet sits above Settings and disappears once the bitmap is
+        // written; no navigation route or extra permission is needed.
+        cropSource?.let { source ->
+            CustomArtworkCropDialog(
+                source = source,
+                onDismiss = {
+                    cropSource = null
+                    cropUri = null
+                },
+                onCropped = { cropped ->
+                    // A fresh path per crop makes the File key change, so the
+                    // home banner and the Settings thumb re-decode immediately
+                    // instead of caching the previous image.
+                    val file = File(
+                        context.filesDir,
+                        "home_art_custom_${System.currentTimeMillis()}.jpg",
+                    )
+                    val saved = runCatching {
+                        FileOutputStream(file).use { out ->
+                            cropped.compress(Bitmap.CompressFormat.JPEG, 92, out)
+                        }
+                    }.isSuccess
+                    if (saved && file.isFile && file.length() > 0L) {
+                        val previous = StateManager.customHomeArt.value
+                        StateManager.setCustomHomeArt(context, file)
+                        if (previous != null && previous.absolutePath != file.absolutePath) {
+                            previous.delete()
+                        }
+                    } else {
+                        file.delete()
+                    }
+                    cropped.recycle()
+                    cropSource = null
+                    cropUri = null
+                },
+            )
         }
 
         // Environment & Host

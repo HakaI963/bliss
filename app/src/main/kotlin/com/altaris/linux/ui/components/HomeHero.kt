@@ -1,5 +1,6 @@
 package com.altaris.linux.ui.components
 
+import android.graphics.BitmapFactory
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -21,7 +22,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -32,6 +37,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
@@ -39,6 +45,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.altaris.linux.ui.theme.Prism
+import java.io.File
 
 /**
  * The home artwork.
@@ -50,6 +57,7 @@ import com.altaris.linux.ui.theme.Prism
 @Composable
 fun HomeHero(
     artRes: Int,
+    customArt: File? = null,
     modifier: Modifier = Modifier,
     title: String = "Altaris",
     subtitle: String? = null,
@@ -57,6 +65,22 @@ fun HomeHero(
 ) {
     val scheme = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(Prism.PanelRadius)
+    // The custom file is written at 1600px wide; cap the decode anyway so a
+    // future/hand-dropped file cannot allocate an oversized bitmap.
+    val customBitmap = remember(customArt) {
+        customArt?.let { file ->
+            runCatching {
+                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                BitmapFactory.decodeFile(file.absolutePath, bounds)
+                var sample = 1
+                while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= 2048) {
+                    sample *= 2
+                }
+                val options = BitmapFactory.Options().apply { inSampleSize = sample }
+                BitmapFactory.decodeFile(file.absolutePath, options)?.asImageBitmap()
+            }.getOrNull()
+        }
+    }
     val drift = rememberInfiniteTransition(label = "heroDrift")
     val scale by drift.animateFloat(
         initialValue = 1f,
@@ -75,17 +99,27 @@ fun HomeHero(
             .background(scheme.surfaceVariant)
             .border(1.dp, scheme.outline, shape),
     ) {
-        Image(
-            painter = painterResource(artRes),
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier
-                .fillMaxSize()
-                .graphicsLayer {
-                    scaleX = scale
-                    scaleY = scale
-                },
-        )
+        val artModifier = Modifier
+            .fillMaxSize()
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+        if (customBitmap != null) {
+            Image(
+                bitmap = customBitmap,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = artModifier,
+            )
+        } else {
+            Image(
+                painter = painterResource(artRes),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = artModifier,
+            )
+        }
         // A scrim only where the text sits, so the picture stays clean.
         Box(
             modifier = Modifier
@@ -166,6 +200,86 @@ fun ArtworkThumb(
             contentScale = ContentScale.Crop,
             modifier = Modifier.size(52.dp),
         )
+    }
+}
+
+/**
+ * The custom-art tile in Settings: a plus when nothing has been cropped yet,
+ * the saved image when it has, plus a small replace button. Tapping the tile
+ * selects the custom art; the badge reopens the picker.
+ */
+@Composable
+fun CustomArtworkThumb(
+    artFile: File?,
+    selected: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+    onChoose: () -> Unit,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(Prism.ButtonRadius)
+    val thumb = remember(artFile) {
+        artFile?.let { file ->
+            runCatching {
+                val options = BitmapFactory.Options().apply { inSampleSize = 4 }
+                BitmapFactory.decodeFile(file.absolutePath, options)?.asImageBitmap()
+            }.getOrNull()
+        }
+    }
+    Box(
+        modifier = modifier
+            .size(58.dp)
+            .clip(shape)
+            .background(scheme.surfaceVariant)
+            .border(
+                width = if (selected) 2.dp else 1.dp,
+                color = if (selected) scheme.onSurface else scheme.outline,
+                shape = shape,
+            )
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (thumb != null) {
+            Image(
+                bitmap = thumb,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(3.dp)
+                    .size(18.dp)
+                    .clip(CircleShape)
+                    .background(scheme.surface)
+                    .border(1.dp, scheme.outline, CircleShape)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = onChoose,
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Add,
+                    contentDescription = "Replace custom artwork",
+                    tint = scheme.onSurface,
+                    modifier = Modifier.size(12.dp),
+                )
+            }
+        } else {
+            Icon(
+                imageVector = Icons.Filled.Add,
+                contentDescription = "Choose custom artwork",
+                tint = scheme.onSurface,
+                modifier = Modifier.size(20.dp),
+            )
+        }
     }
 }
 

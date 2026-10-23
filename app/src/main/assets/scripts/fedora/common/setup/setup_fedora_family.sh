@@ -47,7 +47,7 @@ export LANG=C
 # Scriptlets (gtk-update-icon-cache, udev, systemd) hang under proot.
 export SYSTEMD_OFFLINE=1
 export SYSTEMD_SKIP_UNMOUNTS=1
-DNF_OPTS="-y --setopt=install_weak_deps=False --setopt=tsflags=nodocs,noscripts"
+DNF_OPTS="-y --setopt=install_weak_deps=False --setopt=tsflags=nodocs,noscripts --setopt=max_parallel_downloads=10"
 
 # fedora-minimal omits the OpenSSL default bundle symlink. Restore before
 # dnf talks to metalink HTTPS.
@@ -59,7 +59,7 @@ if [ ! -e /etc/pki/tls/cert.pem ] && [ -f /etc/pki/ca-trust/extracted/pem/tls-ca
 fi
 
 _altaris_log "dnf makecache ($DNF)..."
-$DNF -y --setopt=install_weak_deps=False makecache || {
+$DNF -y --setopt=install_weak_deps=False --setopt=max_parallel_downloads=10 makecache || {
     echo "Altaris: dnf makecache failed (network / repos)"
     exit 1
 }

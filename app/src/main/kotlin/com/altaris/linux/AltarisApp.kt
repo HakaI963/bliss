@@ -22,6 +22,13 @@ class AltarisApp : Application() {
         // The product was renamed; carry the old preference files over so an
         // upgrade does not look like a fresh install.
         com.altaris.linux.core.utils.PrefsMigration.migrate(this)
+        // Hydrate the home artwork flows before the first screen composes, so
+        // a custom banner survives a cold start even if Settings is the first
+        // screen opened.
+        runCatching {
+            com.altaris.linux.core.utils.StateManager.getHomeArt(this)
+            com.altaris.linux.core.utils.StateManager.getCustomHomeArt(this)
+        }
         if (!isMainProcess()) {
             // Shizuku re-creates this Application inside its :shell user-service
             // process. Host bootstrap/terminal setup must never run there.

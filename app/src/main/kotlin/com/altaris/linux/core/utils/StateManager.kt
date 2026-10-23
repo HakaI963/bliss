@@ -33,6 +33,14 @@ object StateManager {
     private val _homeArt = MutableStateFlow(R.drawable.altaris_scene_1)
     val homeArt: StateFlow<Int> = _homeArt.asStateFlow()
 
+    /** A user-cropped photo saved under filesDir, when one exists. */
+    private val _customHomeArt = MutableStateFlow<java.io.File?>(null)
+    val customHomeArt: StateFlow<java.io.File?> = _customHomeArt.asStateFlow()
+
+    /** True when the home banner should render [customHomeArt]. */
+    private val _homeArtIsCustom = MutableStateFlow(false)
+    val homeArtIsCustom: StateFlow<Boolean> = _homeArtIsCustom.asStateFlow()
+
     fun getHomeArt(context: Context): Int {
         val prefs = context.getSharedPreferences("theme_prefs", Context.MODE_PRIVATE)
         val name = prefs.getString("home_art", null)
@@ -40,16 +48,72 @@ object StateManager {
             runCatching { context.resources.getIdentifier(it, "drawable", context.packageName) }.getOrNull()
         } ?: R.drawable.altaris_scene_1
         _homeArt.value = art
+        hydrateCustomHomeArt(context, prefs)
         return art
     }
 
     fun setHomeArt(context: Context, artRes: Int) {
         val prefs = context.getSharedPreferences("theme_prefs", Context.MODE_PRIVATE)
         val name = runCatching { context.resources.getResourceEntryName(artRes) }.getOrNull()
-        if (name != null) {
-            prefs.edit().putString("home_art", name).apply()
-        }
+        val editor = prefs.edit()
+        if (name != null) editor.putString("home_art", name)
+        editor.putBoolean("home_art_custom", false)
+        editor.apply()
         _homeArt.value = artRes
+        _homeArtIsCustom.value = false
+    }
+
+    /** Load a saved custom banner (or clear the flow when the file is gone). */
+    fun getCustomHomeArt(context: Context): java.io.File? {
+        val prefs = context.getSharedPreferences("theme_prefs", Context.MODE_PRIVATE)
+        hydrateCustomHomeArt(context, prefs)
+        return _customHomeArt.value
+    }
+
+    /** Persist a freshly cropped banner and make it the active artwork. */
+    fun setCustomHomeArt(context: Context, file: java.io.File) {
+        context.getSharedPreferences("theme_prefs", Context.MODE_PRIVATE)
+            .edit()
+            .putString("custom_home_art", file.absolutePath)
+            .putBoolean("home_art_custom", true)
+            .apply()
+        _customHomeArt.value = file
+        _homeArtIsCustom.value = true
+    }
+
+    /** Re-select an existing custom banner without recropping it. */
+    fun selectCustomHomeArt(context: Context) {
+        val file = _customHomeArt.value ?: getCustomHomeArt(context) ?: return
+        context.getSharedPreferences("theme_prefs", Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean("home_art_custom", true)
+            .apply()
+        _customHomeArt.value = file
+        _homeArtIsCustom.value = true
+    }
+
+    /** Remove the custom banner (the bundled [homeArt] is shown again). */
+    fun clearCustomHomeArt(context: Context) {
+        val file = _customHomeArt.value
+        context.getSharedPreferences("theme_prefs", Context.MODE_PRIVATE)
+            .edit()
+            .remove("custom_home_art")
+            .putBoolean("home_art_custom", false)
+            .apply()
+        _customHomeArt.value = null
+        _homeArtIsCustom.value = false
+        runCatching { file?.delete() }
+    }
+
+    private fun hydrateCustomHomeArt(
+        context: Context,
+        prefs: android.content.SharedPreferences,
+    ) {
+        val file = prefs.getString("custom_home_art", null)
+            ?.let { java.io.File(it) }
+            ?.takeIf { it.isFile && it.length() > 0L }
+        _customHomeArt.value = file
+        _homeArtIsCustom.value = file != null && prefs.getBoolean("home_art_custom", false)
     }
 
     // ── Colour scheme (Altaris identity) ──────────────────────────────────
