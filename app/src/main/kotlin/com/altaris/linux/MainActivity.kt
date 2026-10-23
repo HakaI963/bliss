@@ -1498,7 +1498,7 @@ private fun AnimatedContentTransitionScope<Screen>.altarisRouteTransition(): Con
     // terminal measures shorter than the home screen, and interpolating that
     // size makes the incoming screen unfold from a corner. Clip and snap.
     return if (fadeOnly) {
-        transform.using(SizeTransform(clip = true, sizeAnimationSpec = { _, _ -> null }))
+        transform.using(SizeTransform(clip = true, sizeAnimationSpec = { _, _ -> tween(1) }))
     } else {
         // clip = false keeps terminal/X11 surface content from being clipped mid-slide.
         transform.using(SizeTransform(clip = false))

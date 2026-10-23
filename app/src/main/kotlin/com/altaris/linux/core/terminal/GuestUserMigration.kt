@@ -113,7 +113,7 @@ object GuestUserMigration {
             }
             if (replaceMembers) {
                 // "wheel:x:10:flux,someone" -> "wheel:x:10:altaris,someone"
-                val fields = out.split(":")
+                val fields = out.split(":").toMutableList()
                 if (fields.size >= 4 && fields[3].split(",").contains(LEGACY)) {
                     fields[3] = fields[3].split(",").joinToString(",") {
                         if (it == LEGACY) PRIMARY else it

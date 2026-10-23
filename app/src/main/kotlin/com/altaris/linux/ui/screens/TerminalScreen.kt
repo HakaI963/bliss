@@ -443,7 +443,7 @@ private fun TerminalScreenContent(
             // first: otherwise the terminal measures short while the home
             // screen measures full height, and the route size animation makes
             // the content appear to unfold from a corner.
-            terminalViewRef?.let { hideIme(it) }
+            terminalViewRef?.let { com.altaris.linux.ui.terminal.hideIme(it) }
             kotlinx.coroutines.delay(140)
             onBack?.invoke()
         }
