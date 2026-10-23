@@ -605,8 +605,9 @@ object RootShell {
             out.setExecutable(true, false)
             out.setReadable(true, false)
             out.absolutePath
-        } catch (e: Exception) {
-            Log.w(TAG, "stageChrootRuntimeAsset($assetName) failed: ${e.message}")
+        } catch (t: Throwable) {
+            // AssetManager/Context stubs can throw Error subclasses in JVM tests.
+            runCatching { Log.w(TAG, "stageChrootRuntimeAsset($assetName) failed: ${t.message}") }
             null
         }
     }
