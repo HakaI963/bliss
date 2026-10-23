@@ -3398,7 +3398,7 @@ function ble/util/assign-words {
   ble/util/assign "$1" "$2"
   ble/string#split-words "$1" "${!1}"
 }
-ble/bin/awk/.instantiate
+# Altaris: define ble/is-function before awk instantiation, which calls it.
 if ((_ble_bash>=30200)); then
   function ble/is-function {
     declare -F "$1" &>/dev/null
@@ -3410,6 +3410,7 @@ else
     [[ $type == function ]]
   }
 fi
+ble/bin/awk/.instantiate
 if ((_ble_bash>=30200)); then
   function ble/function#getdef {
     local name=$1

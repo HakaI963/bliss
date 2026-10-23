@@ -31,10 +31,31 @@ object CloneEngineAutoStart {
     /** Idempotent: attach the engine and start it when Shizuku is usable. */
     fun start(context: Context) {
         val app = context.applicationContext
+        cleanupOrphanServices()
         runCatching { HeadlessCloneEngine.attach(app) }
             .onFailure { Log.w(TAG, "engine attach failed", it) }
         installBinderListener(app)
         tryStart()
+    }
+
+    /**
+     * A previous app process may leave its bound user service behind when it is
+     * force-stopped; those are the `<pkg>:shell` processes reparented to init.
+     * Remove them before binding a new one — the engine must not outlive the
+     * app in the background, and two engines would fight over the display.
+     */
+    private fun cleanupOrphanServices() {
+        val usable = runCatching {
+            Shizuku.pingBinder() &&
+                Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
+        }.getOrDefault(false)
+        if (!usable) return
+        runCatching {
+            com.altaris.linux.core.system.ShizukuShell.run(
+                "for p in \$(pidof com.altaris.linux:shell 2>/dev/null); do kill -9 \$p; done",
+                5_000L,
+            )
+        }.onFailure { Log.w(TAG, "orphan engine cleanup failed", it) }
     }
 
     /** Called by the Apps screen too, so a late permission still connects. */

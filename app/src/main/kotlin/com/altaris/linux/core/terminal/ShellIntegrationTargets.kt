@@ -38,7 +38,7 @@ object ShellIntegrationTargets {
      * (2023-04-03). Bump on every re-vendor — invalidates the stamps and
      * triggers one re-copy.
      */
-    const val BLESH_RELEASE = "0.4.0-devel3+1a5c451c"
+    const val BLESH_RELEASE = "0.4.0-devel3+1a5c451c-altaris1"
 
     /** Version stamp written next to the runtime tree. */
     const val STAMP_NAME = ".altaris-shell-version"
