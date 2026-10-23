@@ -75,9 +75,9 @@ class BusyBoxPathsTest {
     @Test
     fun helper_version_is_v210() {
         val helper = readAsset("scripts/chroot/altaris_chroot.sh")
-        assertTrue(helper.contains("altaris-chroot v2.14"))
-        assertTrue(helper.contains("VERSION_STR=\"altaris-chroot v2.14\""))
-        assertEquals("altaris-chroot v2.14", ChrootPaths.CHROOT_HELPER_VERSION)
+        assertTrue(helper.contains("altaris-chroot v2.15"))
+        assertTrue(helper.contains("VERSION_STR=\"altaris-chroot v2.15\""))
+        assertEquals("altaris-chroot v2.15", ChrootPaths.CHROOT_HELPER_VERSION)
     }
 
     @Test

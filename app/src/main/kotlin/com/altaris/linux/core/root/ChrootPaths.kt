@@ -51,7 +51,7 @@ object ChrootPaths {
     const val CHROOT_HELPER = "$HELPERS_DIR/altaris_chroot.sh"
     const val CHROOT_HELPER_ASSET = "scripts/chroot/altaris_chroot.sh"
     /** Must match first `# altaris-chroot vN` line in the asset. */
-    const val CHROOT_HELPER_VERSION = "altaris-chroot v2.14"
+    const val CHROOT_HELPER_VERSION = "altaris-chroot v2.15"
 
     /** Session executable — must be a system binary (SELinux blocks exec of app-data scripts). */
     const val SESSION_EXEC = "/system/bin/sh"

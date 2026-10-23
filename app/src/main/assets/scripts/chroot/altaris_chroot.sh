@@ -1,5 +1,5 @@
 #!/system/bin/sh
-# altaris-chroot v2.14
+# altaris-chroot v2.15
 # SSOT chroot runner for NativeCode Debian 13 (requires root).
 # Do not nest this under run_debian13_root.sh — it already owns mounts + one chroot.
 # Guest entry always uses env -i + Debian PATH (never Android /system PATH).
@@ -20,7 +20,7 @@
 #   ALTARIS_CHROOT  ALTARIS_PACKAGE  ALTARIS_HOST_TMP  ALTARIS_PREFIX  ALTARIS_BB  ALTARIS_SHELL
 set -u
 
-VERSION_STR="altaris-chroot v2.14"
+VERSION_STR="altaris-chroot v2.15"
 # Prefer caller-pinned env (RootShell / start_gui). Fallbacks cover both store flavors.
 if [ -z "${ALTARIS_PACKAGE:-}" ]; then
   if [ -d /data/data/com.zenithblue.fluxlinux/files/usr ]; then
@@ -203,21 +203,28 @@ ensure_sticky_tmp() {
 ensure_devpts() {
   _pts="$ALTARIS_CHROOT/dev/pts"
   mkdir -p "$_pts" 2>/dev/null || true
-  if is_mounted "$_pts"; then
-    _perm=""
-    if [ -c "$_pts/ptmx" ]; then
-      _perm=$($BB stat -c '%a' "$_pts/ptmx" 2>/dev/null || stat -c '%a' "$_pts/ptmx" 2>/dev/null || echo "")
-    fi
-    # 0 / 000 / empty missing → heal once (no mount storm: single umount+remount)
-    case "$_perm" in
-      ""|0|000)
-        $BB umount "$_pts" 2>/dev/null || $BB umount -l "$_pts" 2>/dev/null || true
-        ;;
-    esac
+
+  # The session's own pty slave lives in the HOST devpts instance. bind_if_missing
+  # uses a plain --bind, which does NOT carry submounts, so $_pts starts empty.
+  # Mounting a private devpts (newinstance) then leaves the guest with a /dev/pts
+  # that does not contain the fd this shell runs on: ttyname(0) fails with ENOTTY
+  # and guest tools print
+  #   "tty: ttyname error: Inappropriate ioctl for device"
+  # Reuse the host instance so /dev/pts/<n> resolves to the real pty.
+  _host_dev=$($BB stat -c '%d' /dev/pts 2>/dev/null || stat -c '%d' /dev/pts 2>/dev/null || echo "")
+  _guest_dev=$($BB stat -c '%d' "$_pts" 2>/dev/null || stat -c '%d' "$_pts" 2>/dev/null || echo "")
+  if [ -n "$_host_dev" ] && [ "$_host_dev" != "$_guest_dev" ]; then
+    $BB umount -l "$_pts" 2>/dev/null || true
+    $BB mount --rbind /dev/pts "$_pts" 2>/dev/null \
+      || $BB mount --bind /dev/pts "$_pts" 2>/dev/null \
+      || /system/bin/mount --rbind /dev/pts "$_pts" 2>/dev/null \
+      || true
   fi
+
+  # Fall back to a private devpts only when the host bind did not take. Logins
+  # still work, but /dev/tty stays unavailable in the guest.
   if ! is_mounted "$_pts"; then
-    $BB mount -t devpts devpts "$_pts" -o newinstance,ptmxmode=0666,mode=0620 2>/dev/null \
-      || $BB mount -t devpts devpts "$_pts" -o ptmxmode=0666,mode=0620 2>/dev/null \
+    $BB mount -t devpts devpts "$_pts" -o ptmxmode=0666,mode=0620 2>/dev/null \
       || $BB mount -t devpts -o ptmxmode=0666,mode=0620 devpts "$_pts" 2>/dev/null \
       || $BB mount -t devpts devpts "$_pts" 2>/dev/null \
       || true
@@ -225,7 +232,7 @@ ensure_devpts() {
   if [ ! -c "$ALTARIS_CHROOT/dev/ptmx" ] && [ -c "$_pts/ptmx" ]; then
     $BB ln -sf pts/ptmx "$ALTARIS_CHROOT/dev/ptmx" 2>/dev/null || true
   fi
-  unset _pts _perm
+  unset _pts _host_dev _guest_dev
 }
 
 ensure_mounts() {
