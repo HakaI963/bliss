@@ -1,50 +1,36 @@
 package com.altaris.linux.core.utils
 
-import java.io.BufferedReader
-import java.io.DataOutputStream
-import java.io.InputStreamReader
+import com.altaris.linux.core.root.RootShell
 
+/**
+ * Small compatibility facade over [RootShell] for older call sites.
+ *
+ * The previous implementation used `Runtime.getRuntime().exec("su")` and
+ * `waitFor()` with **no timeout**, including from Compose composition. On a
+ * fresh root grant the manager prompt could therefore freeze the UI forever.
+ * Every command now goes through RootShell's bounded `captureResult`.
+ */
 object RootUtils {
 
-    /**
-     * Checks if the device is rooted and if we can obtain root access.
-     */
-    fun isRootAvailable(): Boolean {
-        return runRootCommand("id").isSuccess
-    }
+    /** Checks if the device is rooted and if we can obtain root access. */
+    fun isRootAvailable(): Boolean = runCatching { RootShell.isRootAvailable() }.getOrDefault(false)
 
     /**
-     * Runs a command as root (su).
-     * Returns a Result object containing exit code and output.
+     * Runs a command as root (su). Returns a Result object containing exit code and output.
+     *
+     * @param timeoutMs 0 waits forever (avoid on UI paths); >0 kills on timeout.
      */
-    fun runRootCommand(command: String): ShellResult {
-        var process: Process? = null
-        var os: DataOutputStream? = null
-        
-        try {
-            process = Runtime.getRuntime().exec("su")
-            os = DataOutputStream(process.outputStream)
-            
-            os.writeBytes(command + "\n")
-            os.writeBytes("exit\n")
-            os.flush()
-            
-            val exitCode = process.waitFor()
-            val output = process.inputStream.bufferedReader().use { it.readText() }
-            val error = process.errorStream.bufferedReader().use { it.readText() }
-            
-            return ShellResult(
-                isSuccess = exitCode == 0,
-                output = output.trim(),
-                error = error.trim()
-            )
-            
-        } catch (e: Exception) {
-            return ShellResult(false, "", e.message ?: "Unknown error")
-        } finally {
-            try { os?.close() } catch (e: Exception) {}
-            try { process?.destroy() } catch (e: Exception) {}
-        }
+    fun runRootCommand(command: String, timeoutMs: Long = 120_000L): ShellResult {
+        val result = RootShell.captureResult(command, timeoutMs)
+        return ShellResult(
+            isSuccess = result.exitCode == 0,
+            output = result.stdout.trim(),
+            error = when (result.exitCode) {
+                -1 -> "no working su"
+                -2 -> "root command timed out after ${timeoutMs}ms"
+                else -> ""
+            }
+        )
     }
 
     data class ShellResult(

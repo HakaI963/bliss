@@ -11,6 +11,7 @@ import java.nio.file.Path
 import java.nio.file.Paths
 import java.nio.file.SimpleFileVisitor
 import java.nio.file.attribute.BasicFileAttributes
+import java.util.concurrent.locks.ReentrantLock
 
 /**
  * Repairs a proot rootfs that was **moved** from the legacy package id.
@@ -33,15 +34,26 @@ object RootfsKeyRepair {
     private const val MARKER_DIR = ".rootfs-key-repair"
 
     /** Serializes the app-start pass and a terminal-open pass. */
-    private val repairLock = Any()
+    private val repairLock = ReentrantLock()
 
     fun ensureRepaired(ctx: Context, rootfs: File?) {
         if (rootfs == null || !rootfs.isDirectory) return
-        synchronized(repairLock) {
+        // Fast path: the app-start pass already finished this container.
+        if (marker(ctx, rootfs).isFile) return
+        // Never queue a terminal open behind a long repair (Shizuku rootfs
+        // passes can take minutes). The app-start thread keeps working; if it
+        // is busy now, this session proceeds and the next open sees the marker.
+        if (!repairLock.tryLock()) {
+            Log.i(TAG, "repair for ${rootfs.name} already running; not blocking session open")
+            return
+        }
+        try {
             if (marker(ctx, rootfs).isFile) return
             if (!ShizukuShell.available()) return
             runCatching { repair(ctx.applicationContext, rootfs) }
                 .onFailure { Log.w(TAG, "repair ${rootfs.name} failed: ${it.message}") }
+        } finally {
+            repairLock.unlock()
         }
     }
 

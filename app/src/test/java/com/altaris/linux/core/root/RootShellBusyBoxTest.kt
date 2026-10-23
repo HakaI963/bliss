@@ -10,6 +10,21 @@ class RootShellBusyBoxTest {
     @After
     fun tearDown() {
         RootShell.clearBusyBoxCache()
+        RootShell.clearSuCache()
+    }
+
+    @Test
+    fun shellRootCommand_doesNotProbeSu() {
+        RootShell.clearSuCache()
+        val cmd = RootShell.shellRootCommand("echo hi")
+        assertEquals("/system/bin/su -c 'echo hi'", cmd)
+    }
+
+    @Test
+    fun shellRootCommand_escapesSingleQuotes() {
+        RootShell.clearSuCache()
+        val cmd = RootShell.shellRootCommand("echo it's")
+        assertEquals("/system/bin/su -c 'echo it'\\''s'", cmd)
     }
 
     @Test

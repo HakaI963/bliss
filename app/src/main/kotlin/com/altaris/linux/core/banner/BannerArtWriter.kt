@@ -246,7 +246,8 @@ object BannerArtWriter {
         try {
             if (!RootShell.isRootAvailable()) return
             val out = RootShell.capture(
-                "ls -d /data/local/altaris/chroots/*/home/flux 2>/dev/null"
+                "ls -d /data/local/altaris/chroots/*/home/flux 2>/dev/null",
+                timeoutMs = 10_000L
             )
             out.lineSequence()
                 .map { it.trim() }

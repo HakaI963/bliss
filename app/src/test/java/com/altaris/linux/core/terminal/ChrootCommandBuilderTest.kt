@@ -160,4 +160,29 @@ class ChrootCommandBuilderTest {
         )
         assertEquals(ChrootPaths.ALPINE_CHROOT_PATH, env["ALTARIS_CHROOT"])
     }
+
+    @Test
+    fun build_neverBlocksOnRootForSessionOpen() {
+        // Root unset on purpose: composing a session must not probe/stage su.
+        com.altaris.linux.core.root.RootShell.clearSuCache()
+        val dir = java.nio.file.Files.createTempDirectory("altaris-chroot-build").toFile()
+        try {
+            val ctx = FakeContext(dir, "$dir/jni")
+            val start = System.nanoTime()
+            val (args, _) = ChrootCommandBuilder.build(
+                ctx,
+                "exec zsh",
+                chrootPath = "$dir/missing-chroot"
+            )
+            val elapsedMs = (System.nanoTime() - start) / 1_000_000
+            assertTrue("build took ${elapsedMs}ms", elapsedMs < 1_500)
+            assertEquals("/system/bin/sh", args[0])
+            assertEquals("-c", args[1])
+            assertTrue(args[2].contains("altaris_chroot.sh"))
+            assertTrue(args[2].contains("ALTARIS_CHROOT="))
+        } finally {
+            dir.deleteRecursively()
+            com.altaris.linux.core.root.RootShell.clearSuCache()
+        }
+    }
 }

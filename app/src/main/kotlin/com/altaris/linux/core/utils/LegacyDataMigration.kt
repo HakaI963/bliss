@@ -80,7 +80,7 @@ object LegacyDataMigration {
             restorecon -R "${'$'}NEW/shared_prefs" 2>/dev/null || true
             exit 0
         """.trimIndent()
-        val code = RootShell.executeSync(cmd)
+        val code = RootShell.executeSync(cmd, timeoutMs = 10 * 60_000L)
         Log.i(TAG, "migration exit=$code")
         if (code == 0) mark(marker)
     }

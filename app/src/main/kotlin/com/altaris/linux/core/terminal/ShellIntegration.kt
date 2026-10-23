@@ -322,7 +322,7 @@ object ShellIntegration {
             val install = File(stage, "install.sh")
             val rootArgs = CHROOT_ROOTS.joinToString(" ") { "'$it'" }
             val cmd = "sh '${install.absolutePath}' '${stage.absolutePath}' $rootArgs"
-            val result = RootUtils.runRootCommand(cmd)
+            val result = RootUtils.runRootCommand(cmd, timeoutMs = 5 * 60_000L)
             val lines = result.output.lineSequence()
                 .map { it.trim() }
                 .filter { it.startsWith("chroot ") }

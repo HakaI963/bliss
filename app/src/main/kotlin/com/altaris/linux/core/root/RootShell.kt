@@ -49,8 +49,28 @@ object RootShell {
     /** [ensureChrootHelper] succeeded this process (helper + resolver staged). */
     private val chrootHelperReady = AtomicBoolean(false)
 
+    /**
+     * One staging pass is enough per app process. Root-manager prompts/pipe
+     * quirks used to re-run `su cp` on every chroot open; when a prompt hung,
+     * that blocked the shared terminal executor and every distro (proot too).
+     */
+    private val resolverReady = AtomicBoolean(false)
+
+    /** Avoid a failed BusyBox stage retrying on every single chroot open. */
+    @Volatile
+    private var resolverRetryAtMs = 0L
+
+    /** Do not start duplicate background helper warm-ups. */
+    private val chrootWarmupRunning = AtomicBoolean(false)
+
+    private const val ROOT_CMD_TIMEOUT_MS = 20_000L
+
     /** Re-stage on next [ensureChrootHelper] (an uninstall script may delete the helper). */
-    fun invalidateChrootHelper() = chrootHelperReady.set(false)
+    fun invalidateChrootHelper() {
+        chrootHelperReady.set(false)
+        resolverReady.set(false)
+        resolverRetryAtMs = 0L
+    }
 
     // ─────────────────────────────────────────────────────────────────────────
     // Public API
@@ -222,10 +242,14 @@ object RootShell {
     /**
      * Execute a shell command as root synchronously (blocking).
      * Must be called from a background thread. Returns the exit code.
+     *
+     * [timeoutMs] > 0 kills the process and returns -2. Never use the old
+     * unbounded form from the terminal-open path: a pending root-manager
+     * prompt must not hold a session/executor forever.
      */
-    fun executeSync(cmd: String): Int {
+    fun executeSync(cmd: String, timeoutMs: Long = ROOT_CMD_TIMEOUT_MS): Int {
         val inv = resolveSuInvocation() ?: return -1
-        return runCommand(buildSuArgs(inv, cmd)) {}
+        return runCommand(buildSuArgs(inv, cmd), {}, timeoutMs)
     }
 
     /**
@@ -273,7 +297,11 @@ object RootShell {
     /**
      * Discover a working su invocation. Tries absolute paths without File.exists(),
      * plus `sh -c` wrappers. Caches the first success. Background thread only.
+     *
+     * Serialized: concurrent app-start/Home/terminal probes used to fire ten
+     * root prompts each and could leave a slow invocation uncached.
      */
+    @Synchronized
     fun resolveSuInvocation(): List<String>? {
         cachedSuInvocation?.let { return it }
 
@@ -293,8 +321,11 @@ object RootShell {
             listOf("/system/bin/sh", "-c", "SU_WRAP:/debug_ramdisk/su")
         )
 
-        for (trial in trials) {
-            if (trySuProbe(trial)) {
+        for ((index, trial) in trials.withIndex()) {
+            // The first invocation is the one that shows the root-manager
+            // prompt on a fresh grant; give the user a little longer there.
+            val timeout = if (index == 0) 4_000L else 2_000L
+            if (trySuProbe(trial, timeout)) {
                 cachedSuInvocation = trial
                 Log.i(TAG, "resolveSuInvocation OK: $trial")
                 return trial
@@ -304,7 +335,11 @@ object RootShell {
         return null
     }
 
+    /** Non-blocking cache read for session builders. */
+    fun peekSuInvocation(): List<String>? = cachedSuInvocation
+
     /** Clear cached su (e.g. after user grants root in manager). */
+    @Synchronized
     fun clearSuCache() {
         cachedSuInvocation = null
     }
@@ -370,50 +405,73 @@ object RootShell {
     /**
      * Stage [BusyBoxPaths.RESOLVER_ASSET] to [BusyBoxPaths.RESOLVER_ON_DEVICE]
      * using the same su cp/chmod pattern as [ensureChrootHelper].
+     *
+     * Fast-path: the resolver is small and stable, so one successful stage per
+     * process is enough. Retrying it on every chroot session open was part of
+     * the root-granted terminal freeze (each retry is a blocking `su`).
      */
     fun ensureBusyBoxResolver(ctx: Context): Boolean {
-        return try {
-            val staged = stageAsset(ctx, BusyBoxPaths.RESOLVER_ASSET)
-                ?: run {
-                    val tmp = File(ctx.cacheDir, "resolve_bb.sh")
-                    ctx.assets.open(BusyBoxPaths.RESOLVER_ASSET).use { input ->
-                        tmp.outputStream().use { input.copyTo(it) }
+        if (resolverReady.get()) return true
+        val now = System.currentTimeMillis()
+        if (resolverRetryAtMs > now) return false
+        synchronized(this) {
+            if (resolverReady.get()) return true
+            if (resolverRetryAtMs > System.currentTimeMillis()) return false
+            return try {
+                val staged = stageChrootRuntimeAsset(ctx, BusyBoxPaths.RESOLVER_ASSET)
+                    ?: run {
+                        val tmp = File(ctx.cacheDir, "resolve_bb.sh")
+                        ctx.assets.open(BusyBoxPaths.RESOLVER_ASSET).use { input ->
+                            tmp.outputStream().use { input.copyTo(it) }
+                        }
+                        tmp.absolutePath
                     }
-                    tmp.absolutePath
-                }
-            var code = executeSync(
-                "mkdir -p ${ChrootPaths.HELPERS_DIR} && " +
-                    "cp -f '$staged' ${BusyBoxPaths.RESOLVER_ON_DEVICE} && " +
-                    "chmod 755 ${BusyBoxPaths.RESOLVER_ON_DEVICE}"
-            )
-            if (code != 0) {
-                val bytes = ctx.assets.open(BusyBoxPaths.RESOLVER_ASSET).use { it.readBytes() }
-                val b64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
-                code = executeSync(
+                var code = executeSync(
                     "mkdir -p ${ChrootPaths.HELPERS_DIR} && " +
-                        "echo $b64 | base64 -d > ${BusyBoxPaths.RESOLVER_ON_DEVICE} && " +
-                        "chmod 755 ${BusyBoxPaths.RESOLVER_ON_DEVICE}"
+                        "cp -f '$staged' ${BusyBoxPaths.RESOLVER_ON_DEVICE} && " +
+                        "chmod 755 ${BusyBoxPaths.RESOLVER_ON_DEVICE}",
+                    timeoutMs = 15_000L
                 )
+                if (code != 0) {
+                    val bytes = ctx.assets.open(BusyBoxPaths.RESOLVER_ASSET).use { it.readBytes() }
+                    val b64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+                    code = executeSync(
+                        "mkdir -p ${ChrootPaths.HELPERS_DIR} && " +
+                            "echo $b64 | base64 -d > ${BusyBoxPaths.RESOLVER_ON_DEVICE} && " +
+                            "chmod 755 ${BusyBoxPaths.RESOLVER_ON_DEVICE}",
+                        timeoutMs = 15_000L
+                    )
+                }
+                if (code != 0) {
+                    Log.w(TAG, "ensureBusyBoxResolver root stage failed exit=$code")
+                    // Do not hammer su on every subsequent session open.
+                    resolverRetryAtMs = System.currentTimeMillis() + 60_000L
+                    false
+                } else {
+                    Log.i(TAG, "ensureBusyBoxResolver staged ${BusyBoxPaths.RESOLVER_ON_DEVICE}")
+                    resolverReady.set(true)
+                    true
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "ensureBusyBoxResolver failed: ${e.message}")
+                resolverRetryAtMs = System.currentTimeMillis() + 60_000L
+                false
             }
-            if (code != 0) {
-                Log.w(TAG, "ensureBusyBoxResolver root stage failed exit=$code")
-                return false
-            }
-            Log.i(TAG, "ensureBusyBoxResolver staged ${BusyBoxPaths.RESOLVER_ON_DEVICE}")
-            true
-        } catch (e: Exception) {
-            Log.w(TAG, "ensureBusyBoxResolver failed: ${e.message}")
-            false
         }
     }
 
     /**
      * Single shell snippet that runs [cmd] as root — for TerminalSession / `sh -c` only.
      * Escapes [cmd] in single quotes so `;` `&&` `$` inside the guest chain stay intact.
+     *
+     * Never probes `su` here: this method is called while composing a session
+     * (sometimes on the main thread). The root manager will prompt when the
+     * terminal process actually runs; probing on the UI path caused the
+     * "grant root, then no terminal opens" freeze.
      */
     fun shellRootCommand(cmd: String): String {
         val escaped = cmd.replace("'", "'\\''")
-        val inv = cachedSuInvocation ?: resolveSuInvocation()
+        val inv = cachedSuInvocation
         return when {
             inv != null && inv.size >= 3 && inv[2].startsWith("SU_WRAP:") -> {
                 val suBin = inv[2].removePrefix("SU_WRAP:")
@@ -449,7 +507,7 @@ object RootShell {
                 return true
             }
 
-            val staged = stageAsset(ctx, ChrootPaths.CHROOT_HELPER_ASSET)
+            val staged = stageChrootRuntimeAsset(ctx, ChrootPaths.CHROOT_HELPER_ASSET)
                 ?: run {
                     val tmp = File(ctx.cacheDir, "altaris_chroot.sh")
                     ctx.assets.open(ChrootPaths.CHROOT_HELPER_ASSET).use { input ->
@@ -462,7 +520,8 @@ object RootShell {
                 "mkdir -p ${ChrootPaths.HELPERS_DIR} && " +
                     "cp -f '$staged' ${ChrootPaths.CHROOT_HELPER} && " +
                     "chmod 755 ${ChrootPaths.CHROOT_HELPER} && " +
-                    "grep -q '${ChrootPaths.CHROOT_HELPER_VERSION}' ${ChrootPaths.CHROOT_HELPER}"
+                    "grep -q '${ChrootPaths.CHROOT_HELPER_VERSION}' ${ChrootPaths.CHROOT_HELPER}",
+                timeoutMs = 15_000L
             )
             if (code != 0) {
                 // Last resort: base64 stream (app cannot write the helpers dir)
@@ -471,7 +530,8 @@ object RootShell {
                 code = executeSync(
                     "mkdir -p ${ChrootPaths.HELPERS_DIR} && " +
                         "echo $b64 | base64 -d > ${ChrootPaths.CHROOT_HELPER} && " +
-                        "chmod 755 ${ChrootPaths.CHROOT_HELPER}"
+                        "chmod 755 ${ChrootPaths.CHROOT_HELPER}",
+                    timeoutMs = 15_000L
                 )
             }
             if (code != 0) {
@@ -484,6 +544,70 @@ object RootShell {
         } catch (e: Exception) {
             Log.w(TAG, "ensureChrootHelper failed: ${e.message}")
             false
+        }
+    }
+
+    /**
+     * Warm the chroot helper + BusyBox off the terminal-open path.
+     * No-op when root is not already known, so it never prompts the user from
+     * a background screen. Safe to call repeatedly.
+     */
+    fun warmChrootRuntimeAsync(ctx: Context) {
+        if (chrootHelperReady.get() && cachedBusyBoxPath != null) return
+        if (cachedSuInvocation == null) return
+        if (!chrootWarmupRunning.compareAndSet(false, true)) return
+        val app = ctx.applicationContext ?: ctx
+        executor.execute {
+            try {
+                ensureChrootHelper(app)
+                resolveBusyBox()
+            } catch (_: Exception) {
+            } finally {
+                chrootWarmupRunning.set(false)
+            }
+        }
+    }
+
+    /**
+     * Copy the chroot helper + resolver into app-private staging **without
+     * root**. The session command can fall back to this copy when the
+     * /data/local helper has not been staged yet, so opening a terminal no
+     * longer waits on `su`.
+     *
+     * @return the staged helper path, or null when assets are unavailable.
+     */
+    fun stagedChrootHelper(ctx: Context): String? {
+        val helper = stageChrootRuntimeAsset(ctx, ChrootPaths.CHROOT_HELPER_ASSET) ?: return null
+        stageChrootRuntimeAsset(ctx, BusyBoxPaths.RESOLVER_ASSET)
+        return helper
+    }
+
+    /** Copy [assetName] into filesDir/staged_scripts when missing or stale. */
+    private fun stageChrootRuntimeAsset(ctx: Context, assetName: String): String? {
+        return try {
+            val dir = File(ctx.filesDir, "staged_scripts")
+            dir.mkdirs()
+            dir.setExecutable(true, false)
+            dir.setReadable(true, false)
+            val out = File(dir, File(assetName).name)
+            val bytes = ctx.assets.open(assetName).use { it.readBytes() }
+            val updated = runCatching {
+                ctx.packageManager.getPackageInfo(ctx.packageName, 0).lastUpdateTime
+            }.getOrDefault(0L)
+            val stamp = File(dir, "${out.name}.stamp")
+            val stampValue = "$updated:${bytes.size}"
+            if (!out.isFile || out.length() != bytes.size.toLong() ||
+                !stamp.isFile || stamp.readText().trim() != stampValue
+            ) {
+                out.outputStream().use { it.write(bytes) }
+                runCatching { stamp.writeText(stampValue) }
+            }
+            out.setExecutable(true, false)
+            out.setReadable(true, false)
+            out.absolutePath
+        } catch (e: Exception) {
+            Log.w(TAG, "stageChrootRuntimeAsset($assetName) failed: ${e.message}")
+            null
         }
     }
 
@@ -585,7 +709,7 @@ object RootShell {
         return invocation + cmd
     }
 
-    private fun trySuProbe(invocation: List<String>): Boolean {
+    private fun trySuProbe(invocation: List<String>, timeoutMs: Long = 2_000L): Boolean {
         return try {
             val args = buildSuArgs(invocation, "id")
             Log.d(TAG, "trySuProbe: $args")
@@ -596,7 +720,7 @@ object RootShell {
                 pb.inputStream.bufferedReader().use { it.readText() }
             }
             // Hard timeout: a hanging su prompt must not block app/test threads.
-            val finished = pb.waitFor(2, TimeUnit.SECONDS)
+            val finished = pb.waitFor(timeoutMs, TimeUnit.MILLISECONDS)
             if (!finished) {
                 pb.destroyForcibly()
                 Log.w(TAG, "trySuProbe timeout: $args")
@@ -619,7 +743,8 @@ object RootShell {
     /** Streams stdout+stderr from a ProcessBuilder command, returns exit code. */
     private fun runCommand(
         args: List<String>,
-        onLine: (String) -> Unit
+        onLine: (String) -> Unit,
+        timeoutMs: Long = 0L
     ): Int {
         Log.d(TAG, "runCommand: ${args.joinToString(" ")}")
         return try {
@@ -628,15 +753,45 @@ object RootShell {
                 .start()
             try { pb.outputStream.close() } catch (_: Exception) {}
 
-            val reader = BufferedReader(InputStreamReader(pb.inputStream))
-            var line: String?
-            while (reader.readLine().also { line = it } != null) {
-                val l = line ?: continue
-                Log.d(TAG, l)
-                mainHandler.post { onLine(l) }
+            // Read on a daemon thread. Waiting for EOF on this thread would let
+            // a root manager (or a child that inherits stdout) block forever;
+            // the process wait below is the only thing allowed to gate us.
+            val reader = Thread {
+                try {
+                    BufferedReader(InputStreamReader(pb.inputStream)).use { reader ->
+                        var line: String?
+                        while (reader.readLine().also { line = it } != null) {
+                            val l = line ?: continue
+                            Log.d(TAG, l)
+                            mainHandler.post { onLine(l) }
+                        }
+                    }
+                } catch (_: Exception) {
+                }
+            }.apply {
+                isDaemon = true
+                name = "altaris-root-reader"
+                start()
             }
-            reader.close()
-            val code = pb.waitFor()
+
+            val finished = if (timeoutMs > 0L) {
+                pb.waitFor(timeoutMs, TimeUnit.MILLISECONDS)
+            } else {
+                pb.waitFor()
+                true
+            }
+            if (!finished) {
+                pb.destroyForcibly()
+                try { reader.join(500) } catch (_: Exception) {}
+                Log.w(TAG, "runCommand timeout after ${timeoutMs}ms")
+                return -2
+            }
+            try { reader.join(5_000) } catch (_: Exception) {}
+            val code = try {
+                pb.exitValue()
+            } catch (_: Exception) {
+                -1
+            }
             Log.d(TAG, "runCommand exit=$code")
             code
         } catch (e: Exception) {

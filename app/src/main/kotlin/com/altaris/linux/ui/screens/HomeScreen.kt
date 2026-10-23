@@ -307,14 +307,27 @@ fun HomeScreen(
         }
     }
 
+    /** Run [action] for a chroot guest only after a fresh su probe succeeds. */
+    fun requireRootThen(action: () -> Unit) {
+        RootShell.probeRootAvailable(forceClearCache = true) { ok ->
+            rootAvailable = ok
+            if (ok) {
+                action()
+            } else {
+                android.widget.Toast.makeText(
+                    context,
+                    "Grant superuser to Altaris first",
+                    android.widget.Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+    }
+
     /** Shell action of a container tile: chroot guests need root first. */
     fun openShell(distro: Distro) {
         if (distro.isChrootCard() && !rootAvailable) {
-            android.widget.Toast.makeText(
-                context,
-                "Grant superuser to Altaris first",
-                android.widget.Toast.LENGTH_SHORT
-            ).show()
+            // Re-probe instead of trusting a stale false from before the grant.
+            requireRootThen { onOpenTerminal(distro.id, false) }
         } else {
             onOpenTerminal(distro.id, false)
         }
@@ -323,12 +336,10 @@ fun HomeScreen(
     /** Tile tap: opens the launch-mode sheet (shell / root / desktop). */
     fun openLaunchSheet(distro: Distro) {
         if (distro.isChrootCard() && !rootAvailable) {
-            android.widget.Toast.makeText(
-                context,
-                "Grant superuser to Altaris first",
-                android.widget.Toast.LENGTH_SHORT
-            ).show()
-        } else if (session != null && session.distroId != distro.id) {
+            requireRootThen { openLaunchSheet(distro) }
+            return
+        }
+        if (session != null && session.distroId != distro.id) {
             android.widget.Toast.makeText(
                 context,
                 "Stop ${session.distroName} ${session.type} first",

@@ -63,6 +63,12 @@ jobs:
         env:
           ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_HOME }}
 
+      - name: Unit tests (diagnostics)
+        continue-on-error: true
+        run: ./gradlew testAltarisDebugUnitTest --stacktrace
+        env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_HOME }}
+
       - name: Verify APK (targetSdk 28, bootstrap + jniLibs packaged)
         run: |
           APK=$(ls app/build/outputs/apk/altaris/debug/*.apk | head -n 1)
@@ -88,6 +94,6 @@ jobs:
           APK=app/build/outputs/apk/altaris/debug/app-altaris-debug.apk
           TAG="altaris-debug-${GITHUB_SHA::7}"
           SHA=$(sha256sum "$APK" | awk '{print $1}')
-          gh release create "$TAG" --title "Altaris 1.0.0 — custom home artwork and faster installs" \
-            --notes "Altaris 1.0.0 adds custom home artwork with an in-app crop for any photo, restores the Distros tab motion, shows idle instead of a fake 0 fps, and makes Fedora/glibc installs finish reliably by skipping hanging RPM scriptlets. It keeps the 3.20 work: flat monochrome identities, accessibility navigation, the clone viewer Elements panel, universal shell profile, hidden control plane and the `altaris` CLI. APK SHA-256: $SHA" || true
+          gh release create "$TAG" --title "Altaris 1.0.1 — root-granted terminal launch fix" \
+            --notes "Altaris 1.0.1 fixes the case where granting superuser made distro terminals stop opening. Root-only chroot maintenance (helper staging, BusyBox resolution, profile/banner repair) no longer runs on the session-open path; chroot helper assets get a root-readable app-private fallback, all root commands are timeout-bounded, and guest session preparation no longer shares the single host-prep thread (so a pending su prompt cannot block proot too). Unit tests run in CI. APK SHA-256: $SHA" || true
           gh release upload "$TAG" "$APK" --clobber

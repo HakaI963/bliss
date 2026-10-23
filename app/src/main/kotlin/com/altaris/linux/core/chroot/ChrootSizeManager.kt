@@ -66,7 +66,8 @@ object ChrootSizeManager {
 
     private fun measureInline(path: String): Result {
         val existsOut = RootShell.capture(
-            "if [ -d '$path' ]; then echo YES; else echo NO; fi"
+            "if [ -d '$path' ]; then echo YES; else echo NO; fi",
+            timeoutMs = 10_000L
         )
         val dirExists = existsOut.trim().lines().lastOrNull()?.trim() == "YES"
         if (!dirExists) {

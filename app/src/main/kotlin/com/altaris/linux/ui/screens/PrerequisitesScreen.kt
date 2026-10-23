@@ -1320,7 +1320,7 @@ fun PhantomProcessStep(
     LaunchedEffect(Unit) {
         checkingRoot = true
         kotlinx.coroutines.delay(500) // fake delay for UX
-        rootAvailable = RootUtils.isRootAvailable()
+        rootAvailable = withContext(Dispatchers.IO) { RootUtils.isRootAvailable() }
         checkingRoot = false
     }
 
@@ -1472,7 +1472,7 @@ fun PhantomProcessStep(
                           checkingRoot = true
                           coroutineScope.launch {
                               kotlinx.coroutines.delay(500)
-                              rootAvailable = RootUtils.isRootAvailable()
+                              rootAvailable = withContext(Dispatchers.IO) { RootUtils.isRootAvailable() }
                               checkingRoot = false
                           }
                       },
@@ -2084,12 +2084,13 @@ fun BusyBoxInstallStep(
     onContinue: () -> Unit
 ) {
     val context = LocalContext.current
-    val isRooted = remember { RootUtils.isRootAvailable() }
+    var isRooted by remember { mutableStateOf(false) }
     var probing by remember { mutableStateOf(true) }
     var resolvedPath by remember { mutableStateOf<String?>(null) }
     var ackOptionalModule by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
+        isRooted = withContext(Dispatchers.IO) { RootUtils.isRootAvailable() }
         withContext(Dispatchers.IO) {
             RootShell.ensureBusyBoxResolver(context.applicationContext)
         }

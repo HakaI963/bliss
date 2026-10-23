@@ -1,9 +1,11 @@
 package com.altaris.linux.core.terminal
 
 import android.content.Context
+import android.util.Log
 import com.altaris.linux.core.data.Distro
 import kotlinx.coroutines.flow.StateFlow
 import com.termux.view.TerminalView
+import java.util.concurrent.Executors
 
 /**
  * Thin facade over [SessionRegistry] + [InstallSessionFactory] +
@@ -19,6 +21,15 @@ object AltarisTerminalSessionManager {
 
     /** Guest opens between the tab-limit check and SessionRegistry.add (main thread only). */
     private var pendingOpens = 0
+
+    /**
+     * Session preparation runs HERE, not on [TerminalLauncher.executor].
+     * Host preparation stays serialized there; a slow root/chroot repair must
+     * never occupy the only thread that opens proot terminals too.
+     */
+    private val sessionExecutor = Executors.newFixedThreadPool(3) { r ->
+        Thread(r, "altaris-session-prep").apply { isDaemon = true }
+    }
 
     /** Types eligible for tab reuse — install/component/host-script tabs never reuse. */
     private val interactiveTypes = setOf("shell", "shell-root", "host")
@@ -163,36 +174,41 @@ object AltarisTerminalSessionManager {
             return
         }
         pendingOpens++
-        // Host prep + argv/env build (su probe for chroot) off main; only the
-        // TerminalSession construction + registry add run on main (needs Looper).
+        // Host prep is serialized on TerminalLauncher.executor; guest session
+        // prep then runs on its own pool. A chroot `su` that waits for a root
+        // prompt can no longer block proot sessions queued behind it.
         TerminalLauncher.executor.execute {
-            // Chroot never uses the host $PREFIX — skip host prep (proot keeps it).
-            val opener = runCatching {
-                if (method != "chroot" && !TerminalLauncher.prepareHostBlocking(ctx)) {
-                    TerminalLauncher.mainHandler.post {
-                        pendingOpens--
-                        onResult(SessionOpenResult.HOST_PREPARE_FAILED)
-                    }
-                    return@execute
-                }
-                GuestSessionFactory.prepareSession(ctx, type, title, shellCmd, method, distroId)
-            }.getOrNull()
-            TerminalLauncher.mainHandler.post {
-                val opened = try {
-                    opener?.invoke() == true
-                } finally {
+            val hostOk = runCatching {
+                // Chroot never uses the host $PREFIX — skip host prep (proot keeps it).
+                method == "chroot" || TerminalLauncher.prepareHostBlocking(ctx)
+            }.getOrDefault(false)
+            if (!hostOk) {
+                TerminalLauncher.mainHandler.post {
                     pendingOpens--
+                    onResult(SessionOpenResult.HOST_PREPARE_FAILED)
                 }
-                onResult(if (opened) SessionOpenResult.OPENED else SessionOpenResult.OPEN_FAILED)
-                // Guest audio is a TCP client of host Pulse; start it after the shell is up.
-                if (opened) {
-                    val app = ctx.applicationContext
-                    Thread { PulseHost.ensureStarted(app) }.start()
+                return@execute
+            }
+            sessionExecutor.execute {
+                val opener = runCatching {
+                    GuestSessionFactory.prepareSession(ctx, type, title, shellCmd, method, distroId)
+                }.onFailure { Log.w("AltarisSessions", "session prep failed", it) }.getOrNull()
+                TerminalLauncher.mainHandler.post {
+                    val opened = try {
+                        opener?.invoke() == true
+                    } finally {
+                        pendingOpens--
+                    }
+                    onResult(if (opened) SessionOpenResult.OPENED else SessionOpenResult.OPEN_FAILED)
+                    // Guest audio is a TCP client of host Pulse; start it after the shell is up.
+                    if (opened) {
+                        val app = ctx.applicationContext
+                        Thread { PulseHost.ensureStarted(app) }.start()
+                    }
                 }
             }
         }
     }
-
     /**
      * Interactive guest session (host already prepared).
      * [shellCmd] default `"exec zsh"` = interactive sentinel; guest binary comes

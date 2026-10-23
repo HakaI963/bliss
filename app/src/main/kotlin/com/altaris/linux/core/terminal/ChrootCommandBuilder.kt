@@ -23,8 +23,13 @@ object ChrootCommandBuilder {
         chrootPath: String = ChrootPaths.CHROOT_PATH,
         loginShell: GuestLoginShell? = null
     ): Pair<Array<String>, HashMap<String, String>> {
-        ensureHelperScript(ctx) // also stages the BusyBox resolver
-        RootShell.resolveBusyBox()
+        // NEVER stage the helper / resolve BusyBox here. Both are blocking `su`
+        // operations; doing them while composing a session made a pending root
+        // prompt stall the shared terminal executor, so proot sessions (queued
+        // behind the same executor) never opened either. Use the cached state,
+        // stage a root-readable copy from app assets without root, and let the
+        // helper self-heal inside the session. Warm-up runs separately.
+        val stagedHelper = RootShell.stagedChrootHelper(ctx)
         // Shell comes from loginShell; helper resolves the real binary as root
         // (app uid cannot stat /data/local/altaris). When loginShell is null (legacy
         // callers), altaris stays zsh and root stays bash (sh on Alpine paths).
@@ -35,16 +40,28 @@ object ChrootCommandBuilder {
             isAlpine -> "sh"
             else -> "bash"
         }
+        // Use a shell variable only when we have a fallback; tests and the
+        // normal installed path keep the literal helper path.
+        val helperExpr = if (stagedHelper != null) "\$H" else CHROOT_HELPER
         val rootInner = buildRootInner(
             shellCmd, user,
+            helper = helperExpr,
             loginShellAltaris = altarisFlag,
             loginShellRoot = rootFlag,
             chrootPath = chrootPath
         )
-        // Pin ALTARIS_CHROOT for Alpine/Debian multi-chroot coexistence
+        // Pin ALTARIS_CHROOT for Alpine/Debian multi-chroot coexistence.
         val bb = RootShell.cachedBusyBox()
-        val exportBb = if (!bb.isNullOrEmpty()) "export ALTARIS_BB='$bb'; " else ""
-        val withPath = "${exportBb}export ALTARIS_CHROOT='$chrootPath'; $rootInner"
+        val quote = { s: String -> "'" + s.replace("'", "'\\''") + "'" }
+        val exportBb = if (!bb.isNullOrEmpty()) "export ALTARIS_BB=${quote(bb)}; " else ""
+        val helperPrelude = if (stagedHelper != null) {
+            "H=${quote(CHROOT_HELPER)}; " +
+                "if [ ! -f \"\$H\" ] || ! grep -q ${quote(CHROOT_HELPER_VERSION)} \"\$H\" 2>/dev/null; " +
+                "then H=${quote(stagedHelper)}; fi; "
+        } else {
+            ""
+        }
+        val withPath = "${exportBb}${helperPrelude}export ALTARIS_CHROOT=${quote(chrootPath)}; $rootInner"
         val cmd = RootShell.shellRootCommand(withPath)
         // Inline WINCH trap on outer sh (mShellPid). Keep this shell as parent (no leading exec).
         val winchCmd = winchWrap(cmd)

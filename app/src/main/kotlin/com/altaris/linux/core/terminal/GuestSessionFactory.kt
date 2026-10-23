@@ -6,6 +6,7 @@ import com.altaris.linux.R
 import com.altaris.linux.core.data.Distro
 import com.altaris.linux.core.data.DistroRepository
 import com.altaris.linux.core.data.terminalComponentFor
+import com.altaris.linux.core.root.RootShell
 import com.altaris.linux.core.utils.TerminalPreferences
 import com.termux.terminal.TerminalSession
 
@@ -54,12 +55,21 @@ object GuestSessionFactory {
     ): (() -> Boolean)? {
         if (!SessionRegistry.hasFreeTab()) return null
         TerminalPalette.apply()
-        runCatching { com.altaris.linux.core.control.AltarisCliInstaller.ensure(ctx, method, distroId) }
-        // Patch guest .zshrc if it still hard-sources missing oh-my-zsh / pokemon,
-        // or create a missing Altaris profile (Alpine installs that never wrote one).
-        GuestZshrcRepair.repairIfNeeded(ctx, method, distroId)
-        // Alpine proot: ensure apk db/lock is app-writable so `sudo apk` works.
-        GuestApkDbRepair.repairIfNeeded(ctx, method, distroId)
+        val isChroot = method == "chroot"
+        if (isChroot) {
+            // Root-only passes (CLI write, zshrc/banner repair) run many `su`
+            // calls and can take minutes. Run them after the terminal lands;
+            // never make the session wait for them.
+            RootShell.warmChrootRuntimeAsync(ctx)
+            ChrootMaintenance.schedule(ctx, distroId)
+        } else {
+            runCatching { com.altaris.linux.core.control.AltarisCliInstaller.ensure(ctx, method, distroId) }
+            // Patch guest .zshrc if it still hard-sources missing oh-my-zsh / pokemon,
+            // or create a missing Altaris profile (Alpine installs that never wrote one).
+            GuestZshrcRepair.repairIfNeeded(ctx, method, distroId)
+            // Alpine proot: ensure apk db/lock is app-writable so `sudo apk` works.
+            GuestApkDbRepair.repairIfNeeded(ctx, method, distroId)
+        }
         val user = LinuxCommandBuilder.sessionUserForType(type)
         // Always ZSH or BASH from prefs — never null (chroot root follows the pref too).
         val loginShell = TerminalPreferences.getGuestLoginShell(ctx)
@@ -69,7 +79,6 @@ object GuestSessionFactory {
             loginShell = loginShell
         )
 
-        val isChroot = method == "chroot"
         val cwd = if (isChroot) "/" else TermuxHostPaths.homeDir(ctx).absolutePath
         // proot argv[0] is the executable: libbash (legacy) or libproot (direct).
         val sessionExec = if (isChroot) com.altaris.linux.core.root.ChrootPaths.SESSION_EXEC else args[0]
