@@ -165,6 +165,12 @@ final class DisplayEngine {
 
     private void releaseLocked() {
         if (display != null) {
+            // The clone task still lives on the virtual display. Releasing the
+            // display while it is the top task makes Android migrate that task
+            // to the default display: the clone flashes full-screen on the
+            // phone. Remove the display's root task first (force-stop alone
+            // leaves the task record behind).
+            removeDisplayTasks(display.displayId);
             try {
                 display.release();
             } catch (Throwable ignored) {
@@ -172,6 +178,29 @@ final class DisplayEngine {
             display = null;
         }
         releaseWakeLock();
+    }
+
+    /** Removes every root task hosted by [displayId] before the display dies. */
+    private void removeDisplayTasks(int displayId) {
+        try {
+            AppCatalog.CommandResult list = AppCatalog.run("am stack list", 10);
+            if (!list.ok()) {
+                log("stack list failed: " + oneLine(list.output));
+                return;
+            }
+            java.util.regex.Matcher matcher = java.util.regex.Pattern
+                    .compile("RootTask id=(\\d+)[^\\n]*displayId=" + displayId + "\\b")
+                    .matcher(list.output);
+            while (matcher.find()) {
+                String stackId = matcher.group(1);
+                AppCatalog.CommandResult removed =
+                        AppCatalog.run("am stack remove " + stackId, 10);
+                log("removed stack " + stackId + " on display " + displayId
+                        + " exit=" + removed.exit);
+            }
+        } catch (Throwable e) {
+            log("remove display tasks failed: " + message(e));
+        }
     }
 
     /**

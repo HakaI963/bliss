@@ -535,6 +535,10 @@ object HeadlessCloneEngine {
                 if (activeClonePackage.value == packageName) activeClonePackage.value = null
                 noteAction("stop $packageName")
                 runCatching { c.releaseDisplay() }
+                // The first force-stop can race the display teardown. Kill once
+                // more now that the display is gone, so no migrated task/process
+                // can surface full-screen.
+                runCatching { c.cloneKill(packageName) }
                 preview.value = null
                 previewError.value = null
                 displayReady.value = false
@@ -863,6 +867,9 @@ object HeadlessCloneEngine {
                 displayReady.value = false
                 preview.value = null
             }
+            // Kill after the display is released: a slow first force-stop must
+            // not leave a process that Android can migrate to the phone screen.
+            runCatching { c.cloneKill(packageName) }
             noteAction("stop $packageName", "agent")
             if (error != null) {
                 JSONObject().put("ok", false).put("error", error)
