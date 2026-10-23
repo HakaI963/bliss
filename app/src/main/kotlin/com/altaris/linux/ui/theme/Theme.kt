@@ -34,9 +34,12 @@ private fun colorSchemeFor(palette: AltarisPalette): ColorScheme {
     val inverseOnSurface = if (palette.isDark) palette.base else palette.onSurface
     val scrim = Color.Black
 
-    // One identity, one palette: the dark and light variants of the Material
-    // scheme carry exactly the same tokens.
-    return darkColorScheme(
+    // Start from the matching light/dark defaults, then overwrite every token
+    // the identity owns. Using darkColorScheme for a light identity left the
+    // derived containers (surfaceContainer/High/…) dark, so menus and popovers
+    // painted dark-on-dark in Warm Neutral.
+    val base = if (palette.isDark) darkColorScheme() else lightColorScheme()
+    return base.copy(
         primary = palette.action,
         onPrimary = palette.onAction,
         primaryContainer = palette.surfaceRaised,
