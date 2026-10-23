@@ -438,7 +438,15 @@ private fun TerminalScreenContent(
     // Closing the last tab means leaving the terminal. The old in-place
     // "pick a distro" screen is gone: it was the legacy terminal UI.
     if (sessions.isEmpty()) {
-        LaunchedEffect("terminal-empty") { onBack?.invoke() }
+        LaunchedEffect("terminal-empty") {
+            // Closing the last tab leaves the terminal route. Drop the IME
+            // first: otherwise the terminal measures short while the home
+            // screen measures full height, and the route size animation makes
+            // the content appear to unfold from a corner.
+            terminalViewRef?.let { hideIme(it) }
+            kotlinx.coroutines.delay(140)
+            onBack?.invoke()
+        }
         return
     }
 
@@ -566,7 +574,13 @@ private fun TerminalScreenContent(
                         iconRes = managed.iconRes ?: R.drawable.ic_terminal,
                         selected = i == activeIndex,
                         onSelect = { AltarisTerminalSessionManager.switchSession(i) },
-                        onClose = { AltarisTerminalSessionManager.closeSession(context, i) }
+                        onClose = {
+                            // The IME is full-width at the bottom of the route;
+                            // leave with it already down so the home screen
+                            // does not animate against a half-height terminal.
+                            terminalViewRef?.let { com.altaris.linux.ui.terminal.hideIme(it) }
+                            AltarisTerminalSessionManager.closeSession(context, i)
+                        }
                     )
                 }
             }

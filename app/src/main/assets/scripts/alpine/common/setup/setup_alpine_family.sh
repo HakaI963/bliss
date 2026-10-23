@@ -78,35 +78,34 @@ apk add --no-cache \
         exit 1
     }
 
-# 5. Guest user: flux (uid 1000). The app logs in as "flux"; "altaris" is
-# kept as an alias so the desktop helpers and /home/altaris paths keep working.
-if ! id flux >/dev/null 2>&1; then
+# 5. Guest user: altaris (uid 1000). `flux` is kept as a legacy alias.
+if ! id altaris >/dev/null 2>&1; then
     echo "Altaris: Creating the guest account..."
     if command -v useradd >/dev/null 2>&1; then
         if ! id -u 1000 >/dev/null 2>&1; then
-            useradd -m -u 1000 -s /bin/bash flux 2>/dev/null \
-                || useradd -m -s /bin/bash flux 2>/dev/null \
-                || useradd -m -s /bin/sh flux
+            useradd -m -u 1000 -s /bin/bash altaris 2>/dev/null \
+                || useradd -m -s /bin/bash altaris 2>/dev/null \
+                || useradd -m -s /bin/sh altaris
         else
-            useradd -m -s /bin/bash flux 2>/dev/null || useradd -m -s /bin/sh flux
+            useradd -m -s /bin/bash altaris 2>/dev/null || useradd -m -s /bin/sh altaris
         fi
     elif command -v adduser >/dev/null 2>&1; then
-        adduser -D -s /bin/sh flux
+        adduser -D -s /bin/sh altaris
     fi
-    echo "flux:flux" | chpasswd 2>/dev/null || true
+    echo "altaris:altaris" | chpasswd 2>/dev/null || true
 fi
 
-# The alias user shares flux's uid/home so both names resolve.
-if id flux >/dev/null 2>&1 && ! id altaris >/dev/null 2>&1; then
-    _a_uid=$(id -u flux 2>/dev/null)
-    _a_gid=$(id -g flux 2>/dev/null)
+# Legacy alias: same uid, and /home/flux is a link to the real home.
+if id altaris >/dev/null 2>&1 && ! id flux >/dev/null 2>&1; then
+    _a_uid=$(id -u altaris 2>/dev/null)
+    _a_gid=$(id -g altaris 2>/dev/null)
     if [ -n "$_a_uid" ] && [ -n "$_a_gid" ]; then
-        echo "altaris:x:${_a_uid}:${_a_gid}:Altaris:/home/flux:/bin/sh" >> /etc/passwd
-        echo "altaris:x:${_a_gid}:" >> /etc/group
+        echo "flux:x:${_a_uid}:${_a_gid}:Legacy:/home/flux:/bin/sh" >> /etc/passwd
+        grep -q "^flux:" /etc/group 2>/dev/null || echo "flux:x:${_a_gid}:" >> /etc/group
     fi
 fi
-if [ -d /home/flux ] && [ ! -e /home/altaris ]; then
-    ln -s /home/flux /home/altaris 2>/dev/null || true
+if [ -d /home/altaris ] && [ ! -e /home/flux ]; then
+    ln -s /home/altaris /home/flux 2>/dev/null || true
 fi
 
 # Groups (best-effort — names differ slightly across Alpine releases)
@@ -229,8 +228,8 @@ fi
 
 # 6. Sudo NOPASSWD
 mkdir -p /etc/sudoers.d
-printf '%s\n' "flux ALL=(ALL) NOPASSWD:ALL" "altaris ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/flux
-chmod 0440 /etc/sudoers.d/flux
+printf '%s\n' "altaris ALL=(ALL) NOPASSWD:ALL" "flux ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/altaris
+chmod 0440 /etc/sudoers.d/altaris
 # Alpine ships @includedir; re-assert if a minimal sudoers was replaced
 if [ -f /etc/sudoers ] && ! grep -qE '@includedir[[:space:]]+/etc/sudoers\.d' /etc/sudoers 2>/dev/null; then
     echo '@includedir /etc/sudoers.d' >> /etc/sudoers

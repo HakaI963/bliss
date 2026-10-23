@@ -64,6 +64,7 @@ import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Widgets
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -1054,6 +1055,30 @@ private fun CloneViewPage(
         }
     }
 
+    // Real frame rate of the virtual display: the engine reports how many
+    // frames the guest actually produced. Sample it once a second instead of
+    // showing the configured cap (which is only an upper bound).
+    var measuredFps by remember(session.clone.packageName) { mutableStateOf(0) }
+    LaunchedEffect(connected, displayReady, session.clone.packageName) {
+        if (!connected || !displayReady) return@LaunchedEffect
+        var previousFrames = -1L
+        var previousAt = 0L
+        while (isActive) {
+            val status = runCatching { HeadlessCloneEngine.apiStatus() }.getOrNull()
+            val frames = status?.optLong("display_frames", -1L) ?: -1L
+            val now = android.os.SystemClock.elapsedRealtime()
+            if (frames >= 0) {
+                if (previousFrames >= 0 && now > previousAt) {
+                    val delta = (frames - previousFrames).coerceAtLeast(0L)
+                    measuredFps = ((delta * 1000.0) / (now - previousAt)).roundToInt()
+                }
+                previousFrames = frames
+                previousAt = now
+            }
+            delay(1000)
+        }
+    }
+
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -1159,6 +1184,9 @@ private fun CloneViewPage(
                     widthPx = session.width,
                     heightPx = session.height,
                     fps = session.fps,
+                    measuredFps = measuredFps,
+                    clonePackage = session.clone.packageName,
+                    originalPackage = session.clone.originalPackage,
                 )
             }
             }
@@ -1356,7 +1384,6 @@ private fun ElementsPanel(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var status by remember { mutableStateOf("Accessibility: checking…") }
     var running by remember { mutableStateOf(false) }
     var nodes by remember { mutableStateOf<List<A11yNode>>(emptyList()) }
     var note by remember { mutableStateOf<String?>(null) }
@@ -1371,7 +1398,6 @@ private fun ElementsPanel(
                 loadElements(context, displayId, packageName)
             }
             running = loaded.running
-            status = if (loaded.running) "Accessibility: ready" else "Accessibility: not enabled"
             nodes = loaded.nodes
             note = loaded.note
             busy = false
@@ -1380,95 +1406,78 @@ private fun ElementsPanel(
 
     LaunchedEffect(Unit) { refresh() }
 
+    fun enable() {
+        scope.launch {
+            val result = withContext(Dispatchers.IO) {
+                A11yBridge.ensureEnabled(context)
+            }
+            val obj = runCatching { JSONObject(result) }.getOrNull()
+            if (obj?.optBoolean("ok", false) == true) {
+                enableNote = "Accessibility service enabled."
+                // The platform binds the service asynchronously.
+                kotlinx.coroutines.delay(900)
+                refresh()
+            } else {
+                val error = obj?.optString("error").orEmpty()
+                enableNote = if (error.contains("root", ignoreCase = true)) {
+                    "Root is unavailable — enable the service from Android settings."
+                } else {
+                    error.ifBlank { "The accessibility service could not be enabled." }
+                }
+            }
+        }
+    }
+
     Column(
         modifier
             .fillMaxSize()
             .clip(Quartz.CardShape)
             .background(MaterialTheme.colorScheme.surface)
             .border(1.dp, MaterialTheme.colorScheme.outlineVariant, Quartz.CardShape)
-            .padding(horizontal = 14.dp)
-            .padding(top = 9.dp, bottom = 8.dp),
+            .padding(horizontal = 12.dp)
+            .padding(top = 6.dp, bottom = 6.dp),
     ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Elements", fontSize = 18.sp, fontWeight = FontWeight.Medium)
-                Spacer(Modifier.weight(1f))
-                PrismChip(
-                    text = "Refresh",
-                    accent = accent,
-                    onClick = { refresh() }
-                )
-                IconButton(onClick = onClose, modifier = Modifier.size(28.dp)) {
-                    Icon(
-                        Icons.Default.Close,
-                        "Show logs",
-                        tint = altarisMutedText(),
-                        modifier = Modifier.size(16.dp),
-                    )
-                }
-            }
+        Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                "Tap an element to open it in the clone.",
-                fontSize = 11.5.sp,
-                color = altarisMutedText(),
+                "Elements",
+                fontSize = 17.sp,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurface,
             )
-            Spacer(Modifier.height(8.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                PrismOrb(active = running, accent = accent)
-                Spacer(Modifier.width(9.dp))
-                Text(
-                    status,
-                    fontSize = 12.5.sp,
-                    fontWeight = FontWeight.Medium,
-                    modifier = Modifier.weight(1f),
-                )
-                if (!running) {
-                    PrismButton(
-                        text = "Enable",
-                        accent = accent,
-                        onClick = {
-                            scope.launch {
-                                val result = withContext(Dispatchers.IO) {
-                                    A11yBridge.ensureEnabled(context)
-                                }
-                                val obj = runCatching { JSONObject(result) }.getOrNull()
-                                if (obj?.optBoolean("ok", false) == true) {
-                                    enableNote = "Accessibility service enabled."
-                                    // The platform binds the service asynchronously.
-                                    kotlinx.coroutines.delay(900)
-                                    refresh()
-                                } else {
-                                    val error = obj?.optString("error").orEmpty()
-                                    enableNote = if (error.contains("root", ignoreCase = true)) {
-                                        "Root is unavailable — enable the service from Android settings."
-                                    } else {
-                                        error.ifBlank { "The accessibility service could not be enabled." }
-                                    }
-                                }
-                            }
-                        }
-                    )
-                }
+            Spacer(Modifier.weight(1f))
+            if (!running) {
+                PrismChip(text = "Enable", accent = accent, onClick = { enable() })
+                Spacer(Modifier.width(6.dp))
             }
-            (enableNote ?: note)?.let {
-                Text(
-                    it,
-                    fontSize = 11.5.sp,
-                    lineHeight = 15.sp,
-                    color = altarisMutedText(),
-                    modifier = Modifier.padding(top = 6.dp),
+            PrismChip(text = "Refresh", accent = accent, onClick = { refresh() })
+            IconButton(onClick = onClose, modifier = Modifier.size(28.dp)) {
+                Icon(
+                    Icons.Default.Close,
+                    "Show logs",
+                    tint = altarisMutedText(),
+                    modifier = Modifier.size(16.dp),
                 )
             }
-            Spacer(Modifier.height(8.dp))
+        }
+        (enableNote ?: note)?.let {
+            Text(
+                it,
+                fontSize = 11.sp,
+                lineHeight = 14.sp,
+                color = altarisMutedText(),
+                modifier = Modifier.padding(top = 3.dp, bottom = 2.dp),
+            )
+        }
             when {
                 nodes.isEmpty() && busy -> Box(
-                    Modifier.fillMaxWidth().padding(24.dp),
+                    Modifier.fillMaxWidth().weight(1f).padding(24.dp),
                     contentAlignment = Alignment.Center,
                 ) {
                     Text("Reading elements…", fontSize = 12.sp, color = altarisMutedText())
                 }
 
                 nodes.isEmpty() -> Box(
-                    Modifier.fillMaxWidth().padding(24.dp),
+                    Modifier.fillMaxWidth().weight(1f).padding(24.dp),
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
@@ -1483,7 +1492,7 @@ private fun ElementsPanel(
                     )
                 }
 
-                else -> LazyColumn(Modifier.fillMaxWidth()) {
+                else -> LazyColumn(Modifier.fillMaxWidth().weight(1f)) {
                     itemsIndexed(nodes) { _, node ->
                         PrismRow(
                             title = node.label.ifBlank { node.type },
@@ -1544,9 +1553,13 @@ private fun CloneSideRail(
     widthPx: Int,
     heightPx: Int,
     fps: Int,
+    measuredFps: Int,
+    clonePackage: String,
+    originalPackage: String,
 ) {
     val scheme = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(8.dp)
+    val liveFps = if (measuredFps > 0) measuredFps else 0
     Column(
         modifier = Modifier
             .width(widthDp.dp)
@@ -1554,9 +1567,9 @@ private fun CloneSideRail(
             .clip(shape)
             .background(scheme.surface)
             .border(1.dp, scheme.outlineVariant, shape)
-            .padding(horizontal = 6.dp, vertical = 8.dp),
+            .padding(horizontal = 5.dp, vertical = 7.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(7.dp),
+        verticalArrangement = Arrangement.spacedBy(5.dp),
     ) {
         Box(
             modifier = Modifier
@@ -1576,38 +1589,74 @@ private fun CloneSideRail(
         Text(
             title,
             fontSize = 9.sp,
-            lineHeight = 12.sp,
-            color = scheme.onSurfaceVariant,
+            lineHeight = 11.sp,
+            fontWeight = FontWeight.Medium,
+            color = scheme.onSurface,
             maxLines = 3,
             overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.Center,
         )
         Box(Modifier.fillMaxWidth().height(0.75.dp).background(scheme.outlineVariant))
         Text(
-            "${widthPx.coerceAtLeast(0)}\n${heightPx.coerceAtLeast(0)}",
-            fontSize = 8.5.sp,
-            lineHeight = 11.sp,
+            if (liveFps > 0) "$liveFps fps" else "idle",
+            fontSize = 10.sp,
+            lineHeight = 12.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = scheme.onSurface,
+            textAlign = TextAlign.Center,
+        )
+        Text(
+            "cap $fps",
+            fontSize = 7.5.sp,
+            color = scheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+        Text(
+            "${widthPx.coerceAtLeast(0)}×${heightPx.coerceAtLeast(0)}",
+            fontSize = 7.5.sp,
+            lineHeight = 10.sp,
             color = scheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
             maxLines = 2,
         )
-        Text(
-            "$fps fps",
-            fontSize = 8.5.sp,
-            color = scheme.onSurfaceVariant,
-            maxLines = 1,
-        )
+        Box(Modifier.fillMaxWidth().height(0.75.dp).background(scheme.outlineVariant))
+        RailFact("PKG", clonePackage, scheme)
+        RailFact("ORIG", originalPackage, scheme)
         Spacer(Modifier.weight(1f))
-        // No controls here: Live, PiP and Elements already sit in the dock
-        // directly below the display, and duplicating them made the viewer
-        // feel crowded. The rail carries facts only.
         Text(
             "PORTRAIT",
-            fontSize = 8.sp,
+            fontSize = 7.5.sp,
             fontWeight = FontWeight.SemiBold,
-            letterSpacing = 0.8.sp,
+            letterSpacing = 0.6.sp,
             color = scheme.onSurfaceVariant.copy(alpha = 0.7f),
             textAlign = TextAlign.Center,
+        )
+    }
+}
+
+/** One label + wrapped package name, broken at dots so it fits the rail. */
+@Composable
+private fun RailFact(label: String, value: String, scheme: ColorScheme) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            label,
+            fontSize = 7.sp,
+            fontWeight = FontWeight.SemiBold,
+            letterSpacing = 0.5.sp,
+            color = scheme.onSurfaceVariant.copy(alpha = 0.75f),
+        )
+        Text(
+            value.split('.').chunked(2).joinToString(".\n") { it.joinToString(".") },
+            fontSize = 7.sp,
+            lineHeight = 9.sp,
+            fontFamily = FontFamily.Monospace,
+            color = scheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            maxLines = 4,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }

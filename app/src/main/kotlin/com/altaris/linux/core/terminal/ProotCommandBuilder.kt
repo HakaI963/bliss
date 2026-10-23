@@ -219,7 +219,7 @@ object ProotCommandBuilder {
         shell: String,
         prootDistro: String,
         shellCmd: String,
-        user: String = "flux",
+        user: String = "altaris",
         useSharedTmp: Boolean = true,
         distro: String = "debian",
         loginShell: GuestLoginShell = GuestLoginShell.DEFAULT
@@ -245,26 +245,82 @@ object ProotCommandBuilder {
         }
     }
 
+    /**
+     * Resolves a guest executable to a *real file* inside the rootfs.
+     *
+     * proot resolves the first exec itself, on the host. Alpine's
+     * `/usr/bin/env -> /bin/busybox` is an absolute symlink, so the host looks
+     * for Android's missing `/bin/busybox` and reports "'/usr/bin/env' not
+     * found". The same happens for `/bin/sh -> /bin/busybox`. Follow the link
+     * chain inside the guest and, for busybox, use applet dispatch.
+     */
+    private fun guestExec(rootfs: File, path: String, applet: String): List<String> {
+        val resolved = resolveGuestPath(rootfs, path) ?: path
+        return if (resolved.substringAfterLast('/') == "busybox") {
+            listOf(resolved, applet)
+        } else {
+            listOf(resolved)
+        }
+    }
+
+    private fun resolveGuestPath(rootfs: File, start: String): String? {
+        var path = start
+        repeat(10) {
+            val host = File(rootfs, path.trimStart('/'))
+            if (!java.nio.file.Files.isSymbolicLink(host.toPath())) {
+                return if (host.isFile) path else null
+            }
+            val target = runCatching {
+                java.nio.file.Files.readSymbolicLink(host.toPath()).toString()
+            }.getOrNull() ?: return null
+            path = if (target.startsWith("/")) {
+                target
+            } else {
+                normalizeGuest(path.substringBeforeLast('/', "") + "/" + target)
+            }
+        }
+        return null
+    }
+
+    private fun normalizeGuest(path: String): String {
+        val parts = ArrayDeque<String>()
+        for (part in path.split('/')) {
+            when (part) {
+                "", "." -> Unit
+                ".." -> if (parts.isNotEmpty()) parts.removeLast()
+                else -> parts.addLast(part)
+            }
+        }
+        return "/" + parts.joinToString("/")
+    }
+
     fun build(
         ctx: Context,
         shellCmd: String,
-        user: String = "flux",
+        user: String = "altaris",
         useSharedTmp: Boolean = true,
         distro: String = "debian",
         loginShell: GuestLoginShell = GuestLoginShell.DEFAULT
     ): Pair<Array<String>, HashMap<String, String>> {
         // The rootfs may only carry the alias user; resolve before building.
         val rootfs = File("${TermuxHostPaths.PREFIX}/var/lib/proot-distro/containers/$distro/rootfs")
+        GuestUserMigration.ensureAltaris(rootfs)
         val loginUser = GuestUserResolver.resolve(user, GuestUserResolver.passwdOf(rootfs))
         // Host package env + interactive TERM (guest login inherits package identity)
         val envMap = HostCommandBuilder.envMap(ctx, forceHostSetup = false, includeTerm = true)
         if (!TerminalPreferences.isLegacyProotLauncher(ctx)) {
-            val guestCmd = listOf("/usr/bin/env", "-i") +
+            // The first exec is resolved by proot itself on the *host*. An
+            // absolute symlink like Alpine's /usr/bin/env -> /bin/busybox
+            // points at Android's missing /bin/busybox, so proot reports
+            // "'/usr/bin/env' not found". Prefer a real file; busybox applet
+            // dispatch is the fallback for musl/busybox distros.
+            val guestCmd = guestExec(rootfs, "/usr/bin/env", "env") + listOf("-i") +
                 guestEnvVars(loginUser, envMap["TERM"] ?: "xterm-256color") +
+                guestExec(rootfs, "/bin/sh", "sh") +
                 if (GuestLoginShell.isLoginSentinel(shellCmd)) {
-                    listOf("/bin/sh", "-lc", GuestLoginShell.prootLoginScript(loginShell))
+                    listOf("-lc", GuestLoginShell.prootLoginScript(loginShell))
                 } else {
-                    listOf("/bin/sh", "-c", shellCmd)
+                    listOf("-c", shellCmd)
                 }
             buildDirect(
                 proot = TermuxHostPaths.libProot(ctx).absolutePath,

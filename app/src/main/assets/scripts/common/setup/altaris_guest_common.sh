@@ -96,18 +96,31 @@ _altaris_ensure_user() {
         _altaris_shell="/bin/sh"
     fi
     if ! id altaris >/dev/null 2>&1; then
-        _altaris_log "Creating user flux (shell $_altaris_shell)..."
+        _altaris_log "Creating user altaris (shell $_altaris_shell)..."
         if command -v useradd >/dev/null 2>&1; then
             if ! id -u 1000 >/dev/null 2>&1; then
-                useradd -m -u 1000 -s "$_altaris_shell" flux 2>/dev/null \
-                    || useradd -m -s "$_altaris_shell" flux
+                useradd -m -u 1000 -s "$_altaris_shell" altaris 2>/dev/null \
+                    || useradd -m -s "$_altaris_shell" altaris
             else
-                useradd -m -s "$_altaris_shell" flux
+                useradd -m -s "$_altaris_shell" altaris
             fi
         else
             adduser -D -s "$_altaris_shell" altaris 2>/dev/null || true
         fi
-        echo "flux:flux" | chpasswd 2>/dev/null || true
+        echo "altaris:altaris" | chpasswd 2>/dev/null || true
+    fi
+    # Legacy `flux` name: same uid, and /home/flux points at /home/altaris so
+    # the setup helpers and older desktop shortcuts keep resolving.
+    if id altaris >/dev/null 2>&1 && ! id flux >/dev/null 2>&1; then
+        _altaris_uid=$(id -u altaris 2>/dev/null)
+        _altaris_gid=$(id -g altaris 2>/dev/null)
+        if [ -n "$_altaris_uid" ] && [ -n "$_altaris_gid" ]; then
+            echo "flux:x:${_altaris_uid}:${_altaris_gid}:Legacy:/home/flux:${_altaris_shell}" >> /etc/passwd
+            grep -q "^flux:" /etc/group 2>/dev/null || echo "flux:x:${_altaris_gid}:" >> /etc/group
+        fi
+    fi
+    if [ -d /home/altaris ] && [ ! -e /home/flux ]; then
+        ln -s /home/altaris /home/flux 2>/dev/null || true
     fi
     for g in wheel audio video netdev input users; do
         if command -v usermod >/dev/null 2>&1; then
@@ -158,8 +171,8 @@ PAM
 _altaris_ensure_sudo() {
     if command -v sudo >/dev/null 2>&1; then
         mkdir -p /etc/sudoers.d
-        echo "flux ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/flux
-        chmod 0440 /etc/sudoers.d/flux
+        printf '%s\n' "altaris ALL=(ALL) NOPASSWD:ALL" "flux ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/altaris
+        chmod 0440 /etc/sudoers.d/altaris
         chmod 0755 /etc/sudoers.d 2>/dev/null || true
         if [ -f /etc/sudoers ] && ! grep -qE '@includedir[[:space:]]+/etc/sudoers\.d' /etc/sudoers 2>/dev/null; then
             echo '@includedir /etc/sudoers.d' >> /etc/sudoers
@@ -170,7 +183,7 @@ _altaris_ensure_sudo() {
             chown root:root "$_sc" 2>/dev/null || true
             chmod 0644 "$_sc" 2>/dev/null || true
         done
-        chown root:root /etc/sudoers /etc/sudoers.d /etc/sudoers.d/flux 2>/dev/null || true
+        chown root:root /etc/sudoers /etc/sudoers.d /etc/sudoers.d/altaris 2>/dev/null || true
         chmod 4755 /usr/bin/sudo 2>/dev/null || chmod 4755 /usr/sbin/sudo 2>/dev/null || true
         _altaris_repair_sudo_pam
     elif command -v doas >/dev/null 2>&1; then

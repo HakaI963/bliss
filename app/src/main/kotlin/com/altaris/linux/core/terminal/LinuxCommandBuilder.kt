@@ -24,13 +24,13 @@ object LinuxCommandBuilder {
     fun sessionUserForType(type: String): String =
         when (type) {
             "shell-root", "component" -> "root"
-            else -> "flux"
+            else -> "altaris"
         }
 
     fun build(
         ctx: Context,
         shellCmd: String,
-        user: String = "flux",
+        user: String = "altaris",
         useSharedTmp: Boolean = true,
         method: String = currentMethod,
         distroId: String? = null,
@@ -43,7 +43,10 @@ object LinuxCommandBuilder {
             "chroot" -> ChrootCommandBuilder.build(
                 ctx,
                 shellCmd,
-                user,
+                // Chroot images still carry the legacy flux account and the
+                // root-side start scripts address it by name. Keep the alias
+                // there until the chroot setup migrates too.
+                if (user == "altaris") "flux" else user,
                 chrootPath = profile?.chrootPath
                     ?: com.altaris.linux.core.root.ChrootPaths.CHROOT_PATH,
                 loginShell = loginShell

@@ -5,17 +5,15 @@ import java.io.File
 /**
  * Resolves the guest login user.
  *
- * The guest scripts create `flux` (uid 1000) and keep an `altaris` alias, but
- * a rootfs that was set up by an older build — or a setup run that failed
- * half-way — may only have one of them. Logging in as a user that
- * `/etc/passwd` does not contain aborts the session with
- * "no user '…' defined", so the app resolves the name against the real
- * passwd before building any command.
+ * New guests use `altaris` (uid 1000). A rootfs that was set up by an older
+ * build — or a setup run that failed half-way — may still only carry the
+ * legacy `flux` account, so the app resolves the name against the real passwd
+ * before building any command and falls back to the old name.
  */
 object GuestUserResolver {
 
     /** The names the guest may use, in preference order. */
-    val GUEST_USERS = listOf("flux", "altaris")
+    val GUEST_USERS = listOf("altaris", "flux")
 
     /** Reads `<rootfs>/etc/passwd`; null when the rootfs has no passwd yet. */
     fun passwdOf(rootfs: File?): List<List<String>>? {

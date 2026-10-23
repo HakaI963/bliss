@@ -78,7 +78,7 @@ final class CloneManager {
     private static final String KEYSTORE_ASSET = "clone.keystore";
     private static final String KEYSTORE_PASS = "headless";
     private static final String KEY_ALIAS = "clone";
-    private static final String CLONE_PREFIX = "com.nopiece.hclone.h";
+    private static final String CLONE_PREFIX = "com.altaris.apps.";
     private static final Pattern SESSION_ID =
             Pattern.compile("created install session \\[(\\d+)\\]");
     private static final Pattern HEX = Pattern.compile("[0-9a-f]{8}");
@@ -634,7 +634,22 @@ final class CloneManager {
                 if (clonePackage == null || clonePackage.trim().isEmpty()) {
                     return Jsons.error("missing clone package");
                 }
-                AppCatalog.run("am force-stop " + quote(clonePackage.trim()), 30);
+                String clone = clonePackage.trim();
+                AppCatalog.run("am force-stop " + quote(clone), 30);
+                // Releasing the virtual display while the activity is still
+                // alive makes Android migrate it to the default display: the
+                // clone flashes full-screen on the phone for a frame. Wait for
+                // the process to actually die before the caller releases it.
+                for (int i = 0; i < 40; i++) {
+                    AppCatalog.CommandResult probe = AppCatalog.run("pidof " + quote(clone), 2);
+                    if (!probe.ok() || probe.output.trim().isEmpty()) break;
+                    try {
+                        Thread.sleep(50);
+                    } catch (InterruptedException interrupted) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                }
                 engine.log("clone kill " + clonePackage);
                 return Jsons.ok("stopped " + clonePackage);
             } catch (Throwable e) {

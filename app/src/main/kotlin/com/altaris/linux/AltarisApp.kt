@@ -59,6 +59,18 @@ class AltarisApp : Application() {
             // then a one-time hint (autoEnable keeps that off the main thread).
             runCatching { com.altaris.linux.core.a11y.A11yAutoEnable.autoEnable(this) }
             runCatching { com.altaris.linux.core.terminal.DistroFsCache.warm(this) }
+            // Rebrand legacy flux guests once per launch (also done lazily
+            // before a terminal is opened, in ProotCommandBuilder).
+            runCatching {
+                val containers = java.io.File(
+                    filesDir,
+                    "usr/var/lib/proot-distro/containers",
+                )
+                containers.listFiles().orEmpty().forEach { dir ->
+                    com.altaris.linux.core.terminal.GuestUserMigration
+                        .ensureAltaris(java.io.File(dir, "rootfs"))
+                }
+            }
             runCatching { ShellIntegration.ensureInstalled(this) }
                 .onFailure { Log.w("AltarisApp", "shell integration install failed", it) }
             runCatching { com.altaris.linux.core.control.AltarisCliInstaller.installAll(this) }

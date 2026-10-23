@@ -48,7 +48,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 object HeadlessCloneEngine {
 
     private const val TAG = "AltarisClone"
-    private const val CLONE_PREFIX = "com.nopiece.hclone."
+    private const val CLONE_PREFIX = "com.altaris.apps."
+    private const val LEGACY_CLONE_PREFIX = "com.nopiece.hclone."
 
     data class DeviceApp(
         val packageName: String,
@@ -629,6 +630,7 @@ object HeadlessCloneEngine {
                     .filter { info ->
                         info.packageName != ctx.packageName &&
                             !info.packageName.startsWith(CLONE_PREFIX) &&
+                            !info.packageName.startsWith(LEGACY_CLONE_PREFIX) &&
                             (info.flags and ApplicationInfo.FLAG_SYSTEM) == 0
                     }
                     .distinctBy { it.packageName }

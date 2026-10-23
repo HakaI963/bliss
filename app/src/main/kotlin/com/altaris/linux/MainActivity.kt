@@ -1477,7 +1477,13 @@ private fun AnimatedContentTransitionScope<Screen>.altarisRouteTransition(): Con
     val fadeOutSpec = tween<Float>(160, easing = FastOutSlowInEasing)
     val transform = when {
         fadeOnly ->
-            fadeIn(tween(180)) togetherWith fadeOut(tween(140))
+            // Terminal and the install wizard own the whole window. A plain
+            // cross-fade reads as one surface replacing another; no horizontal
+            // or diagonal movement.
+            (fadeIn(tween(200, easing = FastOutSlowInEasing)) +
+                slideInVertically(tween(240, easing = FastOutSlowInEasing)) { h -> h / 40 }) togetherWith
+                (fadeOut(tween(150, easing = FastOutSlowInEasing)) +
+                    slideOutVertically(tween(180, easing = FastOutSlowInEasing)) { h -> h / 40 })
         depthDelta > 0 ->
             (slideInHorizontally(slideIn) { w -> w * 3 / 20 } + fadeIn(fadeInSpec)) togetherWith
                 (slideOutHorizontally(slideOut) { w -> -(w / 12) } + fadeOut(fadeOutSpec))
@@ -1488,8 +1494,15 @@ private fun AnimatedContentTransitionScope<Screen>.altarisRouteTransition(): Con
             (fadeIn(fadeInSpec) + slideInVertically(slideIn) { h -> h / 100 }) togetherWith
                 (fadeOut(fadeOutSpec) + slideOutVertically(slideOut) { h -> -(h / 200) })
     }
-    // clip = false keeps terminal/X11 surface content from being clipped mid-slide.
-    return transform.using(SizeTransform(clip = false))
+    // Fade-only routes must not animate their bounds: with an open IME the
+    // terminal measures shorter than the home screen, and interpolating that
+    // size makes the incoming screen unfold from a corner. Clip and snap.
+    return if (fadeOnly) {
+        transform.using(SizeTransform(clip = true, sizeAnimationSpec = { _, _ -> null }))
+    } else {
+        // clip = false keeps terminal/X11 surface content from being clipped mid-slide.
+        transform.using(SizeTransform(clip = false))
+    }
 }
 
 private fun AnimatedContentTransitionScope<BottomTab>.altarisTabTransition(): ContentTransform {

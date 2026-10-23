@@ -218,13 +218,18 @@ fun HomeScreen(
     // PRoot guests lead the bento; the method itself is shown on every tile.
     val prootInstalled = installedDistros.filter { !it.isChrootCard() }
     var rootAvailable by remember { mutableStateOf(false) }
+    val shizukuRunning by com.altaris.linux.core.clone.HeadlessCloneEngine
+        .shizukuRunning.collectAsState()
 
     fun probeRoot(force: Boolean = false) {
         RootShell.probeRootAvailable(forceClearCache = force) { ok ->
             rootAvailable = ok
         }
     }
-    LaunchedEffect(Unit) { probeRoot() }
+    LaunchedEffect(Unit) {
+        probeRoot()
+        com.altaris.linux.core.clone.HeadlessCloneEngine.refreshState()
+    }
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -409,7 +414,8 @@ fun HomeScreen(
                     stats = listOf(
                         installedDistros.size.toString() to "Containers",
                         (if (session != null) 1 else 0).toString() to "Running",
-                        (if (rootAvailable) "Yes" else "No") to "Root"
+                        (if (rootAvailable) "Yes" else "No") to "Root",
+                        (if (shizukuRunning) "Yes" else "No") to "Shizuku"
                     )
                 )
             }
