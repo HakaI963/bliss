@@ -34,6 +34,13 @@ object RootShell {
     private const val SCRIPTS_TMP = "${ChrootPaths.STAGING_DIR}/scripts"
 
     /**
+     * su locations tried *at run time* by [shellRootCommand] when the cache is cold.
+     * KernelSU, Magisk and AOSP disagree here, so the shell picks instead of the app.
+     */
+    private const val SU_RUNTIME_CANDIDATES =
+        "/debug_ramdisk/su /system/bin/su /system/xbin/su /sbin/su /su/bin/su"
+
+    /**
      * Working su argv prefix, e.g. `["/system/bin/su","-c"]` or `["/system/bin/sh","-c"]` with
      * embedded su. Discovered once via [resolveSuInvocation]; null if root unavailable.
      *
@@ -324,7 +331,7 @@ object RootShell {
         for ((index, trial) in trials.withIndex()) {
             // The first invocation is the one that shows the root-manager
             // prompt on a fresh grant; give the user a little longer there.
-            val timeout = if (index == 0) 4_000L else 2_000L
+            val timeout = if (index == 0) 20_000L else 3_000L
             if (trySuProbe(trial, timeout)) {
                 cachedSuInvocation = trial
                 Log.i(TAG, "resolveSuInvocation OK: $trial")
@@ -481,7 +488,19 @@ object RootShell {
                 val prefix = inv.dropLast(1).joinToString(" ")
                 "$prefix -c '$escaped'"
             }
-            else -> "/system/bin/su -c '$escaped'"
+            else -> {
+                // Cache miss. Resolve su at run time *inside* the shell instead of
+                // hard-coding /system/bin/su: KernelSU, Magisk and AOSP put su in
+                // different places, and a wrong guess makes the pty exit instantly.
+                // The tab is still added and reported OPENED, so the user only sees
+                // "terminal never opens". Still no Java-side probe — the root
+                // manager prompts when this line runs, i.e. only on a real open.
+                "for s in $SU_RUNTIME_CANDIDATES; do " +
+                    "if [ -x \"\$s\" ]; then exec \"\$s\" -c '$escaped'; fi; done; " +
+                    "s=\$(command -v su 2>/dev/null); " +
+                    "if [ -n \"\$s\" ]; then exec \"\$s\" -c '$escaped'; fi; " +
+                    "echo 'altaris: no working su binary' >&2; exit 127"
+            }
         }
     }
 

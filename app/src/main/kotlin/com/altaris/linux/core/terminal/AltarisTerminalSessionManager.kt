@@ -17,6 +17,8 @@ import java.util.concurrent.Executors
  */
 object AltarisTerminalSessionManager {
 
+    private const val TAG = "AltarisSessionMgr"
+
     const val MAX_TABS = SessionRegistry.MAX_TABS
 
     /** Guest opens between the tab-limit check and SessionRegistry.add (main thread only). */
@@ -50,9 +52,25 @@ object AltarisTerminalSessionManager {
     }
 
     /** Focus an existing tab; true when one matched (no new process, no tab-limit use). */
-    private fun reuseExistingTab(type: String, shellCmd: String, distroId: String?): Boolean {
+    private fun reuseExistingTab(
+        ctx: Context,
+        type: String,
+        shellCmd: String,
+        distroId: String?
+    ): Boolean {
         val index = findReusableTab(type, shellCmd, distroId)
         if (index < 0) return false
+        val managed = SessionRegistry.sessions().getOrNull(index) ?: return false
+        // A tab whose pty already exited looks exactly like a live one in the
+        // registry. Re-focusing it reports OPENED while showing a dead terminal,
+        // so every retry "does nothing" and the bug looks permanent. Drop it and
+        // let the caller open a fresh tab. A null session means "not attached
+        // yet", which is still alive — keep it.
+        if (managed.session?.isRunning == false) {
+            Log.i(TAG, "reuseExistingTab: dropping dead tab index=$index type=$type")
+            SessionRegistry.closeSession(ctx, index)
+            return false
+        }
         SessionRegistry.switchSession(index)
         return true
     }
@@ -161,7 +179,7 @@ object AltarisTerminalSessionManager {
         // same distro can run side by side.
         // Before the tab-limit check and host prep: reuse spawns no process and
         // must not consume a tab slot (UI-thread function — synchronous is fine).
-        if (reuseExisting && reuseExistingTab(type, shellCmd, distroId)) {
+        if (reuseExisting && reuseExistingTab(ctx, type, shellCmd, distroId)) {
             onResult(SessionOpenResult.OPENED)
             return
         }

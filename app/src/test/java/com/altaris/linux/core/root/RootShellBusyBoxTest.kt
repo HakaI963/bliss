@@ -3,6 +3,7 @@ package com.altaris.linux.core.root
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class RootShellBusyBoxTest {
@@ -13,18 +14,34 @@ class RootShellBusyBoxTest {
         RootShell.clearSuCache()
     }
 
+    /**
+     * Cold cache must not hard-code one su path: KernelSU, Magisk and AOSP
+     * disagree, and a wrong guess makes the pty exit while the tab is still
+     * reported as opened — the "root granted, terminal never opens" bug.
+     */
     @Test
-    fun shellRootCommand_doesNotProbeSu() {
+    fun shellRootCommand_resolvesSuAtRuntimeWhenCacheIsCold() {
         RootShell.clearSuCache()
         val cmd = RootShell.shellRootCommand("echo hi")
-        assertEquals("/system/bin/su -c 'echo hi'", cmd)
+        assertTrue("walks a candidate list", cmd.contains("for s in "))
+        assertTrue("covers KernelSU", cmd.contains("/debug_ramdisk/su"))
+        assertTrue("covers Magisk/AOSP", cmd.contains("/system/bin/su"))
+        assertTrue("execs the resolved su", cmd.contains("exec \"\$s\" -c 'echo hi'"))
+        assertTrue("fails loudly when nothing works", cmd.contains("exit 127"))
     }
 
     @Test
     fun shellRootCommand_escapesSingleQuotes() {
         RootShell.clearSuCache()
         val cmd = RootShell.shellRootCommand("echo it's")
-        assertEquals("/system/bin/su -c 'echo it'\\''s'", cmd)
+        assertTrue(cmd.contains("echo it'\\''s"))
+    }
+
+    /** A warm cache keeps the cheap single-path form (no loop, no extra forks). */
+    @Test
+    fun shellRootCommand_usesCachedInvocation() {
+        RootShell.seedSuInvocationForTest(listOf("/debug_ramdisk/su", "-c"))
+        assertEquals("/debug_ramdisk/su -c 'echo hi'", RootShell.shellRootCommand("echo hi"))
     }
 
     @Test

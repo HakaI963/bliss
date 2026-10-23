@@ -234,7 +234,11 @@ fun HomeScreen(
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
-                probeRoot(force = true)
+                // Warm, do not clear: force-clearing on every resume left the su
+                // cache cold at the exact moment a terminal card was tapped, and
+                // the chroot session then had to guess a su path. A cached
+                // invocation short-circuits this probe; a cold one still resolves.
+                probeRoot()
                 // Drop a "desktop running" card whose X server died with the app.
                 coroutineScope.launch(kotlinx.coroutines.Dispatchers.IO) {
                     DesktopSessionQuery.reconcileStale(context)

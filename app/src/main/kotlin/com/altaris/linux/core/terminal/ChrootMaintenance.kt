@@ -41,14 +41,19 @@ object ChrootMaintenance {
         val now = SystemClock.elapsedRealtime()
         val previous = lastScheduled[distroId]
         if (previous != null && now - previous < MIN_INTERVAL_MS) return
+
+        // Cheap guards first: burning the 10-minute window before them left a
+        // failed pass blocking maintenance for a whole interval.
+        val app = ctx.applicationContext ?: return
+        // Cache read only — never probe. isRootAvailable() here used to fire a
+        // fresh su prompt from a background pass, exactly what the comment below
+        // promised not to do. A cold cache means the terminal's own su will ask,
+        // and the next open lands in the cached branch.
+        if (RootShell.peekSuInvocation() == null) return
         lastScheduled[distroId] = now
 
-        val app = ctx.applicationContext ?: return
         executor.execute {
             try {
-                // Do not send a fresh su prompt from a background pass. When the
-                // cached invocation is absent, the terminal's own su will ask.
-                if (RootShell.peekSuInvocation() == null && !RootShell.isRootAvailable()) return@execute
                 AltarisCliInstaller.ensure(app, "chroot", distroId)
                 GuestZshrcRepair.repairIfNeeded(app, "chroot", distroId)
             } catch (e: Exception) {

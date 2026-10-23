@@ -94,6 +94,6 @@ jobs:
           APK=app/build/outputs/apk/altaris/debug/app-altaris-debug.apk
           TAG="altaris-debug-${GITHUB_SHA::7}"
           SHA=$(sha256sum "$APK" | awk '{print $1}')
-          gh release create "$TAG" --title "Altaris 1.0.1 — root-granted terminal launch fix" \
-            --notes "Altaris 1.0.1 fixes the case where granting superuser made distro terminals stop opening. Root-only chroot maintenance (helper staging, BusyBox resolution, profile/banner repair) no longer runs on the session-open path; chroot helper assets get a root-readable app-private fallback, all root commands are timeout-bounded, and guest session preparation no longer shares the single host-prep thread (so a pending su prompt cannot block proot too). Unit tests run in CI. APK SHA-256: $SHA" || true
+          gh release create "$TAG" --title "Altaris 1.0.2 — root-granted terminal launch fix" \
+            --notes "Altaris 1.0.2 fixes distro terminals never opening once superuser is granted. The chroot session no longer guesses /system/bin/su when the su cache is cold: the shell walks /debug_ramdisk/su, /system/bin/su, /system/xbin/su, /sbin/su and su/bin/su and execs the first that exists, so KernelSU and Magisk layouts both work. A tab whose pty already exited is now dropped instead of being re-focused, so retrying 'open terminal' actually opens one instead of silently returning to a dead tab. The su cache is no longer cleared on every resume (it is warmed instead), the first root probe allows 20s for the grant dialog instead of 4s, and chroot maintenance only runs with a warm su cache so it never fires a background root prompt. APK SHA-256: $SHA" || true
           gh release upload "$TAG" "$APK" --clobber
