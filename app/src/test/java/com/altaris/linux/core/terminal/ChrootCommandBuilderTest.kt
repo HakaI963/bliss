@@ -147,7 +147,7 @@ class ChrootCommandBuilderTest {
         assertEquals("/root", env["HOME"])
         assertEquals("/system/bin:/system/xbin:/sbin:" + System.getenv("PATH").orEmpty(), env["PATH"])
         val altarisEnv = ChrootCommandBuilder.buildEnv(user = "altaris")
-        assertEquals("/home/flux", altarisEnv["HOME"])
+        assertEquals("/home/altaris", altarisEnv["HOME"])
         assertEquals("tcp:127.0.0.1", altarisEnv["PULSE_SERVER"])
         assertEquals(ChrootPaths.CHROOT_PATH, altarisEnv["ALTARIS_CHROOT"])
     }

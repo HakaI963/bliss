@@ -6,14 +6,15 @@ import java.io.File
  * Resolves the guest login user.
  *
  * New guests use `altaris` (uid 1000). A rootfs that was set up by an older
- * build — or a setup run that failed half-way — may still only carry the
- * legacy `flux` account, so the app resolves the name against the real passwd
- * before building any command and falls back to the old name.
+ * build may still only carry the legacy `flux` account. The app cannot read
+ * that rootfs (SELinux: /data/local is root-only), so it always asks for
+ * `altaris` and lets altaris_chroot.sh — which runs as root — map the name to
+ * whichever account actually exists.
  */
 object GuestUserResolver {
 
     /** The names the guest may use, in preference order. */
-    val GUEST_USERS = listOf("altaris", "flux")
+    val GUEST_USERS = listOf("altaris")
 
     /** Reads `<rootfs>/etc/passwd`; null when the rootfs has no passwd yet. */
     fun passwdOf(rootfs: File?): List<List<String>>? {

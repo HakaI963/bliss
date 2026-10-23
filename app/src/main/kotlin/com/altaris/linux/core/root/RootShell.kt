@@ -637,14 +637,14 @@ object RootShell {
      */
     fun executeInChroot(
         cmd: String,
-        user: String = "flux",
+        user: String = "altaris",
         chrootPath: String = ChrootPaths.CHROOT_PATH,
         onLine: (String) -> Unit = {},
         onDone: (Int) -> Unit = {},
         context: Context? = null
     ) {
         context?.let { ensureChrootHelper(it) }
-        val u = if (user == "root") "root" else "flux"
+        val u = if (user == "root") "root" else "altaris"
         val b64 = android.util.Base64.encodeToString(
             cmd.toByteArray(Charsets.UTF_8),
             android.util.Base64.NO_WRAP
@@ -658,7 +658,7 @@ object RootShell {
      */
     fun captureInChroot(
         cmd: String,
-        user: String = "flux",
+        user: String = "altaris",
         chrootPath: String = ChrootPaths.CHROOT_PATH,
         timeoutMs: Long = 60_000L,
         context: Context? = null,
@@ -666,7 +666,7 @@ object RootShell {
         processHolder: AtomicReference<Process?>? = null
     ): CaptureResult {
         context?.let { ensureChrootHelper(it) }
-        val u = if (user == "root") "root" else "flux"
+        val u = if (user == "root") "root" else "altaris"
         val b64 = android.util.Base64.encodeToString(
             cmd.toByteArray(Charsets.UTF_8),
             android.util.Base64.NO_WRAP

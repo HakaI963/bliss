@@ -19,7 +19,7 @@ object ChrootCommandBuilder {
     fun build(
         ctx: Context,
         shellCmd: String,
-        user: String = "flux",
+        user: String = "altaris",
         chrootPath: String = ChrootPaths.CHROOT_PATH,
         loginShell: GuestLoginShell? = null
     ): Pair<Array<String>, HashMap<String, String>> {
@@ -75,7 +75,7 @@ object ChrootCommandBuilder {
     /** Pure guest-inner argv builder (unit-testable without Android). */
     fun buildRootInner(
         shellCmd: String,
-        user: String = "flux",
+        user: String = "altaris",
         helper: String = ChrootPaths.CHROOT_HELPER,
         loginShellAltaris: String = "zsh",
         loginShellRoot: String = "bash",
@@ -113,7 +113,7 @@ object ChrootCommandBuilder {
 
     /** Session env for the outer sh (Android PATH + TERM + guest HOME). */
     fun buildEnv(
-        user: String = "flux",
+        user: String = "altaris",
         chrootPath: String = ChrootPaths.CHROOT_PATH
     ): HashMap<String, String> {
         val passwd = GuestUserResolver.passwdOf(File(chrootPath))

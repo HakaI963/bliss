@@ -1,5 +1,5 @@
 #!/system/bin/sh
-# altaris-chroot v2.13
+# altaris-chroot v2.14
 # SSOT chroot runner for NativeCode Debian 13 (requires root).
 # Do not nest this under run_debian13_root.sh — it already owns mounts + one chroot.
 # Guest entry always uses env -i + Debian PATH (never Android /system PATH).
@@ -8,16 +8,19 @@
 # Usage:
 #   altaris_chroot.sh version
 #   altaris_chroot.sh mount [--x11]
-#   altaris_chroot.sh login [--user flux|root] [--shell zsh|bash] [--workdir PATH]
-#   altaris_chroot.sh sh    [--user flux|root] -- 'shell string'
-#   altaris_chroot.sh exec  [--user flux|root] -- CMD [ARGS...]
-#   altaris_chroot.sh b64   [--user flux|root] -- BASE64_PAYLOAD
+#   altaris_chroot.sh login [--user altaris|root] [--shell zsh|bash] [--workdir PATH]
+#   altaris_chroot.sh sh    [--user altaris|root] -- 'shell string'
+#   altaris_chroot.sh exec  [--user altaris|root] -- CMD [ARGS...]
+#   altaris_chroot.sh b64   [--user altaris|root] -- BASE64_PAYLOAD
+#
+# --user also accepts the legacy alias `flux`; resolve_guest_user() maps it to
+# the account that actually exists in this rootfs.
 #
 # Env:
 #   ALTARIS_CHROOT  ALTARIS_PACKAGE  ALTARIS_HOST_TMP  ALTARIS_PREFIX  ALTARIS_BB  ALTARIS_SHELL
 set -u
 
-VERSION_STR="altaris-chroot v2.13"
+VERSION_STR="altaris-chroot v2.14"
 # Prefer caller-pinned env (RootShell / start_gui). Fallbacks cover both store flavors.
 if [ -z "${ALTARIS_PACKAGE:-}" ]; then
   if [ -d /data/data/com.zenithblue.fluxlinux/files/usr ]; then
@@ -41,15 +44,32 @@ die() {
   exit 2
 }
 
+# The guest account was renamed flux -> altaris, but images built by earlier
+# releases still only carry the old name and some callers still pass it.
+# This script runs as root, so it can read the rootfs passwd directly (the app
+# uid cannot, which is why the app-side resolver guesses). Pick the account that
+# actually exists; anything else is a caller bug, so keep the strict default.
+resolve_guest_user() {
+  [ "${USER_NAME:-}" = "root" ] && return 0
+  _pw="${ALTARIS_CHROOT}/etc/passwd"
+  if [ -r "$_pw" ] && grep -q '^altaris:' "$_pw" 2>/dev/null; then
+    USER_NAME=altaris
+  elif [ -r "$_pw" ] && grep -q '^flux:' "$_pw" 2>/dev/null; then
+    USER_NAME=flux
+  else
+    USER_NAME=altaris
+  fi
+}
+
 usage() {
   cat <<'EOF' >&2
 usage:
   altaris_chroot.sh version
   altaris_chroot.sh mount [--x11]
-  altaris_chroot.sh login [--user flux|root] [--shell zsh|bash] [--workdir PATH]
-  altaris_chroot.sh sh    [--user flux|root] -- SHELL_STRING
-  altaris_chroot.sh exec  [--user flux|root] -- CMD [ARGS...]
-  altaris_chroot.sh b64   [--user flux|root] -- BASE64_PAYLOAD
+  altaris_chroot.sh login [--user altaris|root] [--shell zsh|bash] [--workdir PATH]
+  altaris_chroot.sh sh    [--user altaris|root] -- SHELL_STRING
+  altaris_chroot.sh exec  [--user altaris|root] -- CMD [ARGS...]
+  altaris_chroot.sh b64   [--user altaris|root] -- BASE64_PAYLOAD
 EOF
   exit 2
 }
@@ -1734,7 +1754,7 @@ case "$MODE" in
         *) die "login: unknown arg $1" ;;
       esac
     done
-    case "$USER_NAME" in root|altaris) ;; *) die "user must be altaris|root" ;; esac
+    resolve_guest_user
     ensure_mounts
     guest_login
     ;;
@@ -1753,7 +1773,7 @@ case "$MODE" in
           ;;
       esac
     done
-    case "$USER_NAME" in root|altaris) ;; *) die "user must be altaris|root" ;; esac
+    resolve_guest_user
     [ "$#" -ge 1 ] || die "sh requires a shell string"
     # Join remaining as one command string (caller may pass one quoted arg)
     CMD_STR="$*"
@@ -1772,7 +1792,7 @@ case "$MODE" in
         *) break ;;
       esac
     done
-    case "$USER_NAME" in root|altaris) ;; *) die "user must be altaris|root" ;; esac
+    resolve_guest_user
     [ "$#" -ge 1 ] || die "exec requires CMD"
     ensure_mounts
     guest_exec "$@"
@@ -1789,7 +1809,7 @@ case "$MODE" in
         *) break ;;
       esac
     done
-    case "$USER_NAME" in root|altaris) ;; *) die "user must be altaris|root" ;; esac
+    resolve_guest_user
     [ "$#" -ge 1 ] || die "b64 requires payload"
     B64_PAYLOAD="$1"
     ensure_mounts

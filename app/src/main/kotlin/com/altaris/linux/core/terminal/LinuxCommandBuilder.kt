@@ -43,10 +43,11 @@ object LinuxCommandBuilder {
             "chroot" -> ChrootCommandBuilder.build(
                 ctx,
                 shellCmd,
-                // Chroot images still carry the legacy flux account and the
-                // root-side start scripts address it by name. Keep the alias
-                // there until the chroot setup migrates too.
-                if (user == "altaris") "flux" else user,
+                // Do NOT remap altaris -> flux here. altaris_chroot.sh only accepts
+                // altaris|root and died with "user must be altaris|root" for every
+                // chroot session. Images that still carry the legacy flux account
+                // are resolved inside the helper, which can read the rootfs passwd.
+                user,
                 chrootPath = profile?.chrootPath
                     ?: com.altaris.linux.core.root.ChrootPaths.CHROOT_PATH,
                 loginShell = loginShell
