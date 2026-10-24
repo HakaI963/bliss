@@ -680,6 +680,34 @@ object RootShell {
     }
 
     /**
+     * Start a long-lived process inside the chroot and keep its pipes open.
+     *
+     * [captureInChroot] closes stdin and waits for exit, which is wrong for a
+     * daemon that must answer for minutes (the REA MCP server). The caller owns
+     * the process, must drain stderr, and must destroy it when done.
+     */
+    fun startInChroot(
+        cmd: String,
+        user: String = "root",
+        chrootPath: String = ChrootPaths.CHROOT_PATH,
+        context: Context? = null
+    ): Process? {
+        context?.let { ensureChrootHelper(it) }
+        val u = if (user == "root") "root" else "altaris"
+        val b64 = android.util.Base64.encodeToString(
+            cmd.toByteArray(Charsets.UTF_8),
+            android.util.Base64.NO_WRAP
+        )
+        val invocation = resolveSuInvocation() ?: return null
+        return try {
+            ProcessBuilder(buildSuArgs(invocation, buildChrootHelperCmd(u, b64, chrootPath))).start()
+        } catch (t: Throwable) {
+            Log.w(TAG, "startInChroot failed", t)
+            null
+        }
+    }
+
+    /**
      * Self-heal: if helper missing from the Altaris helpers dir, copy from app home/staged.
      * Then `sh helper b64 …`.
      */

@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -28,15 +29,18 @@ import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -55,6 +59,8 @@ import com.altaris.linux.core.control.CloneControlService
 import com.altaris.linux.core.control.ControlServer
 import com.altaris.linux.core.control.DetectedAgent
 import com.altaris.linux.core.control.DistroAgentReport
+import com.altaris.linux.core.rea.ReaCatalog
+import com.altaris.linux.core.rea.ReaManager
 import com.altaris.linux.ui.components.AltarisTitle
 import com.altaris.linux.ui.components.PrismButton
 import com.altaris.linux.ui.components.PrismCard
@@ -69,11 +75,12 @@ import com.altaris.linux.ui.theme.altarisMutedText
 import com.altaris.linux.ui.theme.sectionAccent
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.altaris.linux.core.utils.TerminalPreferences
 import androidx.compose.foundation.interaction.MutableInteractionSource
 
-private enum class ToolsPage { HOME, CLONE }
+private enum class ToolsPage { HOME, CLONE, REA }
 
 private const val MCP_CONFIG = """{
   "mcp": {
@@ -147,7 +154,7 @@ fun ToolsScreen() {
     when (page) {
         ToolsPage.HOME -> ToolsHome(
             accent = accent,
-            onOpen = { page = ToolsPage.CLONE }
+            onOpen = { page = it }
         )
         ToolsPage.CLONE -> ToolsDetail(
             accent = accent,
@@ -160,6 +167,15 @@ fun ToolsScreen() {
             McpCard(context, accent)
             CliCard(context, accent)
             AutomationCard(context, accent)
+        }
+        ToolsPage.REA -> ToolsDetail(
+            accent = accent,
+            title = "Reverse engineering",
+            subtitle = "REA tools, live analysis, agent MCP",
+            onBack = { page = ToolsPage.HOME },
+        ) {
+            ReaCard(context, accent)
+            ReaToolsCard(context, accent)
         }
     }
 }
@@ -189,6 +205,12 @@ private fun ToolsHome(
                 Icons.Default.Build,
                 accent,
             ) { onOpen(ToolsPage.CLONE) }
+            CategoryRow(
+                "Reverse engineering",
+                "REA · APK/native/firmware analysis · live device · agent MCP",
+                Icons.Default.Search,
+                accent,
+            ) { onOpen(ToolsPage.REA) }
         }
     }
 }
@@ -624,3 +646,154 @@ private fun copy(context: Context, text: String, toast: String) {
     clipboard.setPrimaryClip(ClipData.newPlainText("Altaris", text))
     Toast.makeText(context, toast, Toast.LENGTH_SHORT).show()
 }
+
+@Composable
+private fun ReaCard(context: Context, accent: Color) {
+    val scope = rememberCoroutineScope()
+    val status by ReaManager.status.collectAsState()
+    var distros by remember { mutableStateOf<List<String>>(emptyList()) }
+    var selected by remember { mutableStateOf("") }
+    var tick by remember { mutableIntStateOf(0) }
+
+    LaunchedEffect(tick) {
+        val ids = ReaManager.installedDistros(context)
+        distros = ids
+        val pick = selected.takeIf { it.isNotBlank() && ids.contains(it) }
+            ?: ReaManager.defaultDistro(ids).orEmpty()
+        selected = pick
+        if (pick.isNotBlank()) ReaManager.probe(context, pick)
+    }
+
+    PrismCard(accent = accent) {
+        PrismSectionLabel("REA", accent)
+        PrismRow(
+            title = "Reverse Engineer Anything",
+            subtitle = when {
+                status.busy.isNotBlank() -> status.busy
+                status.running -> "Running · " + status.toolCount + " tools · " + status.reaVersion
+                status.installed -> "Installed · " + status.reaVersion + " · Node " + status.nodeVersion
+                selected.isBlank() -> "Install a distro first"
+                else -> "Not installed in " + selected
+            },
+            accent = accent,
+            leading = { PrismOrb(active = status.running, accent = accent) },
+            trailing = {
+                PrismChip(
+                    when {
+                        status.running -> "Running"
+                        status.installed -> "Stopped"
+                        else -> "Missing"
+                    },
+                    accent,
+                    selected = status.running,
+                )
+            },
+        )
+        if (distros.isNotEmpty()) {
+            Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                distros.forEach { id ->
+                    PrismChip(
+                        id,
+                        accent,
+                        selected = id == selected,
+                        onClick = {
+                            selected = id
+                            scope.launch { ReaManager.probe(context, id) }
+                        },
+                    )
+                }
+            }
+        }
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            PrismButton(
+                if (status.installed) "Reinstall" else "Install REA",
+                accent,
+                icon = Icons.Default.PlayArrow,
+                enabled = selected.isNotBlank() && status.busy.isBlank(),
+            ) {
+                scope.launch {
+                    ReaManager.install(context, selected)
+                    tick++
+                }
+            }
+            PrismButton(
+                if (status.running) "Stop" else "Start",
+                accent,
+                enabled = status.installed && status.busy.isBlank(),
+            ) {
+                scope.launch {
+                    if (status.running) ReaManager.stop()
+                    else ReaManager.start(context, selected)
+                }
+            }
+        }
+        PrismButton(
+            "Register in agents",
+            accent,
+            enabled = status.installed && status.busy.isBlank(),
+        ) {
+            scope.launch { ReaManager.registerAgents(context, selected) }
+        }
+        if (status.error.isNotBlank()) {
+            Text(
+                status.error,
+                color = MaterialTheme.colorScheme.error,
+                fontSize = 11.sp,
+                modifier = Modifier.padding(horizontal = 2.dp),
+            )
+        }
+        if (status.log.isNotBlank()) {
+            CodeBlock(status.log.takeLast(2500))
+        }
+    }
+}
+
+@Composable
+private fun ReaToolsCard(context: Context, accent: Color) {
+    val scope = rememberCoroutineScope()
+    val status by ReaManager.status.collectAsState()
+
+    PrismCard(accent = accent) {
+        PrismSectionLabel("Analysis tools", accent)
+        ReaCatalog.DEPENDENCIES.forEach { dep ->
+            val installed = dep.id in status.available
+            PrismRow(
+                title = dep.label,
+                subtitle = if (dep.desktopOnly) {
+                    dep.note.ifBlank { "Desktop only" }
+                } else {
+                    dep.description
+                },
+                accent = accent,
+                divider = true,
+                trailing = {
+                    PrismChip(
+                        when {
+                            dep.desktopOnly -> "Unsupported"
+                            installed -> "Installed"
+                            else -> "Install"
+                        },
+                        accent,
+                        selected = installed,
+                        onClick = if (dep.desktopOnly || installed || status.busy.isNotBlank()) {
+                            null
+                        } else {
+                            ({
+                                scope.launch {
+                                    ReaManager.install(context, status.distroId, listOf(dep.id))
+                                }
+                            })
+                        },
+                    )
+                },
+            )
+        }
+    }
+}
+

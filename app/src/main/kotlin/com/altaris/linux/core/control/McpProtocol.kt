@@ -4,6 +4,7 @@ import android.graphics.BitmapFactory
 import android.util.Base64
 import com.altaris.linux.core.a11y.A11yBridge
 import com.altaris.linux.core.clone.HeadlessCloneEngine
+import com.altaris.linux.core.rea.ReaManager
 import kotlinx.coroutines.runBlocking
 import org.json.JSONArray
 import org.json.JSONObject
@@ -241,6 +242,73 @@ object McpProtocol {
                 schema("package" to "string: optional clone package, default the running clone")
             )
         )
+        put(
+            tool(
+                "altaris_rea_status",
+                "REA (reverse engineering) install and server status for a distro.",
+                schema("distro" to "string: optional distro id")
+            )
+        )
+        put(
+            tool(
+                "altaris_rea_install",
+                "Install Node 22 + rea-agents inside a distro, optionally with external analysis tools.",
+                schema(
+                    "distro" to "string: optional distro id",
+                    "tools" to "array: optional ids: jadx, apktool, aapt, adb, java, binutils, gdb, rizin, python3, binwalk, p7zip, tshark, sqlite3, file"
+                )
+            )
+        )
+        put(
+            tool(
+                "altaris_rea_start",
+                "Start the REA MCP server inside the distro and publish its tools here.",
+                schema("distro" to "string: optional distro id")
+            )
+        )
+        put(tool("altaris_rea_stop", "Stop the REA MCP server.", JSONObject()))
+        put(
+            tool(
+                "altaris_rea_tools",
+                "List every REA tool currently published through this endpoint.",
+                JSONObject()
+            )
+        )
+        put(
+            tool(
+                "altaris_rea_call",
+                "Call any REA tool by name (analyze APK, inspect binary, Android resources, live device, …).",
+                schema(
+                    "name" to "string: REA tool name from altaris_rea_tools",
+                    "arguments" to "object: tool arguments",
+                    "timeoutMs" to "integer: optional, default 600000"
+                )
+            )
+        )
+        put(
+            tool(
+                "altaris_rea_agents",
+                "Register this MCP endpoint in every AI agent config found inside the distro.",
+                schema("distro" to "string: optional distro id")
+            )
+        )
+        put(
+            tool(
+                "altaris_rea_clone_apk",
+                "Export a clone's APKs to /sdcard/Download/Altaris/rea so REA can analyze them.",
+                schema("package" to "string: clone package")
+            )
+        )
+        val reaTools = ReaManager.cachedTools()
+        if (reaTools != null) {
+            for (i in 0 until reaTools.length()) {
+                val definition = reaTools.optJSONObject(i) ?: continue
+                put(
+                    JSONObject(definition.toString())
+                        .put("description", "[REA] " + definition.optString("description"))
+                )
+            }
+        }
     }
 
     private fun tool(name: String, description: String, properties: JSONObject): JSONObject {
@@ -412,7 +480,85 @@ object McpProtocol {
             val ctx = ControlServer.context() ?: throw IllegalStateException("App context unavailable")
             textResult(a11yObject(A11yBridge.ensureEnabled(ctx)))
         }
-        else -> throw IllegalArgumentException("Unknown tool: $name")
+        "altaris_rea_status" -> {
+            val ctx = ControlServer.context() ?: throw IllegalStateException("App context unavailable")
+            val ids = runBlocking { ReaManager.installedDistros(ctx) }
+            val distro = args.optString("distro").takeIf { it.isNotBlank() }
+                ?: ReaManager.defaultDistro(ids)
+            if (distro == null) {
+                textResult(JSONObject().put("ok", false).put("error", "no installed distro"))
+            } else {
+                textResult(reaStatusJson(runBlocking { ReaManager.probe(ctx, distro) }))
+            }
+        }
+        "altaris_rea_install" -> {
+            val ctx = ControlServer.context() ?: throw IllegalStateException("App context unavailable")
+            val ids = runBlocking { ReaManager.installedDistros(ctx) }
+            val distro = args.optString("distro").takeIf { it.isNotBlank() }
+                ?: ReaManager.defaultDistro(ids)
+                ?: throw IllegalStateException("no installed distro")
+            val requested = args.optJSONArray("tools")
+            val deps = if (requested == null) emptyList<String>() else
+                (0 until requested.length()).mapNotNull {
+                    requested.optString(it).takeIf { id -> id.isNotBlank() }
+                }
+            textResult(reaStatusJson(runBlocking { ReaManager.install(ctx, distro, deps) }))
+        }
+        "altaris_rea_start" -> {
+            val ctx = ControlServer.context() ?: throw IllegalStateException("App context unavailable")
+            val ids = runBlocking { ReaManager.installedDistros(ctx) }
+            val distro = args.optString("distro").takeIf { it.isNotBlank() }
+                ?: ReaManager.defaultDistro(ids)
+                ?: throw IllegalStateException("no installed distro")
+            textResult(reaStatusJson(runBlocking { ReaManager.start(ctx, distro) }))
+        }
+        "altaris_rea_stop" -> textResult(reaStatusJson(runBlocking { ReaManager.stop() }))
+        "altaris_rea_tools" -> {
+            val tools = ReaManager.cachedTools()
+                ?: throw IllegalStateException("REA is not running. Call altaris_rea_start first.")
+            textResult(JSONObject().put("ok", true).put("count", tools.length()).put("tools", tools))
+        }
+        "altaris_rea_call" -> {
+            val tool = args.optString("name").takeIf { it.isNotBlank() }
+                ?: throw IllegalArgumentException("name is required")
+            val arguments = args.optJSONObject("arguments") ?: JSONObject()
+            val timeout = args.optLong("timeoutMs", 600_000L).coerceIn(5_000L, 3_600_000L)
+            runBlocking { ReaManager.call(tool, arguments, timeout) }
+        }
+        "altaris_rea_agents" -> {
+            val ctx = ControlServer.context() ?: throw IllegalStateException("App context unavailable")
+            val ids = runBlocking { ReaManager.installedDistros(ctx) }
+            val distro = args.optString("distro").takeIf { it.isNotBlank() }
+                ?: ReaManager.defaultDistro(ids)
+                ?: throw IllegalStateException("no installed distro")
+            textResult(reaStatusJson(runBlocking { ReaManager.registerAgents(ctx, distro) }))
+        }
+        "altaris_rea_clone_apk" -> {
+            val ctx = ControlServer.context() ?: throw IllegalStateException("App context unavailable")
+            val pkg = requirePackage(args)
+            val (exit, out) = runBlocking { ReaManager.exportCloneApk(ctx, pkg) }
+            textResult(
+                JSONObject()
+                    .put("ok", exit == 0)
+                    .put("package", pkg)
+                    .put("paths", JSONArray().apply {
+                        out.lines().map { it.trim() }.filter { it.isNotEmpty() }.forEach { put(it) }
+                    })
+                    .put("error", if (exit == 0) "" else out.takeLast(400))
+            )
+        }
+        else -> {
+            if (!ReaManager.isReaTool(name)) {
+                throw IllegalArgumentException("Unknown tool: " + name)
+            }
+            runBlocking {
+                ReaManager.call(
+                    name,
+                    args,
+                    args.optLong("timeoutMs", 600_000L).coerceIn(5_000L, 3_600_000L),
+                )
+            }
+        }
     }
 
     /** Parse a bridge reply, never throws. */
@@ -453,6 +599,25 @@ object McpProtocol {
             "search" -> 84
             else -> null
         }
+    }
+
+    private fun reaStatusJson(status: ReaManager.Status): JSONObject {
+        val available = JSONArray()
+        status.available.sorted().forEach { available.put(it) }
+        return JSONObject()
+            .put("ok", status.error.isBlank())
+            .put("distro", status.distroId)
+            .put("method", status.method)
+            .put("installed", status.installed)
+            .put("running", status.running)
+            .put("node", status.nodeVersion)
+            .put("rea", status.reaVersion)
+            .put("packageManager", status.packageManager)
+            .put("tools", status.toolCount)
+            .put("available", available)
+            .put("busy", status.busy)
+            .put("error", status.error)
+            .put("log", status.log.takeLast(4000))
     }
 
     private fun textResult(obj: JSONObject): JSONObject =
