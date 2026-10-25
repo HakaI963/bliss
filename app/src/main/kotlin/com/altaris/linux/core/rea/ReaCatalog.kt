@@ -14,8 +14,8 @@ data class ReaDependency(
     val id: String,
     val label: String,
     val description: String,
-    val packages: Map<String, List<String>>,
-    val desktopOnly: Boolean = false,
+    val packages: Map<String, List<String>> = emptyMap(),
+    val kind: String = "package", // "package" | "ghidra" | "license"
     val note: String = "",
 )
 
@@ -191,41 +191,50 @@ object ReaCatalog {
             ),
         ),
         ReaDependency(
+            id = "radare2",
+            label = "radare2",
+            description = "Native disassembler and debugger; fast on ARM, ideal for quick triage beside Ghidra.",
+            packages = mapOf(
+                "apt" to listOf("radare2"),
+                "apk" to listOf("radare2"),
+                "dnf" to listOf("radare2"),
+                "pacman" to listOf("radare2"),
+            ),
+        ),
+        ReaDependency(
             id = "ghidra",
             label = "Ghidra",
-            description = "Desktop decompiler. Not available on Android.",
-            packages = emptyMap(),
-            desktopOnly = true,
-            note = "REA falls back to objdump/Rizin for native binaries; no port is possible for the Ghidra UI.",
+            description = "NSA open-source decompiler. The headless analyzer runs on ARM64 via proot/chroot; only the GUI needs a desktop.",
+            kind = "ghidra",
+            note = "Java 17+ is installed automatically. First analysis compiles and runs all analyzers, so it is slow on mobile ARM. The GUI is not used.",
         ),
         ReaDependency(
             id = "ida",
             label = "IDA Pro",
-            description = "Commercial desktop decompiler. Not available on Android.",
-            packages = emptyMap(),
-            desktopOnly = true,
-            note = "Use the objdump/Rizin workflows instead.",
+            description = "Commercial decompiler. Provide your own idat64 binary and Altaris drives it if present.",
+            kind = "license",
+            note = "Drop idat64 into /opt/altaris/rea/ida to make it callable. No license, not installed.",
         ),
         ReaDependency(
             id = "hopper",
             label = "Hopper",
-            description = "macOS-only decompiler. Not available on Android.",
-            packages = emptyMap(),
-            desktopOnly = true,
+            description = "macOS-only commercial decompiler; cannot run on Android.",
+            kind = "license",
+            note = "Unavailable on this platform.",
         ),
         ReaDependency(
             id = "jeb",
             label = "JEB",
-            description = "Commercial Android decompiler. Not available on Android.",
-            packages = emptyMap(),
-            desktopOnly = true,
-            note = "JADX covers the same APK/DEX workflows on device.",
+            description = "Commercial Android decompiler. Provide your licensed jeb.jar; JADX covers the same workflows on device.",
+            kind = "license",
+            note = "No license, not installed.",
         ),
     )
 
     fun byId(id: String): ReaDependency? = DEPENDENCIES.firstOrNull { it.id == id }
 
-    fun installable(): List<ReaDependency> = DEPENDENCIES.filterNot { it.desktopOnly }
+    /** Tools the UI may install. License-gated (commercial) entries are excluded. */
+    fun installable(): List<ReaDependency> = DEPENDENCIES.filter { it.kind != "license" }
 
     /** Package list for [manager], or null when this distro does not ship it. */
     fun packagesFor(dep: ReaDependency, manager: String): List<String>? = dep.packages[manager]

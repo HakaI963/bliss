@@ -299,6 +299,17 @@ object McpProtocol {
                 schema("package" to "string: clone package")
             )
         )
+        put(
+            tool(
+                "altaris_ghidra_analyze",
+                "Run Ghidra's headless analyzer on a file inside the distro and return its function list.",
+                schema(
+                    "distro" to "string: optional distro id",
+                    "target" to "string: guest path to a binary, APK, or library",
+                    "max" to "integer: max functions to return (default 300)"
+                )
+            )
+        )
         val reaTools = ReaManager.cachedTools()
         if (reaTools != null) {
             for (i in 0 until reaTools.length()) {
@@ -546,6 +557,17 @@ object McpProtocol {
                     })
                     .put("error", if (exit == 0) "" else out.takeLast(400))
             )
+        }
+        "altaris_ghidra_analyze" -> {
+            val ctx = ControlServer.context() ?: throw IllegalStateException("App context unavailable")
+            val ids = runBlocking { ReaManager.installedDistros(ctx) }
+            val distro = args.optString("distro").takeIf { it.isNotBlank() }
+                ?: ReaManager.defaultDistro(ids)
+                ?: throw IllegalStateException("no installed distro")
+            val target = args.optString("target").takeIf { it.isNotBlank() }
+                ?: throw IllegalArgumentException("target path is required")
+            val max = args.optInt("max", 300).coerceIn(10, 5000)
+            textResult(runBlocking { ReaManager.analyzeGhidra(ctx, distro, target, max) })
         }
         else -> {
             if (!ReaManager.isReaTool(name)) {

@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -175,6 +176,7 @@ fun ToolsScreen() {
             onBack = { page = ToolsPage.HOME },
         ) {
             ReaCard(context, accent)
+            ReaGhidraCard(context, accent)
             ReaToolsCard(context, accent)
         }
     }
@@ -765,26 +767,26 @@ private fun ReaToolsCard(context: Context, accent: Color) {
             val installed = dep.id in status.available
             PrismRow(
                 title = dep.label,
-                subtitle = if (dep.desktopOnly) {
-                    dep.note.ifBlank { "Desktop only" }
-                } else {
-                    dep.description
+                subtitle = when (dep.kind) {
+                    "license" -> dep.note.ifBlank { "Needs a license; not bundled." }
+                    else -> dep.description
                 },
                 accent = accent,
                 divider = true,
                 trailing = {
                     PrismChip(
                         when {
-                            dep.desktopOnly -> "Unsupported"
+                            dep.kind == "license" -> "License"
                             installed -> "Installed"
                             else -> "Install"
                         },
                         accent,
                         selected = installed,
-                        onClick = if (dep.desktopOnly || installed || status.busy.isNotBlank()) {
-                            null
-                        } else {
-                            ({
+                        onClick = when {
+                            dep.kind == "license" -> null
+                            installed -> null
+                            status.busy.isNotBlank() -> null
+                            else -> ({
                                 scope.launch {
                                     ReaManager.install(context, status.distroId, listOf(dep.id))
                                 }
@@ -793,6 +795,66 @@ private fun ReaToolsCard(context: Context, accent: Color) {
                     )
                 },
             )
+        }
+    }
+}
+
+
+@Composable
+private fun ReaGhidraCard(context: Context, accent: Color) {
+    val scope = rememberCoroutineScope()
+    val status by ReaManager.status.collectAsState()
+    var target by remember { mutableStateOf("") }
+    var output by remember { mutableStateOf("") }
+    var analyzing by remember { mutableStateOf(false) }
+
+    PrismCard(accent = accent) {
+        PrismSectionLabel("Ghidra analysis", accent)
+        PrismRow(
+            title = "Headless decompiler",
+            subtitle = if (status.available.contains("ghidra")) {
+                "Ready. Runs on ARM64; first analysis is slow."
+            } else {
+                "Install Ghidra from the list below, then analyze a binary here."
+            },
+            accent = accent,
+            trailing = {
+                PrismChip(
+                    if (analyzing) "Running" else "Analyze",
+                    accent,
+                    selected = analyzing,
+                )
+            },
+        )
+        OutlinedTextField(
+            value = target,
+            onValueChange = { target = it },
+            label = { Text("Guest path (binary / APK / library)") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        PrismButton(
+            "Analyze with Ghidra",
+            accent,
+            icon = Icons.Default.Search,
+            enabled = target.isNotBlank() && status.available.contains("ghidra") && !analyzing,
+        ) {
+            analyzing = true
+            output = ""
+            scope.launch {
+                try {
+                    val res = ReaManager.analyzeGhidra(context, status.distroId, target, 300)
+                    output = (res.optString("output").ifBlank { res.optString("error") })
+                        .ifBlank { "No output." }
+                } catch (t: Throwable) {
+                    output = t.message ?: t.javaClass.simpleName
+                } finally {
+                    analyzing = false
+                }
+            }
+        }
+        if (output.isNotBlank()) {
+            CodeBlock(output.takeLast(3000))
         }
     }
 }

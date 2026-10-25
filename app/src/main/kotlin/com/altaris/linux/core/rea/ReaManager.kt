@@ -37,6 +37,13 @@ object ReaManager {
     const val REA_VERSION = "6.7.0"
     const val MCP_URL = "http://127.0.0.1:47831/mcp"
 
+    /** Ghidra headless analyzer, installed on demand into the distro. */
+    const val GHIDRA_ROOT = ROOT + "/ghidra"
+    const val GHIDRA_SCRIPTS = ROOT + "/scripts"
+    const val GHIDRA_OUT = ROOT + "/ghidra-out"
+    const val GHIDRA_TAG = "Ghidra_12.2_build"
+    const val GHIDRA_ASSET = "ghidra_12.2_PUBLIC_20261016.zip"
+
     data class Status(
         val distroId: String = "",
         val method: String = "",
@@ -91,8 +98,9 @@ object ReaManager {
                 "elif command -v apk >/dev/null 2>&1; then echo pm=apk; " +
                 "elif command -v dnf >/dev/null 2>&1; then echo pm=dnf; " +
                 "elif command -v pacman >/dev/null 2>&1; then echo pm=pacman; else echo pm=none; fi",
-            "for b in jadx apktool aapt adb objdump gdb rizin python3 binwalk 7z tshark sqlite3 file java; do " +
+            "for b in jadx apktool aapt adb objdump gdb rizin python3 binwalk 7z tshark sqlite3 file java radare2; do " +
                 "if command -v \$b >/dev/null 2>&1; then echo bin:\$b=1; else echo bin:\$b=0; fi; done",
+            "if [ -x " + GHIDRA_ROOT + "/support/analyzeHeadless ]; then echo bin:ghidra=1; else echo bin:ghidra=0; fi",
         ).joinToString("\n")
 
         val result = GuestExec.run(ctx, distroId, script, timeoutMs = 60_000L)
@@ -162,27 +170,46 @@ object ReaManager {
                 line("REA already installed in " + distroId)
             }
 
+            // Ghidra is pure Java and needs a JRE; install Java first so the
+            // download step below finds 'java' on PATH.
+            if (dependencies.any { ReaCatalog.byId(it)?.kind == "ghidra" }) {
+                val javaDep = ReaCatalog.byId("java")
+                val jm = _status.value.packageManager
+                val javaPkgs = javaDep?.let { ReaCatalog.packagesFor(it, jm) }
+                if (javaPkgs != null) {
+                    line("ensure Java for Ghidra via " + jm + ": " + javaPkgs.joinToString(" "))
+                    val jr = GuestExec.run(app, distroId, dependencyScript(jm, javaPkgs), timeoutMs = 20 * 60_000L) { line(it) }
+                    if (!jr.ok) line("warning: Java install failed: " + jr.tail(4))
+                }
+            }
+
             for (id in dependencies) {
                 val dep = ReaCatalog.byId(id) ?: continue
-                if (dep.desktopOnly) {
-                    line("skip " + dep.label + ": desktop-only (" + dep.note + ")")
-                    continue
-                }
-                val manager = _status.value.packageManager
-                val packages = ReaCatalog.packagesFor(dep, manager)
-                if (packages.isNullOrEmpty()) {
-                    line("skip " + dep.label + ": not packaged for " + manager)
-                    continue
-                }
-                line("install " + dep.label + " via " + manager + ": " + packages.joinToString(" "))
-                val depResult = GuestExec.run(
-                    app,
-                    distroId,
-                    dependencyScript(manager, packages),
-                    timeoutMs = 20 * 60_000L,
-                ) { line(it) }
-                if (!depResult.ok) {
-                    line("warning: " + dep.label + " failed: " + depResult.tail(4))
+                when (dep.kind) {
+                    "license" -> line("skip " + dep.label + ": " + (dep.note.ifBlank { "license required" }))
+                    "ghidra" -> {
+                        line("install Ghidra (headless analyzer)")
+                        val gResult = GuestExec.run(app, distroId, ghidraInstallScript(app), timeoutMs = 60 * 60_000L) { line(it) }
+                        if (!gResult.ok) line("warning: Ghidra install failed: " + gResult.tail(8))
+                    }
+                    else -> {
+                        val manager = _status.value.packageManager
+                        val packages = ReaCatalog.packagesFor(dep, manager)
+                        if (packages.isNullOrEmpty()) {
+                            line("skip " + dep.label + ": not packaged for " + manager)
+                            continue
+                        }
+                        line("install " + dep.label + " via " + manager + ": " + packages.joinToString(" "))
+                        val depResult = GuestExec.run(
+                            app,
+                            distroId,
+                            dependencyScript(manager, packages),
+                            timeoutMs = 20 * 60_000L,
+                        ) { line(it) }
+                        if (!depResult.ok) {
+                            line("warning: " + dep.label + " failed: " + depResult.tail(4))
+                        }
+                    }
                 }
             }
 
@@ -226,7 +253,79 @@ object ReaManager {
         }
     }
 
+    private fun ghidraInstallScript(ctx: Context): String =
+        readAsset(ctx.applicationContext, "scripts/rea/ghidra-install.sh")
+            .replace("__REA_ROOT__", ROOT)
+            .replace("__GHIDRA_ROOT__", GHIDRA_ROOT)
+            .replace("__GHIDRA_TAG__", GHIDRA_TAG)
+            .replace("__GHIDRA_ASSET__", GHIDRA_ASSET)
+
+    /** Write the GhidraScript and the headless-analysis wrapper into the guest. */
+    private fun readAsset(ctx: Context, name: String): String =
+        ctx.applicationContext.assets.open(name).bufferedReader().use { it.readText() }
+
+    private suspend fun ensureGhidraScripts(ctx: Context, distroId: String) {
+        val dump = readAsset(ctx, "scripts/rea/DumpInfo.java")
+        val wrap = readAsset(ctx, "scripts/rea/ghidra-analyze.sh")
+            .replace("__GHIDRA_ROOT__", GHIDRA_ROOT)
+            .replace("__REA_ROOT__", ROOT)
+        // Plain heredocs (no quoting on the delimiter) so the shell-side $ vars
+        // are expanded by the guest when the wrapper runs, while DumpInfo is left
+        // verbatim. The app already resolved the ROOT placeholders above.
+        val script = listOf(
+            "set -e",
+            "mkdir -p \"" + GHIDRA_SCRIPTS + "\" \"" + GHIDRA_OUT + "\"",
+            "cat > \"" + GHIDRA_SCRIPTS + "/DumpInfo.java\" <<'GHIDRA_EOF'",
+            dump.trimEnd(),
+            "GHIDRA_EOF",
+            "cat > \"" + GHIDRA_ROOT + "/ghidra-analyze.sh\" <<'GHIDRA_EOF'",
+            wrap.trimEnd(),
+            "GHIDRA_EOF",
+            "chmod +x \"" + GHIDRA_ROOT + "/ghidra-analyze.sh\"",
+        ).joinToString("\n")
+        GuestExec.run(ctx, distroId, script, timeoutMs = 60_000L)
+    }
+
+    /**
+     * Headless Ghidra analysis of [target] (a path inside the guest). Imports the
+     * file, runs the default analyzers, then a GhidraScript dumps every function
+     * (name + entry address) to a file the wrapper prints. Works on ARM64; the
+     * GUI is never used.
+     */
+    suspend fun analyzeGhidra(
+        ctx: Context,
+        distroId: String,
+        target: String,
+        max: Int = 300,
+    ): JSONObject = withContext(Dispatchers.IO) {
+        val present = GuestExec.run(
+            ctx,
+            distroId,
+            "if [ -x \"" + GHIDRA_ROOT + "/support/analyzeHeadless\" ]; then echo yes; else echo no; fi",
+            timeoutMs = 20_000L,
+        )
+        if (!present.output.contains("yes")) {
+            return@withContext JSONObject()
+                .put("ok", false)
+                .put("error", "Ghidra is not installed. Install it from Tools > Reverse engineering first.")
+        }
+        ensureGhidraScripts(ctx, distroId)
+        val script = listOf(
+            "export _JAVA_OPTIONS=\"-Djava.awt.headless=true\"",
+            "export JAVA_TOOL_OPTIONS=\"-Djava.awt.headless=true\"",
+            GHIDRA_ROOT + "/ghidra-analyze.sh " + GuestExec.shellQuote(target) + " " + max,
+        ).joinToString("\n")
+        val result = GuestExec.run(ctx, distroId, script, timeoutMs = 45 * 60_000L)
+        JSONObject()
+            .put("ok", result.ok)
+            .put("target", target)
+            .put("exit", result.exit)
+            .put("output", result.output.takeLast(8000))
+            .put("error", if (result.ok) "" else result.tail(6))
+    }
+
     // ------------------------------------------------------------- server
+
 
     suspend fun start(ctx: Context, distroId: String): Status = withContext(Dispatchers.IO) {
         mutex.withLock {
