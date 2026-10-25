@@ -67,3 +67,9 @@ find "$GH" -name "*.sh" -exec chmod +x {} + 2>/dev/null || true
 chmod +x "$GH/support/analyzeHeadless" 2>/dev/null || true
 echo "Ghidra installed at $GH"
 
+# --- build the ARM64 decompiler (no prebuilt binary ships for linux_arm_64) ---
+BUILD_SH="$BASE/scripts/ghidra-decompiler-build.sh"
+if [ -f "$BUILD_SH" ]; then
+  sh "$BUILD_SH" "$GH" || echo "warning: decompiler build failed; disassembly and function analysis still work, only decompilation is unavailable"
+fi
+

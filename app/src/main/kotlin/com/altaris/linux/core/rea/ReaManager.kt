@@ -174,6 +174,9 @@ object ReaManager {
 
             val needsCore = !alreadyInstalled
             if (needsCore) {
+                // Stage the helper scripts first: ghidra-install.sh invokes the
+                // decompiler build script from the same directory.
+                runCatching { ensureGhidraScripts(app, distroId) }
                 val core = installScript()
                 val coreResult = GuestExec.run(app, distroId, core, timeoutMs = 45 * 60_000L) { line(it) }
                 if (!coreResult.ok) {
@@ -285,6 +288,9 @@ object ReaManager {
         val wrap = readAsset(ctx, "scripts/rea/ghidra-analyze.sh")
             .replace("__GHIDRA_ROOT__", GHIDRA_ROOT)
             .replace("__REA_ROOT__", ROOT)
+        // The decompiler build script lives in the same scripts dir the install
+        // script invokes it from, so it must be staged before Ghidra is installed.
+        val build = readAsset(ctx, "scripts/rea/ghidra-decompiler-build.sh")
         // Plain heredocs (no quoting on the delimiter) so the shell-side $ vars
         // are expanded by the guest when the wrapper runs, while DumpInfo is left
         // verbatim. The app already resolved the ROOT placeholders above.
@@ -297,7 +303,11 @@ object ReaManager {
             "cat > \"" + GHIDRA_ROOT + "/ghidra-analyze.sh\" <<'GHIDRA_EOF'",
             wrap.trimEnd(),
             "GHIDRA_EOF",
-            "chmod +x \"" + GHIDRA_ROOT + "/ghidra-analyze.sh\"",
+            "cat > \"" + GHIDRA_SCRIPTS + "/ghidra-decompiler-build.sh\" <<'GHIDRA_EOF'",
+            build.trimEnd(),
+            "GHIDRA_EOF",
+            "chmod +x \"" + GHIDRA_ROOT + "/ghidra-analyze.sh\" \"" +
+                GHIDRA_SCRIPTS + "/ghidra-decompiler-build.sh\"",
         ).joinToString("\n")
         GuestExec.run(ctx, distroId, script, timeoutMs = 60_000L)
     }
