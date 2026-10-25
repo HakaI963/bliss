@@ -50,9 +50,11 @@ object ReaManager {
      * 12.2 moved the minimum to Java 25, which no phone distro packages yet,
      * so 11.4.3 is the newest release that runs on-device.
      */
-    const val JDK_VERSION = "21.0.9+10"
-    const val JDK_TEMURIN = "https://api.adoptium.net/v3/binary/version/jdk-" + JDK_VERSION +
-        "/linux/arm64/jdk/hotspot/normal/eclipse?project=jdk"
+    // Always resolves to the newest GA Temurin 21 arm64 (glibc). The arch
+    // segment is "aarch64" — "arm64" 404s on the Adoptium API. Alpine keeps the
+    // openjdk21-jdk package instead; Temurin has no musl build.
+    const val JDK_TEMURIN =
+        "https://api.adoptium.net/v3/binary/latest/21/ga/linux/aarch64/jdk/hotspot/normal/eclipse"
 
     data class Status(
         val distroId: String = "",
