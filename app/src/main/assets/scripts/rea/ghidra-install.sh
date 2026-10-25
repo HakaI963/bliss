@@ -6,21 +6,60 @@ GH=__GHIDRA_ROOT__
 TAG=__GHIDRA_TAG__
 ASSET=__GHIDRA_ASSET__
 mkdir -p "$BASE"
+
+# --- ensure a full JDK 21+ (javac is required, JRE is rejected) ---
+JDK_OK=0
+if command -v javac >/dev/null 2>&1 && command -v java >/dev/null 2>&1; then
+  V=$(java -version 2>&1 | head -1 | sed -n "s/.*version \"\([0-9][0-9]*\).*/\1/p")
+  case "$V" in ""|*[!0-9]*) V=0;; esac
+  [ "$V" -ge 21 ] && JDK_OK=1
+fi
+if [ "$JDK_OK" -eq 0 ]; then
+  if command -v apt-get >/dev/null 2>&1; then
+    apt-get update -qq && apt-get install -y --no-install-recommends openjdk-21-jdk-headless || true
+  elif command -v apk >/dev/null 2>&1; then
+    apk add --no-cache openjdk21-jdk || true
+  elif command -v dnf >/dev/null 2>&1; then
+    dnf install -y java-21-openjdk-devel || true
+  elif command -v pacman >/dev/null 2>&1; then
+    pacman -Sy --noconfirm jdk21-openjdk || true
+  fi
+  if command -v javac >/dev/null 2>&1 && command -v java >/dev/null 2>&1; then
+    V=$(java -version 2>&1 | head -1 | sed -n "s/.*version \"\([0-9][0-9]*\).*/\1/p")
+    case "$V" in ""|*[!0-9]*) V=0;; esac
+    [ "$V" -ge 21 ] && JDK_OK=1
+  fi
+fi
+# Fallback: Temurin JDK 21 arm64 tarball (glibc). Alpine keeps its own package.
+if [ "$JDK_OK" -eq 0 ] && [ ! -f /etc/alpine-release ]; then
+  echo "no distro JDK 21+; installing Temurin 21"
+  JDK_URL=__JDK_URL__
+  command -v curl >/dev/null 2>&1 || { if command -v apt-get >/dev/null 2>&1; then apt-get update -qq && apt-get install -y --no-install-recommends curl ca-certificates; fi; }
+  if command -v curl >/dev/null 2>&1; then
+    curl -fL --retry 4 -o /tmp/altaris-jdk.tar.gz "$JDK_URL"
+    rm -rf "$BASE/jdk" "$BASE/jdk.tmp"
+    mkdir -p "$BASE/jdk.tmp"
+    tar -xzf /tmp/altaris-jdk.tar.gz -C "$BASE/jdk.tmp" --strip-components=1
+    mv "$BASE/jdk.tmp" "$BASE/jdk"
+    JDK_OK=1
+  fi
+fi
+if [ "$JDK_OK" -eq 0 ]; then echo "ERROR: could not provision a JDK 21+"; exit 5; fi
+echo "JDK ready"
+
+# --- install Ghidra ---
 if [ -x "$GH/support/analyzeHeadless" ]; then echo "Ghidra already present"; exit 0; fi
 command -v unzip >/dev/null 2>&1 || { if command -v apt-get >/dev/null 2>&1; then apt-get update -qq && apt-get install -y --no-install-recommends unzip; elif command -v apk >/dev/null 2>&1; then apk add --no-cache unzip; elif command -v dnf >/dev/null 2>&1; then dnf install -y unzip; elif command -v pacman >/dev/null 2>&1; then pacman -Sy --noconfirm unzip; fi; }
 command -v curl >/dev/null 2>&1 || { if command -v apt-get >/dev/null 2>&1; then apt-get update -qq && apt-get install -y --no-install-recommends curl ca-certificates; elif command -v apk >/dev/null 2>&1; then apk add --no-cache curl ca-certificates; fi; }
-cd /tmp
-CAND=$(curl -fsSL "https://api.github.com/repos/NationalSecurityAgency/ghidra/releases/tags/$TAG" 2>/dev/null | grep -o 'ghidra_[^"]*linux_arm64[^"]*\.zip' | head -1)
-[ -n "$CAND" ] && ASSET="$CAND"
 URL="https://github.com/NationalSecurityAgency/ghidra/releases/download/$TAG/$ASSET"
 echo "downloading Ghidra: $URL"
-rm -f ghidra-dl.zip
-if command -v curl >/dev/null 2>&1; then curl -fL --retry 4 -o ghidra-dl.zip "$URL"; else wget -qO ghidra-dl.zip "$URL"; fi
+rm -f /tmp/ghidra-dl.zip
+if command -v curl >/dev/null 2>&1; then curl -fL --retry 4 -o /tmp/ghidra-dl.zip "$URL"; else wget -qO /tmp/ghidra-dl.zip "$URL"; fi
 echo "extracting Ghidra"
 rm -rf "$BASE/ghidra.tmp"
 mkdir -p "$BASE/ghidra.tmp"
-unzip -q ghidra-dl.zip -d "$BASE/ghidra.tmp"
-DIR=$(find "$BASE/ghidra.tmp" -maxdepth 1 -type d -name "ghidra*" | head -1)
+unzip -q /tmp/ghidra-dl.zip -d "$BASE/ghidra.tmp"
+DIR=$(find "$BASE/ghidra.tmp" -mindepth 1 -maxdepth 1 -type d -name "ghidra*" | head -1)
 [ -z "$DIR" ] && DIR="$BASE/ghidra.tmp"
 rm -rf "$GH"
 mv "$DIR" "$GH"

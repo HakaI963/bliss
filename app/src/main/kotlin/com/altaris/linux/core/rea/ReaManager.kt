@@ -41,8 +41,18 @@ object ReaManager {
     const val GHIDRA_ROOT = ROOT + "/ghidra"
     const val GHIDRA_SCRIPTS = ROOT + "/scripts"
     const val GHIDRA_OUT = ROOT + "/ghidra-out"
-    const val GHIDRA_TAG = "Ghidra_12.2_build"
-    const val GHIDRA_ASSET = "ghidra_12.2_PUBLIC_20261016.zip"
+    const val GHIDRA_TAG = "Ghidra_11.4.3_build"
+    const val GHIDRA_ASSET = "ghidra_11.4.3_PUBLIC_20251203.zip"
+
+    /**
+     * Ghidra 11.4.3 requires Java 21+ (application.java.min=21) and its
+     * launcher refuses a JRE: LaunchSupport checks for a javac executable.
+     * 12.2 moved the minimum to Java 25, which no phone distro packages yet,
+     * so 11.4.3 is the newest release that runs on-device.
+     */
+    const val JDK_VERSION = "21.0.9+10"
+    const val JDK_TEMURIN = "https://api.adoptium.net/v3/binary/version/jdk-" + JDK_VERSION +
+        "/linux/arm64/jdk/hotspot/normal/eclipse?project=jdk"
 
     data class Status(
         val distroId: String = "",
@@ -101,6 +111,9 @@ object ReaManager {
             "for b in jadx apktool aapt adb objdump gdb rizin python3 binwalk 7z tshark sqlite3 file java radare2; do " +
                 "if command -v \$b >/dev/null 2>&1; then echo bin:\$b=1; else echo bin:\$b=0; fi; done",
             "if [ -x " + GHIDRA_ROOT + "/support/analyzeHeadless ]; then echo bin:ghidra=1; else echo bin:ghidra=0; fi",
+            // The Temurin JDK fallback lives outside PATH, so command -v java would
+            // miss it and the UI would show Java as missing while Ghidra works.
+            "if [ -x " + ROOT + "/jdk/bin/java ]; then echo bin:java=1; fi",
         ).joinToString("\n")
 
         val result = GuestExec.run(ctx, distroId, script, timeoutMs = 60_000L)
@@ -259,6 +272,7 @@ object ReaManager {
             .replace("__GHIDRA_ROOT__", GHIDRA_ROOT)
             .replace("__GHIDRA_TAG__", GHIDRA_TAG)
             .replace("__GHIDRA_ASSET__", GHIDRA_ASSET)
+            .replace("__JDK_URL__", JDK_TEMURIN)
 
     /** Write the GhidraScript and the headless-analysis wrapper into the guest. */
     private fun readAsset(ctx: Context, name: String): String =
@@ -310,11 +324,9 @@ object ReaManager {
                 .put("error", "Ghidra is not installed. Install it from Tools > Reverse engineering first.")
         }
         ensureGhidraScripts(ctx, distroId)
-        val script = listOf(
-            "export _JAVA_OPTIONS=\"-Djava.awt.headless=true\"",
-            "export JAVA_TOOL_OPTIONS=\"-Djava.awt.headless=true\"",
-            GHIDRA_ROOT + "/ghidra-analyze.sh " + GuestExec.shellQuote(target) + " " + max,
-        ).joinToString("\n")
+        // JAVA_HOME and headless flags are resolved inside the wrapper, so the
+        // guest's own stale JAVA_HOME cannot point Ghidra at a JRE.
+        val script = GHIDRA_ROOT + "/ghidra-analyze.sh " + GuestExec.shellQuote(target) + " " + max
         val result = GuestExec.run(ctx, distroId, script, timeoutMs = 45 * 60_000L)
         JSONObject()
             .put("ok", result.ok)

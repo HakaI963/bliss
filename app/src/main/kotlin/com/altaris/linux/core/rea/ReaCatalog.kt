@@ -71,13 +71,13 @@ object ReaCatalog {
         ),
         ReaDependency(
             id = "java",
-            label = "Java runtime",
-            description = "JADX and Apktool are JVM tools; without it they cannot start.",
+            label = "Java (JDK 21)",
+            description = "JADX and Apktool are JVM tools; Ghidra needs a full JDK with javac and Java 21+.",
             packages = mapOf(
-                "apt" to listOf("openjdk-17-jre-headless"),
-                "apk" to listOf("openjdk17-jre-headless"),
-                "dnf" to listOf("java-17-openjdk-headless"),
-                "pacman" to listOf("jre17-openjdk-headless"),
+                "apt" to listOf("openjdk-21-jdk-headless"),
+                "apk" to listOf("openjdk21-jdk"),
+                "dnf" to listOf("java-21-openjdk-devel"),
+                "pacman" to listOf("jdk21-openjdk"),
             ),
         ),
         ReaDependency(
@@ -206,7 +206,7 @@ object ReaCatalog {
             label = "Ghidra",
             description = "NSA open-source decompiler. The headless analyzer runs on ARM64 via proot/chroot; only the GUI needs a desktop.",
             kind = "ghidra",
-            note = "Java 17+ is installed automatically. First analysis compiles and runs all analyzers, so it is slow on mobile ARM. The GUI is not used.",
+            note = "A full JDK 21+ (with javac, required by Ghidra's launcher) is installed automatically. First analysis runs every analyzer, so it is slow on mobile ARM. The GUI is not used.",
         ),
         ReaDependency(
             id = "ida",
