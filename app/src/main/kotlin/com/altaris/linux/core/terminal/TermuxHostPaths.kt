@@ -169,6 +169,15 @@ object TermuxHostPaths {
             |export PATH="$nld:$BIN:/system/bin"
             |export TERM="${'$'}{TERM:-xterm-256color}"
             |export HISTFILE="${'$'}HOME/.bash_history"
+            |# History must survive an app restart: the host shell is killed with
+            |# the tab, so append every command instead of writing on exit.
+            |export HISTSIZE=50000
+            |export HISTFILESIZE=50000
+            |shopt -s histappend 2>/dev/null || true
+            |case ";${'$'}{PROMPT_COMMAND:-};" in
+            |  *";history -a;"*) ;;
+            |  *) PROMPT_COMMAND="history -a${'$'}{PROMPT_COMMAND:+; ${'$'}PROMPT_COMMAND}" ;;
+            |esac
             |# ble.sh inspects these on startup and complains when they are empty
             |# on Android (where the shell is not started by login).
             |export USER="${'$'}{USER:-altaris}"

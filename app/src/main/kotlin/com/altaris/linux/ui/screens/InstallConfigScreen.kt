@@ -36,6 +36,7 @@ import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -103,6 +104,14 @@ fun InstallConfigScreen(
     var selectedTheme by remember { mutableStateOf("dark") }
     var selectedDesktops by remember(distro.id) { mutableStateOf(setOf(DesktopChoice.XFCE)) }
     var hwAccel by remember(distro.id) { mutableStateOf(true) }
+    // Named install: a label for a SECOND copy of this distro (own container).
+    // Empty = install into the distro's default container (repair/reinstall).
+    val existingInstance = remember(distro.id) {
+        com.altaris.linux.core.install.DistroInstances.cached(distro.id)
+    }
+    var instanceName by remember(distro.id) {
+        mutableStateOf(existingInstance?.label.orEmpty())
+    }
     var phase by remember { mutableStateOf(InstallPhase.OPTIONS) }
     var percent by remember { mutableIntStateOf(0) }
     var phaseLabel by remember { mutableStateOf("") }
@@ -131,7 +140,10 @@ fun InstallConfigScreen(
             distroId = distro.id,
             theme = selectedTheme,
             desktops = desktops,
-            extras = extras
+            extras = extras,
+            // A typed name creates a separate container; blank (or an existing
+            // instance card) targets the distro's default container.
+            instanceName = if (existingInstance != null) null else instanceName.trim().ifBlank { null }
         ) { progress ->
             percent = progress.overallPercent
             phaseLabel = progress.phaseLabel
@@ -389,6 +401,52 @@ fun InstallConfigScreen(
                                 text = if (isChroot) "CHROOT" else "PROOT",
                                 accent = accent
                             )
+                        }
+                    }
+
+                    // Named install: a second copy of this distro in its own
+                    // container. Blank installs/repairs the default container.
+                    if (!isChroot) {
+                        PrismSectionLabel(
+                            text = "Instance name",
+                            accent = accent,
+                            modifier = Modifier.staggerIn(0, entrance)
+                        )
+                        PrismCard(
+                            accent = accent,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .staggerIn(0, entrance)
+                        ) {
+                            Column {
+                                OutlinedTextField(
+                                    value = instanceName,
+                                    onValueChange = { instanceName = it.take(32) },
+                                    singleLine = true,
+                                    label = { Text("Name (optional)") },
+                                    placeholder = {
+                                        Text(
+                                            if (existingInstance != null) {
+                                                existingInstance.label
+                                            } else {
+                                                "e.g. work, testing"
+                                            }
+                                        )
+                                    },
+                                    supportingText = {
+                                        Text(
+                                            if (existingInstance != null) {
+                                                "Separate container: ${existingInstance.container}"
+                                            } else {
+                                                "Give this copy its own name to keep it " +
+                                                    "separate — leave empty to use ${distro.id}"
+                                            },
+                                            fontSize = 11.sp
+                                        )
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
                         }
                     }
 

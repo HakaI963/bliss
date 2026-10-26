@@ -38,7 +38,7 @@ object ShellIntegrationTargets {
      * (2023-04-03). Bump on every re-vendor — invalidates the stamps and
      * triggers one re-copy.
      */
-    const val BLESH_RELEASE = "0.4.0-devel3+1a5c451c-altaris1"
+    const val BLESH_RELEASE = "0.4.0-devel3+1a5c451c-altaris2"
 
     /** Version stamp written next to the runtime tree. */
     const val STAMP_NAME = ".altaris-shell-version"
@@ -54,6 +54,9 @@ object ShellIntegrationTargets {
 
     /** Stage file name of the rc fragment (cat'ed by the chroot `install.sh`). */
     const val RC_BLOCK_STAGE_NAME = "rc-block.sh"
+
+    /** Stage file name of the bash history fragment (chroot `install.sh`). */
+    const val HISTORY_BLOCK_STAGE_NAME = "history-block.sh"
 
     /** First line of files the installer creates itself (never added to user files). */
     const val CREATED_HEADER = "# Created by Altaris shell integration (ble.sh)."
@@ -105,6 +108,33 @@ object ShellIntegrationTargets {
         |    [ -r $GUEST_SHARE/$CONF_NAME ] && . $GUEST_SHARE/$CONF_NAME
         |fi
         |$MARKER_END
+        |""".trimMargin()
+
+    /** Marker pair for the persistent-history fragment (separate from ble.sh). */
+    const val HISTORY_MARKER_BEGIN = "# >>> altaris shell history v1 >>>"
+    const val HISTORY_MARKER_END = "# <<< altaris shell history v1 <<<"
+
+    /**
+     * Bash persistent history. The app kills guest sessions when a tab closes,
+     * so bash never reaches its exit-time history write: every command is
+     * appended immediately (`history -a`) instead. Written as its own marker
+     * block so installs that already carry the ble.sh block pick it up.
+     */
+    val GUEST_HISTORY_BLOCK = """
+        |$HISTORY_MARKER_BEGIN
+        |# Persistent command history — survives app restarts and killed tabs.
+        |# Guarded so dash / busybox ash (POSIX login shells) skip it cleanly.
+        |if [ -n "${'$'}{BASH_VERSION-}" ]; then
+        |    HISTFILE="${'$'}{HISTFILE:-${'$'}HOME/.bash_history}"
+        |    HISTSIZE=50000
+        |    HISTFILESIZE=50000
+        |    shopt -s histappend 2>/dev/null || true
+        |    case ";${'$'}{PROMPT_COMMAND:-};" in
+        |      *";history -a;"*) ;;
+        |      *) PROMPT_COMMAND="history -a${'$'}{PROMPT_COMMAND:+; ${'$'}PROMPT_COMMAND}" ;;
+        |    esac
+        |fi
+        |$HISTORY_MARKER_END
         |""".trimMargin()
 
     /** One rc file to wire, relative to a rootfs root (`etc/bash/bashrc`, `root/.bashrc`, …). */
@@ -169,8 +199,11 @@ object ShellIntegrationTargets {
      * a partial BEGIN-without-END pair still counts — the block stays
      * functional and Altaris never rewrites or trims user content).
      */
-    fun hasMarkerBlock(file: File): Boolean = try {
-        file.isFile && file.readText().contains(MARKER_BEGIN)
+    fun hasMarkerBlock(file: File): Boolean = hasMarkerBlock(file, MARKER_BEGIN)
+
+    /** Marker-parameterised variant used by the history fragment. */
+    fun hasMarkerBlock(file: File, marker: String): Boolean = try {
+        file.isFile && file.readText().contains(marker)
     } catch (_: Exception) {
         false
     }
@@ -181,7 +214,16 @@ object ShellIntegrationTargets {
      * rewritten; when [createIfMissing] the file is created with a minimal
      * [CREATED_HEADER] comment (the block brings its own description comments).
      */
-    fun appendMarkerBlock(file: File, block: String, createIfMissing: Boolean): Boolean {
+    fun appendMarkerBlock(file: File, block: String, createIfMissing: Boolean): Boolean =
+        appendMarkerBlock(file, block, createIfMissing, MARKER_BEGIN)
+
+    /** Marker-parameterised append (the history fragment uses its own marker). */
+    fun appendMarkerBlock(
+        file: File,
+        block: String,
+        createIfMissing: Boolean,
+        marker: String
+    ): Boolean {
         return try {
             if (!file.isFile) {
                 if (!createIfMissing) return false
@@ -190,7 +232,7 @@ object ShellIntegrationTargets {
                 return true
             }
             val text = file.readText()
-            if (text.contains(MARKER_BEGIN)) return true
+            if (text.contains(marker)) return true
             val separator = if (text.isEmpty() || text.endsWith("\n")) "" else "\n"
             file.writeText(text + separator + block)
             true
@@ -272,7 +314,13 @@ object ShellIntegrationTargets {
             runCatching { profileD.setExecutable(true, false) }
         }
         for (target in rcTargets(root)) {
-            appendMarkerBlock(File(root, target.relPath), GUEST_RC_BLOCK, target.createIfMissing)
+            val file = File(root, target.relPath)
+            appendMarkerBlock(file, GUEST_RC_BLOCK, target.createIfMissing)
+            // Persistent history is a separate marker block so rc files wired
+            // by an older Altaris build get it without being rewritten.
+            appendMarkerBlock(
+                file, GUEST_HISTORY_BLOCK, target.createIfMissing, HISTORY_MARKER_BEGIN
+            )
         }
         // ble.sh keeps its cache in $HOME/.cache/blesh — prepare root + homes.
         if (File(root, "root").isDirectory) File(root, "root/.cache").mkdirs()

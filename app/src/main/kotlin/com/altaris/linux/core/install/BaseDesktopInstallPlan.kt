@@ -22,7 +22,7 @@ object BaseDesktopInstallPlan {
     data class Phase(val id: String, val label: String, val weight: Int)
 
     fun distroById(id: String): Distro? =
-        DistroRepository.supportedDistros.find { it.id == id }
+        DistroRepository.cardFor(id)
 
     fun methodFor(distroId: String): String = DistroInstallProfile.methodFor(distroId)
 

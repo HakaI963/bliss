@@ -210,9 +210,7 @@ fun HomeScreen(
     }
     val installedDistros = remember(fsSnapshot) {
         val ids = fsSnapshot?.installed.orEmpty()
-        DistroRepository.sortForDistroPage(
-            DistroRepository.supportedDistros.filter { it.id in ids }
-        )
+        DistroRepository.sortForDistroPage(ids.mapNotNull { DistroRepository.cardFor(it) })
     }
 
     // PRoot guests lead the bento; the method itself is shown on every tile.

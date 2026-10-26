@@ -7,6 +7,7 @@ import android.util.Log
 import com.altaris.linux.core.gpu.GpuDriverInstaller
 import com.altaris.linux.core.root.RootShell
 import com.altaris.linux.core.service.BaseInstallService
+import com.altaris.linux.core.terminal.DistroFsCache
 import com.altaris.linux.core.terminal.GpuAccelDetector
 import com.altaris.linux.core.terminal.HostCommandBuilder
 import com.altaris.linux.core.terminal.ShellCommandRunner
@@ -139,6 +140,7 @@ class OnboardingInstallRunner(private val ctx: Context) {
         theme: String = "dark",
         desktops: Set<DesktopChoice> = setOf(DesktopChoice.XFCE),
         extras: Set<InstallExtra> = emptySet(),
+        instanceName: String? = null,
         onProgress: (Progress) -> Unit
     ) {
         // Invalidate any in-flight job before resetting cancel flag
@@ -177,13 +179,38 @@ class OnboardingInstallRunner(private val ctx: Context) {
             return
         }
         val method = profile.method
-        val choiceSet = DesktopInstallSelection.sanitize(distroId, desktops)
+        // Named installs (see DistroInstances): an existing instance id
+        // reinstalls into its own container; a base id + custom name creates a
+        // new, separate container. The base id stays for scripts/components.
+        val targetProfile: DistroInstallProfile = when {
+            DistroInstances.get(appCtx, distroId) != null -> {
+                val inst = DistroInstances.get(appCtx, distroId)!!
+                profile.copy(
+                    distroId = inst.id,
+                    prootName = inst.container,
+                    displayName = inst.label
+                )
+            }
+            method == "proot" && !instanceName.isNullOrBlank() -> {
+                val container = DistroInstances.containerForNew(appCtx, distroId, instanceName)
+                    ?: profile.prootName
+                profile.copy(
+                    distroId = container,
+                    prootName = container,
+                    displayName = instanceName.trim()
+                )
+            }
+            else -> profile
+        }
+        val choiceSet = DesktopInstallSelection.sanitize(
+            targetProfile.baseDistroId, desktops
+        )
         val phases = BaseDesktopInstallPlan.phasesFor(
-            method, profile.displayName, choiceSet
+            method, targetProfile.displayName, choiceSet
         )
         sessionDistroId = distroId
         sessionTaskName =
-            "${profile.displayName} · ${DesktopInstallSelection.summaryLabel(choiceSet)}"
+            "${targetProfile.displayName} · ${DesktopInstallSelection.summaryLabel(choiceSet)}"
         // Supersede a session owned by another runner instance (e.g. the user
         // kicked off a second install from a different screen while one ran).
         activeInstance?.let { other -> if (other !== this && other.isBusy()) other.cancel() }
@@ -230,7 +257,7 @@ class OnboardingInstallRunner(private val ctx: Context) {
                 if (method == "chroot") {
                     runChroot(distroId, theme, choiceSet, extras, phases, onProgress, gen)
                 } else {
-                    runProot(distroId, theme, choiceSet, extras, phases, onProgress, gen)
+                    runProot(distroId, targetProfile, theme, choiceSet, extras, phases, onProgress, gen)
                 }
             } catch (e: Exception) {
                 if (!isStale(gen)) {
@@ -270,6 +297,7 @@ class OnboardingInstallRunner(private val ctx: Context) {
 
     private fun runProot(
         distroId: String,
+        profile: DistroInstallProfile,
         theme: String,
         desktops: Set<DesktopChoice>,
         extras: Set<InstallExtra>,
@@ -277,6 +305,9 @@ class OnboardingInstallRunner(private val ctx: Context) {
         onProgress: (Progress) -> Unit,
         gen: Int
     ) {
+        // Scripts / package managers follow the base distro; state keys, the
+        // container and every session follow the (possibly named) instance id.
+        val baseId = profile.baseDistroId
         val xfceSelected = DesktopChoice.XFCE in desktops
         val kdeSelected = DesktopChoice.KDE in desktops
         val hostIdx = phaseIdx(phases, "HOST")
@@ -303,7 +334,6 @@ class OnboardingInstallRunner(private val ctx: Context) {
         }
         completePhase(phases, hostIdx, onProgress, "Host ready")
 
-        val profile = DistroInstallProfile.require(distroId)
         enter(
             phases, dlIdx, onProgress,
             "Downloading ${profile.displayName} rootfs…",
@@ -331,7 +361,7 @@ class OnboardingInstallRunner(private val ctx: Context) {
         val bash = TermuxHostPaths.libBash(appCtx).absolutePath
         val installScript = TermuxHostPaths.hostScript(appCtx, "altaris_install.sh").absolutePath
         val setupB64 = BaseDesktopInstallPlan.familySetupB64(
-            appCtx, theme, distroId, desktops
+            appCtx, theme, baseId, desktops
         )
         val desktopsEnv = DesktopInstallSelection.envValue(desktops)
         val firstEnv = DesktopInstallSelection.firstEnvValue(desktops)
@@ -342,6 +372,9 @@ class OnboardingInstallRunner(private val ctx: Context) {
             put("ALTARIS_DESKTOPS", desktopsEnv)
             put("ALTARIS_DESKTOP", firstEnv)
             put("ALTARIS_DESKTOP_ENV", firstEnv)
+            // Container name (arg 1) and base distro id are separate now, so a
+            // named install can reuse the base distro's rootfs case statement.
+            put("ALTARIS_DISTRO_ID", baseId)
             put("ALTARIS_ROOTFS_PATH", "${TermuxHostPaths.HOME}/${profile.rootfsFileName}")
             put("ALTARIS_ROOTFS_NAME", profile.rootfsFileName)
             put("ALTARIS_ROOTFS_SHA256", profile.rootfsSha256)
@@ -379,10 +412,10 @@ class OnboardingInstallRunner(private val ctx: Context) {
         }
         if (kdeSelected) {
             val kdeScript = DesktopInstallSelection.componentScriptName(
-                distroId, DesktopInstallSelection.COMPONENT_KDE_PLASMA
+                baseId, DesktopInstallSelection.COMPONENT_KDE_PLASMA
             )
             if (kdeScript == null) {
-                postFail(onProgress, phases, "KDE Plasma component missing for $distroId")
+                postFail(onProgress, phases, "KDE Plasma component missing for $baseId")
                 return
             }
             log(phases, rootfsIdx, onProgress, "Installing KDE Plasma desktop…")
@@ -476,7 +509,7 @@ class OnboardingInstallRunner(private val ctx: Context) {
         if (kdeSelected) {
             // KDE customization downloads its own theme/icons/OMZ (no host staging).
             val kdeCustomScript = DesktopInstallSelection.componentScriptName(
-                distroId, DesktopInstallSelection.COMPONENT_KDE_CUSTOMIZATION
+                baseId, DesktopInstallSelection.COMPONENT_KDE_CUSTOMIZATION
             )
             if (kdeCustomScript == null) {
                 log(phases, customIdx, onProgress, "KDE customization component missing — skipped")
@@ -527,30 +560,37 @@ class OnboardingInstallRunner(private val ctx: Context) {
         )
 
         if (abortIfCancelled(gen, phases, onProgress)) return
-        StateManager.setDistroInstalled(appCtx, distroId, true)
+        StateManager.setDistroInstalled(appCtx, profile.distroId, true)
         if (xfceSelected) {
             StateManager.setComponentInstalled(
-                appCtx, distroId, DesktopInstallSelection.COMPONENT_XFCE, true
+                appCtx, profile.distroId, DesktopInstallSelection.COMPONENT_XFCE, true
             )
             if (xfceCustomOk) {
                 StateManager.setComponentInstalled(
-                    appCtx, distroId, DesktopInstallSelection.COMPONENT_CUSTOMIZATION, true
+                    appCtx, profile.distroId, DesktopInstallSelection.COMPONENT_CUSTOMIZATION, true
                 )
             }
         }
         if (kdeSelected) {
             StateManager.setComponentInstalled(
-                appCtx, distroId, DesktopInstallSelection.COMPONENT_KDE_PLASMA, true
+                appCtx, profile.distroId, DesktopInstallSelection.COMPONENT_KDE_PLASMA, true
             )
             if (kdeCustomOk) {
                 StateManager.setComponentInstalled(
-                    appCtx, distroId, DesktopInstallSelection.COMPONENT_KDE_CUSTOMIZATION, true
+                    appCtx, profile.distroId, DesktopInstallSelection.COMPONENT_KDE_CUSTOMIZATION, true
                 )
             }
         }
         if (hwOk) {
-            StateManager.setComponentInstalled(appCtx, distroId, "hw_accel", true)
+            StateManager.setComponentInstalled(appCtx, profile.distroId, "hw_accel", true)
         }
+        // Named installs become first-class instances: registry + fs cache.
+        if (profile.baseDistroId != profile.distroId) {
+            DistroInstances.register(
+                appCtx, profile.prootName, profile.baseDistroId, profile.displayName
+            )
+        }
+        DistroFsCache.invalidate()
         StateManager.triggerRefresh()
         postSuccess(onProgress, phases)
     }
@@ -895,14 +935,14 @@ class OnboardingInstallRunner(private val ctx: Context) {
             "Hardware acceleration: mode=${gpu.mode} vendor=${gpu.vendorHint}"
         )
         // Adreno: app picks the stable Turnip release (empty map elsewhere).
-        val driverEnv = GpuDriverInstaller.guestEnv(appCtx, profile.distroId)
+        val driverEnv = GpuDriverInstaller.guestEnv(appCtx, profile.baseDistroId)
         (driverEnv["ALTARIS_TURNIP_MSG"] ?: driverEnv["ALTARIS_PANVK_MSG"])?.let { log(phases, phaseIndex, onProgress, it) }
         val ok = try {
             if (method == "chroot") {
                 val path = chrootPath
                     ?: com.altaris.linux.core.root.ChrootPaths.CHROOT_PATH
                 val payload = BaseDesktopInstallPlan.hwAccelPayload(
-                    appCtx, profile.distroId, gpu.mode, gpu.vendorHint, driverEnv
+                    appCtx, profile.baseDistroId, gpu.mode, gpu.vendorHint, driverEnv
                 )
                 runChrootGuestBlocking(payload, user = "root", phases, phaseIndex, onProgress, path) == 0
             } else {
@@ -924,7 +964,7 @@ class OnboardingInstallRunner(private val ctx: Context) {
         }
         if (driverEnv.isNotEmpty()) {
             GpuDriverInstaller.refreshInstalled(
-                appCtx, profile.distroId, profile.prootName, method == "chroot"
+                appCtx, profile.baseDistroId, profile.prootName, method == "chroot"
             )
         }
         if (GpuDriverInstaller.pendingDistro(appCtx) != null) {

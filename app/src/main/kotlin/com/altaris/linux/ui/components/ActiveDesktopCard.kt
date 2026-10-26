@@ -60,7 +60,7 @@ fun ActiveDesktopCard(
     val subtitleText = "$deName on :0 · ${if (isRunning) "running" else "starting"}"
     val a11yDesc = "$titleText. $subtitleText"
 
-    val distro = DistroRepository.supportedDistros.find { it.id == session.distroId }
+    val distro = DistroRepository.cardFor(session.distroId)
     val iconRes = distro?.iconRes
 
     Column(

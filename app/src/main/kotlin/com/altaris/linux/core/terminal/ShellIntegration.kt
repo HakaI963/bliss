@@ -67,6 +67,7 @@ object ShellIntegration {
     private const val CONF_NAME = ShellIntegrationTargets.CONF_NAME
     private const val STAMP_NAME = ShellIntegrationTargets.STAMP_NAME
     private const val RC_BLOCK_STAGE_NAME = ShellIntegrationTargets.RC_BLOCK_STAGE_NAME
+    private const val HISTORY_BLOCK_STAGE_NAME = ShellIntegrationTargets.HISTORY_BLOCK_STAGE_NAME
     private const val BLESH_RELEASE = ShellIntegrationTargets.BLESH_RELEASE
     private const val MIN_BLE_SH_BYTES = ShellIntegrationTargets.MIN_BLE_SH_BYTES
     private val BLE_CONF = ShellIntegrationTargets.BLE_CONF
@@ -80,7 +81,7 @@ object ShellIntegration {
      * generation — round-12 added `/etc/bash/bashrc` + `~/.bashrc` targets, so
      * installs stamped by the round-11 wiring must be re-wired at least once).
      */
-    private const val CHROOT_WIRING_GEN = 2
+    private const val CHROOT_WIRING_GEN = 3
 
     /** Persisted chroot pass result — read (never written) by [reportLines]. */
     private const val REPORT_NAME = "shell-integration-report.txt"
@@ -317,6 +318,10 @@ object ShellIntegration {
                 File(stage, RC_BLOCK_STAGE_NAME), GUEST_RC_BLOCK
             )
             ShellIntegrationTargets.writeTextIfDifferent(
+                File(stage, HISTORY_BLOCK_STAGE_NAME),
+                ShellIntegrationTargets.GUEST_HISTORY_BLOCK
+            )
+            ShellIntegrationTargets.writeTextIfDifferent(
                 File(stage, "install.sh"), CHROOT_INSTALL_SCRIPT
             )
             val install = File(stage, "install.sh")
@@ -392,6 +397,7 @@ object ShellIntegration {
         |[ -n "${'$'}stage" ] && [ -d "${'$'}stage/blesh" ] || exit 1
         |block="${'$'}stage/rc-block.sh"
         |[ -f "${'$'}block" ] || exit 1
+        |hblock="${'$'}stage/history-block.sh"
         |failed=0
         |wired=
         |
@@ -406,11 +412,12 @@ object ShellIntegration {
         |# Append the marker block to FILE unless it is already there.
         |append_marker() {
         |  _f=${'$'}1
-        |  grep -q 'altaris shell integration v1' "${'$'}_f" 2>/dev/null && return 0
+        |  _m=${'$'}2
+        |  grep -q "${'$'}_m" "${'$'}_f" 2>/dev/null && return 0
         |  if [ -s "${'$'}_f" ] && [ -n "${'$'}(tail -c 1 "${'$'}_f" 2>/dev/null)" ]; then
         |    printf '\n' >> "${'$'}_f" 2>/dev/null || return 1
         |  fi
-        |  cat "${'$'}block" >> "${'$'}_f" 2>/dev/null || return 1
+        |  cat "${'$'}3" >> "${'$'}_f" 2>/dev/null || return 1
         |  return 0
         |}
         |
@@ -423,7 +430,10 @@ object ShellIntegration {
         |    mkdir -p "${'$'}{_f%/*}" 2>/dev/null || return 1
         |    printf '# Created by Altaris shell integration (ble.sh).\n' > "${'$'}_f" 2>/dev/null || return 1
         |  fi
-        |  append_marker "${'$'}_f" || return 1
+        |  append_marker "${'$'}_f" 'altaris shell integration v1' "${'$'}block" || return 1
+        |  if [ -f "${'$'}hblock" ]; then
+        |    append_marker "${'$'}_f" 'altaris shell history v1' "${'$'}hblock" || true
+        |  fi
         |  chmod 644 "${'$'}_f" 2>/dev/null
         |  return 0
         |}

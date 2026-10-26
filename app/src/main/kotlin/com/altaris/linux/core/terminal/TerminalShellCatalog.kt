@@ -63,7 +63,9 @@ data class TerminalShellAvailability(
     val kaliChroot: Boolean = false,
     val parrotChroot: Boolean = false,
     val archlinuxChroot: Boolean = false,
-    val rootAvailable: Boolean
+    val rootAvailable: Boolean,
+    /** Container names of named proot installs (same distro, separate copy). */
+    val instanceProot: Set<String> = emptySet()
 ) {
     /** Back-compat aliases used by older tests / call sites. */
     val prootInstalled: Boolean get() = debianProot
@@ -82,7 +84,7 @@ data class TerminalShellAvailability(
         "kali" -> kaliProot
         "parrot" -> parrotProot
         "archlinux" -> archlinuxProot
-        else -> false
+        else -> id in instanceProot
     }
 
     fun chrootInstalled(id: String): Boolean = when (id) {
@@ -104,7 +106,7 @@ data class TerminalShellAvailability(
 
 object TerminalShellCatalog {
 
-    fun prootDefs(distroId: String = "debian"): List<TerminalShellDef> {
+    fun prootDefs(distroId: String = "debian", labelOverride: String? = null): List<TerminalShellDef> {
         val (label, icon) = when (distroId) {
             "alpine" -> "Alpine" to R.drawable.distro_alpine
             "fedora" -> "Fedora" to R.drawable.distro_fedora
@@ -119,10 +121,11 @@ object TerminalShellCatalog {
             "archlinux" -> "Arch" to R.drawable.distro_arch
             else -> "Debian" to R.drawable.distro_debian
         }
+        val shown = labelOverride?.takeIf { it.isNotBlank() } ?: label
         return listOf(
             TerminalShellDef(
                 "shell",
-                "$label Shell",
+                "$shown Shell",
                 "Guest shell",
                 "proot",
                 icon,
@@ -130,7 +133,7 @@ object TerminalShellCatalog {
             ),
             TerminalShellDef(
                 "shell-root",
-                "$label Shell Rooted",
+                "$shown Shell Rooted",
                 "Root shell",
                 "proot",
                 icon,
@@ -196,8 +199,15 @@ object TerminalShellCatalog {
         TerminalShellDef("host", "Host Shell", "libbash", "host", R.drawable.distro_termux)
 
     /** Synchronous filesystem availability (no su probe — caller supplies that). */
-    fun availability(ctx: Context, rootAvailable: Boolean = false): TerminalShellAvailability =
-        TerminalShellAvailability(
+    fun availability(ctx: Context, rootAvailable: Boolean = false): TerminalShellAvailability {
+        // Named proot installs (same distro installed more than once).
+        val instances = try {
+            com.altaris.linux.core.install.DistroInstances
+                .all(ctx.applicationContext)
+        } catch (_: Exception) {
+            emptyList()
+        }
+        return TerminalShellAvailability(
             debianProot = TerminalLauncher.isProotInstalled(ctx, "debian"),
             alpineProot = TerminalLauncher.isProotInstalled(ctx, "alpine"),
             fedoraProot = TerminalLauncher.isProotInstalled(ctx, "fedora"),
@@ -222,8 +232,13 @@ object TerminalShellCatalog {
             kaliChroot = TerminalLauncher.isChrootInstalled(ChrootPaths.KALI_CHROOT_PATH),
             parrotChroot = TerminalLauncher.isChrootInstalled(ChrootPaths.PARROT_CHROOT_PATH),
             archlinuxChroot = TerminalLauncher.isChrootInstalled(ChrootPaths.ARCH_CHROOT_PATH),
-            rootAvailable = rootAvailable
+            rootAvailable = rootAvailable,
+            instanceProot = instances
+                .filter { TerminalLauncher.isProotInstalled(ctx, it.container) }
+                .map { it.id }
+                .toSet()
         )
+    }
 
     /**
      * Build grid sections for the current availability. Proot / chroot cards stay
@@ -272,7 +287,7 @@ object TerminalShellCatalog {
 
         val hostCard = TerminalShellCardUi(def = hostDef(), enabled = true, disabledReason = null)
 
-        return listOf(
+        val catalogSections = listOf(
             prootSection("DEBIAN", "debian", avail.prootInstalled("debian")),
             prootSection("ALPINE", "alpine", avail.prootInstalled("alpine")),
             prootSection("FEDORA", "fedora", avail.prootInstalled("fedora")),
@@ -303,5 +318,32 @@ object TerminalShellCatalog {
                 cards = listOf(hostCard)
             )
         )
+
+        // Named installs get their own shell cards, in front of the catalog so
+        // a second copy of a distro is reachable without scrolling.
+        val instanceSections = try {
+            com.altaris.linux.core.install.DistroInstances
+                .all(ctx.applicationContext)
+                .filter { avail.prootInstalled(it.id) }
+                .map { inst ->
+                    val base = com.altaris.linux.core.install.DistroInstallProfile
+                        .baseProfile(inst.baseId)?.distroId ?: inst.baseId
+                    TerminalShellSection(
+                        title = inst.label.uppercase(),
+                        subtitle = "PROOT",
+                        cards = prootDefs(base, inst.label).map { def ->
+                            TerminalShellCardUi(
+                                def = def.copy(distroId = inst.id),
+                                enabled = true,
+                                disabledReason = null
+                            )
+                        }
+                    )
+                }
+        } catch (_: Exception) {
+            emptyList()
+        }
+
+        return instanceSections + catalogSections
     }
 }

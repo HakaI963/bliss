@@ -5,6 +5,7 @@ import android.util.Base64
 import android.util.Log
 import com.altaris.linux.core.banner.BannerArtWriter
 import com.altaris.linux.core.banner.BannerAssets
+import com.altaris.linux.core.install.DistroInstallProfile
 import com.altaris.linux.core.root.ChrootPaths
 import com.altaris.linux.core.root.RootShell
 import java.io.File
@@ -38,13 +39,34 @@ object GuestZshrcRepair {
      * r12: system-wide plugin paths + first-run package fallback so Parrot,
      * Fedora, Void and other families match Alpine/Debian.
      */
-    private const val REPAIR_REVISION = 13
+    private const val REPAIR_REVISION = 14
 
     /** Marker echoed by the root chroot repair payload on success. */
     internal const val CHROOT_OK_MARKER = "ALTARIS_ZSH_OK"
 
     /** Substring identifying the [ALTARIS_SHELL_BLOCK] marker pair. */
     private const val SHELL_MARKER = "altaris shell integration v2"
+
+    /** Substring identifying the [ALTARIS_HISTORY_BLOCK] marker pair. */
+    private const val HISTORY_MARKER = "altaris shell history v1"
+
+    /**
+     * Persistent zsh history. Bare zsh defaults to `SAVEHIST=0`, so up-arrow
+     * works during a session but nothing is ever written to disk; the app also
+     * kills the shell when a tab closes, so an exit-time save never happens.
+     * `inc_append_history` + `share_history` write each command immediately.
+     * Appended as its own marker block so existing profiles keep their content.
+     */
+    internal val ALTARIS_HISTORY_BLOCK = """
+# >>> altaris shell history v1 >>>
+# Persistent command history — survives app restarts and killed tabs.
+HISTFILE="${'$'}{HISTFILE:-${'$'}HOME/.zsh_history}"
+HISTSIZE=50000
+SAVEHIST=50000
+setopt append_history inc_append_history share_history
+setopt hist_ignore_dups hist_ignore_space extended_history
+# <<< altaris shell history v1 <<<
+""".trimStart()
 
     /**
      * Marker-guarded zsh shell integration: live syntax coloring
@@ -104,6 +126,7 @@ fi
 # next shell loads the plugins. New installs get them during family setup.
 if [ ! -r /usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh ] \
     && [ ! -r "${'$'}HOME/.oh-my-zsh/custom/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh" ] \
+    && [ ! -r /usr/local/share/altaris/zsh/zsh-autosuggestions/zsh-autosuggestions.zsh ] \
     && [ ! -e "${'$'}HOME/.config/altaris/.shell-bootstrap" ]; then
   mkdir -p "${'$'}HOME/.config/altaris" 2>/dev/null && touch "${'$'}HOME/.config/altaris/.shell-bootstrap" 2>/dev/null || true
   ( if command -v apt-get >/dev/null 2>&1; then
@@ -178,7 +201,7 @@ fi
 
 # Altaris Linux appearance (wallpaper/colors/terminal; hash-guarded inside).
 [ -r "${'$'}HOME/.config/altaris/appearance-apply.sh" ] && sh "${'$'}HOME/.config/altaris/appearance-apply.sh" >/dev/null 2>&1 || true
-""".trimStart() + "\n" + ALTARIS_SHELL_BLOCK
+""".trimStart() + "\n" + ALTARIS_SHELL_BLOCK + ALTARIS_HISTORY_BLOCK
 
     /**
      * Patch or create guest altaris `.zshrc` when needed.
@@ -284,7 +307,7 @@ PROMPT2='%F{240}> %f'
                 else {
                     val text = zshrc.readText()
                     text.contains("banner.sh") && text.contains("appearance-apply.sh") &&
-                        text.contains(SHELL_MARKER)
+                        text.contains(SHELL_MARKER) && text.contains(HISTORY_MARKER)
                 }
             } catch (_: Exception) {
                 false
@@ -332,6 +355,12 @@ PROMPT2='%F{240}> %f'
                 ) {
                     zshrc.appendText("\n$ALTARIS_SHELL_BLOCK")
                     Log.i(TAG, "Appended shell integration block to ${zshrc.absolutePath}")
+                }
+                // Persistent history (SAVEHIST=0 is the zsh default: without
+                // this block up-arrow forgets everything after an app restart).
+                if (!needsRepair(text) && !text.contains(HISTORY_MARKER) && zshrc.canWrite()) {
+                    zshrc.appendText("\n$ALTARIS_HISTORY_BLOCK")
+                    Log.i(TAG, "Appended history block to ${zshrc.absolutePath}")
                 }
             } else {
                 // Create missing Altaris profile (Alpine used to never write .zshrc)
@@ -489,9 +518,18 @@ PROMPT2='%F{240}> %f'
         sb.append("  cat \"\$H/.zshrc.altaris-block\" >> \"\$H/.zshrc\" 2>/dev/null || true\n")
         sb.append("  rm -f \"\$H/.zshrc.altaris-block\" 2>/dev/null || true\n")
         sb.append("fi\n")
+        // Persistent zsh history: own marker so existing profiles are appended,
+        // never rewritten (SAVEHIST defaults to 0 without this block).
+        sb.append("if [ -f \"\$H/.zshrc\" ] && ! grep -q '").append(HISTORY_MARKER)
+            .append("' \"\$H/.zshrc\" 2>/dev/null; then\n")
+        sb.append("  _put \"\$H/.zshrc.altaris-history\" '").append(b64(ALTARIS_HISTORY_BLOCK)).append("'\n")
+        sb.append("  printf '\\n' >> \"\$H/.zshrc\" 2>/dev/null || true\n")
+        sb.append("  cat \"\$H/.zshrc.altaris-history\" >> \"\$H/.zshrc\" 2>/dev/null || true\n")
+        sb.append("  rm -f \"\$H/.zshrc.altaris-history\" 2>/dev/null || true\n")
+        sb.append("fi\n")
         // Debian's stock .bashrc resets PS1 after /etc/profile.d, so append the
         // Altaris prompt at the very end of the interactive bash profile too.
-        sb.append("if [ -f \"\$H/.bashrc\" ] && ! grep -q 'altaris bash prompt v1' \"\$H/.bashrc\" 2>/dev/null; then\n")
+        sb.append("if [ -f \"\$H/.bashrc\" ] && ! grep -q 'altaris bash prompt v2' \"\$H/.bashrc\" 2>/dev/null; then\n")
         sb.append("  _put \"\$H/.bashrc.altaris-prompt\" '").append(b64(BASH_PROMPT_BLOCK)).append("'\n")
         sb.append("  printf '\\n' >> \"\$H/.bashrc\" 2>/dev/null || true\n")
         sb.append("  cat \"\$H/.bashrc.altaris-prompt\" >> \"\$H/.bashrc\" 2>/dev/null || true\n")
@@ -583,14 +621,15 @@ exit 1
      */
     /** Bash login prompt: Altaris identity + red marker after a failed command. */
     internal val BASH_PROMPT_BLOCK = """
-# >>> altaris bash prompt v1 >>>
+# >>> altaris bash prompt v2 >>>
 if [ -n "${'$'}BASH_VERSION" ] && [ -n "${'$'}PS1" ]; then
   _ALTARIS_PS1_OK='\[\e[38;5;79m\]altaris@\h\[\e[0m\]:\[\e[38;5;110m\]\w\[\e[0m\]\$ '
   _ALTARIS_PS1_FAIL='\[\e[38;5;79m\]altaris@\h\[\e[0m\]:\[\e[38;5;110m\]\w\[\e[0m\]\[\e[38;5;203m\]\$\[\e[0m\] '
-  PROMPT_COMMAND='if [ "${'$'}?" = 0 ]; then PS1="${'$'}_ALTARIS_PS1_OK"; else PS1="${'$'}_ALTARIS_PS1_FAIL"; fi'
+  # history -a keeps commands after the app kills the tab; $? is captured first.
+  PROMPT_COMMAND='_ALTARIS_RC=${'$'}?; history -a; if [ "${'$'}_ALTARIS_RC" = 0 ]; then PS1="${'$'}_ALTARIS_PS1_OK"; else PS1="${'$'}_ALTARIS_PS1_FAIL"; fi'
   PS1="${'$'}_ALTARIS_PS1_OK"
 fi
-# <<< altaris bash prompt v1 <<<
+# <<< altaris bash prompt v2 <<<
 """.trimStart()
 
     internal val COLOR_PROFILE = """
@@ -599,7 +638,7 @@ if [ -n "${'$'}BASH_VERSION" ] && [ -n "${'$'}PS1" ]; then
   alias ls='ls --color=auto' 2>/dev/null
   ALTARIS_PS1_OK='\[\e[38;5;79m\]altaris@\h\[\e[0m\]:\[\e[38;5;110m\]\w\[\e[0m\]\$ '
   ALTARIS_PS1_FAIL='\[\e[38;5;79m\]altaris@\h\[\e[0m\]:\[\e[38;5;110m\]\w\[\e[0m\]\[\e[38;5;203m\]\$\[\e[0m\] '
-  PROMPT_COMMAND='[ "${'$'}?" = 0 ] && PS1="${'$'}ALTARIS_PS1_OK" || PS1="${'$'}ALTARIS_PS1_FAIL"'
+  PROMPT_COMMAND='_ALTARIS_RC=${'$'}?; history -a; [ "${'$'}_ALTARIS_RC" = 0 ] && PS1="${'$'}ALTARIS_PS1_OK" || PS1="${'$'}ALTARIS_PS1_FAIL"'
   PS1="${'$'}ALTARIS_PS1_OK"
 fi
 
@@ -625,7 +664,7 @@ alias ls='ls --color=auto' 2>/dev/null
         val bashrc = File(home, ".bashrc")
         try {
             val text = if (bashrc.isFile) bashrc.readText() else ""
-            if (text.contains("altaris bash prompt v1")) return
+            if (text.contains("altaris bash prompt v2")) return
             if (!bashrc.isFile) {
                 if (!home.canWrite()) return
                 bashrc.writeText("# Altaris interactive shell\n")
@@ -657,7 +696,7 @@ alias ls='ls --color=auto' 2>/dev/null
     }
 
     private fun isGlibcGuest(distroId: String?): Boolean {
-        val name = resolveProotName(distroId)
+        val name = resolveProotName(baseDistroIdFor(distroId))
         return name == "fedora" || name == "void" || name == "opensuse" ||
             name == "deepin" || name == "manjaro" ||
             name == "ubuntu" || name == "kali" || name == "parrot" ||
@@ -666,10 +705,11 @@ alias ls='ls --color=auto' 2>/dev/null
 
     /** apk-based guests: Alpine (v2) + Chimera (v3, musl). */
     private fun isApkGuest(distroId: String?): Boolean {
-        val name = resolveProotName(distroId)
+        val base = baseDistroIdFor(distroId)
+        val name = resolveProotName(base)
         return name == "alpine" || name == "chimera" ||
-            (distroId?.contains("alpine", ignoreCase = true) == true) ||
-            (distroId?.contains("chimera", ignoreCase = true) == true)
+            (base?.contains("alpine", ignoreCase = true) == true) ||
+            (base?.contains("chimera", ignoreCase = true) == true)
     }
 
     /** Login zsh (`su -` / `zsh -l`) does not read `.zshrc` unless also interactive. */
@@ -732,7 +772,7 @@ alias ls='ls --color=auto' 2>/dev/null
                 File(root, "home/altaris/.zshrc")
             }
             "proot" -> {
-                val prootName = resolveProotName(distroId)
+                val prootName = prootContainerFor(distroId)
                 val rootfs = File(
                     ctx.filesDir,
                     "usr/var/lib/proot-distro/containers/$prootName/rootfs"
@@ -755,6 +795,24 @@ alias ls='ls --color=auto' 2>/dev/null
             "debian", "debian13_chroot", "debian_chroot" -> "debian"
             else -> distroId.removeSuffix("_chroot").ifBlank { "debian" }
         }
+    }
+
+    /**
+     * Container name of [distroId] for proot — named installs resolve through
+     * [DistroInstallProfile.forId], stock ids keep the legacy mapping.
+     */
+    internal fun prootContainerFor(distroId: String?): String {
+        if (distroId.isNullOrBlank()) return "debian"
+        if (distroId.endsWith("_chroot")) return resolveProotName(distroId)
+        DistroInstallProfile.forId(distroId)?.prootName?.takeIf { it.isNotBlank() }
+            ?.let { return it }
+        return resolveProotName(distroId)
+    }
+
+    /** Base catalog id of [distroId] — named installs must classify like their base. */
+    private fun baseDistroIdFor(distroId: String?): String? {
+        if (distroId.isNullOrBlank()) return null
+        return DistroInstallProfile.forId(distroId)?.baseDistroId ?: distroId
     }
 
     /** True when profile hard-sources omz or always runs pokemon without guards. */

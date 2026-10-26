@@ -130,6 +130,16 @@ object TerminalLauncher {
     fun refreshInstalledAfterUninstall(ctx: Context, distroId: String) {
         val appCtx = ctx.applicationContext
         val profile = com.altaris.linux.core.install.DistroInstallProfile.forId(distroId)
+        // Named proot installs are registered instances — drop the entry so a
+        // reinstalled container starts clean.
+        try {
+            com.altaris.linux.core.install.DistroInstances.remove(appCtx, distroId)
+        } catch (_: Exception) {
+        }
+        try {
+            com.altaris.linux.core.terminal.DistroFsCache.invalidate()
+        } catch (_: Exception) {
+        }
         if (profile?.method == "chroot") {
             val path = profile.chrootPath
             if (!path.isNullOrEmpty()) {

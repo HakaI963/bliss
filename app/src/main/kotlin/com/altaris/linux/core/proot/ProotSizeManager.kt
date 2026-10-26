@@ -31,7 +31,7 @@ object ProotSizeManager {
         SessionRegistry.sessions().any { it.title == "Uninstall $distroName" }
 
     fun measure(context: Context, distroId: String): Result {
-        val distro = DistroRepository.supportedDistros.firstOrNull { it.id == distroId }
+        val distro = DistroRepository.cardFor(distroId)
         val distroName = distro?.name ?: distroId
 
         val containerDir = GuestStorageCatalog.prootContainerDir(context, distroId)

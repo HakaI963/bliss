@@ -168,12 +168,18 @@ fun DistroScreen(
     var methodTab by remember { mutableStateOf(MethodTab.PROOT) }
     var selectedCategory by remember { mutableStateOf(DistroCategory.ALL) }
     // Backend filtering/sort logic (kept): method filter + sortForDistroPage.
+    // Named installs (same distro, separate container) get their own rows in
+    // the PRoot tab; each is a Distro card with the user's custom name.
     val methodDistros = remember(methodTab) {
-        DistroRepository.sortForDistroPage(
-            DistroRepository.supportedDistros.filter { distro ->
-                if (methodTab == MethodTab.CHROOT) distro.chrootSupported else distro.prootSupported
-            }
-        )
+        val base = DistroRepository.supportedDistros.filter { distro ->
+            if (methodTab == MethodTab.CHROOT) distro.chrootSupported else distro.prootSupported
+        }
+        val instances = if (methodTab == MethodTab.PROOT) {
+            DistroRepository.instanceCards()
+        } else {
+            emptyList()
+        }
+        DistroRepository.sortForDistroPage(base + instances)
     }
     val prootCount = DistroRepository.supportedDistros.count { it.prootSupported }
     val chrootCount = DistroRepository.supportedDistros.count { it.chrootSupported }
