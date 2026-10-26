@@ -423,6 +423,7 @@ fun InstallConfigScreen(
                                     value = instanceName,
                                     onValueChange = { instanceName = it.take(32) },
                                     singleLine = true,
+                                    enabled = existingInstance == null,
                                     label = { Text("Name (optional)") },
                                     placeholder = {
                                         Text(
@@ -436,7 +437,8 @@ fun InstallConfigScreen(
                                     supportingText = {
                                         Text(
                                             if (existingInstance != null) {
-                                                "Separate container: ${existingInstance.container}"
+                                                "Existing instance — reinstalls its own " +
+                                                    "container (${existingInstance.container})"
                                             } else {
                                                 "Give this copy its own name to keep it " +
                                                     "separate — leave empty to use ${distro.id}"
