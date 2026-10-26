@@ -69,7 +69,7 @@ fun ProotStorageDetailScreen(
 ) {
     val isUniversal = distroId == GuestStorageCatalog.ALL_PROOT_ID
     val distro = if (!isUniversal) {
-        DistroRepository.supportedDistros.firstOrNull { it.id == distroId }
+        DistroRepository.cardFor(distroId)
     } else null
 
     val context = LocalContext.current

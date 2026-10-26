@@ -564,8 +564,8 @@ class MainActivity : ComponentActivity() {
         ).show()
         DriverRelease.armResume(this) {
             runOnUiThread {
-                val d = com.altaris.linux.core.data.DistroRepository.supportedDistros
-                    .find { it.id == id } ?: return@runOnUiThread
+                val d = com.altaris.linux.core.data.DistroRepository.cardFor(id)
+                    ?: return@runOnUiThread
                 val c = d.components.find { it.id == "hw_accel" } ?: return@runOnUiThread
                 runEmbeddedComponent(this, d, c, mapOf("ALTARIS_GPU" to "auto"), false)
             }

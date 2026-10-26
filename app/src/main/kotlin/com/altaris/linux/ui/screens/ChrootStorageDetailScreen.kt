@@ -75,7 +75,7 @@ fun ChrootStorageDetailScreen(
 ) {
     val isUniversal = distroId == GuestStorageCatalog.ALL_CHROOT_ID
     val distro = if (!isUniversal) {
-        DistroRepository.supportedDistros.firstOrNull { it.id == distroId }
+        DistroRepository.cardFor(distroId)
     } else null
 
     val resolvedPath = if (!isUniversal) {

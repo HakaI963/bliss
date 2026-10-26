@@ -566,7 +566,38 @@ object DistroRepository {
      * Falls back to the first installable card of that method.
      */
     fun iconResFor(distroId: String?): Int? =
-        distroId?.let { id -> supportedDistros.find { it.id == id }?.iconRes }
+        distroId?.let { id -> cardFor(id)?.iconRes }
+
+    /**
+     * Base catalog id for [id]: a named instance resolves to its base distro,
+     * every stock id resolves to itself. Context-free (in-memory registry).
+     */
+    fun baseIdFor(id: String): String =
+        com.altaris.linux.core.install.DistroInstances.cached(id)?.baseId ?: id
+
+    /**
+     * Catalog card for [id]: the stock entry, or a pseudo card for a named
+     * install (id = container, name = user label, base data + components).
+     * Null for unknown ids.
+     */
+    fun cardFor(id: String): Distro? {
+        supportedDistros.find { it.id == id }?.let { return it }
+        val inst = com.altaris.linux.core.install.DistroInstances.cached(id) ?: return null
+        val base = supportedDistros.find { it.id == inst.baseId } ?: return null
+        return base.copy(
+            id = inst.id,
+            name = inst.label,
+            description = "${base.name} · ${inst.label}",
+            prootSupported = true,
+            chrootSupported = false
+        )
+    }
+
+    /** Pseudo cards for every known named install (browse lists, IO-loaded). */
+    fun instanceCards(): List<Distro> =
+        com.altaris.linux.core.install.DistroInstances
+            .cachedAll()
+            .mapNotNull { cardFor(it.id) }
 
     fun installableVariant(id: String, chroot: Boolean): Distro? {
         val current = supportedDistros.find { it.id == id }

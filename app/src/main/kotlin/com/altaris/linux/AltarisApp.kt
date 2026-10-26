@@ -25,10 +25,14 @@ class AltarisApp : Application() {
         // Hydrate the home artwork flows before the first screen composes, so
         // a custom banner survives a cold start even if Settings is the first
         // screen opened.
+        runCatching { com.altaris.linux.core.utils.StateManager.getHomeArt(this) }
         runCatching {
-            com.altaris.linux.core.utils.StateManager.getHomeArt(this)
             com.altaris.linux.core.utils.StateManager.getCustomHomeArt(this)
         }
+        // Named distro instances (same distro installed more than once under
+        // separate container names). In-memory registry for profile resolution.
+        runCatching { com.altaris.linux.core.install.DistroInstances.init(this) }
+            .onFailure { Log.w("AltarisApp", "instance registry load failed", it) }
         if (!isMainProcess()) {
             // Shizuku re-creates this Application inside its :shell user-service
             // process. Host bootstrap/terminal setup must never run there.

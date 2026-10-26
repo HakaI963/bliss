@@ -100,6 +100,6 @@ object DesktopSessionQuery {
     }
 
     private fun resolveDistroName(id: String): String {
-        return DistroRepository.supportedDistros.find { it.id == id }?.name?.removeSuffix(" (Rooted)") ?: id
+        return DistroRepository.cardFor(id)?.name?.removeSuffix(" (Rooted)") ?: id
     }
 }

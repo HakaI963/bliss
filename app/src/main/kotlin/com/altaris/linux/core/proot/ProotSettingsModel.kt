@@ -23,9 +23,7 @@ object ProotSettingsModel {
     )
 
     private fun distroLabel(distroId: String): String {
-        return DistroRepository.supportedDistros
-            .firstOrNull { it.id == distroId }
-            ?.name ?: "Linux"
+        return DistroRepository.cardFor(distroId)?.name ?: "Linux"
     }
 
     fun loadCached(ctx: Context, distroId: String): SizeUi {

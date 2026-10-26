@@ -47,6 +47,11 @@ data class DistroInstallProfile(
     val chrootStopGuiScript: String? = null,
     /** Display name for logs / FGS. */
     val displayName: String,
+    /**
+     * Base catalog id for named installs (see [DistroInstances]). For every
+     * stock profile this equals [distroId]; only instance profiles differ.
+     */
+    val baseDistroId: String = distroId,
 ) {
     val homeRootfsPath: String
         get() = rootfsFileName
@@ -670,7 +675,11 @@ data class DistroInstallProfile(
             ROCKY_PROOT, CENTOS_STREAM_PROOT,
         )
 
-        fun forId(distroId: String): DistroInstallProfile? = BY_ID[distroId]
+        fun forId(distroId: String): DistroInstallProfile? =
+            BY_ID[distroId] ?: DistroInstances.profileFor(distroId)
+
+        /** The stock (base) profile only — no instance resolution. */
+        fun baseProfile(distroId: String): DistroInstallProfile? = BY_ID[distroId]
 
         fun require(distroId: String): DistroInstallProfile =
             forId(distroId)

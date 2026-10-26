@@ -134,6 +134,5 @@ object DesktopInstallSelection {
         }
 
     private fun distroComponents(distroId: String): List<DistroComponent> =
-        DistroRepository.supportedDistros.firstOrNull { it.id == distroId }?.components
-            ?: emptyList()
+        DistroRepository.cardFor(distroId)?.components ?: emptyList()
 }

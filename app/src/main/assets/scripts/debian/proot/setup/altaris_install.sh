@@ -9,9 +9,13 @@ set -u
 DISTRO="${1:-debian}"
 SETUP_B64="${2:-}"
 
+# Base distro id for the rootfs selection below. Named installs pass a
+# container name as $1 and the base distro via ALTARIS_DISTRO_ID (Kotlin).
+DISTRO_TYPE="${ALTARIS_DISTRO_ID:-$DISTRO}"
+
 # Per-distro pinned rootfs (packaged as assets/rootfs/, deployed to $HOME)
 # Env ALTARIS_ROOTFS_* overrides always win (Kotlin HostScriptDeployer / onboarding).
-case "$DISTRO" in
+case "$DISTRO_TYPE" in
     alpine)
         ROOTFS_NAME="${ALTARIS_ROOTFS_NAME:-alpine_3.24_rootfs.tar.gz}"
         ROOTFS_URL="${ALTARIS_ROOTFS_URL:-https://github.com/HakaI963/bliss/releases/download/rootfs/alpine_3.24_rootfs.tar.gz}"
@@ -361,7 +365,7 @@ else
     SKIP_EXTRACT=0
     if rootfs_has_shell "$DISTRO_ROOTFS"; then
         # Fedora pin moved 43 → 44. Re-extract when the guest is the old release.
-        if [ "$DISTRO" = "fedora" ]; then
+        if [ "$DISTRO_TYPE" = "fedora" ]; then
             _have_ver=$(guest_version_id "$DISTRO_ROOTFS")
             if [ "$_have_ver" != "44" ]; then
                 echo "Altaris: fedora guest is VERSION_ID=${_have_ver:-unknown} — replacing with 44"
@@ -378,9 +382,13 @@ else
         EXIT_CODE=0
     else
         if [ "${ALTARIS_PD_INSTALL_MODE:-file}" = "registry" ]; then
-            echo "Altaris: ALTARIS_PD_INSTALL_MODE=registry — installing $DISTRO from registry"
+            echo "Altaris: ALTARIS_PD_INSTALL_MODE=registry — installing $DISTRO_TYPE from registry"
+            if [ "$DISTRO" != "$DISTRO_TYPE" ]; then
+                echo "Altaris: ERROR: named install requires file mode (unset ALTARIS_PD_INSTALL_MODE)"
+                exit 1
+            fi
             wipe_proot_container "$DISTRO" || exit 1
-            "$PYTHON" "$PROOT_DISTRO" install "$DISTRO"
+            "$PYTHON" "$PROOT_DISTRO" install "$DISTRO_TYPE"
             EXIT_CODE=$?
         else
             if ! resolve_rootfs_archive; then
@@ -418,7 +426,7 @@ echo "Altaris: Install Successful!"
 
 # openSUSE: keep a copy of libcurl-mini. Family setup must never replace it
 # with full libcurl4+libldap (EVP_md2 vs OpenSSL 3.5.3 breaks zypper).
-if [ "$DISTRO" = "opensuse" ] && [ -n "${DISTRO_ROOTFS:-}" ]; then
+if [ "$DISTRO_TYPE" = "opensuse" ] && [ -n "${DISTRO_ROOTFS:-}" ]; then
     _curl=""
     for _c in \
         "$DISTRO_ROOTFS/usr/lib64/libcurl.so.4.8.0" \
@@ -528,7 +536,7 @@ if [ -n "$SETUP_MODE" ]; then
         # Default xfce for the one-click path; onboarding always passes a
         # concrete value (including "none" for a terminal base).
         GUEST_ENV="export ALTARIS_DESKTOPS='${ALTARIS_DESKTOPS:-xfce}'; export ALTARIS_DESKTOP='${ALTARIS_DESKTOP:-xfce}'; export ALTARIS_DESKTOP_ENV='${ALTARIS_DESKTOP_ENV:-xfce}';"
-        GUEST_RUN="$GUEST_ENV"'export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin; unset LD_LIBRARY_PATH LD_PRELOAD PROOT_TMP_DIR; export TMPDIR=/tmp; if [ -x /bin/bash ]; then exec /bin/bash /tmp/'"$SETUP_GUEST_NAME"' '"$DISTRO"'; else exec /bin/sh /tmp/'"$SETUP_GUEST_NAME"' '"$DISTRO"'; fi'
+        GUEST_RUN="$GUEST_ENV"'export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin; unset LD_LIBRARY_PATH LD_PRELOAD PROOT_TMP_DIR; export TMPDIR=/tmp; if [ -x /bin/bash ]; then exec /bin/bash /tmp/'"$SETUP_GUEST_NAME"' '"$DISTRO_TYPE"'; else exec /bin/sh /tmp/'"$SETUP_GUEST_NAME"' '"$DISTRO_TYPE"'; fi'
         "$PYTHON" "$PROOT_DISTRO" login "$DISTRO" --shared-tmp -- \
             /bin/sh -c "$GUEST_RUN"
         SETUP_EXIT=$?

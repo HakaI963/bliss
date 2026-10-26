@@ -30,9 +30,15 @@ object GuestApkDbRepair {
         val cacheKey = GuestRepairCache.apkDbKey(distroId ?: method)
         val prefs = ctx.getSharedPreferences(GuestRepairCache.PREFS, Context.MODE_PRIVATE)
         if (prefs.getBoolean(cacheKey, false)) return
-        val prootName = GuestZshrcRepair.resolveProotName(distroId)
-        val isChimera = prootName == "chimera"
-        if (prootName != "alpine" && !isChimera) return
+        val prootName = GuestZshrcRepair.prootContainerFor(distroId)
+        // Classify on the base distro (named installs keep their base family).
+        val baseId = if (distroId.isNullOrEmpty()) {
+            "alpine"
+        } else {
+            com.altaris.linux.core.data.DistroRepository.baseIdFor(distroId)
+        }
+        val isChimera = baseId == "chimera"
+        if (baseId != "alpine" && !isChimera) return
 
         val rootfs = File(
             ctx.filesDir,

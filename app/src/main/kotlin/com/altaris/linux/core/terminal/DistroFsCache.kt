@@ -56,15 +56,35 @@ object DistroFsCache {
                 again
             } else {
                 val gen = generation
+                // Registry load + container discovery (cheap, IO thread).
+                runCatching {
+                    com.altaris.linux.core.install.DistroInstances.init(context.applicationContext)
+                }
                 val distros = DistroRepository.supportedDistros
                 val installed = distros
                     .filter { TerminalLauncher.isDistroInstalledOnFs(context, it.id) }
                     .map { it.id }
-                    .toSet()
+                    .toMutableSet()
                 val unfinished = distros
                     .filter { TerminalLauncher.isDistroUnfinished(context, it.id) }
                     .map { it.id }
-                    .toSet()
+                    .toMutableSet()
+                // Named installs (same distro, separate container) — each is its
+                // own card id, resolved through DistroInstallProfile.forId.
+                try {
+                    com.altaris.linux.core.install.DistroInstances
+                        .all(context.applicationContext)
+                        .forEach { inst ->
+                            if (TerminalLauncher.isProotInstalled(context, inst.container)) {
+                                installed.add(inst.id)
+                                if (TerminalLauncher.isDistroUnfinished(context, inst.id)) {
+                                    unfinished.add(inst.id)
+                                }
+                            }
+                        }
+                } catch (_: Exception) {
+                    // Registry unavailable — base distros still report normally.
+                }
                 Snapshot(installed, unfinished, gen).also { snapshot = it }
             }
         }
