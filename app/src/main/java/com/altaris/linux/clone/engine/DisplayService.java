@@ -14,6 +14,9 @@ import android.util.Log;
  * <p>Direct Binder transactions instead of ShadowAuto's JSON-RPC server
  * (Apache-2.0). JSON commands answer with a JSON string; frame commands answer
  * with {@code int ok, String error, byte[] jpeg}.
+ *
+ * <p>Display-scoped commands read the session key first. The key is the clone
+ * package, so each clone owns its own virtual display and input stream.
  */
 public class DisplayService extends Binder {
     private static final String TAG = "AltarisEngine";
@@ -54,6 +57,7 @@ public class DisplayService extends Binder {
     protected boolean onTransact(int code, Parcel data, Parcel reply, int flags)
             throws RemoteException {
         if (code != Protocol.CMD_STATUS && code != Protocol.CMD_SHUTDOWN
+                && code != Protocol.CMD_SESSIONS
                 && (code < Protocol.CMD_CREATE || code > Protocol.CMD_CLONE_FROM_PATH)) {
             return super.onTransact(code, data, reply, flags);
         }
@@ -106,20 +110,26 @@ public class DisplayService extends Binder {
                 reply.writeString(local.statusJson());
                 return;
             }
+            case Protocol.CMD_SESSIONS: {
+                reply.writeString(local.sessionsJson());
+                return;
+            }
             case Protocol.CMD_LOG_TAIL: {
                 reply.writeString(local.logTailJson(data.readInt()));
                 return;
             }
             case Protocol.CMD_CREATE: {
+                String key = data.readString();
                 int width = data.readInt();
                 int height = data.readInt();
                 int dpi = data.readInt();
                 int fps = data.readInt();
-                reply.writeString(local.createDisplay(width, height, dpi, fps));
+                reply.writeString(local.createDisplay(key, width, height, dpi, fps));
                 return;
             }
             case Protocol.CMD_RELEASE: {
-                reply.writeString(local.releaseDisplay());
+                String key = data.readString();
+                reply.writeString(local.releaseDisplay(key));
                 return;
             }
             case Protocol.CMD_LIST_APPS: {
@@ -128,36 +138,42 @@ public class DisplayService extends Binder {
             }
             case Protocol.CMD_LAUNCH_APP: {
                 String packageName = data.readString();
+                String key = data.readString();
                 boolean forceStop = data.readInt() == 1;
-                reply.writeString(local.launchApp(packageName, forceStop));
+                reply.writeString(local.launchApp(packageName, key, forceStop));
                 return;
             }
             case Protocol.CMD_CAPTURE: {
+                String key = data.readString();
                 int timeoutMs = data.readInt();
                 int quality = data.readInt();
-                byte[] jpeg = local.captureJpeg(timeoutMs, quality);
+                byte[] jpeg = local.captureJpeg(key, timeoutMs, quality);
                 writeFrame(reply, jpeg, jpeg == null ? "no frame available yet" : "");
                 return;
             }
             case Protocol.CMD_TAP: {
-                reply.writeString(local.tap(data.readInt(), data.readInt()));
+                String key = data.readString();
+                reply.writeString(local.tap(key, data.readInt(), data.readInt()));
                 return;
             }
             case Protocol.CMD_SWIPE: {
+                String key = data.readString();
                 int x1 = data.readInt();
                 int y1 = data.readInt();
                 int x2 = data.readInt();
                 int y2 = data.readInt();
                 int duration = data.readInt();
-                reply.writeString(local.swipe(x1, y1, x2, y2, duration));
+                reply.writeString(local.swipe(key, x1, y1, x2, y2, duration));
                 return;
             }
             case Protocol.CMD_KEY: {
-                reply.writeString(local.key(data.readInt()));
+                String key = data.readString();
+                reply.writeString(local.key(key, data.readInt()));
                 return;
             }
             case Protocol.CMD_TEXT: {
-                reply.writeString(local.text(data.readString()));
+                String key = data.readString();
+                reply.writeString(local.text(key, data.readString()));
                 return;
             }
 
@@ -182,7 +198,8 @@ public class DisplayService extends Binder {
             }
             case Protocol.CMD_CLONE_LAUNCH: {
                 String clonePackage = data.readString();
-                reply.writeString(local.cloneLaunch(clonePackage));
+                String key = data.readString();
+                reply.writeString(local.cloneLaunch(clonePackage, key));
                 return;
             }
             case Protocol.CMD_CLONE_KILL: {

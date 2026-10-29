@@ -44,12 +44,27 @@ import java.util.concurrent.atomic.AtomicBoolean
  * Clones are repackaged, signed, installed hidden in user 0, and launched on a
  * virtual display owned by the shell process. There is no embedded virtual-app
  * runtime and no secondary Android user/profile.
+ *
+ * ## Concurrent clones
+ *
+ * Every launch gets its own virtual display, addressed by a *session key*: the
+ * clone package for clones, [KEY_PRIMARY] for an installed app opened ad hoc.
+ * Launching one clone never releases another clone's display, and the machine
+ * API (`apiCapture`, `apiTap`, …) takes a package name so two agents can drive
+ * two clones at the same time without fighting over "the" display.
+ * [activeClonePackage] is only the clone the viewer is looking at.
  */
 object HeadlessCloneEngine {
 
     private const val TAG = "AltarisClone"
     private const val CLONE_PREFIX = "com.altaris.apps."
     private const val LEGACY_CLONE_PREFIX = "com.nopiece.hclone."
+
+    /** Session key used for an installed app opened without a clone. */
+    const val KEY_PRIMARY = SessionKeys.PRIMARY
+
+    /** The shell engine refuses more than this many live displays. */
+    const val MAX_SESSIONS = 6
 
     data class DeviceApp(
         val packageName: String,
@@ -70,6 +85,18 @@ object HeadlessCloneEngine {
         val createdAt: Long = 0L,
         val lastOpened: Long = 0L,
         val parts: Int = 0,
+    )
+
+    /** One live virtual display and the clone that owns it. */
+    data class Session(
+        val key: String,
+        val packageName: String?,
+        val displayId: Int,
+        val width: Int,
+        val height: Int,
+        val fps: Int,
+        val frames: Long = 0L,
+        val viewer: Boolean = false,
     )
 
     enum class Quality(val key: String, val label: String, val jpeg: Int) {
@@ -110,7 +137,9 @@ object HeadlessCloneEngine {
     val displayRotation = MutableStateFlow(-1)
     val preview = MutableStateFlow<Bitmap?>(null)
     val previewError = MutableStateFlow<String?>(null)
-    /** Clone package currently owning the virtual display, if any. */
+    /** Live displays, keyed by clone package (or [KEY_PRIMARY]). */
+    val sessions = MutableStateFlow<Map<String, Session>>(emptyMap())
+    /** Clone package the viewer is showing, if any. */
     val activeClonePackage = MutableStateFlow<String?>(null)
     /** Recent user/agent actions, newest last. Shown in the viewer. */
     val actionLog = MutableStateFlow<List<String>>(emptyList())
@@ -122,6 +151,13 @@ object HeadlessCloneEngine {
     }
 
     fun clearActionLog() { actionLog.value = emptyList() }
+
+    /** Session key the viewer is attached to. */
+    fun viewerKey(): String = activeClonePackage.value ?: KEY_PRIMARY
+
+    /** Resolve a package name to its session key, falling back to the viewer. */
+    private fun keyOf(packageName: String?): String =
+        SessionKeys.resolve(packageName, activeClonePackage.value)
 
     // User defaults
     val displayFps = MutableStateFlow(60)
@@ -147,6 +183,8 @@ object HeadlessCloneEngine {
     private val deviceAppsInFlight = AtomicBoolean(false)
     private val logsInFlight = AtomicBoolean(false)
     private val operationInFlight = AtomicBoolean(false)
+    /** Serialises display creation so two launches cannot race a key. */
+    private val displayLock = Any()
     private val localLogs = ArrayList<String>()
     private var appContext: Context? = null
     private var prefs: SharedPreferences? = null
@@ -283,6 +321,8 @@ object HeadlessCloneEngine {
         c.stopService()
         preview.value = null
         displayReady.value = false
+        sessions.value = emptyMap()
+        activeClonePackage.value = null
         setNotice("Shell engine stopped")
         refreshState()
     }
@@ -313,6 +353,7 @@ object HeadlessCloneEngine {
         if (!connected.value) {
             displayReady.value = false
             inputReady.value = false
+            sessions.value = emptyMap()
             return
         }
         if (!statusInFlight.compareAndSet(false, true)) return
@@ -334,11 +375,18 @@ object HeadlessCloneEngine {
 
     // ---------------------------------------------------------------- display
 
+    /**
+     * Create (or recreate) the display of one session key.
+     *
+     * [width]/[height] of 0 keep the stored per-app size or the current default,
+     * exactly like a launch does, so this is safe to call from the viewer.
+     */
     fun createDisplay(
         width: Int = displayWidth.value,
         height: Int = displayHeight.value,
         dpi: Int = displayDpi.value,
         fps: Int = displayFps.value,
+        key: String = viewerKey(),
     ) {
         val c = requireConnected() ?: return
         val w = width.coerceIn(320, 2160)
@@ -351,29 +399,34 @@ object HeadlessCloneEngine {
         operation.value = "Creating virtual display…"
         scope.launch {
             try {
-                val raw = c.createDisplay(w, h, d, f)
-                val error = resultError(raw)
-                if (error == null) {
-                    setNotice("Virtual display ready")
-                    parseStatus(c.status())
-                } else {
-                    fail(error)
+                synchronized(displayLock) {
+                    val raw = c.createDisplay(key, w, h, d, f)
+                    val error = resultError(raw)
+                    if (error == null) {
+                        setNotice("Virtual display ready")
+                    } else {
+                        fail(error)
+                    }
                 }
+                parseStatus(c.status())
             } finally {
                 operation.value = null
             }
         }
     }
 
-    fun releaseDisplay() {
+    /** Release one session, or every session when [key] is empty. */
+    fun releaseDisplay(key: String = "") {
         val c = requireConnected() ?: return
         preview.value = null
         displayReady.value = false
-        activeClonePackage.value = null
+        if (key.isBlank() || key == activeClonePackage.value) {
+            activeClonePackage.value = null
+        }
         scope.launch {
             try {
-                c.releaseDisplay()
-                setNotice("Virtual display released")
+                c.releaseDisplay(key)
+                setNotice(if (key.isBlank()) "All virtual displays released" else "Display released")
                 parseStatus(c.status())
             } catch (t: Throwable) {
                 fail(t.message ?: "Release failed")
@@ -384,10 +437,21 @@ object HeadlessCloneEngine {
     fun capturePreview() {
         val c = client ?: return
         if (!connected.value || !displayReady.value) return
+        capturePreviewOf(viewerKey(), c)
+    }
+
+    /** Capture the display of one package (the viewer by default). */
+    fun capturePreviewOf(packageName: String) {
+        val c = client ?: return
+        if (!connected.value) return
+        capturePreviewOf(keyOf(packageName), c)
+    }
+
+    private fun capturePreviewOf(key: String, c: EngineClient) {
         if (!previewInFlight.compareAndSet(false, true)) return
         scope.launch {
             try {
-                val frame = c.capture(700, quality.value.jpeg)
+                val frame = c.capture(key, 700, quality.value.jpeg)
                 if (frame.ok()) {
                     val bitmap = BitmapFactory.decodeByteArray(frame.jpeg, 0, frame.jpeg.size)
                     if (bitmap != null) {
@@ -451,22 +515,26 @@ object HeadlessCloneEngine {
     }
 
     fun launchClone(packageName: String, width: Int = 0, height: Int = 0, fps: Int = 0) {
-        if (activeClonePackage.value == packageName) {
+        if (sessions.value.containsKey(packageName)) {
+            // Already running on its own display: just bring the viewer there.
+            activeClonePackage.value = packageName
             setNotice("Already running; resuming view")
+            val c = ensureClient()
+            if (c != null) parseStatus(c.status())
             return
         }
         val saved = perAppDisplay(packageName)
         val w = width.takeIf { it > 0 } ?: saved.width
         val h = height.takeIf { it > 0 } ?: saved.height
         val f = fps.takeIf { it > 0 } ?: saved.fps.takeIf { it > 0 } ?: displayFps.value
-        launchWithDisplay("Opening clone…", w, h, f, packageName) { c ->
-            c.cloneLaunch(packageName)
+        launchWithDisplay("Opening clone…", w, h, f, packageName, packageName) { c, key ->
+            c.cloneLaunch(packageName, key)
         }
     }
 
     fun launchInstalledApp(packageName: String) {
-        launchWithDisplay("Opening app on the display…", 0, 0, displayFps.value, null) { c ->
-            c.launchApp(packageName, true)
+        launchWithDisplay("Opening app on the display…", 0, 0, displayFps.value, packageName, KEY_PRIMARY) { c, key ->
+            c.launchApp(packageName, key, true)
         }
     }
 
@@ -503,13 +571,14 @@ object HeadlessCloneEngine {
         cloneLogs.value = emptyList()
     }
 
+    /** Stop the clone process but keep its display for another launch. */
     fun killClone(packageName: String) {
         val c = requireConnected() ?: return
         scope.launch {
             try {
                 val error = resultError(c.cloneKill(packageName))
                 if (error != null) fail(error) else setNotice("App stopped")
-                if (activeClonePackage.value == packageName) activeClonePackage.value = null
+                dropSession(packageName, c)
                 refreshClonesInternal(c)
             } catch (t: Throwable) {
                 fail(t.message ?: "Stop failed")
@@ -517,7 +586,7 @@ object HeadlessCloneEngine {
         }
     }
 
-    /** Stop the clone and release the virtual display (viewer Stop button). */
+    /** Stop the clone and release its display. Other clones keep running. */
     fun stopClone(packageName: String) {
         val c = requireConnected()
         if (c == null) {
@@ -532,9 +601,8 @@ object HeadlessCloneEngine {
                 } else {
                     setNotice("App stopped")
                 }
-                if (activeClonePackage.value == packageName) activeClonePackage.value = null
                 noteAction("stop $packageName")
-                runCatching { c.releaseDisplay() }
+                dropSession(packageName, c)
                 // The first force-stop can race the display teardown. Kill once
                 // more now that the display is gone, so no migrated task/process
                 // can surface full-screen.
@@ -550,6 +618,18 @@ object HeadlessCloneEngine {
         }
     }
 
+    /** Kill the clone and release only its own display. */
+    private fun dropSession(packageName: String, c: EngineClient) {
+        if (activeClonePackage.value == packageName) {
+            activeClonePackage.value = null
+            preview.value = null
+            previewError.value = null
+        }
+        runCatching { c.releaseDisplay(packageName) }
+        sessions.value = sessions.value - packageName
+        if (sessions.value.isEmpty()) displayReady.value = false
+    }
+
     /**
      * Reset the viewer after the clone was left running in the background.
      * The display and clone process are intentionally kept alive.
@@ -563,51 +643,50 @@ object HeadlessCloneEngine {
         runOperation("Removing clone…") {
             c.cloneDelete(packageName)
         }
-        if (activeClonePackage.value == packageName) {
-            activeClonePackage.value = null
-            displayReady.value = false
-            preview.value = null
-        }
+        dropSession(packageName, c)
         clearPerAppDisplay(packageName)
         clearCloneLogs()
     }
 
     // ---------------------------------------------------------------- input
 
-    fun tap(x: Int, y: Int) {
+    fun tap(x: Int, y: Int, packageName: String? = null) {
         val c = client ?: return
         if (!connected.value || !displayReady.value) return
         noteAction("tap ($x, $y)")
         scope.launch {
-            runCatching { c.tap(x, y) }.onFailure { Log.w(TAG, "tap failed", it) }
+            runCatching { c.tap(keyOf(packageName), x, y) }
+                .onFailure { Log.w(TAG, "tap failed", it) }
         }
     }
 
-    fun swipe(x1: Int, y1: Int, x2: Int, y2: Int, durationMs: Int = 260) {
+    fun swipe(x1: Int, y1: Int, x2: Int, y2: Int, durationMs: Int = 260, packageName: String? = null) {
         val c = client ?: return
         if (!connected.value || !displayReady.value) return
         noteAction("swipe ($x1,$y1) → ($x2,$y2)")
         scope.launch {
-            runCatching { c.swipe(x1, y1, x2, y2, durationMs) }
+            runCatching { c.swipe(keyOf(packageName), x1, y1, x2, y2, durationMs) }
                 .onFailure { Log.w(TAG, "swipe failed", it) }
         }
     }
 
-    fun key(keyCode: Int) {
+    fun key(keyCode: Int, packageName: String? = null) {
         val c = client ?: return
         if (!connected.value || !displayReady.value) return
         noteAction("key $keyCode")
         scope.launch {
-            runCatching { c.key(keyCode) }.onFailure { Log.w(TAG, "key failed", it) }
+            runCatching { c.key(keyOf(packageName), keyCode) }
+                .onFailure { Log.w(TAG, "key failed", it) }
         }
     }
 
-    fun text(value: String) {
+    fun text(value: String, packageName: String? = null) {
         val c = client ?: return
         if (!connected.value || !displayReady.value || value.isEmpty()) return
         noteAction("text \"${value.take(60)}\"")
         scope.launch {
-            runCatching { c.text(value) }.onFailure { Log.w(TAG, "text failed", it) }
+            runCatching { c.text(keyOf(packageName), value) }
+                .onFailure { Log.w(TAG, "text failed", it) }
         }
     }
 
@@ -668,6 +747,10 @@ object HeadlessCloneEngine {
      * Machine-facing operations used by the local control server, the guest
      * `altaris` CLI and MCP. These suspend functions return raw JSON objects so
      * callers never have to scrape UI state.
+     *
+     * Every operation that touches a display takes an optional package name:
+     * that is what makes concurrent agents possible. Without one, the viewer's
+     * clone is used.
      */
 
     suspend fun apiStatus(): JSONObject = withContext(Dispatchers.IO) {
@@ -684,6 +767,8 @@ object HeadlessCloneEngine {
             .put("display_dpi", displayDpi.value)
             .put("display_fps", displayFps.value)
             .put("active_clone", activeClonePackage.value ?: JSONObject.NULL)
+            .put("session_count", sessions.value.size)
+            .put("sessions", sessionsJson())
         if (c?.isServiceConnected() == true) {
             runCatching {
                 val raw = JSONObject(c.status())
@@ -691,6 +776,36 @@ object HeadlessCloneEngine {
             }
         }
         base
+    }
+
+    suspend fun apiSessions(): JSONObject = withContext(Dispatchers.IO) {
+        val c = ensureClient()
+        if (c != null && c.isServiceConnected()) {
+            runCatching { parseStatus(c.status()) }
+        }
+        JSONObject()
+            .put("ok", true)
+            .put("count", sessions.value.size)
+            .put("max", MAX_SESSIONS)
+            .put("active_clone", activeClonePackage.value ?: JSONObject.NULL)
+            .put("sessions", sessionsJson())
+    }
+
+    private fun sessionsJson(): JSONArray {
+        val array = JSONArray()
+        sessions.value.values.forEach { session ->
+            array.put(
+                JSONObject()
+                    .put("package", session.key)
+                    .put("display_id", session.displayId)
+                    .put("width", session.width)
+                    .put("height", session.height)
+                    .put("fps", session.fps)
+                    .put("frames", session.frames)
+                    .put("viewer", session.viewer)
+            )
+        }
+        return array
     }
 
     suspend fun apiApps(): JSONObject = withContext(Dispatchers.IO) {
@@ -717,7 +832,9 @@ object HeadlessCloneEngine {
                 .put("error", t.message ?: "Clone list failed")
         }
         try {
-            JSONObject(raw)
+            val parsed = JSONObject(raw)
+            parsed.put("sessions", sessionsJson())
+            parsed
         } catch (_: Throwable) {
             JSONObject().put("ok", false).put("error", "Clone list was not valid JSON")
         }
@@ -789,11 +906,7 @@ object HeadlessCloneEngine {
         try {
             val error = resultError(c.cloneDelete(packageName))
             if (error == null) {
-                if (activeClonePackage.value == packageName) {
-                    activeClonePackage.value = null
-                    displayReady.value = false
-                    preview.value = null
-                }
+                dropSession(packageName, c)
                 refreshClonesInternal(c)
                 JSONObject().put("ok", true).put("detail", "Removed $packageName")
             } else {
@@ -804,16 +917,38 @@ object HeadlessCloneEngine {
         }
     }
 
+    /**
+     * Launch a clone on its own virtual display.
+     *
+     * Repeating the call for a running clone returns the existing session; other
+     * clones are untouched, so N agents can hold N clones without stepping on
+     * each other.
+     */
     suspend fun apiLaunch(packageName: String, width: Int = 0, height: Int = 0, fps: Int = 0): JSONObject =
         withContext(Dispatchers.IO) {
-            if (activeClonePackage.value == packageName) {
-                return@withContext JSONObject().put("ok", true)
-                    .put("already_running", true)
-                    .put("package", packageName)
+            if (packageName.isBlank()) {
+                return@withContext JSONObject().put("ok", false).put("error", "package is required")
             }
             val c = ensureClient()
             if (c == null || !c.isServiceConnected()) {
                 return@withContext JSONObject().put("ok", false).put("error", "Shell engine is not connected")
+            }
+            val existing = sessions.value[packageName]
+            if (existing != null) {
+                // Already running: only move the *viewer* when nothing owns it.
+                if (activeClonePackage.value == null) activeClonePackage.value = packageName
+                parseStatus(c.status())
+                return@withContext JSONObject()
+                    .put("ok", true)
+                    .put("already_running", true)
+                    .put("package", packageName)
+                    .put("display_id", existing.displayId)
+                    .put("sessions", sessionsJson())
+            }
+            if (sessions.value.size >= MAX_SESSIONS) {
+                return@withContext JSONObject().put("ok", false)
+                    .put("error", "At most $MAX_SESSIONS clones can run at once; stop one first")
+                    .put("sessions", sessionsJson())
             }
             val saved = perAppDisplay(packageName)
             val w = (width.takeIf { it > 0 } ?: saved.width.takeIf { it > 0 }
@@ -823,22 +958,26 @@ object HeadlessCloneEngine {
             val f = (fps.takeIf { it > 0 } ?: saved.fps.takeIf { it > 0 }
                 ?: displayFps.value).coerceIn(10, 240)
             try {
-                runCatching { c.releaseDisplay() }
-                preview.value = null
-                displayReady.value = false
-                activeClonePackage.value = null
-                val createError = resultError(c.createDisplay(w, h, displayDpi.value, f))
+                val created = synchronized(displayLock) {
+                    c.createDisplay(packageName, w, h, displayDpi.value, f)
+                }
+                val createError = resultError(created)
                 if (createError != null) {
                     return@withContext JSONObject().put("ok", false)
                         .put("error", "Display failed: $createError")
                 }
+                val display = runCatching { JSONObject(created).optInt("display_id", -1) }.getOrDefault(-1)
+                // Do not steal the viewer: an agent launching clone B must not
+                // move the clone a human is watching.
+                if (activeClonePackage.value == null) activeClonePackage.value = packageName
                 parseStatus(c.status())
-                val launchError = resultError(c.cloneLaunch(packageName))
+                val launchError = resultError(c.cloneLaunch(packageName, packageName))
                 if (launchError != null) {
-                    runCatching { c.releaseDisplay() }
+                    runCatching { c.releaseDisplay(packageName) }
+                    sessions.value = sessions.value - packageName
+                    parseStatus(c.status())
                     return@withContext JSONObject().put("ok", false).put("error", launchError)
                 }
-                activeClonePackage.value = packageName
                 noteAction("launch $packageName", "agent")
                 parseStatus(c.status())
                 refreshClonesInternal(c)
@@ -848,34 +987,37 @@ object HeadlessCloneEngine {
                     .put("width", w)
                     .put("height", h)
                     .put("fps", f)
-                    .put("display_id", displayId.value)
+                    .put("display_id", if (display > 0) display else sessions.value[packageName]?.displayId ?: -1)
+                    .put("sessions", sessionsJson())
             } catch (t: Throwable) {
                 JSONObject().put("ok", false).put("error", t.message ?: "Launch failed")
             }
         }
 
+    /** Stop one clone and release only its display. */
     suspend fun apiStop(packageName: String): JSONObject = withContext(Dispatchers.IO) {
+        if (packageName.isBlank()) {
+            return@withContext JSONObject().put("ok", false).put("error", "package is required")
+        }
         val c = ensureClient()
         if (c == null || !c.isServiceConnected()) {
             return@withContext JSONObject().put("ok", false).put("error", "Shell engine is not connected")
         }
         try {
             val error = resultError(c.cloneKill(packageName))
-            if (activeClonePackage.value == packageName) {
-                runCatching { c.releaseDisplay() }
-                activeClonePackage.value = null
-                displayReady.value = false
-                preview.value = null
-            }
+            dropSession(packageName, c)
             // Kill after the display is released: a slow first force-stop must
             // not leave a process that Android can migrate to the phone screen.
             runCatching { c.cloneKill(packageName) }
             noteAction("stop $packageName", "agent")
             if (error != null) {
-                JSONObject().put("ok", false).put("error", error)
+                JSONObject().put("ok", false).put("error", error).put("sessions", sessionsJson())
             } else {
                 refreshClonesInternal(c)
-                JSONObject().put("ok", true).put("detail", "Stopped $packageName")
+                parseStatus(c.status())
+                JSONObject().put("ok", true)
+                    .put("detail", "Stopped $packageName")
+                    .put("sessions", sessionsJson())
             }
         } catch (t: Throwable) {
             JSONObject().put("ok", false).put("error", t.message ?: "Stop failed")
@@ -886,12 +1028,13 @@ object HeadlessCloneEngine {
         maxWidth: Int = 900,
         jpeg: Int = 90,
         timeoutMs: Int = 5_000,
+        packageName: String? = null,
     ): ByteArray? =
         withContext(Dispatchers.IO) {
             val c = ensureClient() ?: return@withContext null
             if (!c.isServiceConnected()) return@withContext null
             val frame = runCatching {
-                c.capture(timeoutMs.coerceIn(500, 30_000), jpeg.coerceIn(30, 100))
+                c.capture(keyOf(packageName), timeoutMs.coerceIn(500, 30_000), jpeg.coerceIn(30, 100))
             }.getOrNull()
             if (frame != null && frame.ok()) frame.jpeg else null
         }
@@ -916,60 +1059,88 @@ object HeadlessCloneEngine {
             }
         }
 
-    suspend fun apiTap(x: Int, y: Int): JSONObject = withContext(Dispatchers.IO) {
-        noteAction("tap ($x, $y)", "agent")
-        val c = ensureClient()
-        if (c == null || !c.isServiceConnected()) {
-            return@withContext JSONObject().put("ok", false).put("error", "Shell engine is not connected")
+    suspend fun apiTap(x: Int, y: Int, packageName: String? = null): JSONObject =
+        withContext(Dispatchers.IO) {
+            noteAction("tap ($x, $y)", "agent")
+            val c = ensureClient()
+            if (c == null || !c.isServiceConnected()) {
+                return@withContext JSONObject().put("ok", false).put("error", "Shell engine is not connected")
+            }
+            val key = keyOf(packageName)
+            runCatching { JSONObject(c.tap(key, x, y)).put("package", key) }
+                .getOrElse { JSONObject().put("ok", false).put("error", it.message ?: "Tap failed") }
         }
-        runCatching { JSONObject(c.tap(x, y)) }
-            .getOrElse { JSONObject().put("ok", false).put("error", it.message ?: "Tap failed") }
-    }
 
-    suspend fun apiSwipe(x1: Int, y1: Int, x2: Int, y2: Int, durationMs: Int): JSONObject =
+    suspend fun apiSwipe(
+        x1: Int,
+        y1: Int,
+        x2: Int,
+        y2: Int,
+        durationMs: Int,
+        packageName: String? = null,
+    ): JSONObject =
         withContext(Dispatchers.IO) {
             noteAction("swipe ($x1,$y1) → ($x2,$y2)", "agent")
             val c = ensureClient()
             if (c == null || !c.isServiceConnected()) {
                 return@withContext JSONObject().put("ok", false).put("error", "Shell engine is not connected")
             }
-            runCatching { JSONObject(c.swipe(x1, y1, x2, y2, durationMs.coerceIn(30, 3000))) }
-                .getOrElse { JSONObject().put("ok", false).put("error", it.message ?: "Swipe failed") }
+            val key = keyOf(packageName)
+            runCatching {
+                JSONObject(c.swipe(key, x1, y1, x2, y2, durationMs.coerceIn(30, 3000))).put("package", key)
+            }.getOrElse { JSONObject().put("ok", false).put("error", it.message ?: "Swipe failed") }
         }
 
-    suspend fun apiText(value: String): JSONObject = withContext(Dispatchers.IO) {
+    suspend fun apiText(value: String, packageName: String? = null): JSONObject = withContext(Dispatchers.IO) {
         noteAction("text \"${value.take(60)}\"", "agent")
         val c = ensureClient()
         if (c == null || !c.isServiceConnected()) {
             return@withContext JSONObject().put("ok", false).put("error", "Shell engine is not connected")
         }
-        runCatching { JSONObject(c.text(value)) }
+        val key = keyOf(packageName)
+        runCatching { JSONObject(c.text(key, value)).put("package", key) }
             .getOrElse { JSONObject().put("ok", false).put("error", it.message ?: "Text failed") }
     }
 
-    suspend fun apiKey(keyCode: Int): JSONObject = withContext(Dispatchers.IO) {
+    suspend fun apiKey(keyCode: Int, packageName: String? = null): JSONObject = withContext(Dispatchers.IO) {
         noteAction("key $keyCode", "agent")
         val c = ensureClient()
         if (c == null || !c.isServiceConnected()) {
             return@withContext JSONObject().put("ok", false).put("error", "Shell engine is not connected")
         }
-        runCatching { JSONObject(c.key(keyCode)) }
+        val key = keyOf(packageName)
+        runCatching { JSONObject(c.key(key, keyCode)).put("package", key) }
             .getOrElse { JSONObject().put("ok", false).put("error", it.message ?: "Key failed") }
     }
 
-    suspend fun apiReleaseDisplay(): JSONObject = withContext(Dispatchers.IO) {
+    suspend fun apiReleaseDisplay(packageName: String? = null): JSONObject = withContext(Dispatchers.IO) {
         val c = ensureClient()
         if (c == null || !c.isServiceConnected()) {
             return@withContext JSONObject().put("ok", false).put("error", "Shell engine is not connected")
         }
-        val error = resultError(c.releaseDisplay())
-        activeClonePackage.value = null
-        displayReady.value = false
-        preview.value = null
-        if (error == null) JSONObject().put("ok", true) else JSONObject().put("ok", false).put("error", error)
+        val key = packageName.orEmpty()
+        val error = resultError(c.releaseDisplay(key))
+        if (key.isBlank() || key == activeClonePackage.value) {
+            activeClonePackage.value = null
+            preview.value = null
+        }
+        if (key.isBlank()) {
+            sessions.value = emptyMap()
+            displayReady.value = false
+        } else {
+            sessions.value = sessions.value - key
+        }
+        parseStatus(c.status())
+        if (error == null) JSONObject().put("ok", true).put("sessions", sessionsJson())
+        else JSONObject().put("ok", false).put("error", error)
     }
 
     fun activeDisplayPackage(): String? = activeClonePackage.value
+
+    /** Display id for a package, or the viewer's display when null. */
+    fun displayIdFor(packageName: String? = null): Int =
+        sessions.value[keyOf(packageName)]?.displayId
+            ?: if (packageName.isNullOrBlank()) displayId.value else -1
 
     // ---------------------------------------------------------------- internals
 
@@ -996,13 +1167,20 @@ object HeadlessCloneEngine {
         return c
     }
 
+    /**
+     * Create the display for [key] and run [command] on it.
+     *
+     * Only this key's display is recreated: a launch in one clone must not
+     * destroy the display another clone (or another agent) is using.
+     */
     private fun launchWithDisplay(
         label: String,
         requestedWidth: Int,
         requestedHeight: Int,
         requestedFps: Int,
-        activePackage: String?,
-        command: (EngineClient) -> String,
+        viewerPackage: String?,
+        key: String,
+        command: (EngineClient, String) -> String,
     ) {
         val c = requireConnected() ?: return
         if (operationInFlight.get()) return
@@ -1012,27 +1190,27 @@ object HeadlessCloneEngine {
                 val w = (requestedWidth.takeIf { it > 0 } ?: displayWidth.value).coerceIn(320, 2160)
                 val h = (requestedHeight.takeIf { it > 0 } ?: displayHeight.value).coerceIn(480, 3840)
                 val f = requestedFps.coerceIn(10, 240)
-                // A display cannot be resized together with its capture surface.
-                // Recreate it so per-app resolution/FPS always take effect.
-                if (displayReady.value) {
-                    c.releaseDisplay()
-                    preview.value = null
-                    displayReady.value = false
+                if (!sessions.value.containsKey(key) && sessions.value.size >= MAX_SESSIONS) {
+                    fail("At most $MAX_SESSIONS clones can run at once; stop one first")
+                    return@launch
                 }
-                activeClonePackage.value = null
-                val created = c.createDisplay(w, h, displayDpi.value, f)
+                // A display cannot be resized together with its capture surface.
+                // Recreate only this session so per-app resolution/FPS applies.
+                val created = synchronized(displayLock) {
+                    c.createDisplay(key, w, h, displayDpi.value, f)
+                }
                 val createError = resultError(created)
                 if (createError != null) {
                     fail("Display failed: $createError")
                     return@launch
                 }
+                activeClonePackage.value = viewerPackage
                 parseStatus(c.status())
-                val error = resultError(command(c))
+                val error = resultError(command(c, key))
                 if (error != null) {
                     fail(error)
                 } else {
-                    activeClonePackage.value = activePackage
-                    if (activePackage != null) noteAction("launch $activePackage")
+                    if (viewerPackage != null) noteAction("launch $key")
                     setNotice("Launch requested")
                 }
                 refreshClonesInternal(c)
@@ -1154,6 +1332,39 @@ object HeadlessCloneEngine {
         displayRotation.value = obj.optInt("display_rotation", -1)
         inputReady.value = obj.optBoolean("input_ready", false)
         if (!displayReady.value) preview.value = null
+
+        val array = obj.optJSONArray("sessions")
+        if (array != null) {
+            val map = LinkedHashMap<String, Session>()
+            for (i in 0 until array.length()) {
+                val item = array.optJSONObject(i) ?: continue
+                val key = item.optString("key").ifBlank { item.optString("package") }
+                if (key.isBlank()) continue
+                map[key] = Session(
+                    key = key,
+                    packageName = key.takeIf { it.startsWith(CLONE_PREFIX) || it.startsWith(LEGACY_CLONE_PREFIX) },
+                    displayId = item.optInt("display_id", -1),
+                    width = item.optInt("width", 0),
+                    height = item.optInt("height", 0),
+                    fps = displayFps.value,
+                    frames = item.optLong("frames", 0L),
+                    viewer = item.optBoolean("viewer", false),
+                )
+            }
+            sessions.value = map
+            // Keep the legacy single-display fields pointed at the clone the
+            // viewer owns, so a launch by an agent cannot make the UI viewer
+            // report another clone's display.
+            val viewed = activeClonePackage.value?.let { map[it] }
+            if (viewed != null) {
+                displayId.value = viewed.displayId
+                displayReady.value = true
+                if (viewed.width > 0) displayWidth.value = viewed.width
+                if (viewed.height > 0) displayHeight.value = viewed.height
+            }
+        } else if (!displayReady.value) {
+            sessions.value = emptyMap()
+        }
     }
 
     private fun parseLogs(raw: String) {

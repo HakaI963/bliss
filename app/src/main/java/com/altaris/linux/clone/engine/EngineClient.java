@@ -273,6 +273,23 @@ public final class EngineClient {
     }
 
     public Frame callFrame(int code, int first, int second) {
+        return callFrame(code, parcel -> {
+            parcel.writeString("");
+            parcel.writeInt(first);
+            parcel.writeInt(second);
+        });
+    }
+
+    /** Frame command with an explicit display key (empty = the viewer session). */
+    public Frame callFrame(int code, String key, int first, int second) {
+        return callFrame(code, parcel -> {
+            parcel.writeString(key == null ? "" : key);
+            parcel.writeInt(first);
+            parcel.writeInt(second);
+        });
+    }
+
+    public Frame callFrame(int code, Writer writer) {
         IBinder local = binder;
         if (local == null) {
             return new Frame(null, "shell service not connected");
@@ -280,8 +297,9 @@ public final class EngineClient {
         Parcel data = Parcel.obtain();
         Parcel reply = Parcel.obtain();
         try {
-            data.writeInt(first);
-            data.writeInt(second);
+            if (writer != null) {
+                writer.write(data);
+            }
             local.transact(code, data, reply, 0);
             reply.setDataPosition(0);
             int ok = reply.readInt();
@@ -313,8 +331,9 @@ public final class EngineClient {
         return callJson(Protocol.CMD_LOG_TAIL, parcel -> parcel.writeInt(maxLines));
     }
 
-    public String createDisplay(int width, int height, int dpi, int fps) {
+    public String createDisplay(String key, int width, int height, int dpi, int fps) {
         return callJson(Protocol.CMD_CREATE, parcel -> {
+            parcel.writeString(key == null ? "" : key);
             parcel.writeInt(width);
             parcel.writeInt(height);
             parcel.writeInt(dpi);
@@ -322,30 +341,38 @@ public final class EngineClient {
         });
     }
 
-    public String releaseDisplay() {
-        return callJson(Protocol.CMD_RELEASE, null);
+    public String releaseDisplay(String key) {
+        return callJson(Protocol.CMD_RELEASE,
+                parcel -> parcel.writeString(key == null ? "" : key));
     }
 
-    public String launchApp(String packageName, boolean forceStop) {
+    public String sessions() {
+        return callJson(Protocol.CMD_SESSIONS, null);
+    }
+
+    public String launchApp(String packageName, String key, boolean forceStop) {
         return callJson(Protocol.CMD_LAUNCH_APP, parcel -> {
             parcel.writeString(packageName);
+            parcel.writeString(key == null ? "" : key);
             parcel.writeInt(forceStop ? 1 : 0);
         });
     }
 
-    public Frame capture(int timeoutMs, int quality) {
-        return callFrame(Protocol.CMD_CAPTURE, timeoutMs, quality);
+    public Frame capture(String key, int timeoutMs, int quality) {
+        return callFrame(Protocol.CMD_CAPTURE, key, timeoutMs, quality);
     }
 
-    public String tap(int x, int y) {
+    public String tap(String key, int x, int y) {
         return callJson(Protocol.CMD_TAP, parcel -> {
+            parcel.writeString(key == null ? "" : key);
             parcel.writeInt(x);
             parcel.writeInt(y);
         });
     }
 
-    public String swipe(int x1, int y1, int x2, int y2, int durationMs) {
+    public String swipe(String key, int x1, int y1, int x2, int y2, int durationMs) {
         return callJson(Protocol.CMD_SWIPE, parcel -> {
+            parcel.writeString(key == null ? "" : key);
             parcel.writeInt(x1);
             parcel.writeInt(y1);
             parcel.writeInt(x2);
@@ -354,12 +381,18 @@ public final class EngineClient {
         });
     }
 
-    public String key(int keyCode) {
-        return callJson(Protocol.CMD_KEY, parcel -> parcel.writeInt(keyCode));
+    public String key(String key, int keyCode) {
+        return callJson(Protocol.CMD_KEY, parcel -> {
+            parcel.writeString(key == null ? "" : key);
+            parcel.writeInt(keyCode);
+        });
     }
 
-    public String text(String value) {
-        return callJson(Protocol.CMD_TEXT, parcel -> parcel.writeString(value));
+    public String text(String key, String value) {
+        return callJson(Protocol.CMD_TEXT, parcel -> {
+            parcel.writeString(key == null ? "" : key);
+            parcel.writeString(value);
+        });
     }
 
     // Clone space ----------------------------------------------------------
@@ -390,9 +423,11 @@ public final class EngineClient {
         });
     }
 
-    public String cloneLaunch(String clonePackage) {
-        return callJson(Protocol.CMD_CLONE_LAUNCH,
-                parcel -> parcel.writeString(clonePackage));
+    public String cloneLaunch(String clonePackage, String key) {
+        return callJson(Protocol.CMD_CLONE_LAUNCH, parcel -> {
+            parcel.writeString(clonePackage);
+            parcel.writeString(key == null ? "" : key);
+        });
     }
 
     public String cloneKill(String clonePackage) {

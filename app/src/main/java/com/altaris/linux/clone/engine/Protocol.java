@@ -6,12 +6,18 @@ package com.altaris.linux.clone.engine;
  * <p>All commands are synchronous {@code IBinder.transact} calls. JSON commands
  * answer with a JSON string; frame commands answer with
  * {@code int ok, String error, byte[] jpeg}.
+ *
+ * <p>Display-scoped commands carry a session key first: the clone package for a
+ * clone session, or an arbitrary label for an ad-hoc display. Every launch gets
+ * its own virtual display, so two agents driving two clones never fight over
+ * one display. An empty key means "the session the viewer is showing", which
+ * keeps single-clone callers simple.
  */
 final class Protocol {
     private Protocol() {
     }
 
-    static final int VERSION = 4;
+    static final int VERSION = 5;
 
     static final int CMD_STATUS = 1;
     static final int CMD_CREATE = 2;
@@ -41,9 +47,11 @@ final class Protocol {
      * locations the scoped-storage app cannot read directly.
      */
     static final int CMD_CLONE_FROM_PATH = 28;
+    /** Ordered list of live display sessions (JSON). */
+    static final int CMD_SESSIONS = 29;
 
     /** Class instantiated by Shizuku inside the shell process. Must stay public. */
     static final String SERVICE_CLASS = "com.altaris.linux.clone.engine.DisplayService";
     static final String SERVICE_TAG = "altaris-engine";
-    static final int SERVICE_VERSION = 4;
+    static final int SERVICE_VERSION = 5;
 }

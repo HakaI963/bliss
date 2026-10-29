@@ -15,15 +15,26 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.security.SecureRandom;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 /**
- * Shell-side state machine: owns the virtual display, the input bridge and the
+ * Shell-side state machine: owns the virtual displays, the input bridge and the
  * clone manager, and answers Binder commands from the UI process.
+ *
+ * <p>Displays are kept in a session map keyed by the clone package (or an
+ * arbitrary label). Creating a display for one key never touches another key,
+ * which is what lets several clones — and therefore several agents — run at the
+ * same time. The only shared resources are the input bridge (it injects per
+ * display id) and the wake lock (reference counted by the session count).
  */
 final class DisplayEngine {
     private static final String TAG = "AltarisEngine";
     private static final int MAX_LOG_LINES = 400;
+    private static final int MAX_SESSIONS = 6;
 
     private final Context context;
     private final Object lock = new Object();
@@ -31,7 +42,10 @@ final class DisplayEngine {
     private final CloneManager clones;
     private final String controlToken;
 
-    private VirtualDisplaySession display;
+    /** Live sessions, oldest first. Key is the clone package or a caller label. */
+    private final LinkedHashMap<String, VirtualDisplaySession> sessions = new LinkedHashMap<>();
+    /** Session the UI viewer is attached to; "" when none. */
+    private String viewerKey = "";
     private InputBridge input;
     private PowerManager.WakeLock wakeLock;
     private String lastError = "";
@@ -52,9 +66,18 @@ final class DisplayEngine {
 
     // ---------------------------------------------------------------- status
 
+    /** Display id of the viewer session, or of the newest session, or -1. */
     int displayId() {
         synchronized (lock) {
-            return display == null ? -1 : display.displayId;
+            VirtualDisplaySession session = resolveLocked("");
+            return session == null ? -1 : session.displayId;
+        }
+    }
+
+    int displayIdFor(String key) {
+        synchronized (lock) {
+            VirtualDisplaySession session = resolveLocked(key);
+            return session == null ? -1 : session.displayId;
         }
     }
 
@@ -62,7 +85,7 @@ final class DisplayEngine {
         JSONObject object = new JSONObject();
         synchronized (lock) {
             try {
-                VirtualDisplaySession session = display;
+                VirtualDisplaySession session = resolveLocked("");
                 object.put("service_version", Protocol.VERSION);
                 object.put("uid", Process.myUid());
                 object.put("sdk", Build.VERSION.SDK_INT);
@@ -83,11 +106,43 @@ final class DisplayEngine {
                 object.put("input_ready", input != null && input.available());
                 object.put("input_error", input == null
                         ? "not initialised" : input.unavailableReason());
+                object.put("session_count", sessions.size());
+                object.put("viewer_key", viewerKey);
+                object.put("sessions", sessionsJsonLocked());
                 object.put("error", lastError);
             } catch (Throwable ignored) {
             }
         }
         return object.toString();
+    }
+
+    String sessionsJson() {
+        synchronized (lock) {
+            return sessionsJsonLocked().toString();
+        }
+    }
+
+    private JSONArray sessionsJsonLocked() {
+        JSONArray array = new JSONArray();
+        for (Map.Entry<String, VirtualDisplaySession> entry : sessions.entrySet()) {
+            VirtualDisplaySession session = entry.getValue();
+            try {
+                JSONObject item = new JSONObject();
+                item.put("key", entry.getKey());
+                item.put("package", entry.getKey());
+                item.put("display_id", session.displayId);
+                item.put("width", session.width);
+                item.put("height", session.height);
+                item.put("dpi", session.dpi);
+                item.put("state", session.stateName());
+                item.put("frames", session.frameCount());
+                item.put("rotation", session.rotation());
+                item.put("viewer", entry.getKey().equals(viewerKey));
+                array.put(item);
+            } catch (Throwable ignored) {
+            }
+        }
+        return array;
     }
 
     String listAppsJson() {
@@ -114,70 +169,139 @@ final class DisplayEngine {
 
     // --------------------------------------------------------------- display
 
-    String createDisplay(int width, int height, int dpi, int fps) {
+    /**
+     * Creates (or recreates) the display for [key] and makes it the viewer
+     * session. Other sessions keep running untouched.
+     */
+    String createDisplay(String key, int width, int height, int dpi, int fps) {
         synchronized (lock) {
-            releaseLocked();
+            String session = normalizeKey(key);
+            if (session.isEmpty()) {
+                return Jsons.error("display session key is required");
+            }
+            if (!sessions.containsKey(session) && sessions.size() >= MAX_SESSIONS) {
+                return Jsons.error("at most " + MAX_SESSIONS
+                        + " displays can run at once; stop a clone first");
+            }
+            releaseLocked(session);
             int safeWidth = clamp(width, 320, 2160, 720);
             int safeHeight = clamp(height, 480, 3840, 1280);
             int safeDpi = clamp(dpi, 120, 640, 320);
             int safeFps = clamp(fps, 10, 240, 60);
             try {
-                display = VirtualDisplaySession.create(context, safeWidth, safeHeight, safeDpi, safeFps);
-                boolean on = display.ensureOn();
+                VirtualDisplaySession created = VirtualDisplaySession.create(
+                        context, safeWidth, safeHeight, safeDpi, safeFps);
+                sessions.put(session, created);
+                viewerKey = session;
+                boolean on = created.ensureOn();
                 ensureInput();
                 acquireWakeLock();
                 lastError = "";
-                log("display created id=" + display.displayId
+                log("display created key=" + session + " id=" + created.displayId
                         + " " + safeWidth + "x" + safeHeight + " @" + safeDpi
                         + " " + safeFps + "fps"
-                        + " state=" + display.stateName()
+                        + " state=" + created.stateName()
                         + (on ? "" : " (still not ON after surface toggle)")
-                        + " flags=" + display.flagsLabel());
-                return Jsons.ok("display " + display.displayId + " "
+                        + " flags=" + created.flagsLabel()
+                        + " sessions=" + sessions.size());
+                return Jsons.display("display " + created.displayId + " " + session + " "
                         + safeWidth + "x" + safeHeight + " @" + safeDpi
                         + " " + safeFps + "fps"
-                        + " state=" + display.stateName());
+                        + " state=" + created.stateName(),
+                        created.displayId, session);
             } catch (Throwable e) {
                 lastError = message(e);
-                log("display create failed: " + message(e));
+                log("display create failed for " + session + ": " + message(e));
                 return Jsons.error(message(e));
             }
         }
     }
 
-    String releaseDisplay() {
+    /** Releases one session, or every session when [key] is empty. */
+    String releaseDisplay(String key) {
         synchronized (lock) {
-            if (display == null) {
-                return Jsons.ok("no display");
+            String session = normalizeKey(key);
+            if (session.isEmpty()) {
+                int count = sessions.size();
+                if (count == 0) {
+                    return Jsons.ok("no display");
+                }
+                releaseAllLocked();
+                log("all " + count + " display(s) released");
+                return Jsons.ok("released " + count + " display(s)");
             }
-            int id = display.displayId;
-            releaseLocked();
-            log("display " + id + " released");
+            VirtualDisplaySession existing = sessions.get(session);
+            if (existing == null) {
+                return Jsons.ok("no display for " + session);
+            }
+            int id = existing.displayId;
+            releaseLocked(session);
+            log("display " + id + " (" + session + ") released");
             return Jsons.ok("display " + id + " released");
         }
     }
 
     void releaseAll() {
         synchronized (lock) {
-            releaseLocked();
+            releaseAllLocked();
         }
     }
 
-    private void releaseLocked() {
-        if (display != null) {
+    private void releaseAllLocked() {
+        List<String> keys = new ArrayList<>(sessions.keySet());
+        for (String key : keys) {
+            releaseLocked(key);
+        }
+        viewerKey = "";
+        releaseWakeLock();
+    }
+
+    /** Drops one session: removes its tasks first so nothing migrates to the phone. */
+    private void releaseLocked(String key) {
+        VirtualDisplaySession session = sessions.remove(key);
+        if (session != null) {
             // The clone task still lives on the virtual display. Releasing the
             // display while it is the top task makes Android migrate that task
             // to the default display: the clone flashes full-screen on the
             // phone. Remove the display's root task first (force-stop alone
             // leaves the task record behind).
-            removeDisplayTasks(display.displayId);
+            removeDisplayTasks(session.displayId);
             try {
-                display.release();
+                session.release();
             } catch (Throwable ignored) {
             }
-            display = null;
         }
-        releaseWakeLock();
+        if (key.equals(viewerKey)) {
+            viewerKey = sessions.isEmpty() ? "" : newestKey();
+        }
+        if (sessions.isEmpty()) {
+            releaseWakeLock();
+        }
+    }
+
+    private String newestKey() {
+        String last = "";
+        for (String key : sessions.keySet()) {
+            last = key;
+        }
+        return last;
+    }
+
+    /** Blank key resolves to the viewer session, then to the newest session. */
+    private VirtualDisplaySession resolveLocked(String key) {
+        String session = normalizeKey(key);
+        if (session.isEmpty()) {
+            if (!viewerKey.isEmpty() && sessions.containsKey(viewerKey)) {
+                return sessions.get(viewerKey);
+            }
+            String newest = newestKey();
+            return newest.isEmpty() ? null : sessions.get(newest);
+        }
+        return sessions.get(session);
+    }
+
+    private static String normalizeKey(String key) {
+        return key == null ? "" : key.trim();
     }
 
     /** Removes every root task hosted by [displayId] before the display dies. */
@@ -204,9 +328,9 @@ final class DisplayEngine {
     }
 
     /**
-     * Keeps the physical screen on while the virtual display exists. HyperOS
-     * suspends virtual displays together with the phone screen; without this
-     * the clone freezes as soon as the screen times out.
+     * Keeps the physical screen on while at least one virtual display exists.
+     * HyperOS suspends virtual displays together with the phone screen; without
+     * this the clones freeze as soon as the screen times out.
      */
     private void acquireWakeLock() {
         if (wakeLock != null) {
@@ -222,7 +346,7 @@ final class DisplayEngine {
                     "Altaris:virtual-display");
             wakeLock.setReferenceCounted(false);
             wakeLock.acquire();
-            log("wake lock acquired (screen stays on while the display exists)");
+            log("wake lock acquired (screen stays on while a display exists)");
         } catch (Throwable e) {
             wakeLock = null;
             log("wake lock failed: " + e);
@@ -253,21 +377,24 @@ final class DisplayEngine {
 
     // --------------------------------------------------------------- actions
 
-    String launchApp(String packageName, boolean forceStop) {
-        VirtualDisplaySession session;
+    String launchApp(String packageName, String key, boolean forceStop) {
+        int display;
         synchronized (lock) {
-            session = display;
-        }
-        if (session == null) {
-            return Jsons.error("no virtual display; create one first");
+            VirtualDisplaySession session = resolveLocked(key);
+            if (session == null) {
+                return Jsons.error("no virtual display for "
+                        + (normalizeKey(key).isEmpty() ? "the viewer" : key)
+                        + "; create one first");
+            }
+            display = session.displayId;
         }
         if (packageName == null || packageName.trim().isEmpty()) {
             return Jsons.error("empty package name");
         }
         try {
             AppCatalog.CommandResult result = AppCatalog.launchPackage(
-                    context, packageName.trim(), session.displayId, forceStop);
-            log("launch " + packageName + " on display " + session.displayId
+                    context, packageName.trim(), display, forceStop);
+            log("launch " + packageName + " on display " + display
                     + " exit=" + result.exit + " " + oneLine(result.output));
             return result.ok()
                     ? Jsons.ok(result.output.isEmpty() ? "launched" : result.output)
@@ -278,58 +405,61 @@ final class DisplayEngine {
         }
     }
 
-    String tap(int x, int y) {
-        return inputAction("tap", input -> {
-            boolean ok = input.tap(displayId(), x, y);
-            return ok ? Jsons.ok("tap injected at " + x + "," + y)
+    String tap(String key, int x, int y) {
+        return inputAction("tap", key, (bridge, display) -> {
+            boolean ok = bridge.tap(display, x, y);
+            return ok ? Jsons.ok("tap injected at " + x + "," + y + " on display " + display)
                     : Jsons.error("injectInputEvent returned false");
         });
     }
 
-    String swipe(int x1, int y1, int x2, int y2, int durationMs) {
-        return inputAction("swipe", input -> {
-            boolean ok = input.swipe(displayId(), x1, y1, x2, y2, durationMs);
-            return ok ? Jsons.ok("swipe injected")
+    String swipe(String key, int x1, int y1, int x2, int y2, int durationMs) {
+        return inputAction("swipe", key, (bridge, display) -> {
+            boolean ok = bridge.swipe(display, x1, y1, x2, y2, durationMs);
+            return ok ? Jsons.ok("swipe injected on display " + display)
                     : Jsons.error("injectInputEvent returned false");
         });
     }
 
-    String key(int keyCode) {
-        return inputAction("key", input -> {
-            boolean ok = input.key(displayId(), keyCode);
-            return ok ? Jsons.ok("key injected")
+    String key(String key, int keyCode) {
+        return inputAction("key", key, (bridge, display) -> {
+            boolean ok = bridge.key(display, keyCode);
+            return ok ? Jsons.ok("key injected on display " + display)
                     : Jsons.error("injectInputEvent returned false");
         });
     }
 
-    String text(String value) {
-        return inputAction("text", input -> {
-            boolean ok = input.text(displayId(), value);
-            return ok ? Jsons.ok("text injected")
+    String text(String key, String value) {
+        return inputAction("text", key, (bridge, display) -> {
+            boolean ok = bridge.text(display, value);
+            return ok ? Jsons.ok("text injected on display " + display)
                     : Jsons.error("injectInputEvent returned false");
         });
     }
 
     private interface InputCall {
-        String run(InputBridge input) throws Exception;
+        String run(InputBridge input, int displayId) throws Exception;
     }
 
-    private String inputAction(String name, InputCall call) {
+    private String inputAction(String name, String key, InputCall call) {
         InputBridge bridge;
+        int display;
         synchronized (lock) {
             ensureInput();
             bridge = input;
-            if (display == null) {
+            VirtualDisplaySession session = resolveLocked(key);
+            if (session == null) {
                 return Jsons.error("no virtual display; create one first");
             }
+            display = session.displayId;
         }
         if (bridge == null || !bridge.available()) {
             return Jsons.error("input unavailable: "
                     + (bridge == null ? "not initialised" : bridge.unavailableReason()));
         }
         try {
-            String result = call.run(bridge);
-            log(name + " -> " + oneLine(result));
+            String result = call.run(bridge, display);
+            log(name + " on display " + display + " -> " + oneLine(result));
             return result;
         } catch (Throwable e) {
             log(name + " failed: " + message(e));
@@ -337,10 +467,10 @@ final class DisplayEngine {
         }
     }
 
-    byte[] captureJpeg(int timeoutMs, int quality) {
+    byte[] captureJpeg(String key, int timeoutMs, int quality) {
         VirtualDisplaySession session;
         synchronized (lock) {
-            session = display;
+            session = resolveLocked(key);
         }
         if (session == null) {
             return null;
@@ -419,8 +549,8 @@ final class DisplayEngine {
         return clones.createFromPath(path, name);
     }
 
-    String cloneLaunch(String clonePackage) {
-        return clones.launch(clonePackage);
+    String cloneLaunch(String clonePackage, String key) {
+        return clones.launch(clonePackage, key);
     }
 
     String cloneKill(String clonePackage) {

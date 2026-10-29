@@ -5,201 +5,229 @@ package com.altaris.linux.core.rea
  * these; each entry unlocks one analysis family (Android resources, native
  * disassembly, firmware, captures …).
  *
- * Package names are per package manager because the supported distros disagree
- * (Debian ships `aapt` and `android-tools-adb`, Arch ships `android-tools`).
- * A missing manager entry means "not packaged there"; the installer reports it
- * instead of failing the whole batch.
+ * [variants] is the ordered install plan per package manager. Every element is
+ * one *batch* of package names that must be installed together (python3 needs
+ * pip in the same command, for instance); the installer walks the list in order
+ * and stops at the first batch that both installs and produces the probe binary.
+ * That is what makes "openjdk-21 first, openjdk-17 second" work on a distro that
+ * only ships one of the two, instead of failing the whole tool.
+ *
+ * An empty list means "this distro does not package the tool"; the installer
+ * reports that instead of pretending to have failed silently.
  */
 data class ReaDependency(
     val id: String,
     val label: String,
     val description: String,
-    val packages: Map<String, List<String>> = emptyMap(),
+    /** manager -> ordered batches of package names. */
+    val variants: Map<String, List<List<String>>> = emptyMap(),
     val kind: String = "package", // "package" | "ghidra" | "license"
     val note: String = "",
+    /** Binaries that prove the tool is present. Empty means "ask the special case". */
+    val probes: List<String> = emptyList(),
 )
 
 object ReaCatalog {
 
     val MANAGERS = listOf("apt", "apk", "dnf", "pacman")
 
+    private fun every(vararg batches: List<String>): List<List<String>> = batches.toList()
+
     val DEPENDENCIES: List<ReaDependency> = listOf(
         ReaDependency(
             id = "jadx",
             label = "JADX",
             description = "Decompile DEX to Java for APK analysis (REA's Android decompiler).",
-            packages = mapOf(
-                "apt" to listOf("jadx"),
-                "apk" to listOf("jadx"),
-                "dnf" to listOf("jadx"),
-                "pacman" to listOf("jadx"),
+            variants = mapOf(
+                "apt" to every(listOf("jadx")),
+                "dnf" to every(listOf("jadx")),
+                // Alpine and Arch package jadx only in community/AUR repos.
+                "apk" to every(listOf("jadx")),
+                "pacman" to emptyList(),
             ),
+            probes = listOf("jadx"),
         ),
         ReaDependency(
             id = "apktool",
             label = "Apktool",
             description = "Decode resources and the binary manifest; needed by resource workflows.",
-            packages = mapOf(
-                "apt" to listOf("apktool"),
-                "apk" to listOf("apktool"),
-                "dnf" to listOf("apktool"),
-                "pacman" to listOf("apktool"),
+            variants = mapOf(
+                "apt" to every(listOf("apktool")),
+                "dnf" to every(listOf("apktool")),
+                "apk" to every(listOf("apktool")),
+                "pacman" to emptyList(),
             ),
+            probes = listOf("apktool"),
         ),
         ReaDependency(
             id = "aapt",
             label = "AAPT",
             description = "Read APK badging, permissions and resource ids.",
-            packages = mapOf(
-                "apt" to listOf("aapt"),
-                "apk" to listOf("aapt"),
-                "dnf" to listOf("android-tools"),
-                "pacman" to listOf("android-tools"),
+            variants = mapOf(
+                "apt" to every(listOf("aapt"), listOf("android-sdk-build-tools")),
+                "dnf" to every(listOf("android-tools")),
+                "pacman" to every(listOf("android-tools")),
+                "apk" to emptyList(),
             ),
+            probes = listOf("aapt", "aapt2"),
         ),
         ReaDependency(
             id = "adb",
             label = "ADB",
             description = "Live device analysis: pull APKs, inspect running processes, attach.",
-            packages = mapOf(
-                "apt" to listOf("android-tools-adb"),
-                "apk" to listOf("android-tools"),
-                "dnf" to listOf("android-tools"),
-                "pacman" to listOf("android-tools"),
+            variants = mapOf(
+                "apt" to every(listOf("android-tools-adb"), listOf("adb")),
+                "apk" to every(listOf("android-tools")),
+                "dnf" to every(listOf("android-tools")),
+                "pacman" to every(listOf("android-tools")),
             ),
+            probes = listOf("adb"),
             note = "Wireless debugging must be enabled on the device.",
         ),
         ReaDependency(
             id = "java",
             label = "Java (JDK 21)",
             description = "JADX and Apktool are JVM tools; Ghidra needs a full JDK with javac and Java 21+.",
-            packages = mapOf(
-                "apt" to listOf("openjdk-21-jdk-headless"),
-                "apk" to listOf("openjdk21-jdk"),
-                "dnf" to listOf("java-21-openjdk-devel"),
-                "pacman" to listOf("jdk21-openjdk"),
+            variants = mapOf(
+                "apt" to every(listOf("openjdk-21-jdk-headless"), listOf("openjdk-17-jdk-headless")),
+                "apk" to every(listOf("openjdk21-jdk"), listOf("openjdk17-jdk")),
+                "dnf" to every(listOf("java-21-openjdk-devel"), listOf("java-17-openjdk-devel")),
+                "pacman" to every(listOf("jdk21-openjdk"), listOf("jdk-openjdk")),
             ),
+            probes = listOf("javac"),
+            note = "Ghidra also needs Java 21+; its installer provisions Temurin 21 when the distro ships an older JDK.",
         ),
         ReaDependency(
             id = "binutils",
             label = "GNU binutils",
             description = "objdump: headers, sections, symbols, relocations, DWARF, disassembly.",
-            packages = mapOf(
-                "apt" to listOf("binutils"),
-                "apk" to listOf("binutils"),
-                "dnf" to listOf("binutils"),
-                "pacman" to listOf("binutils"),
+            variants = mapOf(
+                "apt" to every(listOf("binutils")),
+                "apk" to every(listOf("binutils")),
+                "dnf" to every(listOf("binutils")),
+                "pacman" to every(listOf("binutils")),
             ),
+            probes = listOf("objdump"),
         ),
         ReaDependency(
             id = "gdb",
             label = "GDB",
             description = "Persistent debugger sessions for native binaries.",
-            packages = mapOf(
-                "apt" to listOf("gdb"),
-                "apk" to listOf("gdb"),
-                "dnf" to listOf("gdb"),
-                "pacman" to listOf("gdb"),
+            variants = mapOf(
+                "apt" to every(listOf("gdb")),
+                "apk" to every(listOf("gdb")),
+                "dnf" to every(listOf("gdb")),
+                "pacman" to every(listOf("gdb")),
             ),
+            probes = listOf("gdb"),
         ),
         ReaDependency(
             id = "rizin",
             label = "Rizin",
             description = "Scriptable binary analysis and one-shot command execution.",
-            packages = mapOf(
-                "apt" to listOf("rizin"),
-                "apk" to listOf("rizin"),
-                "dnf" to listOf("rizin"),
-                "pacman" to listOf("rizin"),
+            variants = mapOf(
+                "apt" to every(listOf("rizin")),
+                "apk" to every(listOf("rizin")),
+                "dnf" to every(listOf("rizin")),
+                "pacman" to every(listOf("rizin")),
             ),
+            probes = listOf("rizin"),
         ),
         ReaDependency(
             id = "python3",
             label = "Python 3",
             description = "Scripted analysis, pwntools layouts and REA helper workflows.",
-            packages = mapOf(
-                "apt" to listOf("python3", "python3-pip"),
-                "apk" to listOf("python3", "py3-pip"),
-                "dnf" to listOf("python3", "python3-pip"),
-                "pacman" to listOf("python", "python-pip"),
+            variants = mapOf(
+                "apt" to every(listOf("python3", "python3-pip")),
+                "apk" to every(listOf("python3", "py3-pip")),
+                "dnf" to every(listOf("python3", "python3-pip")),
+                "pacman" to every(listOf("python", "python-pip")),
             ),
+            probes = listOf("python3"),
         ),
         ReaDependency(
             id = "binwalk",
             label = "Binwalk",
             description = "Firmware and embedded-filesystem carving.",
-            packages = mapOf(
-                "apt" to listOf("binwalk"),
-                "apk" to listOf("binwalk"),
-                "dnf" to listOf("binwalk"),
-                "pacman" to listOf("binwalk"),
+            variants = mapOf(
+                "apt" to every(listOf("binwalk")),
+                "dnf" to every(listOf("binwalk")),
+                "pacman" to every(listOf("binwalk")),
+                "apk" to emptyList(),
             ),
+            probes = listOf("binwalk"),
         ),
         ReaDependency(
             id = "p7zip",
             label = "7-Zip",
             description = "Unpack OBB, XAPK, firmware archives and nested images.",
-            packages = mapOf(
-                "apt" to listOf("p7zip-full"),
-                "apk" to listOf("p7zip"),
-                "dnf" to listOf("p7zip"),
-                "pacman" to listOf("p7zip"),
+            variants = mapOf(
+                "apt" to every(listOf("p7zip-full"), listOf("p7zip")),
+                "apk" to every(listOf("p7zip")),
+                "dnf" to every(listOf("p7zip", "p7zip-plugins")),
+                "pacman" to every(listOf("p7zip")),
             ),
+            probes = listOf("7z", "7za", "7zr"),
         ),
         ReaDependency(
             id = "tshark",
             label = "TShark",
             description = "Packet capture analysis for network evidence.",
-            packages = mapOf(
-                "apt" to listOf("tshark"),
-                "apk" to listOf("tshark"),
-                "dnf" to listOf("wireshark-cli"),
-                "pacman" to listOf("wireshark-cli"),
+            variants = mapOf(
+                "apt" to every(listOf("tshark")),
+                "apk" to every(listOf("tshark")),
+                "dnf" to every(listOf("wireshark-cli")),
+                "pacman" to every(listOf("wireshark-cli")),
             ),
+            probes = listOf("tshark"),
         ),
         ReaDependency(
             id = "sqlite3",
             label = "SQLite CLI",
             description = "Inspect app databases pulled from a device or clone.",
-            packages = mapOf(
-                "apt" to listOf("sqlite3"),
-                "apk" to listOf("sqlite"),
-                "dnf" to listOf("sqlite"),
-                "pacman" to listOf("sqlite"),
+            variants = mapOf(
+                "apt" to every(listOf("sqlite3")),
+                "apk" to every(listOf("sqlite")),
+                "dnf" to every(listOf("sqlite")),
+                "pacman" to every(listOf("sqlite")),
             ),
+            probes = listOf("sqlite3"),
         ),
         ReaDependency(
             id = "procps",
             label = "procps",
             description = "REA reads process tables on Linux; busybox ps is not enough.",
-            packages = mapOf(
-                "apt" to listOf("procps"),
-                "apk" to listOf("procps-ng"),
-                "dnf" to listOf("procps-ng"),
-                "pacman" to listOf("procps-ng"),
+            variants = mapOf(
+                "apt" to every(listOf("procps")),
+                "apk" to every(listOf("procps-ng")),
+                "dnf" to every(listOf("procps-ng")),
+                "pacman" to every(listOf("procps-ng")),
             ),
+            probes = listOf("pgrep"),
         ),
         ReaDependency(
             id = "file",
             label = "file",
             description = "Magic-based type identification used by several workflows.",
-            packages = mapOf(
-                "apt" to listOf("file"),
-                "apk" to listOf("file"),
-                "dnf" to listOf("file"),
-                "pacman" to listOf("file"),
+            variants = mapOf(
+                "apt" to every(listOf("file")),
+                "apk" to every(listOf("file")),
+                "dnf" to every(listOf("file")),
+                "pacman" to every(listOf("file")),
             ),
+            probes = listOf("file"),
         ),
         ReaDependency(
             id = "radare2",
             label = "radare2",
             description = "Native disassembler and debugger; fast on ARM, ideal for quick triage beside Ghidra.",
-            packages = mapOf(
-                "apt" to listOf("radare2"),
-                "apk" to listOf("radare2"),
-                "dnf" to listOf("radare2"),
-                "pacman" to listOf("radare2"),
+            variants = mapOf(
+                "apt" to every(listOf("radare2")),
+                "apk" to every(listOf("radare2")),
+                "dnf" to every(listOf("radare2")),
+                "pacman" to every(listOf("radare2")),
             ),
+            probes = listOf("radare2", "r2"),
         ),
         ReaDependency(
             id = "ghidra",
@@ -236,6 +264,14 @@ object ReaCatalog {
     /** Tools the UI may install. License-gated (commercial) entries are excluded. */
     fun installable(): List<ReaDependency> = DEPENDENCIES.filter { it.kind != "license" }
 
-    /** Package list for [manager], or null when this distro does not ship it. */
-    fun packagesFor(dep: ReaDependency, manager: String): List<String>? = dep.packages[manager]
+    /** Ordered install batches for [manager]; empty when the distro cannot ship it. */
+    fun variantsFor(dep: ReaDependency, manager: String): List<List<String>> =
+        dep.variants[manager].orEmpty()
+
+    /** True when this manager has at least one install batch for the tool. */
+    fun packagedFor(dep: ReaDependency, manager: String): Boolean =
+        dep.kind != "package" || variantsFor(dep, manager).isNotEmpty()
+
+    /** Binaries checked in the guest to decide whether the tool is usable. */
+    fun probesFor(dep: ReaDependency): List<String> = dep.probes
 }

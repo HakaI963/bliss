@@ -71,6 +71,14 @@ object McpProtocol {
 
     private fun tools(): JSONArray = JSONArray().apply {
         put(tool("altaris_status", "Get shell/display/clone engine status.", JSONObject()))
+        put(
+            tool(
+                "altaris_sessions",
+                "List every running clone and its virtual display. Each launch owns its own " +
+                    "display, so several clones (and several agents) can run at the same time.",
+                JSONObject()
+            )
+        )
         put(tool("altaris_clones", "List installed clones with package, created and last-opened metadata.", JSONObject()))
         put(tool("altaris_apps", "List installed source apps available for cloning.", JSONObject()))
         put(
@@ -94,7 +102,8 @@ object McpProtocol {
         put(
             tool(
                 "altaris_launch_clone",
-                "Launch a clone on the virtual display.",
+                "Launch a clone on its own virtual display. Other running clones are not touched " +
+                    "and keep their displays, so different agents can drive different clones at once.",
                 schema(
                     "package" to "string: clone package",
                     "width" to "integer: optional display width",
@@ -106,15 +115,18 @@ object McpProtocol {
         put(
             tool(
                 "altaris_stop_clone",
-                "Stop a clone and release the display.",
+                "Stop one clone and release only its own display; other clones keep running.",
                 schema("package" to "string: clone package")
             )
         )
         put(
             tool(
                 "altaris_screenshot",
-                "Capture the current virtual display as a JPEG image.",
-                schema("width" to "integer: optional max width, default 900")
+                "Capture one virtual display as a JPEG image.",
+                schema(
+                    "width" to "integer: optional max width, default 900",
+                    "package" to "string: optional clone package; defaults to the viewer's clone"
+                )
             )
         )
         put(
@@ -148,47 +160,55 @@ object McpProtocol {
         put(
             tool(
                 "altaris_tap",
-                "Tap the virtual display at pixel coordinates.",
-                schema("x" to "integer", "y" to "integer")
+                "Tap one virtual display at pixel coordinates.",
+                schema(
+                    "x" to "integer", "y" to "integer",
+                    "package" to "string: optional clone package; defaults to the viewer's clone"
+                )
             )
         )
         put(
             tool(
                 "altaris_swipe",
-                "Swipe on the virtual display.",
+                "Swipe on one virtual display.",
                 schema(
                     "x1" to "integer", "y1" to "integer", "x2" to "integer",
-                    "y2" to "integer", "ms" to "integer: optional, default 260"
+                    "y2" to "integer", "ms" to "integer: optional, default 260",
+                    "package" to "string: optional clone package"
                 )
             )
         )
         put(
             tool(
                 "altaris_text",
-                "Type text into the virtual display.",
-                schema("text" to "string")
+                "Type text into one virtual display.",
+                schema("text" to "string", "package" to "string: optional clone package")
             )
         )
         put(
             tool(
                 "altaris_key",
                 "Press a key by name or Android keycode (back, home, enter, tab, esc, recents).",
-                schema("key" to "string")
+                schema("key" to "string", "package" to "string: optional clone package")
             )
         )
         put(
             tool(
                 "altaris_ocr",
-                "Capture the display and run on-device OCR. Returns text and bounding boxes.",
-                schema("width" to "integer: optional max width, default 1000")
+                "Capture one display and run on-device OCR. Returns text and bounding boxes.",
+                schema(
+                    "width" to "integer: optional max width, default 1000",
+                    "package" to "string: optional clone package"
+                )
             )
         )
         put(
             tool(
                 "altaris_ui_tree",
-                "Read the UI node tree of the virtual display through the accessibility service.",
+                "Read the UI node tree of one virtual display through the accessibility service.",
                 schema(
-                    "display" to "integer: optional display id, default the running clone display",
+                    "package" to "string: optional clone package",
+                    "display" to "integer: optional display id, default the clone's display",
                     "max" to "integer: optional max nodes, default 600"
                 )
             )
@@ -390,9 +410,15 @@ object McpProtocol {
         "altaris_stop_clone" -> textResult(
             runBlocking { HeadlessCloneEngine.apiStop(requirePackage(args)) }
         )
+        "altaris_sessions" -> textResult(runBlocking { HeadlessCloneEngine.apiSessions() })
         "altaris_screenshot" -> {
             val bytes = runBlocking {
-                HeadlessCloneEngine.apiCapture(args.optInt("width", 900).coerceIn(200, 2160), 90)
+                HeadlessCloneEngine.apiCapture(
+                    args.optInt("width", 900).coerceIn(200, 2160),
+                    90,
+                    5_000,
+                    optionalPackage(args),
+                )
             } ?: throw IllegalStateException("No display frame")
             JSONObject()
                 .put("isError", false)
@@ -425,7 +451,13 @@ object McpProtocol {
             }
         )
         "altaris_tap" -> textResult(
-            runBlocking { HeadlessCloneEngine.apiTap(args.optInt("x"), args.optInt("y")) }
+            runBlocking {
+                HeadlessCloneEngine.apiTap(
+                    args.optInt("x"),
+                    args.optInt("y"),
+                    optionalPackage(args),
+                )
+            }
         )
         "altaris_swipe" -> textResult(
             runBlocking {
@@ -433,30 +465,39 @@ object McpProtocol {
                     args.optInt("x1"), args.optInt("y1"),
                     args.optInt("x2"), args.optInt("y2"),
                     args.optInt("ms", 260),
+                    optionalPackage(args),
                 )
             }
         )
         "altaris_text" -> textResult(
-            runBlocking { HeadlessCloneEngine.apiText(args.optString("text")) }
+            runBlocking {
+                HeadlessCloneEngine.apiText(args.optString("text"), optionalPackage(args))
+            }
         )
         "altaris_key" -> {
             val code = keyCode(args.optString("key")) ?: throw IllegalArgumentException("Unknown key")
-            textResult(runBlocking { HeadlessCloneEngine.apiKey(code) })
+            textResult(runBlocking { HeadlessCloneEngine.apiKey(code, optionalPackage(args)) })
         }
         "altaris_ocr" -> {
             val width = args.optInt("width", 1000).coerceIn(200, 2160)
-            val bytes = runBlocking { HeadlessCloneEngine.apiCapture(width, 92) }
-                ?: throw IllegalStateException("No display frame")
+            val bytes = runBlocking {
+                HeadlessCloneEngine.apiCapture(width, 92, 5_000, optionalPackage(args))
+            } ?: throw IllegalStateException("No display frame")
             val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
                 ?: throw IllegalStateException("Frame decode failed")
             textResult(runBlocking { OcrEngine.recognize(bitmap) })
         }
         "altaris_ui_tree" -> {
             val ctx = ControlServer.context() ?: throw IllegalStateException("App context unavailable")
-            val display = args.optInt("display", HeadlessCloneEngine.displayId.value)
-            val max = args.optInt("max", 600).coerceIn(1, 2000)
             val pkg = args.optString("package").takeIf { it.isNotBlank() }
                 ?: HeadlessCloneEngine.activeClonePackage.value
+            val display = if (args.has("display")) {
+                args.optInt("display")
+            } else {
+                HeadlessCloneEngine.displayIdFor(pkg).takeIf { it > 0 }
+                    ?: HeadlessCloneEngine.displayId.value
+            }
+            val max = args.optInt("max", 600).coerceIn(1, 2000)
             textResult(a11yObject(A11yBridge.tree(ctx, display, max, pkg)))
         }
         "altaris_ui_click" -> {
@@ -475,7 +516,13 @@ object McpProtocol {
         }
         "altaris_ui_tap_text" -> {
             val ctx = ControlServer.context() ?: throw IllegalStateException("App context unavailable")
-            val display = args.optInt("display", HeadlessCloneEngine.displayId.value)
+            val pkg = optionalPackage(args)
+            val display = if (args.has("display")) {
+                args.optInt("display")
+            } else {
+                HeadlessCloneEngine.displayIdFor(pkg).takeIf { it > 0 }
+                    ?: HeadlessCloneEngine.displayId.value
+            }
             textResult(
                 a11yObject(A11yBridge.tapText(ctx, display, args.optString("text"), args.optBoolean("exact", false)))
             )
@@ -601,6 +648,10 @@ object McpProtocol {
     private fun requirePackage(args: JSONObject): String =
         args.optString("package").takeIf { it.isNotBlank() }
             ?: throw IllegalArgumentException("package is required")
+
+    /** Optional clone package: null means "the display the viewer is showing". */
+    private fun optionalPackage(args: JSONObject): String? =
+        args.optString("package").takeIf { it.isNotBlank() }
 
     private fun keyCode(value: String): Int? {
         value.trim().toIntOrNull()?.let { return it }

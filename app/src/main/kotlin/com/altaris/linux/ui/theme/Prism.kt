@@ -35,22 +35,34 @@ object Prism {
     val PanelPad: Dp = 14.dp
 
     /** Row horizontal padding. */
-    val RowPadH: Dp = 10.dp
+    val RowPadH: Dp = 12.dp
 
     /** Row vertical padding. */
-    val RowPadV: Dp = 9.dp
+    val RowPadV: Dp = 11.dp
 
     /** Screen gutter. */
     val Gutter: Dp = 16.dp
 
     /** Vertical rhythm between blocks. */
-    val Stack: Dp = 12.dp
+    val Stack: Dp = 14.dp
 
     /** Tight rhythm inside a block. */
-    val Tight: Dp = 8.dp
+    val Tight: Dp = 10.dp
+
+    /** Gap between controls that sit side by side. */
+    val ControlGap: Dp = 10.dp
 
     /** Minimum touch target. */
     val TouchTarget: Dp = 48.dp
+
+    /** Button height — one size for every action, so rows never look ragged. */
+    val ButtonHeight: Dp = 44.dp
+
+    /** Horizontal padding inside a button. */
+    val ButtonPadH: Dp = 16.dp
+
+    /** Chip height — matches the text baseline of a row. */
+    val ChipHeight: Dp = 32.dp
 
     /** Top bar height (the reference's workspace bar). */
     val TopBarHeight: Dp = 50.dp

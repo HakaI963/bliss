@@ -10,6 +10,7 @@ usage() {
 Altaris local clone control
 
   altaris status
+  altaris sessions
   altaris clones
   altaris apps
   altaris list
@@ -19,18 +20,23 @@ Altaris local clone control
   altaris uninstall <clone-package>
   altaris launch <clone-package> [width height fps]
   altaris stop <clone-package>
-  altaris shot [out.jpg]
+  altaris shot [out.jpg] [--package pkg]
   altaris logs <clone-package> [lines]
-  altaris ocr [out.json]
-  altaris tap <x> <y>
-  altaris swipe <x1> <y1> <x2> <y2> [ms]
-  altaris text <text...>
-  altaris key <back|home|enter|tab|esc|recents|keycode>
+  altaris ocr [out.json] [--package pkg]
+  altaris tap <x> <y> [--package pkg]
+  altaris swipe <x1> <y1> <x2> <y2> [ms] [--package pkg]
+  altaris text <text...> [--package pkg]
+  altaris key <back|home|enter|tab|esc|recents|keycode> [--package pkg]
   altaris record start [fps] [width]
   altaris record stop
   altaris record status
   altaris mcp
   altaris endpoint
+
+Every clone runs on its own virtual display, so several can run at the same
+time. Pass --package <clone> to aim a screen or input command at one of them;
+without it the command uses the clone the viewer is showing.
+ALTARIS_PACKAGE does the same as --package for scripts.
 
 Default endpoint: http://127.0.0.1:47831
 EOF
@@ -116,6 +122,18 @@ jesc() {
   printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
 }
 
+# Display targeting. Several clones can run at the same time, each on its own
+# virtual display, so every input/screen command accepts `--package <clone>`
+# (or -p, or --package=<clone>). Without it the command acts on the clone the
+# viewer is showing.
+PKG="${ALTARIS_PACKAGE:-}"
+pkg_query() {
+  [ -n "$PKG" ] && printf '&package=%s' "$PKG"
+}
+pkg_field() {
+  [ -n "$PKG" ] && printf ',"package":"%s"' "$(jesc "$PKG")"
+}
+
 # Stream the APK straight into Altaris. This is the reliable path: it works for
 # /emulated, /OpenCode..., chroot /root and any other path the guest can read,
 # without requiring the Android app to see the guest filesystem.
@@ -164,8 +182,32 @@ cmd="$1"
 [ -n "$cmd" ] || { usage; exit 1; }
 shift 2>/dev/null || true
 
+# Pull a --package flag out of the argument list (any position) so the
+# positional arguments of each command stay exactly as documented.
+_rest=""
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --package|-p)
+      if [ "$#" -ge 2 ]; then PKG="$2"; shift 2; else shift; fi ;;
+    --package=*)
+      PKG="${1#--package=}"; shift ;;
+    *)
+      if [ -z "$_rest" ]; then _rest="$1"; else _rest="$_rest
+$1"; fi
+      shift ;;
+  esac
+done
+_saved_ifs=$IFS
+IFS='
+'
+set -f
+set -- $_rest
+set +f
+IFS=$_saved_ifs
+
 case "$cmd" in
   status) get /status ;;
+  sessions) get /sessions ;;
   clones|list|ps) get /clones ;;
   apps) get /apps ;;
   endpoint) echo "$BASE" ;;
@@ -202,32 +244,32 @@ case "$cmd" in
     post /stop "{\"package\":\"$(jesc "$1")\"}" ;;
   shot)
     out="${1:-altaris-shot-$(date +%s).jpg}"
-    get_file "/screenshot?width=${ALTARIS_SHOT_WIDTH:-900}" "$out" && echo "$out" ;;
+    get_file "/screenshot?width=${ALTARIS_SHOT_WIDTH:-900}$(pkg_query)" "$out" && echo "$out" ;;
   logs)
     [ -n "$1" ] || { echo "altaris logs: package required" >&2; exit 1; }
     get "/logs?package=$(jesc "$1")&lines=${2:-300}" ;;
   ocr)
     out="${1:-}"
     if [ -n "$out" ]; then
-      get_file "/ocr?width=${ALTARIS_OCR_WIDTH:-1000}" "$out" && echo "$out"
+      get_file "/ocr?width=${ALTARIS_OCR_WIDTH:-1000}$(pkg_query)" "$out" && echo "$out"
     else
-      get "/ocr?width=${ALTARIS_OCR_WIDTH:-1000}"
+      get "/ocr?width=${ALTARIS_OCR_WIDTH:-1000}$(pkg_query)"
     fi
     ;;
   tap)
     [ -n "$1" ] && [ -n "$2" ] || { echo "altaris tap: x y required" >&2; exit 1; }
-    post /tap "{\"x\":$1,\"y\":$2}" ;;
+    post /tap "{\"x\":$1,\"y\":$2$(pkg_field)}" ;;
   swipe)
     [ -n "$1" ] && [ -n "$2" ] && [ -n "$3" ] && [ -n "$4" ] || {
       echo "altaris swipe: x1 y1 x2 y2 [ms] required" >&2; exit 1; }
-    post /swipe "{\"x1\":$1,\"y1\":$2,\"x2\":$3,\"y2\":$4,\"ms\":${5:-260}}" ;;
+    post /swipe "{\"x1\":$1,\"y1\":$2,\"x2\":$3,\"y2\":$4,\"ms\":${5:-260}$(pkg_field)}" ;;
   text)
     [ -n "$1" ] || { echo "altaris text: text required" >&2; exit 1; }
     joined="$*"
-    post /text "{\"text\":\"$(jesc "$joined")\"}" ;;
+    post /text "{\"text\":\"$(jesc "$joined")\"$(pkg_field)}" ;;
   key)
     [ -n "$1" ] || { echo "altaris key: key required" >&2; exit 1; }
-    post /key "{\"key\":\"$(jesc "$1")\"}" ;;
+    post /key "{\"key\":\"$(jesc "$1")\"$(pkg_field)}" ;;
   record)
     sub="$1"
     case "$sub" in
