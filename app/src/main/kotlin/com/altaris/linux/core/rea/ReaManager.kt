@@ -151,7 +151,7 @@ object ReaManager {
             val present = if (dep.kind == "ghidra") {
                 bins.contains("ghidra")
             } else {
-                dep.probesFor(dep).any { bins.contains(it) }
+                ReaCatalog.probesFor(dep).any { bins.contains(it) }
             }
             if (present) ids.add(dep.id)
         }
@@ -345,7 +345,7 @@ object ReaManager {
                         "installing " + dep.label + " via " + manager + ": " +
                             batches.joinToString(" | ") { it.joinToString(" ") }
                     )
-                    val probes = dep.probesFor(dep).joinToString(",")
+                    val probes = ReaCatalog.probesFor(dep).joinToString(",")
                     val script = "sh " + shellPath("install-tool.sh") + " " +
                         GuestExec.shellQuote(manager) + " " + GuestExec.shellQuote(probes) + " " +
                         batches.joinToString(" ") { GuestExec.shellQuote(it.joinToString(",")) }
