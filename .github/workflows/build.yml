@@ -85,6 +85,9 @@ jobs:
           # The REA installers are shipped as assets; a missing one used to fail
           # silently on device, so fail the build instead.
           unzip -l "$APK" | grep -E "assets/scripts/rea/(rea-core-install|install-tool|ghidra-install|ghidra-decompiler-build|ghidra-analyze)\.sh"
+          # The URL shim is the only way a guest can open a link; a missing one
+          # makes every CLI sign-in link unopenable, so pin it here too.
+          unzip -l "$APK" | grep -E "assets/scripts/altaris-(open|cli)\.sh"
           unzip -l "$APK" | grep -E "bootstrap\.tar|libbash\.so|libproot\.so|assets/clone\.keystore" | head -n 10
           sha256sum "$APK" | tee apk-sha256.txt
 
