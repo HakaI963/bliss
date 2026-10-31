@@ -94,19 +94,29 @@ enum class AltarisSection {
 /**
  * Accent colour of a section.
  *
- * Altaris is monochrome: every section shares the identity's action colour,
- * so the chrome never competes with the terminal or the clone display.
+ * Altaris keeps one cool accent (cyan → blue) for live state and for the
+ * analysis surfaces; the chrome itself stays ink-on-white so the terminal and
+ * the clone display keep the visual weight. Quinn and REA are the two places
+ * where the accent is allowed to carry a whole screen.
  */
 @Composable
-fun sectionAccent(section: AltarisSection): Color = LocalAltarisPalette.current.action
+fun sectionAccent(section: AltarisSection): Color = when (section) {
+    AltarisSection.QUINN, AltarisSection.TOOLS -> LocalAltarisPalette.current.accent
+    else -> LocalAltarisPalette.current.action
+}
 
-/** A neutral ramp for a section accent. */
+/** A cyan → blue ramp for a section accent. */
 @Composable
 fun sectionAccentBrush(section: AltarisSection): List<Color> {
+    val palette = LocalAltarisPalette.current
     val accent = sectionAccent(section)
     return listOf(
         accent,
-        accent.copy(alpha = 0.72f),
+        if (section == AltarisSection.QUINN || section == AltarisSection.TOOLS) {
+            palette.accentBright
+        } else {
+            accent.copy(alpha = 0.72f)
+        },
         accent.copy(alpha = 0.18f),
     )
 }

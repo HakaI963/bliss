@@ -120,7 +120,7 @@ object StateManager {
     // Persisted under the "scheme" key of the same "theme_prefs" file (see
     // ThemePreferences.getScheme/setScheme). The observable lets AltarisTheme
     // and the Settings picker restyle the app with no extra plumbing.
-    private val _scheme = MutableStateFlow(AltarisScheme.GRAPHITE)
+    private val _scheme = MutableStateFlow(AltarisScheme.DAYLIGHT)
     val scheme: StateFlow<AltarisScheme> = _scheme.asStateFlow()
 
     /**
@@ -129,11 +129,11 @@ object StateManager {
      */
     fun getScheme(context: Context): AltarisScheme {
         val prefs = context.getSharedPreferences("theme_prefs", Context.MODE_PRIVATE)
-        val schemeName = prefs.getString("scheme", AltarisScheme.GRAPHITE.name)
+        val schemeName = prefs.getString("scheme", AltarisScheme.DAYLIGHT.name)
         val scheme = try {
-            AltarisScheme.valueOf(schemeName ?: AltarisScheme.GRAPHITE.name)
+            AltarisScheme.valueOf(schemeName ?: AltarisScheme.DAYLIGHT.name)
         } catch (e: IllegalArgumentException) {
-            AltarisScheme.GRAPHITE
+            AltarisScheme.DAYLIGHT
         }
         _scheme.value = scheme
         return scheme

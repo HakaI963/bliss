@@ -37,10 +37,11 @@ import org.junit.Rule
 import org.junit.Test
 
 /**
- * The three Altaris identities, rendered on the JVM by Paparazzi.
+ * The Altaris identity, rendered on the JVM by Paparazzi.
  *
- * Each board shows the real shell: the command bar, the home banner with
- * the anime artwork, a panel with rows, a primary action and the dock.
+ * There is one identity (Daylight). The board shows the real shell: the
+ * command bar, the home banner with the anime artwork, a panel with rows, a
+ * primary action and the dock.
  */
 class PrismDesignPreviewTest {
 
@@ -52,17 +53,11 @@ class PrismDesignPreviewTest {
     )
 
     @Test
-    fun identity_graphite() = board(AltarisScheme.GRAPHITE, "identity_graphite")
-
-    @Test
-    fun identity_midnight_slate() = board(AltarisScheme.MIDNIGHT_SLATE, "identity_midnight_slate")
-
-    @Test
-    fun identity_warm_neutral() = board(AltarisScheme.WARM_NEUTRAL, "identity_warm_neutral")
+    fun identity_daylight() = board(AltarisScheme.DAYLIGHT, "identity_daylight")
 
     private fun board(scheme: AltarisScheme, name: String) {
         paparazzi.snapshot(name = name) {
-            AltarisTheme(themeMode = ThemeMode.DARK, scheme = scheme) {
+            AltarisTheme(themeMode = ThemeMode.LIGHT, scheme = scheme) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background,

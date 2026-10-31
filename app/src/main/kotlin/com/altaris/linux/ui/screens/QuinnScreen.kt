@@ -2,108 +2,156 @@ package com.altaris.linux.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.altaris.linux.ui.components.AltarisTitle
-import com.altaris.linux.ui.components.PrismNote
+import com.altaris.linux.core.rea.ReaDistro
 import com.altaris.linux.ui.components.PrismOrb
+import com.altaris.linux.ui.screens.quinn.QuinnChatTab
+import com.altaris.linux.ui.screens.quinn.QuinnReaTab
 import com.altaris.linux.ui.theme.AltarisSection
 import com.altaris.linux.ui.theme.Prism
 import com.altaris.linux.ui.theme.altarisMutedText
 import com.altaris.linux.ui.theme.sectionAccent
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+
+/** Quinn's two surfaces. */
+private enum class QuinnTab(val label: String) {
+    CHAT("Chat"),
+    REA("REA"),
+}
 
 /**
  * Quinn — the AI surface.
  *
- * Intentionally empty for this build: the tab and its identity are in place so
- * the rest of the app (dock order, accent, palette entries) is final, and the
- * assistant lands here without moving anything again.
- *
- * The placeholder is a calm, centred mark rather than an empty list: a blank
- * screen with a spinner reads as a failure, and this is a deliberate state.
+ * Two sub-tabs instead of a page title: **Chat** talks to every coding agent
+ * installed in every distro, and **REA** is the analysis environment. The
+ * header is a compact identity row plus the tab switch, so the content gets the
+ * screen.
  */
 @Composable
 fun QuinnScreen(modifier: Modifier = Modifier) {
+    val context = LocalContext.current
     val accent = sectionAccent(AltarisSection.QUINN)
+    var tab by remember { mutableStateOf(QuinnTab.CHAT) }
+    var rea by remember { mutableStateOf(ReaDistro.state.value) }
+
+    LaunchedEffect(Unit) {
+        rea = withContext(Dispatchers.IO) {
+            ReaDistro.refresh(context)
+            ReaDistro.state.value
+        }
+    }
+
     Column(
         modifier = modifier
             .fillMaxSize()
             .padding(horizontal = Prism.Gutter)
-            .padding(top = 10.dp),
+            .padding(top = 8.dp),
     ) {
-        AltarisTitle(
-            "Quinn",
-            "Your assistant for Altaris",
-            accent,
-        )
+        QuinnHeader(accent, tab, rea.installed) { tab = it }
         Spacer(Modifier.height(Prism.Stack))
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f),
-            contentAlignment = Alignment.Center,
-        ) {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(Prism.Tight),
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(72.dp)
-                        .clip(RoundedCornerShape(Prism.TileRadius * 2))
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
-                        .border(
-                            1.dp,
-                            MaterialTheme.colorScheme.outline,
-                            RoundedCornerShape(Prism.TileRadius * 2),
-                        ),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    PrismOrb(active = false, accent = accent)
-                }
-                Spacer(Modifier.height(Prism.Tight))
-                Text(
-                    text = "Quinn is not here yet",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    textAlign = TextAlign.Center,
-                )
-                Text(
-                    text = "This space is reserved for the assistant. It will answer questions " +
-                        "about your distros, run installs and report what finished, using " +
-                        "whichever coding agent you already have installed.",
-                    fontSize = 12.sp,
-                    lineHeight = 17.sp,
-                    color = altarisMutedText(),
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(horizontal = 8.dp),
-                )
-                Spacer(Modifier.height(Prism.Tight))
-                PrismNote(
-                    "Nothing to set up, and nothing running in the background.",
-                    color = altarisMutedText(),
+        when (tab) {
+            QuinnTab.CHAT -> QuinnChatTab(accent, Modifier.weight(1f))
+            QuinnTab.REA -> QuinnReaTab(accent, Modifier.weight(1f))
+        }
+    }
+}
+
+@Composable
+private fun QuinnHeader(
+    accent: Color,
+    current: QuinnTab,
+    reaInstalled: Boolean,
+    onSelect: (QuinnTab) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        PrismOrb(active = true, accent = accent)
+        Spacer(Modifier.width(8.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                "QUINN",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = 1.4.sp,
+                color = accent,
+            )
+            Text(
+                if (reaInstalled) "Master of your agents · REA ready"
+                else "Master of your agents · REA not installed",
+                fontSize = 10.sp,
+                color = altarisMutedText(),
+                maxLines = 1,
+            )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            QuinnTab.entries.forEach { entry ->
+                HeaderTab(
+                    label = entry.label,
+                    accent = accent,
+                    selected = entry == current,
+                    onClick = { onSelect(entry) },
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun HeaderTab(
+    label: String,
+    accent: Color,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(Prism.ChipRadius)
+    Box(
+        modifier = Modifier
+            .clip(shape)
+            .background(if (selected) accent.copy(alpha = 0.12f) else Color.Transparent)
+            .border(1.dp, if (selected) accent else scheme.outline, shape)
+            .clickable(onClick = onClick)
+            .heightIn(min = Prism.ChipHeight)
+            .padding(horizontal = 14.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            label,
+            fontSize = 11.5.sp,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+            color = if (selected) accent else scheme.onSurface,
+        )
     }
 }

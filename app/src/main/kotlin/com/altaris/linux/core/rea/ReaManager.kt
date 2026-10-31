@@ -3,6 +3,7 @@ package com.altaris.linux.core.rea
 import android.content.Context
 import android.util.Log
 import com.altaris.linux.core.control.ControlServer
+import com.altaris.linux.core.install.DistroInstallProfile
 import com.altaris.linux.core.terminal.DistroFsCache
 import com.altaris.linux.core.terminal.HostCommandBuilder
 import com.altaris.linux.core.terminal.ShellCommandRunner
@@ -14,6 +15,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
 
 /**
  * Install, run and publish REA inside an Altaris distro.
@@ -107,13 +109,46 @@ object ReaManager {
     @Volatile private var toolsCache: JSONArray? = null
 
     /** Installed distro ids, cheapest source the app already maintains. */
+    /**
+     * Distros the user may install REA into.
+     *
+     * The hidden analysis distro is filtered out: it already has REA, and
+     * offering it in the picker would expose a distro the app must not list.
+     */
     suspend fun installedDistros(ctx: Context): List<String> = withContext(Dispatchers.IO) {
-        runCatching { DistroFsCache.get(ctx.applicationContext).installed.sorted() }
-            .getOrDefault(emptyList())
+        runCatching {
+            DistroFsCache.get(ctx.applicationContext).installed
+                .filterNot { DistroInstallProfile.isHidden(it) }
+                .sorted()
+        }.getOrDefault(emptyList())
     }
 
     fun defaultDistro(ids: List<String>): String? =
         ids.firstOrNull { it == "debian" } ?: ids.firstOrNull()
+
+    /**
+     * True when REA's core (Node + the `rea` binary) is present in [distroId].
+     *
+     * A stat check, not a probe: the REA tab asks this on every recomposition
+     * to decide between "not installed" and the live dashboard, so it must not
+     * spawn a guest process.
+     */
+    fun isInstalledIn(ctx: Context, distroId: String): Boolean {
+        if (distroId.isBlank()) return false
+        val profile = DistroInstallProfile.forId(distroId) ?: return false
+        val rootfs: File = when (profile.method) {
+            "chroot" -> profile.chrootPath?.let { File(it) } ?: return false
+            else -> {
+                if (profile.prootName.isBlank()) return false
+                File(
+                    ctx.filesDir,
+                    "usr/var/lib/proot-distro/containers/${profile.prootName}/rootfs"
+                )
+            }
+        }
+        val rea = File(rootfs, REA_BIN.removePrefix("/"))
+        return rea.isFile
+    }
 
     fun cachedTools(): JSONArray? = toolsCache
 
@@ -615,6 +650,19 @@ object ReaManager {
             update { it.copy(running = false, toolCount = 0, busy = "") }
             _status.value
         }
+    }
+
+    /**
+     * Tool catalog for [distroId], starting REA first when it is not running.
+     *
+     * Quinn's REA tab needs the catalog before it can ask a model what to call;
+     * without this it would have to know the REA lifecycle, which belongs here.
+     */
+    suspend fun probeTools(ctx: Context, distroId: String): JSONArray = withContext(Dispatchers.IO) {
+        if (active?.isAlive != true) {
+            runCatching { start(ctx, distroId) }
+        }
+        toolsCache ?: JSONArray()
     }
 
     suspend fun call(name: String, arguments: JSONObject, timeoutMs: Long = 600_000L): JSONObject =

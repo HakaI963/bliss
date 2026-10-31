@@ -589,19 +589,10 @@ class MainActivity : ComponentActivity() {
         }
         requestNotificationPermissionIfNeeded()
         setContent {
-            // Midnight is the default. Day and System are explicit user choices.
-            val themePreferences = remember { ThemePreferences(this@MainActivity) }
-            remember { themePreferences.migrateToMidnight(); true }
-            var currentThemeMode by remember {
-                mutableStateOf(
-                    when (val stored = themePreferences.getThemeMode()) {
-                        ThemeMode.LIGHT, ThemeMode.DARK, ThemeMode.SYSTEM -> stored
-                        else -> ThemeMode.DARK
-                    }
-                )
-            }
-
-            AltarisTheme(themeMode = currentThemeMode) {
+            // One identity: the workspace is always light. The terminal keeps
+            // its own dark surface (see TerminalScreen), which is a deliberate
+            // contrast rather than a theme switch.
+            AltarisTheme(themeMode = ThemeMode.LIGHT) {
                 val onboardingComplete = StateManager.isOnboardingComplete(this@MainActivity)
                 val showPhantomPrompt by com.altaris.linux.core.system.PhantomProcessFixer.promptVisible.collectAsState()
                 if (showPhantomPrompt) {
@@ -909,11 +900,7 @@ class MainActivity : ComponentActivity() {
                                     onNavigateToChrootSettings = { currentScreen = Screen.SETTINGS_CHROOT },
                                     onNavigateToProotSettings = { currentScreen = Screen.SETTINGS_PROOT },
                                     onNavigateToLegacyTermuxSettings = { currentScreen = Screen.SETTINGS_LEGACY_TERMUX },
-                                    currentTheme = currentThemeMode,
-                                    onThemeChanged = { mode ->
-                                        currentThemeMode = mode
-                                        themePreferences.setThemeMode(mode)
-                                    }
+                                    currentTheme = ThemeMode.LIGHT
                                 )
                             }
                         }
@@ -1141,11 +1128,7 @@ class MainActivity : ComponentActivity() {
                                 onNavigateToLegacyTermuxSettings = {
                                     currentScreen = Screen.SETTINGS_LEGACY_TERMUX
                                 },
-                                currentTheme = currentThemeMode,
-                                onThemeChanged = { mode ->
-                                    currentThemeMode = mode
-                                    themePreferences.setThemeMode(mode)
-                                }
+                                currentTheme = ThemeMode.LIGHT
                             )
                         }
                         Screen.SETTINGS_TERMINAL -> {

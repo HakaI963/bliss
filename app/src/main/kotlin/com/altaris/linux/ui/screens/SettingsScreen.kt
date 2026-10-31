@@ -12,7 +12,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -76,8 +75,6 @@ import com.altaris.linux.ui.components.PrismOrb
 import com.altaris.linux.ui.components.PrismRow
 import com.altaris.linux.ui.components.PrismSectionLabel
 import com.altaris.linux.ui.components.PrismSegmented
-import com.altaris.linux.ui.theme.AltarisPalettes
-import com.altaris.linux.ui.theme.AltarisScheme
 import com.altaris.linux.ui.theme.AltarisSection
 import com.altaris.linux.ui.theme.Prism
 import com.altaris.linux.ui.theme.rememberStaggerEntrance
@@ -129,8 +126,6 @@ fun SettingsScreen(
 
     // Theme palette (persisted via StateManager; applied by AltarisTheme).
 
-    // Colour scheme (persisted via StateManager; applied by AltarisTheme).
-    val scheme by StateManager.scheme.collectAsState()
     val homeArt by StateManager.homeArt.collectAsState()
     val customArt by StateManager.customHomeArt.collectAsState()
     val customArtActive by StateManager.homeArtIsCustom.collectAsState()
@@ -163,12 +158,8 @@ fun SettingsScreen(
         }
     }
 
-    // The swatches follow the active mode, like the surfaces do.
-    val darkMode = when (currentTheme) {
-        ThemeMode.DARK -> true
-        ThemeMode.LIGHT -> false
-        else -> isSystemInDarkTheme()
-    }
+    // One identity now: the workspace is always light. The old per-mode
+    // swatch logic is gone with the picker.
 
     // Shared-storage grant refreshes on resume (backend preserved).
     val storageDeclared = SharedStorageAccess.declared(context)
@@ -258,18 +249,9 @@ fun SettingsScreen(
             )
         }
 
-        // Identity — the three Altaris identities. Picking one restyles the app.
-        SettingsGroup("Identity", accent, Modifier.staggerIn(2, entrance)) {
-            AltarisScheme.entries.forEachIndexed { index, entry ->
-                SchemeRow(
-                    scheme = entry,
-                    selected = entry == scheme,
-                    accent = accent,
-                    onClick = { StateManager.setScheme(context, entry) },
-                    divider = index < AltarisScheme.entries.lastIndex
-                )
-            }
-        }
+        // The identity picker is gone: Altaris has one fixed workspace
+        // (Daylight). Keeping the row would offer a choice that no longer
+        // exists, so the group is removed rather than disabled.
 
         // Home artwork — the anime banner on the home screen.
         SettingsGroup("Home artwork", accent, Modifier.staggerIn(4, entrance)) {
@@ -521,67 +503,6 @@ private fun SettingsGroup(
         PrismSectionLabel(label, accent)
         PrismCard(accent = accent) { content() }
     }
-}
-
-/**
- * One identity in the scheme list: a live gradient swatch, the label and the
- * tagline. Tapping it persists the choice, which restyles the app at once.
- */
-@Composable
-private fun SchemeRow(
-    scheme: AltarisScheme,
-    selected: Boolean,
-    accent: Color,
-    onClick: () -> Unit,
-    divider: Boolean = false,
-    modifier: Modifier = Modifier
-) {
-    val palette = remember(scheme) { AltarisPalettes.of(scheme) }
-    val shape = RoundedCornerShape(12.dp)
-    PrismRow(
-        title = scheme.label,
-        subtitle = scheme.tagline,
-        accent = accent,
-        modifier = modifier,
-        leading = {
-            // A tiny preview of the identity: its background, its chrome and
-            // its action colour.
-            Box(
-                modifier = Modifier
-                    .size(38.dp)
-                    .clip(shape)
-                    .background(palette.base)
-                    .border(1.dp, palette.onSurface.copy(alpha = 0.22f), shape)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(11.dp)
-                        .background(palette.surface)
-                )
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(5.dp)
-                        .size(7.dp)
-                        .clip(CircleShape)
-                        .background(palette.action)
-                )
-            }
-        },
-        trailing = {
-            if (selected) {
-                Icon(
-                    Icons.Default.Check,
-                    contentDescription = "Selected",
-                    tint = accent,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-        },
-        onClick = onClick,
-        divider = divider
-    )
 }
 
 /**

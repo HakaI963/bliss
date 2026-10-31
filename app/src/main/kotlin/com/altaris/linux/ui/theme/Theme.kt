@@ -48,10 +48,12 @@ private fun colorSchemeFor(palette: AltarisPalette): ColorScheme {
         onSecondary = palette.base,
         secondaryContainer = palette.surfaceRaised,
         onSecondaryContainer = palette.onSurface,
-        tertiary = palette.onSurfaceVariant,
-        onTertiary = palette.base,
-        tertiaryContainer = palette.surfaceRaised,
-        onTertiaryContainer = palette.onSurface,
+        // The cool accent lives in tertiary so components that already read
+        // "tertiary" (badges, live state) pick it up without per-screen work.
+        tertiary = palette.accent,
+        onTertiary = Color.White,
+        tertiaryContainer = palette.accentWash,
+        onTertiaryContainer = palette.accentDeep,
         background = palette.base,
         onBackground = palette.onSurface,
         surface = palette.surface,
@@ -103,10 +105,10 @@ private fun applyLegacyTokens(palette: AltarisPalette) {
 /**
  * The app theme.
  *
- * [scheme] picks the identity (surfaces, glass, gradients). Passing the
- * default value means "follow the persisted choice", so the Settings picker
- * can switch identities without a restart. Passing a scheme overrides the
- * persisted choice for that composition.
+ * [scheme] picks the identity. There is exactly one (Daylight); the parameter
+ * stays so callers and snapshot tests can pin it explicitly. [themeMode] is
+ * kept only for source compatibility with older call sites — the identity
+ * decides light/dark, never the legacy preference.
  */
 @Composable
 fun AltarisTheme(
@@ -118,7 +120,7 @@ fun AltarisTheme(
     val context = LocalContext.current
     remember(context) {
         runCatching { StateManager.getScheme(context) }
-            .getOrDefault(AltarisScheme.GRAPHITE)
+            .getOrDefault(AltarisScheme.DAYLIGHT)
     }
     val persistedScheme by StateManager.scheme.collectAsState()
 

@@ -58,11 +58,11 @@ class ThemePreferences(context: Context) {
      * fall back to the default identity so a downgrade never breaks the UI.
      */
     fun getScheme(): AltarisScheme {
-        val name = prefs.getString("scheme", AltarisScheme.GRAPHITE.name)
+        val name = prefs.getString("scheme", AltarisScheme.DAYLIGHT.name)
         return try {
-            AltarisScheme.valueOf(name ?: AltarisScheme.GRAPHITE.name)
+            AltarisScheme.valueOf(name ?: AltarisScheme.DAYLIGHT.name)
         } catch (e: IllegalArgumentException) {
-            AltarisScheme.GRAPHITE
+            AltarisScheme.DAYLIGHT
         }
     }
 

@@ -28,6 +28,14 @@ object ChrootPaths {
     /** Alpine 3.24 chroot rootfs (coexists with Debian). */
     const val ALPINE_CHROOT_PATH = "$CHROOTS_DIR/alpine"
 
+    /**
+     * Hidden REA analysis chroot.
+     *
+     * Deliberately not named after a distro: it is Altaris's own analysis
+     * environment, never listed in Distros or the terminal picker.
+     */
+    const val REA_CHROOT_PATH = "$CHROOTS_DIR/rea"
+
     const val FEDORA_CHROOT_PATH = "$CHROOTS_DIR/fedora"
     const val VOID_CHROOT_PATH = "$CHROOTS_DIR/void"
     const val OPENSUSE_CHROOT_PATH = "$CHROOTS_DIR/opensuse"

@@ -10,6 +10,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Storage
@@ -215,7 +216,7 @@ private fun LandscapeLayout(
 private fun OnboardingGetStartedButton(onGetStarted: () -> Unit) {
     Button(
         onClick = onGetStarted,
-        colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black),
+        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary),
         modifier = Modifier
             .fillMaxWidth()
             .height(54.dp),
@@ -223,7 +224,7 @@ private fun OnboardingGetStartedButton(onGetStarted: () -> Unit) {
     ) {
         Text(
             "Get Started",
-            color = Color.Black,
+            color = MaterialTheme.colorScheme.onPrimary,
             fontSize = 17.sp,
             fontWeight = FontWeight.Bold
         )

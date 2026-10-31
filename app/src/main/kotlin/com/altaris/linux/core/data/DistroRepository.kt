@@ -240,7 +240,14 @@ object DistroRepository {
         "rpm/common/setup/setup_rpm_family.sh"
     )
 
-    val supportedDistros = listOf(
+    /**
+     * Every distro the user may see and install.
+     *
+     * Hidden profiles (the REA analysis distro) are filtered here, at the one
+     * place every list reads from, so a hidden distro can never leak into
+     * Distros, the terminal picker, counts or the agent matrix.
+     */
+    val allSupportedDistros = listOf(
         // Currently Available
         Distro(
             id = "debian",
@@ -560,6 +567,10 @@ object DistroRepository {
             components = rpmComponents
         ),
     )
+
+    val supportedDistros: List<Distro> = allSupportedDistros.filterNot {
+        com.altaris.linux.core.install.DistroInstallProfile.isHidden(it.id)
+    }
 
     /**
      * Installable PRoot or Chroot card for the same family as [id].

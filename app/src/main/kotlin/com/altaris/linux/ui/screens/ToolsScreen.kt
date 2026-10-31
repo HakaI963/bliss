@@ -61,6 +61,7 @@ import com.altaris.linux.core.control.ControlServer
 import com.altaris.linux.core.control.DetectedAgent
 import com.altaris.linux.core.control.DistroAgentReport
 import com.altaris.linux.core.rea.ReaCatalog
+import com.altaris.linux.core.rea.ReaDistro
 import com.altaris.linux.core.rea.ReaManager
 import com.altaris.linux.ui.components.AltarisTitle
 import com.altaris.linux.ui.components.PrismActions
@@ -678,103 +679,104 @@ private fun AutomationCard(context: Context, accent: Color) {
 @Composable
 private fun ReaCard(context: Context, accent: Color) {
     val scope = rememberCoroutineScope()
-    val status by ReaManager.status.collectAsState()
-    var distros by remember { mutableStateOf<List<String>>(emptyList()) }
-    var selected by remember { mutableStateOf("") }
+    var state by remember { mutableStateOf(ReaDistro.state.value) }
+    var method by remember { mutableStateOf(ReaDistro.Method.PROOT) }
     var tick by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(tick) {
-        val ids = ReaManager.installedDistros(context)
-        distros = ids
-        val pick = selected.takeIf { it.isNotBlank() && ids.contains(it) }
-            ?: ReaManager.defaultDistro(ids).orEmpty()
-        selected = pick
-        if (pick.isNotBlank()) ReaManager.probe(context, pick)
+        state = withContext(Dispatchers.IO) {
+            ReaDistro.refresh(context)
+            ReaDistro.state.value
+        }
     }
 
     PrismSectionLabel("Reverse engineering", accent)
     PrismCard(accent = accent) {
         PrismRow(
-            title = "REA",
+            title = "REA analysis environment",
             subtitle = when {
-                status.busy.isNotBlank() -> status.busy
-                status.running -> "Server running · ${status.toolCount} tools"
-                status.installed -> "Installed · ${status.reaVersion} · Node ${status.nodeVersion}"
-                selected.isBlank() -> "Install a distro first"
-                else -> "Not installed in $selected"
+                state.busy.isNotBlank() -> state.busy
+                state.installed && state.ready -> "Installed (" + (state.method?.label ?: "proot") + ") · used by Quinn"
+                state.installed -> "Installed, REA core missing"
+                else -> "Not installed"
             },
             accent = accent,
-            leading = { PrismOrb(active = status.running, accent = accent) },
+            leading = { PrismOrb(active = state.installed && state.ready, accent = accent) },
             trailing = {
                 PrismChip(
                     when {
-                        status.running -> "Running"
-                        status.installed -> "Stopped"
+                        state.installed -> "Installed"
                         else -> "Missing"
                     },
                     accent,
-                    selected = status.running,
+                    selected = state.installed,
                 )
             },
         )
-        if (distros.isNotEmpty()) {
-            Spacer(Modifier.height(Prism.Tight))
-            Row(
-                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(Prism.ControlGap),
-            ) {
-                distros.forEach { id ->
-                    PrismChip(
-                        id,
-                        accent,
-                        selected = id == selected,
-                        onClick = {
-                            selected = id
-                            scope.launch { ReaManager.probe(context, id) }
-                        },
-                    )
-                }
-            }
+
+        Spacer(Modifier.height(Prism.Tight))
+        PrismNote(
+            "REA runs inside its own private distro that Quinn creates here, so it " +
+                "never touches your distros and no MCP link is needed. Pick how it runs:"
+        )
+        Spacer(Modifier.height(Prism.Tight))
+        Row(horizontalArrangement = Arrangement.spacedBy(Prism.ControlGap)) {
+            PrismChip(
+                "proot · no root",
+                accent,
+                selected = method == ReaDistro.Method.PROOT,
+                onClick = { method = ReaDistro.Method.PROOT },
+            )
+            PrismChip(
+                "chroot · needs root",
+                accent,
+                selected = method == ReaDistro.Method.CHROOT,
+                onClick = { method = ReaDistro.Method.CHROOT },
+            )
         }
+        if (method == ReaDistro.Method.CHROOT && !state.chrootPossible) {
+            Spacer(Modifier.height(Prism.Tight))
+            PrismNote(
+                "Root is not available, so chroot cannot be used. proot works without it.",
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
+
         Spacer(Modifier.height(Prism.Stack))
         PrismActions {
             PrismButton(
-                text = if (status.installed) "Reinstall REA core" else "Install REA core",
+                text = when {
+                    state.installed -> "Reinstall analysis environment"
+                    else -> "Install analysis environment"
+                },
                 accent = accent,
                 icon = Icons.Default.PlayArrow,
                 modifier = Modifier.fillMaxWidth(),
-                enabled = selected.isNotBlank() && status.busy.isBlank(),
+                enabled = state.busy.isBlank() &&
+                    (method != ReaDistro.Method.CHROOT || state.chrootPossible),
             ) {
                 scope.launch {
-                    ReaManager.install(context, selected)
+                    ReaDistro.install(context, method)
                     tick++
                 }
             }
-            // Full-width, one per row: "Register in agents" is long enough that
-            // two half-width buttons truncate their labels on a phone.
-            PrismButton(
-                text = if (status.running) "Stop server" else "Start server",
-                accent = accent,
-                modifier = Modifier.fillMaxWidth(),
-                enabled = status.installed && status.busy.isBlank(),
-            ) {
-                scope.launch {
-                    if (status.running) ReaManager.stop()
-                    else ReaManager.start(context, selected)
+            if (state.installed) {
+                PrismSecondaryButton(
+                    text = "Remove analysis environment",
+                    accent = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = state.busy.isBlank(),
+                ) {
+                    scope.launch {
+                        ReaDistro.uninstall(context)
+                        tick++
+                    }
                 }
             }
-            PrismSecondaryButton(
-                text = "Register MCP in installed agents",
-                accent = accent,
-                modifier = Modifier.fillMaxWidth(),
-                enabled = status.installed && status.busy.isBlank(),
-            ) {
-                scope.launch { ReaManager.registerAgents(context, selected) }
-            }
         }
-        if (status.error.isNotBlank()) {
+        if (state.error.isNotBlank()) {
             Spacer(Modifier.height(Prism.Tight))
-            PrismNote(status.error, color = MaterialTheme.colorScheme.error)
+            PrismNote(state.error, color = MaterialTheme.colorScheme.error)
         }
     }
 }
@@ -785,6 +787,8 @@ private fun ReaToolsCard(context: Context, accent: Color) {
     val status by ReaManager.status.collectAsState()
     val manager = status.packageManager
     val busy = status.busy.isNotBlank()
+    // Tools live in the hidden REA distro, not in a distro the user picks.
+    val reaDistro = ReaDistro.state.collectAsState().value
 
     val installable = ReaCatalog.DEPENDENCIES.filter { dep ->
         dep.kind != "license" && dep.id !in status.available
@@ -793,11 +797,14 @@ private fun ReaToolsCard(context: Context, accent: Color) {
     PrismSectionLabel("Analysis tools", accent)
     PrismCard(accent = accent) {
         PrismNote(
-            if (manager.isBlank()) {
-                "Pick a distro above. Package manager not detected yet."
-            } else {
-                "Installed through $manager inside the distro. Each tool is installed on its " +
-                    "own, so one unavailable package no longer blocks the others."
+            when {
+                !reaDistro.installed ->
+                    "Install the analysis environment above first; the tools go into it."
+                manager.isBlank() ->
+                    "Detecting the package manager in the analysis environment…"
+                else ->
+                    "Installed through $manager inside the REA environment. Each tool is " +
+                        "installed on its own, so one unavailable package never blocks the others."
             }
         )
         Spacer(Modifier.height(Prism.Tight))
@@ -838,8 +845,9 @@ private fun ReaToolsCard(context: Context, accent: Color) {
                         onClick = when {
                             license || installed || busy || !supported -> null
                             else -> ({
+                                val target = reaDistro.method?.id ?: status.distroId
                                 scope.launch {
-                                    ReaManager.install(context, status.distroId, listOf(dep.id))
+                                    ReaManager.install(context, target, listOf(dep.id))
                                 }
                             })
                         },
@@ -854,14 +862,15 @@ private fun ReaToolsCard(context: Context, accent: Color) {
                 accent = accent,
                 icon = Icons.Default.PlayArrow,
                 modifier = Modifier.fillMaxWidth(),
-                enabled = !busy && status.distroId.isNotBlank(),
+                enabled = !busy && reaDistro.installed,
             ) {
                 scope.launch {
                     val ids = installable
                         .filter { it.kind != "ghidra" }
                         .filter { manager.isBlank() || it.kind != "package" || ReaCatalog.packagedFor(it, manager) }
                         .map { it.id }
-                    if (ids.isNotEmpty()) ReaManager.install(context, status.distroId, ids)
+                    val target = reaDistro.method?.id ?: status.distroId
+                    if (ids.isNotEmpty()) ReaManager.install(context, target, ids)
                 }
             }
         }
@@ -887,6 +896,7 @@ private fun ReaGhidraCard(context: Context, accent: Color) {
     var output by remember { mutableStateOf("") }
     var analyzing by remember { mutableStateOf(false) }
     val ghidraReady = status.available.contains("ghidra")
+    val reaDistro = ReaDistro.state.collectAsState().value
 
     PrismSectionLabel("Ghidra analysis", accent)
     PrismCard(accent = accent) {
@@ -921,13 +931,14 @@ private fun ReaGhidraCard(context: Context, accent: Color) {
             accent = accent,
             icon = Icons.Default.Search,
             modifier = Modifier.fillMaxWidth(),
-            enabled = target.isNotBlank() && ghidraReady && !analyzing,
+            enabled = target.isNotBlank() && ghidraReady && !analyzing && reaDistro.installed,
         ) {
             analyzing = true
             output = ""
             scope.launch {
                 try {
-                    val res = ReaManager.analyzeGhidra(context, status.distroId, target, 300)
+                    val distro = reaDistro.method?.id ?: status.distroId
+                    val res = ReaManager.analyzeGhidra(context, distro, target, 300)
                     output = (res.optString("output").ifBlank { res.optString("error") })
                         .ifBlank { "No output." }
                 } catch (t: Throwable) {

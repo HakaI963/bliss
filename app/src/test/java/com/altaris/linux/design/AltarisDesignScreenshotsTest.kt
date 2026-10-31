@@ -52,7 +52,7 @@ class AltarisDesignScreenshotsTest {
     @Test
     fun quartz_components() {
         paparazzi.snapshot {
-            AltarisTheme(themeMode = ThemeMode.DARK) {
+            AltarisTheme(themeMode = ThemeMode.LIGHT) {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     Column(
                         modifier = Modifier
@@ -102,7 +102,7 @@ class AltarisDesignScreenshotsTest {
     @Test
     fun apps_tab() {
         paparazzi.snapshot {
-            AltarisTheme(themeMode = ThemeMode.DARK) {
+            AltarisTheme(themeMode = ThemeMode.LIGHT) {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     CompositionLocalProvider(LocalActivityResultRegistryOwner provides NoopRegistryOwner) {
                         ClonedAppsScreen()
@@ -122,7 +122,7 @@ class AltarisDesignScreenshotsTest {
         )
         try {
             paparazzi.snapshot {
-                AltarisTheme(themeMode = ThemeMode.DARK) {
+                AltarisTheme(themeMode = ThemeMode.LIGHT) {
                     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                         CompositionLocalProvider(LocalActivityResultRegistryOwner provides NoopRegistryOwner) {
                             ClonedAppsScreen()
@@ -151,7 +151,7 @@ class AltarisDesignScreenshotsTest {
     @Test
     fun apps_preference() {
         paparazzi.snapshot {
-            AltarisTheme(themeMode = ThemeMode.DARK) {
+            AltarisTheme(themeMode = ThemeMode.LIGHT) {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     CompositionLocalProvider(LocalActivityResultRegistryOwner provides NoopRegistryOwner) {
                         ClonedAppsScreen(startOnPreference = true)
@@ -164,7 +164,7 @@ class AltarisDesignScreenshotsTest {
     @Test
     fun tools_hub() {
         paparazzi.snapshot {
-            AltarisTheme(themeMode = ThemeMode.DARK) {
+            AltarisTheme(themeMode = ThemeMode.LIGHT) {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     // ToolsScreen owns a SAF picker; Paparazzi has no ActivityResultRegistryOwner.
                     CompositionLocalProvider(LocalActivityResultRegistryOwner provides NoopRegistryOwner) {
@@ -178,7 +178,7 @@ class AltarisDesignScreenshotsTest {
     @Test
     fun quinn_tab() {
         paparazzi.snapshot {
-            AltarisTheme(themeMode = ThemeMode.DARK) {
+            AltarisTheme(themeMode = ThemeMode.LIGHT) {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     QuinnScreen()
                 }

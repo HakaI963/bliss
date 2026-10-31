@@ -567,10 +567,10 @@ fun HostBootstrapStep(
             },
             enabled = !initializing,
             colors = ButtonDefaults.buttonColors(
-                containerColor = Color.White,
-                contentColor = Color.Black,
-                disabledContainerColor = Color.White.copy(alpha = 0.4f),
-                disabledContentColor = Color.Black.copy(alpha = 0.4f)
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+                disabledContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
+                disabledContentColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.4f)
             ),
             modifier = Modifier
                 .fillMaxWidth()
@@ -583,7 +583,8 @@ fun HostBootstrapStep(
                     bootstrapDone -> "Continue"
                     else -> "Initialize Environment"
                 },
-                color = if (ready) Color.Black else Color.Black.copy(alpha = 0.4f),
+                color = if (ready) MaterialTheme.colorScheme.onPrimary
+                else MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.4f),
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold
             )
@@ -666,7 +667,7 @@ fun TermuxConfigurationStep(
                     android.widget.Toast.makeText(context, "Termux not found!", android.widget.Toast.LENGTH_SHORT).show()
                 }
             },
-            colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black),
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary),
             modifier = Modifier
                 .fillMaxWidth()
                 .height(54.dp),
@@ -674,7 +675,7 @@ fun TermuxConfigurationStep(
         ) {
             Text(
                 "Copy & Open Termux",
-                color = Color.Black,
+                color = MaterialTheme.colorScheme.onPrimary,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold
             )
@@ -708,7 +709,7 @@ fun TermuxConfigurationStep(
         if (configDone) {
             Button(
                 onClick = onContinue,
-                colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(54.dp),
@@ -716,7 +717,7 @@ fun TermuxConfigurationStep(
             ) {
                 Text(
                     "Continue",
-                    color = Color.Black,
+                    color = MaterialTheme.colorScheme.onPrimary,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold
                 )
@@ -800,7 +801,7 @@ fun PermissionRequestStep(
                 onClick = {
                     permissionState.launchPermissionRequest()
                 },
-                colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(54.dp),
@@ -808,7 +809,7 @@ fun PermissionRequestStep(
             ) {
                 Text(
                     "Grant Permission",
-                    color = Color.Black,
+                    color = MaterialTheme.colorScheme.onPrimary,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold
                 )
@@ -823,8 +824,8 @@ fun PermissionRequestStep(
             onClick = onContinue,
             enabled = permissionGranted,
             colors = ButtonDefaults.buttonColors(
-                containerColor = Color.White,
-                disabledContainerColor = Color.White.copy(alpha = 0.4f)
+                containerColor = MaterialTheme.colorScheme.primary,
+                disabledContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
             ),
             modifier = Modifier
                 .fillMaxWidth()
@@ -902,11 +903,11 @@ fun PrerequisiteItem(
                         Spacer(modifier = Modifier.height(12.dp))
                         Button(
                             onClick = onDownload,
-                            colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary),
                             shape = CircleShape,
                             modifier = Modifier.fillMaxWidth().height(54.dp)
                         ) {
-                            Text("Download v0.118.3 (GitHub)", color = Color.Black, fontSize = 14.sp)
+                            Text("Download v0.118.3 (GitHub)", color = MaterialTheme.colorScheme.onPrimary, fontSize = 14.sp)
                         }
                     }
                 }
@@ -970,11 +971,11 @@ fun PrerequisiteItem(
                             Spacer(modifier = Modifier.height(8.dp))
                             Button(
                                 onClick = onDownload,
-                                colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black),
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary),
                                 shape = CircleShape,
                                 modifier = Modifier.fillMaxWidth().height(54.dp)
                             ) {
-                                Text("Download", color = Color.Black, fontSize = 14.sp)
+                                Text("Download", color = MaterialTheme.colorScheme.onPrimary, fontSize = 14.sp)
                             }
                         }
                     }
@@ -1005,11 +1006,11 @@ fun PrerequisiteItem(
                             Spacer(modifier = Modifier.height(8.dp))
                             Button(
                                 onClick = onInstallApk,
-                                colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black),
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary),
                                 shape = CircleShape,
                                 modifier = Modifier.fillMaxWidth().height(54.dp)
                             ) {
-                                Text("Install", color = Color.Black, fontSize = 14.sp)
+                                Text("Install", color = MaterialTheme.colorScheme.onPrimary, fontSize = 14.sp)
                             }
                         }
                     }
@@ -1032,11 +1033,11 @@ fun PrerequisiteItem(
                             Spacer(modifier = Modifier.height(8.dp))
                             Button(
                                 onClick = onDownload,
-                                colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black),
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary),
                                 shape = CircleShape,
                                 modifier = Modifier.fillMaxWidth().height(54.dp)
                             ) {
-                                Text("Redownload", color = Color.Black, fontSize = 14.sp)
+                                Text("Redownload", color = MaterialTheme.colorScheme.onPrimary, fontSize = 14.sp)
                             }
                         }
                     }
@@ -1209,11 +1210,11 @@ fun OverlayPermissionStep(
                              }
                          }
                      },
-                     colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black),
+                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary),
                      modifier = Modifier.weight(1f).height(54.dp),
                      shape = CircleShape
                  ) {
-                     Text("Enable Overlay", fontSize = 13.sp, color = Color.Black, textAlign = TextAlign.Center, lineHeight = 16.sp)
+                     Text("Enable Overlay", fontSize = 13.sp, color = MaterialTheme.colorScheme.onPrimary, textAlign = TextAlign.Center, lineHeight = 16.sp)
                  }
                  
                  // App Info Button
@@ -1227,11 +1228,11 @@ fun OverlayPermissionStep(
                              Toast.makeText(context, "Could not open App Info", Toast.LENGTH_SHORT).show()
                          }
                      },
-                     colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black),
+                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary),
                      modifier = Modifier.weight(1f).height(54.dp),
                      shape = CircleShape
                  ) {
-                     Text("App Info", fontSize = 13.sp, color = Color.Black, textAlign = TextAlign.Center, lineHeight = 16.sp)
+                     Text("App Info", fontSize = 13.sp, color = MaterialTheme.colorScheme.onPrimary, textAlign = TextAlign.Center, lineHeight = 16.sp)
                  }
              }
              
@@ -1286,7 +1287,7 @@ fun OverlayPermissionStep(
               Button(
                  onClick = onContinue,
                  colors = ButtonDefaults.buttonColors(
-                     containerColor = Color.White
+                     containerColor = MaterialTheme.colorScheme.primary
                  ),
                  modifier = Modifier
                      .fillMaxWidth()
@@ -1295,7 +1296,7 @@ fun OverlayPermissionStep(
              ) {
                  Text(
                      "Continue",
-                     color = Color.Black,
+                     color = MaterialTheme.colorScheme.onPrimary,
                      fontSize = 18.sp,
                      fontWeight = FontWeight.Bold
                  )
@@ -1413,11 +1414,11 @@ fun PhantomProcessStep(
                             }
                         }
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary),
                     modifier = Modifier.fillMaxWidth().height(54.dp),
                      shape = CircleShape
                 ) {
-                    Text("Apply Fix (Grant Root)", color = Color.Black)
+                    Text("Apply Fix (Grant Root)", color = MaterialTheme.colorScheme.onPrimary)
                 }
             } else {
                 // No Root
@@ -1477,7 +1478,7 @@ fun PhantomProcessStep(
                           }
                       },
                       modifier = Modifier.fillMaxWidth().height(54.dp),
-                      colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black),
+                      colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary),
                       shape = CircleShape
                   ) {
                      Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -1519,7 +1520,7 @@ fun PhantomProcessStep(
             Button(
                 onClick = onContinue,
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = Color.White
+                    containerColor = MaterialTheme.colorScheme.primary
                 ),
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1528,7 +1529,7 @@ fun PhantomProcessStep(
             ) {
                 Text(
                     "Continue",
-                    color = Color.Black,
+                    color = MaterialTheme.colorScheme.onPrimary,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold
                 )
@@ -1624,10 +1625,10 @@ fun EnvironmentSetupStep(
                 )
             },
             colors = ButtonDefaults.buttonColors(
-                containerColor = Color.White,
-                contentColor = Color.Black,
-                disabledContainerColor = Color.White.copy(alpha = 0.4f),
-                disabledContentColor = Color.Black.copy(alpha = 0.4f)
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+                disabledContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
+                disabledContentColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.4f)
             ),
             enabled = !isSetupLoading && !setupInitiated,
             modifier = Modifier
@@ -1642,7 +1643,7 @@ fun EnvironmentSetupStep(
                 if (isSetupLoading) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(20.dp),
-                        color = Color.Black,
+                        color = MaterialTheme.colorScheme.onPrimary,
                         strokeWidth = 2.dp
                     )
                     Spacer(modifier = Modifier.width(12.dp))
@@ -1685,10 +1686,10 @@ fun EnvironmentSetupStep(
             },
             enabled = setupInitiated && !tweaksCompleted,
             colors = ButtonDefaults.buttonColors(
-                containerColor = Color.White,
-                contentColor = Color.Black,
-                disabledContainerColor = Color.White.copy(alpha = 0.4f),
-                disabledContentColor = Color.Black.copy(alpha = 0.4f),
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+                disabledContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
+                disabledContentColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.4f),
             ),
             modifier = Modifier
                 .fillMaxWidth()
@@ -1711,14 +1712,14 @@ fun EnvironmentSetupStep(
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
                             "2. Apply Termux Tweaks (Optional)",
-                            color = Color.Black,
+                            color = MaterialTheme.colorScheme.onPrimary,
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold
                         )
                         if (tweaksInitiated) {
                              Text(
                                 "(Opened in Termux... Wait for completion)",
-                                color = Color.Black.copy(alpha=0.7f),
+                                color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f),
                                 fontSize = 12.sp
                             )
                         }
@@ -1735,8 +1736,8 @@ fun EnvironmentSetupStep(
             // Enforce only core setup
             enabled = setupInitiated,  
             colors = ButtonDefaults.buttonColors(
-                containerColor = Color.White,
-                disabledContainerColor = Color.White.copy(alpha = 0.4f)
+                containerColor = MaterialTheme.colorScheme.primary,
+                disabledContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
             ),
             modifier = Modifier
                 .fillMaxWidth()
@@ -1775,7 +1776,7 @@ fun FinalInstructionsStep(
         // Warning Card
         androidx.compose.material3.Card(
             colors = androidx.compose.material3.CardDefaults.cardColors(
-                containerColor = Color.White
+                containerColor = MaterialTheme.colorScheme.surface
             ),
             shape = RoundedCornerShape(16.dp),
             modifier = Modifier.fillMaxWidth().border(1.dp, androidx.compose.material3.MaterialTheme.colorScheme.error, RoundedCornerShape(16.dp))
@@ -1844,7 +1845,7 @@ fun FinalInstructionsStep(
             // Complete Button
             Button(
                 onClick = onContinue,
-                colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(54.dp),
@@ -1852,7 +1853,7 @@ fun FinalInstructionsStep(
             ) {
                 Text(
                     "Complete Setup",
-                    color = Color.Black,
+                    color = MaterialTheme.colorScheme.onPrimary,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold
                 )
@@ -2045,11 +2046,11 @@ fun SystemCheckStep(
                                         Toast.makeText(context, "Could not open settings", Toast.LENGTH_SHORT).show()
                                     }
                                 },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black),
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary),
                                 modifier = Modifier.fillMaxWidth().height(54.dp),
                                 shape = CircleShape
                             ) {
-                                Text("Go to Settings", color = Color.Black, fontSize = 14.sp)
+                                Text("Go to Settings", color = MaterialTheme.colorScheme.onPrimary, fontSize = 14.sp)
                             }
                         }
                     }
@@ -2060,7 +2061,7 @@ fun SystemCheckStep(
         // Next Button
         Button(
             onClick = onContinue,
-            colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black),
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary),
             modifier = Modifier
                 .fillMaxWidth()
                 .height(54.dp),
@@ -2068,7 +2069,7 @@ fun SystemCheckStep(
         ) {
             Text(
                 "Continue",
-                color = Color.Black,
+                color = MaterialTheme.colorScheme.onPrimary,
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold
             )
@@ -2189,10 +2190,10 @@ fun BusyBoxInstallStep(
                                 context.startActivity(intent)
                             },
                             modifier = Modifier.fillMaxWidth().height(54.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary),
                             shape = CircleShape
                         ) {
-                            Text("Download Module", color = Color.Black)
+                            Text("Download Module", color = MaterialTheme.colorScheme.onPrimary)
                         }
                     }
                 }
@@ -2246,7 +2247,7 @@ fun BusyBoxInstallStep(
             Spacer(modifier = Modifier.height(32.dp))
             Button(
                 onClick = onContinue,
-                colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(54.dp),
@@ -2254,7 +2255,7 @@ fun BusyBoxInstallStep(
             ) {
                 Text(
                     "Continue",
-                    color = Color.Black,
+                    color = MaterialTheme.colorScheme.onPrimary,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold
                 )
@@ -2384,11 +2385,11 @@ fun HelpAndSupportStep(
         
         Button(
             onClick = onComplete,
-            colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black),
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary),
             modifier = Modifier.fillMaxWidth().height(54.dp),
             shape = CircleShape
         ) {
-            Text("Complete Setup", color = Color.Black, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Text("Complete Setup", color = MaterialTheme.colorScheme.onPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
         }
     }
 }
