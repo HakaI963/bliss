@@ -857,8 +857,8 @@ class MainActivity : ComponentActivity() {
                                     onOpenHostShell = openHostShell
                                 )
                             }
-                            BottomTab.QUINN -> {
-                                com.altaris.linux.ui.screens.QuinnScreen()
+                            BottomTab.REA -> {
+                                com.altaris.linux.ui.screens.ReaScreen()
                             }
                             BottomTab.DISTROS -> {
                                 com.altaris.linux.ui.screens.DistroScreen(
@@ -1047,7 +1047,7 @@ class MainActivity : ComponentActivity() {
                                     if (showChrome) {
                                         AltarisDock(
                                             selected = when (currentTab) {
-                                                BottomTab.QUINN -> DockDestination.QUINN
+                                                BottomTab.REA -> DockDestination.REA
                                                 BottomTab.DISTROS -> DockDestination.DISTROS
                                                 BottomTab.APPS -> DockDestination.APPS
                                                 else -> DockDestination.HOME
@@ -1055,7 +1055,7 @@ class MainActivity : ComponentActivity() {
                                             onSelect = { destination ->
                                                 currentTab = when (destination) {
                                                     DockDestination.HOME -> BottomTab.HOME
-                                                    DockDestination.QUINN -> BottomTab.QUINN
+                                                    DockDestination.REA -> BottomTab.REA
                                                     DockDestination.DISTROS -> BottomTab.DISTROS
                                                     DockDestination.APPS -> BottomTab.APPS
                                                 }
@@ -1401,12 +1401,12 @@ class MainActivity : ComponentActivity() {
                             )
                             add(
                                 PaletteAction(
-                                    id = "quinn",
-                                    title = "Quinn",
-                                    subtitle = "Your assistant for Altaris",
+                                    id = "rea",
+                                    title = "REA",
+                                    subtitle = "Reverse engineering analysis",
                                     icon = Icons.Default.AutoAwesome,
                                     accent = MaterialTheme.colorScheme.secondary,
-                                    onSelect = { currentTab = BottomTab.QUINN },
+                                    onSelect = { currentTab = BottomTab.REA },
                                 )
                             )
                             add(

@@ -30,8 +30,7 @@ import com.altaris.linux.ui.components.QStatusRow
 import com.altaris.linux.ui.components.QToggleRow
 import com.altaris.linux.ui.components.Quartz
 import com.altaris.linux.ui.screens.ClonedAppsScreen
-import com.altaris.linux.ui.screens.QuinnScreen
-import com.altaris.linux.ui.screens.quinn.QuinnReaTab
+import com.altaris.linux.ui.screens.ReaScreen
 import com.altaris.linux.ui.screens.ToolsScreen
 import com.altaris.linux.ui.theme.AltarisTheme
 import org.junit.Rule
@@ -176,33 +175,13 @@ class AltarisDesignScreenshotsTest {
         }
     }
 
+    /** The REA screen in its "not installed" state (the frosted gate). */
     @Test
-    fun quinn_tab() {
+    fun rea_tab() {
         paparazzi.snapshot {
             AltarisTheme(themeMode = ThemeMode.LIGHT) {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    // Quinn's chat registers a file picker, so the snapshot needs
-                    // the same no-op result owner the other screens use.
-                    CompositionLocalProvider(LocalActivityResultRegistryOwner provides NoopRegistryOwner) {
-                        QuinnScreen()
-                    }
-                }
-            }
-        }
-    }
-
-    /**
-     * The REA dashboard in its "not installed" state: the frosted gate is the
-     * part that used to render as a plain card, so it gets its own board.
-     */
-    @Test
-    fun quinn_rea_not_installed() {
-        paparazzi.snapshot {
-            AltarisTheme(themeMode = ThemeMode.LIGHT) {
-                Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    CompositionLocalProvider(LocalActivityResultRegistryOwner provides NoopRegistryOwner) {
-                        QuinnReaTab(accent = MaterialTheme.colorScheme.tertiary)
-                    }
+                    ReaScreen()
                 }
             }
         }

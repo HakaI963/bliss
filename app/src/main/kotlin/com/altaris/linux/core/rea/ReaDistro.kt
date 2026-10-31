@@ -17,14 +17,14 @@ import java.io.File
 /**
  * The hidden REA analysis distro.
  *
- * Quinn's REA target needs a stable home with the right tools, without asking
+ * The REA screen needs a stable home with the right tools, without asking
  * the user to pick a distro and without appearing in the app. This object owns
  * that distro's lifecycle:
  *
  *  - **not installed** — the REA dashboard is frosted and says how to install;
  *  - **installing** — one proot or chroot container is created, then REA and
  *    every analysis tool are installed into it, with real progress;
- *  - **ready** — Quinn drives REA in it over MCP.
+ *  - **ready** — the MCP bridge serves REA from it.
  *
  * Two correctness rules that used to be bugs:
  *

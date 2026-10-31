@@ -83,7 +83,7 @@ object Prism {
  */
 enum class AltarisSection {
     HOME,
-    QUINN,
+    REA,
     DISTROS,
     APPS,
     TOOLS,
@@ -96,12 +96,12 @@ enum class AltarisSection {
  *
  * Altaris keeps one cool accent (cyan → blue) for live state and for the
  * analysis surfaces; the chrome itself stays ink-on-white so the terminal and
- * the clone display keep the visual weight. Quinn and REA are the two places
- * where the accent is allowed to carry a whole screen.
+ * the clone display keep the visual weight. The REA analysis surface is the
+ * one place where the accent is allowed to carry a whole screen.
  */
 @Composable
 fun sectionAccent(section: AltarisSection): Color = when (section) {
-    AltarisSection.QUINN, AltarisSection.TOOLS -> LocalAltarisPalette.current.accent
+    AltarisSection.REA, AltarisSection.TOOLS -> LocalAltarisPalette.current.accent
     else -> LocalAltarisPalette.current.action
 }
 
@@ -112,7 +112,7 @@ fun sectionAccentBrush(section: AltarisSection): List<Color> {
     val accent = sectionAccent(section)
     return listOf(
         accent,
-        if (section == AltarisSection.QUINN || section == AltarisSection.TOOLS) {
+        if (section == AltarisSection.REA || section == AltarisSection.TOOLS) {
             palette.accentBright
         } else {
             accent.copy(alpha = 0.72f)

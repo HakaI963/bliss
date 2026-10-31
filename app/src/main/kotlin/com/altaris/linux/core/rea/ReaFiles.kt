@@ -1,4 +1,4 @@
-package com.altaris.linux.core.quinn
+package com.altaris.linux.core.rea
 
 import android.content.Context
 import com.altaris.linux.core.rea.GuestExec

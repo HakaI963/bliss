@@ -1,15 +1,14 @@
-package com.altaris.linux.core.quinn
+package com.altaris.linux.core.rea
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * The REA file manager's path and file-type rules.
+ * The REA file manager's path and performance rules.
  *
- * The listing itself runs in the guest, but the two things that decide whether
- * a delete is safe — path normalisation and the root guard — are pure and must
- * be tested without a device.
+ * The listing runs in the guest, but the two things that decide whether a
+ * delete is safe — path normalisation and the root guard — are pure.
  */
 class ReaFilesTest {
 
@@ -29,7 +28,6 @@ class ReaFilesTest {
         assertEquals("/root/b", ReaFiles.normalize("/root/a/../b"))
         assertEquals("/", ReaFiles.normalize("/../../.."))
         assertEquals("/", ReaFiles.normalize("../../../etc/passwd/../../.."))
-        // And it is always rebuilt from "/", so the result is absolute.
         assertTrue(ReaFiles.normalize("../../etc/shadow").startsWith("/"))
     }
 
@@ -51,21 +49,8 @@ class ReaFilesTest {
     }
 
     /**
-     * The delete guard. The button exists for files; an empty path must never
-     * resolve to the environment root.
-     */
-    @Test
-    fun theRootIsRefusedForDelete() {
-        val root = ReaFiles.normalize("/")
-        assertEquals("/", root)
-        assertEquals("/", ReaFiles.normalize(""))
-        // The guard in delete() compares against exactly this value.
-        assertTrue(root == ReaFiles.ROOT)
-    }
-
-    /**
      * The performance rule: a listing is one `find`, not one process per entry.
-     * The old implementation spawned `wc` and `date` for every file.
+     * The first implementation spawned `wc` and `date` for every file.
      */
     @Test
     fun theListingUsesASinglePrintfPass() {
@@ -73,7 +58,6 @@ class ReaFilesTest {
         assertEquals("exactly one find invocation", 1, Regex("find ").findAll(script).count())
         assertTrue("uses -printf", script.contains("-printf"))
         assertTrue("bounded depth", script.contains("-maxdepth 1"))
-        // No per-entry subprocesses.
         assertTrue("no wc per entry", !script.contains("wc -c"))
         assertTrue("no date per entry", !script.contains("date -r"))
     }

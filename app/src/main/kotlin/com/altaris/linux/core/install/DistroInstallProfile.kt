@@ -55,7 +55,7 @@ data class DistroInstallProfile(
     /**
      * True for distros the app creates for its own use and must never list.
      *
-     * The REA distro is one: it exists so Quinn's analysis tab has a stable
+     * The REA distro is one: it exists so the analysis screen has a stable
      * home with the right tools, and it deliberately does not appear in
      * Distros, the terminal picker, the agent matrix or any count.
      */

@@ -715,7 +715,7 @@ object ReaManager {
     /**
      * Tool catalog for [distroId], starting REA first when it is not running.
      *
-     * Quinn's REA tab needs the catalog before it can ask a model what to call;
+     * The REA screen needs the catalog to show what the environment offers;
      * without this it would have to know the REA lifecycle, which belongs here.
      */
     suspend fun probeTools(ctx: Context, distroId: String): JSONArray = withContext(Dispatchers.IO) {

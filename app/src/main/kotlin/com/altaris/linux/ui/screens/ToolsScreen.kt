@@ -54,7 +54,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.altaris.linux.core.clone.HeadlessCloneEngine
-import com.altaris.linux.core.control.AgentDetector
 import com.altaris.linux.core.control.AltarisCliInstaller
 import com.altaris.linux.core.control.CloneControlService
 import com.altaris.linux.core.control.ControlServer
@@ -62,7 +61,9 @@ import com.altaris.linux.core.control.DetectedAgent
 import com.altaris.linux.core.control.DistroAgentReport
 import com.altaris.linux.core.rea.ReaCatalog
 import com.altaris.linux.core.rea.ReaDistro
+import com.altaris.linux.core.rea.ReaBridge
 import com.altaris.linux.core.rea.ReaManager
+import com.altaris.linux.core.rea.ReaToolInstaller
 import com.altaris.linux.ui.components.AltarisTitle
 import com.altaris.linux.ui.components.PrismActions
 import com.altaris.linux.ui.components.PrismButton
@@ -177,7 +178,6 @@ fun ToolsScreen() {
         ) {
             ControlCard(context, accent, running, error) { running = ControlServer.isRunning() }
             SessionsCard(context, accent)
-            AgentsCard(context, accent)
             McpCard(context, accent)
             CliCard(context, accent)
             AutomationCard(context, accent)
@@ -189,6 +189,7 @@ fun ToolsScreen() {
             onBack = { page = ToolsPage.HOME },
         ) {
             ReaCard(context, accent)
+            ReaMcpCard(context, accent)
             ReaToolsCard(context, accent)
             ReaGhidraCard(context, accent)
             ReaLogCard(accent)
@@ -425,132 +426,6 @@ private fun SessionsCard(context: Context, accent: Color) {
 }
 
 @Composable
-private fun AgentsCard(context: Context, accent: Color) {
-    var tick by remember { mutableIntStateOf(0) }
-    var reports by remember { mutableStateOf<List<DistroAgentReport>>(emptyList()) }
-    var hostAgents by remember { mutableStateOf<List<DetectedAgent>>(emptyList()) }
-    var scanned by remember { mutableStateOf(false) }
-
-    LaunchedEffect(tick) {
-        val result = withContext(Dispatchers.IO) {
-            val distros = AgentDetector.scanDistros(context)
-            val host = AgentDetector.scan(context).filter { it.kind != "guest cli" }
-            distros to host
-        }
-        reports = result.first
-        hostAgents = result.second
-        scanned = true
-    }
-
-    PrismSectionLabel("AI agents by installed distro", accent)
-    PrismCard(accent = accent) {
-        PrismNote(
-            "Checks the host and every installed proot/chroot distro for OpenCode, Pi, " +
-                "Alpha, Hermes, Claude, Codex, Aider, Gemini and similar. Each distro gets " +
-                "its own MCP button."
-        )
-        Spacer(Modifier.height(Prism.Stack))
-        PrismActions {
-            PrismButton(
-                text = "Scan installed distros",
-                accent = accent,
-                icon = Icons.Default.Refresh,
-                modifier = Modifier.fillMaxWidth(),
-                onClick = { tick++ }
-            )
-            PrismSecondaryButton(
-                text = "Copy agent brief",
-                accent = accent,
-                modifier = Modifier.fillMaxWidth(),
-                onClick = { copy(context, AGENT_BRIEF, "Agent brief copied") }
-            )
-        }
-        Spacer(Modifier.height(Prism.Stack))
-        if (!scanned) {
-            PrismNote("Scanning distro filesystems…")
-        } else if (reports.isEmpty()) {
-            PrismNote("No installed proot/chroot distros found.")
-        } else {
-            // The per-distro agent matrix: one row per distro, MCP button included.
-            reports.forEachIndexed { index, report ->
-                PrismRow(
-                    title = report.name,
-                    subtitle = "${report.method} · ${report.agents.size} agent${if (report.agents.size == 1) "" else "s"}",
-                    accent = accent,
-                    trailing = {
-                        PrismChip(
-                            text = "MCP",
-                            accent = accent,
-                            onClick = {
-                                copy(context, MCP_CONFIG, "${report.name} MCP config copied")
-                            }
-                        )
-                    },
-                    divider = index != reports.lastIndex,
-                )
-                if (report.agents.isEmpty()) {
-                    Text(
-                        "No supported agent binary found",
-                        fontSize = 10.5.sp,
-                        color = altarisMutedText(),
-                        modifier = Modifier.padding(
-                            start = Prism.Gutter * 2, end = Prism.Gutter, bottom = 8.dp,
-                        ),
-                    )
-                } else {
-                    report.agents.forEach { agent ->
-                        Text(
-                            "• ${agent.name}  ${agent.detail}",
-                            fontSize = 10.sp,
-                            lineHeight = 14.sp,
-                            fontFamily = FontFamily.Monospace,
-                            color = accent,
-                            modifier = Modifier.fillMaxWidth().padding(
-                                start = Prism.Gutter * 2,
-                                end = Prism.Gutter,
-                                bottom = 4.dp,
-                            ),
-                        )
-                    }
-                    Spacer(Modifier.height(6.dp))
-                }
-            }
-        }
-    }
-
-    PrismSectionLabel("Host desktop agents", accent)
-    PrismCard(accent = accent) {
-        if (!scanned) {
-            PrismNote("Scanning…")
-        } else if (hostAgents.isEmpty()) {
-            PrismNote("No desktop agent binaries found in the host prefix.")
-        } else {
-            hostAgents.forEachIndexed { index, agent ->
-                PrismRow(
-                    title = "${agent.name}  ·  ${agent.kind}",
-                    subtitle = agent.detail,
-                    accent = accent,
-                    divider = index != hostAgents.lastIndex
-                )
-            }
-        }
-    }
-
-    PrismSectionLabel("Agent brief", accent)
-    PrismCard(accent = accent) {
-        CodeBlock(AGENT_BRIEF)
-        Spacer(Modifier.height(Prism.Tight))
-        PrismSecondaryButton(
-            text = "Copy brief",
-            accent = accent,
-            icon = Icons.Default.ContentCopy,
-            modifier = Modifier.fillMaxWidth(),
-            onClick = { copy(context, AGENT_BRIEF, "Agent brief copied") }
-        )
-    }
-}
-
-@Composable
 private fun CliCard(context: Context, accent: Color) {
     PrismSectionLabel("Commands", accent)
     PrismCard(accent = accent) {
@@ -692,7 +567,7 @@ private fun ReaCard(context: Context, accent: Color) {
             title = "REA analysis environment",
             subtitle = when {
                 state.busy.isNotBlank() -> state.busy
-                state.installed -> "Installed (" + (state.method?.label ?: "proot") + ") · used by Quinn"
+                state.installed -> "Installed (" + (state.method?.label ?: "proot") + ") · served over MCP"
                 else -> "Not installed"
             },
             accent = accent,
@@ -740,8 +615,8 @@ private fun ReaCard(context: Context, accent: Color) {
 
         Spacer(Modifier.height(Prism.Tight))
         PrismNote(
-            "REA runs inside its own private distro that Quinn creates here, so it " +
-                "never touches your distros and no MCP link is needed. Every analysis " +
+            "REA runs inside its own private distro that Altaris creates here, so it " +
+                "never touches your distros. Agents reach it over MCP. Every analysis " +
                 "tool is installed with it. Pick how it runs:"
         )
         Spacer(Modifier.height(Prism.Tight))
@@ -809,6 +684,111 @@ private fun ReaCard(context: Context, accent: Color) {
     }
 }
 
+/**
+ * REA as an MCP server.
+ *
+ * Altaris hosts the server and proxies REA's stdio process, so an agent inside a
+ * distro connects by URL and the app sees every call it makes. The endpoint and
+ * the copy-paste config are shown here; nothing is written into an agent's
+ * config automatically.
+ */
+@Composable
+private fun ReaMcpCard(context: Context, accent: Color) {
+    val scope = rememberCoroutineScope()
+    val bridge by ReaBridge.state.collectAsState()
+    val distro by ReaDistro.state.collectAsState()
+    var copied by remember { mutableStateOf(false) }
+    val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+    val config = remember { ReaBridge.configJson() }
+
+    PrismSectionLabel("MCP server", accent)
+    PrismCard(accent = accent) {
+        PrismRow(
+            title = "REA endpoint",
+            subtitle = if (bridge.running) {
+                bridge.toolCount.toString() + " tools · " + bridge.connections +
+                    " agent connections"
+            } else {
+                "Stopped. Start it to let an agent connect."
+            },
+            accent = accent,
+            leading = { PrismOrb(active = bridge.running, accent = accent) },
+            trailing = {
+                PrismChip(
+                    if (bridge.running) "Live" else "Stopped",
+                    accent,
+                    selected = bridge.running,
+                )
+            },
+        )
+        Spacer(Modifier.height(Prism.Tight))
+        Text(
+            ReaBridge.ENDPOINT,
+            fontSize = 10.5.sp,
+            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+            color = accent,
+        )
+        Spacer(Modifier.height(Prism.Tight))
+        PrismNote(
+            "REA has no network endpoint of its own: Altaris runs it and proxies it " +
+                "here, so an agent inside any distro can reach it at this URL and the REA " +
+                "tab can show what it is doing. Add this to the agent's MCP config:"
+        )
+        Spacer(Modifier.height(Prism.Tight))
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(Prism.PanelRadius))
+                .background(MaterialTheme.colorScheme.background)
+                .border(
+                    1.dp,
+                    MaterialTheme.colorScheme.outline,
+                    RoundedCornerShape(Prism.PanelRadius),
+                )
+                .padding(Prism.Tight),
+        ) {
+            Text(
+                config,
+                fontSize = 9.5.sp,
+                lineHeight = 13.sp,
+                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+            )
+        }
+        Spacer(Modifier.height(Prism.ControlGap))
+        PrismActions {
+            PrismSecondaryButton(
+                text = if (copied) "Copied" else "Copy config",
+                accent = accent,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                clipboard.setText(androidx.compose.ui.text.AnnotatedString(config))
+                copied = true
+            }
+            PrismButton(
+                text = if (bridge.running) "Stop server" else "Start server",
+                accent = accent,
+                icon = Icons.Default.PlayArrow,
+                modifier = Modifier.fillMaxWidth(),
+                enabled = distro.installed,
+            ) {
+                scope.launch {
+                    withContext(Dispatchers.IO) {
+                        if (bridge.running) {
+                            ReaBridge.stop()
+                        } else {
+                            ReaDistro.distroId(context)?.let { ReaBridge.start(context, it) }
+                        }
+                    }
+                }
+            }
+        }
+        if (bridge.error.isNotBlank()) {
+            Spacer(Modifier.height(Prism.Tight))
+            PrismNote(bridge.error, color = MaterialTheme.colorScheme.error)
+        }
+    }
+}
+
 @Composable
 private fun ReaToolsCard(context: Context, accent: Color) {
     val scope = rememberCoroutineScope()
@@ -817,6 +797,7 @@ private fun ReaToolsCard(context: Context, accent: Color) {
     val busy = status.busy.isNotBlank()
     // Tools live in the hidden REA distro, not in a distro the user picks.
     val reaDistro = ReaDistro.state.collectAsState().value
+    val toolInstall by ReaToolInstaller.state.collectAsState()
 
     val installable = ReaCatalog.DEPENDENCIES.filter { dep ->
         dep.kind != "license" && dep.id !in status.available
@@ -886,20 +867,32 @@ private fun ReaToolsCard(context: Context, accent: Color) {
         if (installable.isNotEmpty()) {
             Spacer(Modifier.height(Prism.Stack))
             PrismButton(
-                text = "Install all missing tools",
+                text = if (toolInstall.running) "Installing…" else "Install all missing tools",
                 accent = accent,
                 icon = Icons.Default.PlayArrow,
                 modifier = Modifier.fillMaxWidth(),
-                enabled = !busy && reaDistro.installed,
+                enabled = !toolInstall.running && reaDistro.installed,
             ) {
                 scope.launch {
                     val ids = installable
-                        .filter { it.kind != "ghidra" }
                         .filter { manager.isBlank() || it.kind != "package" || ReaCatalog.packagedFor(it, manager) }
                         .map { it.id }
                     val target = reaDistro.method?.id ?: status.distroId
-                    if (ids.isNotEmpty()) ReaManager.install(context, target, ids)
+                    if (ids.isNotEmpty()) ReaToolInstaller.install(context, target, ids)
                 }
+            }
+        }
+
+        // One bar per tool, so a long Ghidra download never hides the rest.
+        if (toolInstall.tools.isNotEmpty()) {
+            Spacer(Modifier.height(Prism.Tight))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Progress", fontSize = 10.sp, fontWeight = FontWeight.Medium)
+                Spacer(Modifier.weight(1f))
+                PrismNote(toolInstall.summary)
+            }
+            toolInstall.tools.forEach { tool ->
+                ToolProgressRow(tool, accent)
             }
         }
         if (status.outcomes.isNotEmpty()) {
@@ -913,6 +906,70 @@ private fun ReaToolsCard(context: Context, accent: Color) {
                 )
             }
         }
+    }
+}
+
+/**
+ * One tool's install progress: a bar plus its state, so a parallel install of
+ * eighteen tools is readable at a glance instead of one scrolling log.
+ */
+@Composable
+private fun ToolProgressRow(tool: ReaToolInstaller.ToolState, accent: Color) {
+    val scheme = MaterialTheme.colorScheme
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            tool.label,
+            fontSize = 9.5.sp,
+            maxLines = 1,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+            modifier = Modifier.width(84.dp),
+        )
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .height(4.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .background(scheme.outline.copy(alpha = 0.35f))
+        ) {
+            val fraction = when (tool.status) {
+                ReaToolInstaller.ToolState.Status.DONE -> 1f
+                ReaToolInstaller.ToolState.Status.FAILED -> 1f
+                else -> if (tool.percent >= 0) tool.percent / 100f else 0f
+            }
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(fraction.coerceIn(0f, 1f))
+                    .height(4.dp)
+                    .background(
+                        when (tool.status) {
+                            ReaToolInstaller.ToolState.Status.FAILED -> scheme.error
+                            ReaToolInstaller.ToolState.Status.DONE -> accent.copy(alpha = 0.55f)
+                            else -> accent
+                        }
+                    )
+            )
+        }
+        Spacer(Modifier.width(6.dp))
+        Text(
+            when (tool.status) {
+                ReaToolInstaller.ToolState.Status.QUEUED -> "queued"
+                ReaToolInstaller.ToolState.Status.RUNNING ->
+                    if (tool.percent >= 0) tool.percent.toString() + "%" else "…"
+                ReaToolInstaller.ToolState.Status.DONE -> "done"
+                ReaToolInstaller.ToolState.Status.FAILED -> "failed"
+                ReaToolInstaller.ToolState.Status.SKIPPED -> "skipped"
+            },
+            fontSize = 8.5.sp,
+            color = when (tool.status) {
+                ReaToolInstaller.ToolState.Status.FAILED -> scheme.error
+                ReaToolInstaller.ToolState.Status.DONE -> altarisMutedText()
+                else -> accent
+            },
+            modifier = Modifier.width(40.dp),
+        )
     }
 }
 
