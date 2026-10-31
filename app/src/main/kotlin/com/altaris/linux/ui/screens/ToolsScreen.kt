@@ -139,8 +139,8 @@ Rules:
 - Screenshots and OCR are available even when the viewer is not open.
 - The same operations are available in any distro terminal as `altaris ...`.
 - `altaris open <url>` opens a link in the phone browser. Guest shells have no
-  browser, so xdg-open / sensible-browser / $BROWSER already point at it; use it
-  for sign-in links that a CLI prints instead of expecting a desktop browser.
+  browser, so xdg-open / sensible-browser / ${'$'}BROWSER already point at it; use
+  it for sign-in links that a CLI prints instead of expecting a desktop browser.
 
 If a task needs visual confirmation, take a screenshot after every action group.
 The UI action feed in the clone viewer shows your taps, swipes, text and keys."""
