@@ -524,10 +524,11 @@ fun PrismOrb(
 /**
  * A small uppercase group label.
  *
- * The asymmetric padding is deliberate: with an even [Prism.Stack] gap between
- * blocks, equal padding would leave the label floating exactly halfway between
- * the card above and the card below, so it reads as a caption for the wrong
- * block. More space above and almost none below binds it to what follows.
+ * The asymmetric padding is deliberate. Screens put blocks in a `Column` with
+ * `spacedBy(Prism.Stack)`, so the parent supplies an equal gap on both sides of
+ * the label. With symmetric padding the label floated exactly halfway between
+ * the block above and the block below and read as a caption for the wrong one.
+ * Extra space above (plus zero below) binds it to the block it names.
  */
 @Composable
 fun PrismSectionLabel(
@@ -537,7 +538,7 @@ fun PrismSectionLabel(
 ) {
     Text(
         text = text.uppercase(),
-        modifier = modifier.padding(start = 2.dp, end = 2.dp, top = 10.dp, bottom = 2.dp),
+        modifier = modifier.padding(start = 2.dp, end = 2.dp, top = 10.dp),
         fontSize = 10.sp,
         fontWeight = FontWeight.SemiBold,
         letterSpacing = 0.6.sp,
