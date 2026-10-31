@@ -19,11 +19,26 @@ if [ -z "$MG" ]; then
   exit 2
 fi
 
-have() {
-  for p in $PROBES; do
-    command -v "$p" >/dev/null 2>&1 && return 0
+# The probe list is comma-separated ("aapt,aapt2", "7z,7za,7zr"). Splitting it
+# with IFS=',' is required: the old word split produced one literal
+# "aapt,aapt2" token, so every tool with more than one probe binary could
+# never verify and reported failure even after a clean install.
+probe_list() {
+  [ -n "$PROBES" ] || return 0
+  printf '%s\n' "$PROBES" | tr ',' '\n' | while IFS= read -r p; do
+    [ -n "$p" ] && printf '%s\n' "$p"
   done
-  return 1
+}
+
+# True when any probe binary is already on PATH. (The `while` runs in a
+# subshell, so the result travels back through stdout, not a variable.)
+have() {
+  probe_list | while IFS= read -r p; do
+    if command -v "$p" >/dev/null 2>&1; then
+      echo yes
+      break
+    fi
+  done | grep -q yes
 }
 
 if [ -n "$PROBES" ] && have; then

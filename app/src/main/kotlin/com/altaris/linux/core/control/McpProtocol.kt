@@ -133,7 +133,11 @@ object McpProtocol {
             tool(
                 "altaris_record_start",
                 "Record the virtual display to an MP4 file.",
-                schema("fps" to "integer: optional 2-15, default 6", "width" to "integer: optional max width, default 720")
+                schema(
+                    "fps" to "integer: optional 2-15, default 6",
+                    "width" to "integer: optional max width, default 720",
+                    "package" to "string: optional clone package"
+                )
             )
         )
         put(
@@ -217,7 +221,10 @@ object McpProtocol {
             tool(
                 "altaris_ui_click",
                 "Click a UI node by the id from the last altaris_ui_tree snapshot.",
-                schema("nodeId" to "string: node id (path) from altaris_ui_tree")
+                schema(
+                    "nodeId" to "string: node id (path) from altaris_ui_tree",
+                    "package" to "string: optional clone package"
+                )
             )
         )
         put(
@@ -244,6 +251,7 @@ object McpProtocol {
                 schema(
                     "text" to "string: text to match",
                     "exact" to "boolean: optional, default false",
+                    "package" to "string: optional clone package",
                     "display" to "integer: optional display id"
                 )
             )
@@ -438,6 +446,7 @@ object McpProtocol {
                     ?: throw IllegalStateException("App context unavailable"),
                 args.optInt("fps", 6),
                 args.optInt("width", 720),
+                optionalPackage(args),
             )
         )
         "altaris_record_stop" -> textResult(CloneRecorder.stop())
@@ -502,7 +511,15 @@ object McpProtocol {
         }
         "altaris_ui_click" -> {
             val ctx = ControlServer.context() ?: throw IllegalStateException("App context unavailable")
-            textResult(a11yObject(A11yBridge.click(ctx, args.opt("nodeId")?.toString().orEmpty())))
+            textResult(
+                a11yObject(
+                    A11yBridge.click(
+                        ctx,
+                        args.opt("nodeId")?.toString().orEmpty(),
+                        optionalPackage(args),
+                    )
+                )
+            )
         }
         "altaris_ui_type" -> {
             val ctx = ControlServer.context() ?: throw IllegalStateException("App context unavailable")

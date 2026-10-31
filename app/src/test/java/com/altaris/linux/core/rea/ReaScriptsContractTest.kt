@@ -89,6 +89,20 @@ class ReaScriptsContractTest {
     }
 
     @Test
+    fun toolInstallerSplitsTheProbeListOnCommas() {
+        val script = reaScript("install-tool.sh")
+        // The catalog passes "aapt,aapt2" / "7z,7za,7zr". A plain `for p in
+        // $PROBES` produced one literal token, so every multi-probe tool was
+        // reported as failed even after a clean install.
+        assertTrue(script.contains("tr ',' '\\n'"))
+        assertTrue(script.contains("probe_list()"))
+        assertFalse(
+            "probes must be split on commas, not words",
+            script.contains("for p in \$PROBES"),
+        )
+    }
+
+    @Test
     fun toolInstallerFallsBackToPlainInstallOnApt() {
         val script = reaScript("install-tool.sh")
         assertTrue(

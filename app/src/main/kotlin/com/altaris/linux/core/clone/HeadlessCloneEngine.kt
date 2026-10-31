@@ -517,7 +517,7 @@ object HeadlessCloneEngine {
     fun launchClone(packageName: String, width: Int = 0, height: Int = 0, fps: Int = 0) {
         if (sessions.value.containsKey(packageName)) {
             // Already running on its own display: just bring the viewer there.
-            activeClonePackage.value = packageName
+            focusViewer(packageName)
             setNotice("Already running; resuming view")
             val c = ensureClient()
             if (c != null) parseStatus(c.status())
@@ -527,13 +527,13 @@ object HeadlessCloneEngine {
         val w = width.takeIf { it > 0 } ?: saved.width
         val h = height.takeIf { it > 0 } ?: saved.height
         val f = fps.takeIf { it > 0 } ?: saved.fps.takeIf { it > 0 } ?: displayFps.value
-        launchWithDisplay("Opening clone…", w, h, f, packageName, packageName) { c, key ->
+        launchWithDisplay("Opening clone…", w, h, f, packageName) { c, key ->
             c.cloneLaunch(packageName, key)
         }
     }
 
     fun launchInstalledApp(packageName: String) {
-        launchWithDisplay("Opening app on the display…", 0, 0, displayFps.value, packageName, KEY_PRIMARY) { c, key ->
+        launchWithDisplay("Opening app on the display…", 0, 0, displayFps.value, KEY_PRIMARY) { c, key ->
             c.launchApp(packageName, key, true)
         }
     }
@@ -638,6 +638,35 @@ object HeadlessCloneEngine {
         previewError.value = null
     }
 
+    /**
+     * Point the viewer at [packageName].
+     *
+     * Several clones can run at once, so "the viewer's clone" is only a
+     * convenience fallback for machine calls that omit a package. It must be
+     * set explicitly when a human opens a clone — never as a side effect of a
+     * launch, or an agent launching clone B would move the human's viewer.
+     */
+    fun focusViewer(packageName: String?) {
+        val clean = packageName?.takeIf { it.isNotBlank() }
+        if (activeClonePackage.value == clean) return
+        activeClonePackage.value = clean
+        val session = clean?.let { sessions.value[it] }
+        if (session != null) {
+            displayId.value = session.displayId
+            displayReady.value = true
+            if (session.width > 0) displayWidth.value = session.width
+            if (session.height > 0) displayHeight.value = session.height
+        } else if (clean == null) {
+            displayReady.value = sessions.value.isNotEmpty()
+        } else {
+            // The clone is being launched: report "not ready" instead of
+            // capturing the previous clone's display by mistake.
+            displayId.value = -1
+            displayReady.value = false
+            preview.value = null
+        }
+    }
+
     fun deleteClone(packageName: String) {
         val c = requireConnected() ?: return
         runOperation("Removing clone…") {
@@ -650,42 +679,61 @@ object HeadlessCloneEngine {
 
     // ---------------------------------------------------------------- input
 
+    /**
+     * True when input can be injected into [packageName]'s display.
+     *
+     * The old guard was the single `displayReady` flag, which is false when no
+     * viewer is open — so with several clones running (the point of the session
+     * map) an agent's tap was silently dropped. Ask for that clone's session
+     * instead, and keep `displayReady` only as the fallback for the viewer.
+     */
+    private fun inputTarget(packageName: String?): String? {
+        if (!connected.value) return null
+        val key = keyOf(packageName)
+        return when {
+            sessions.value.containsKey(key) -> key
+            packageName == null && displayReady.value -> key
+            else -> null
+        }
+    }
+
     fun tap(x: Int, y: Int, packageName: String? = null) {
         val c = client ?: return
-        if (!connected.value || !displayReady.value) return
-        noteAction("tap ($x, $y)")
+        val key = inputTarget(packageName) ?: return
+        noteAction("tap ($x, $y) → ${key.takeIf { packageName != null } ?: "viewer"}")
         scope.launch {
-            runCatching { c.tap(keyOf(packageName), x, y) }
+            runCatching { c.tap(key, x, y) }
                 .onFailure { Log.w(TAG, "tap failed", it) }
         }
     }
 
     fun swipe(x1: Int, y1: Int, x2: Int, y2: Int, durationMs: Int = 260, packageName: String? = null) {
         val c = client ?: return
-        if (!connected.value || !displayReady.value) return
-        noteAction("swipe ($x1,$y1) → ($x2,$y2)")
+        val key = inputTarget(packageName) ?: return
+        noteAction("swipe ($x1,$y1) → ($x2,$y2) → ${key.takeIf { packageName != null } ?: "viewer"}")
         scope.launch {
-            runCatching { c.swipe(keyOf(packageName), x1, y1, x2, y2, durationMs) }
+            runCatching { c.swipe(key, x1, y1, x2, y2, durationMs) }
                 .onFailure { Log.w(TAG, "swipe failed", it) }
         }
     }
 
     fun key(keyCode: Int, packageName: String? = null) {
         val c = client ?: return
-        if (!connected.value || !displayReady.value) return
+        val key = inputTarget(packageName) ?: return
         noteAction("key $keyCode")
         scope.launch {
-            runCatching { c.key(keyOf(packageName), keyCode) }
+            runCatching { c.key(key, keyCode) }
                 .onFailure { Log.w(TAG, "key failed", it) }
         }
     }
 
     fun text(value: String, packageName: String? = null) {
         val c = client ?: return
-        if (!connected.value || !displayReady.value || value.isEmpty()) return
+        if (value.isEmpty()) return
+        val key = inputTarget(packageName) ?: return
         noteAction("text \"${value.take(60)}\"")
         scope.launch {
-            runCatching { c.text(keyOf(packageName), value) }
+            runCatching { c.text(key, value) }
                 .onFailure { Log.w(TAG, "text failed", it) }
         }
     }
@@ -1118,7 +1166,14 @@ object HeadlessCloneEngine {
         if (c == null || !c.isServiceConnected()) {
             return@withContext JSONObject().put("ok", false).put("error", "Shell engine is not connected")
         }
-        val key = packageName.orEmpty()
+        // Release only the display this caller asked for. Releasing everything
+        // on a package-less call used to destroy every other agent's clone, so
+        // "all" must be spelled out.
+        val key = when {
+            packageName.isNullOrBlank() -> viewerKey()
+            packageName.equals("all", ignoreCase = true) -> ""
+            else -> keyOf(packageName)
+        }
         val error = resultError(c.releaseDisplay(key))
         if (key.isBlank() || key == activeClonePackage.value) {
             activeClonePackage.value = null
@@ -1129,10 +1184,14 @@ object HeadlessCloneEngine {
             displayReady.value = false
         } else {
             sessions.value = sessions.value - key
+            if (sessions.value.isEmpty()) displayReady.value = false
         }
         parseStatus(c.status())
-        if (error == null) JSONObject().put("ok", true).put("sessions", sessionsJson())
-        else JSONObject().put("ok", false).put("error", error)
+        if (error == null) {
+            JSONObject().put("ok", true).put("released", key.ifBlank { "all" }).put("sessions", sessionsJson())
+        } else {
+            JSONObject().put("ok", false).put("error", error)
+        }
     }
 
     fun activeDisplayPackage(): String? = activeClonePackage.value
@@ -1178,7 +1237,6 @@ object HeadlessCloneEngine {
         requestedWidth: Int,
         requestedHeight: Int,
         requestedFps: Int,
-        viewerPackage: String?,
         key: String,
         command: (EngineClient, String) -> String,
     ) {
@@ -1204,13 +1262,16 @@ object HeadlessCloneEngine {
                     fail("Display failed: $createError")
                     return@launch
                 }
-                activeClonePackage.value = viewerPackage
+                // Never move the viewer as a side effect of a launch: with
+                // several clones running, an agent opening clone B must not
+                // steal the display a human is watching. The UI calls
+                // focusViewer() explicitly when the human opens a clone.
                 parseStatus(c.status())
                 val error = resultError(command(c, key))
                 if (error != null) {
                     fail(error)
                 } else {
-                    if (viewerPackage != null) noteAction("launch $key")
+                    noteAction("launch $key")
                     setNotice("Launch requested")
                 }
                 refreshClonesInternal(c)

@@ -185,7 +185,6 @@ fun ClonedAppsScreen(startOnPreference: Boolean = false) {
     val notice by HeadlessCloneEngine.notice.collectAsState()
     val lastError by HeadlessCloneEngine.lastError.collectAsState()
     val displayFps by HeadlessCloneEngine.displayFps.collectAsState()
-    val displayReady by HeadlessCloneEngine.displayReady.collectAsState()
     val activeClonePackage by HeadlessCloneEngine.activeClonePackage.collectAsState()
     val quality by HeadlessCloneEngine.quality.collectAsState()
     val touchEnabled by HeadlessCloneEngine.touchEnabled.collectAsState()
@@ -275,6 +274,9 @@ fun ClonedAppsScreen(startOnPreference: Boolean = false) {
     fun closeViewer() {
         if (viewing == null) return
         viewing = null
+        // Do not keep claiming a display nobody is watching: machine calls that
+        // omit a package would otherwise keep targeting a hidden clone.
+        HeadlessCloneEngine.focusViewer(null)
         HeadlessCloneEngine.leaveViewerRunning()
     }
 
@@ -307,20 +309,25 @@ fun ClonedAppsScreen(startOnPreference: Boolean = false) {
         val height = if (perApp.customSize) perApp.height else defaultSize.second
         val fps = (perApp.fps.takeIf { it > 0 } ?: fpsValue)
             .coerceIn(10, maxFps.coerceAtLeast(10))
-        // The engine owns the display. If this package already owns it, never
+        // The engine owns the display. If this package already owns one, never
         // call launch again — that would restart the app and lose agent state.
-        val resumeLive = activeClonePackage == clone.packageName
+        // Several clones can run at once, so ask the session map (not the
+        // "viewer's clone" field): another clone being watched must not make
+        // this one look stopped.
+        val resumeLive = HeadlessCloneEngine.sessions.value.containsKey(clone.packageName)
+        // Point the viewer at this clone before anything reads the display:
+        // the preview loop and the machine API fall back to "the viewer's
+        // clone", and that must be the clone the human just opened.
+        HeadlessCloneEngine.focusViewer(clone.packageName)
         if (resumeLive) {
             viewing = ViewerSession(
                 clone = clone, width = width, height = height, fps = fps, touch = touchEnabled,
             )
             return
         }
-        if (!resumeLive) {
-            HeadlessCloneEngine.clearPreview()
-            HeadlessCloneEngine.clearCloneLogs()
-            HeadlessCloneEngine.launchClone(clone.packageName, width, height, fps)
-        }
+        HeadlessCloneEngine.clearPreview()
+        HeadlessCloneEngine.clearCloneLogs()
+        HeadlessCloneEngine.launchClone(clone.packageName, width, height, fps)
         viewing = ViewerSession(
             clone = clone,
             width = width,
@@ -406,6 +413,7 @@ fun ClonedAppsScreen(startOnPreference: Boolean = false) {
                             .putExtra("width", session.width)
                             .putExtra("height", session.height)
                             .putExtra("fps", session.fps)
+                            .putExtra("package", session.clone.packageName)
                         runCatching { context.startActivity(intent) }
                     }
                 },
@@ -1010,13 +1018,11 @@ private fun CloneViewPage(
 ) {
     val context = LocalContext.current
     val connected by HeadlessCloneEngine.connected.collectAsState()
-    val displayReady by HeadlessCloneEngine.displayReady.collectAsState()
     val preview by HeadlessCloneEngine.preview.collectAsState()
     val previewError by HeadlessCloneEngine.previewError.collectAsState()
     val lastError by HeadlessCloneEngine.lastError.collectAsState()
     val lines by HeadlessCloneEngine.cloneLogs.collectAsState()
     val actions by HeadlessCloneEngine.actionLog.collectAsState()
-    val displayId by HeadlessCloneEngine.displayId.collectAsState()
     val accent = sectionAccent(AltarisSection.APPS)
     var live by rememberSaveable { mutableStateOf(true) }
     var showLayout by rememberSaveable { mutableStateOf(false) }
@@ -1035,14 +1041,18 @@ private fun CloneViewPage(
         if (actions.isNotEmpty()) actionState.scrollToItem(minOf(actions.size, 40) - 1)
     }
 
-    LaunchedEffect(connected, displayReady, session.fps, live) {
+    LaunchedEffect(connected, session.fps, live) {
         if (!connected || !live) return@LaunchedEffect
         // The virtual display can run at 80–120 fps; the JPEG preview cannot.
         // Cap the UI stream at 24 fps so a high display rate does not starve
         // input/rendering and make the viewer feel heavy.
         val frameDelay = (1000 / session.fps.coerceIn(10, 24)).coerceAtLeast(42).toLong()
         while (isActive) {
-            if (displayReady) HeadlessCloneEngine.capturePreview()
+            // Ask for this clone's display explicitly: other clones may be
+            // running at the same time for other agents.
+            if (HeadlessCloneEngine.sessions.value.containsKey(session.clone.packageName)) {
+                HeadlessCloneEngine.capturePreviewOf(session.clone.packageName)
+            }
             delay(frameDelay)
         }
     }
@@ -1057,15 +1067,15 @@ private fun CloneViewPage(
 
     // Real frame rate of the virtual display: the engine reports how many
     // frames the guest actually produced. Sample it once a second instead of
-    // showing the configured cap (which is only an upper bound).
+    // showing the configured cap (which is only an upper bound). Read this
+    // clone's session, not the legacy single-display counter.
     var measuredFps by remember(session.clone.packageName) { mutableStateOf(0) }
-    LaunchedEffect(connected, displayReady, session.clone.packageName) {
-        if (!connected || !displayReady) return@LaunchedEffect
+    LaunchedEffect(connected, session.clone.packageName) {
+        if (!connected) return@LaunchedEffect
         var previousFrames = -1L
         var previousAt = 0L
         while (isActive) {
-            val status = runCatching { HeadlessCloneEngine.apiStatus() }.getOrNull()
-            val frames = status?.optLong("display_frames", -1L) ?: -1L
+            val frames = HeadlessCloneEngine.sessions.value[session.clone.packageName]?.frames ?: -1L
             val now = android.os.SystemClock.elapsedRealtime()
             if (frames >= 0) {
                 if (previousFrames >= 0 && now > previousAt) {
@@ -1129,6 +1139,9 @@ private fun CloneViewPage(
                     ViewerFrame(
                         bitmap = bitmap,
                         touchEnabled = session.touch && live,
+                        // Aim input at this clone explicitly: another clone
+                        // may be running for another agent right now.
+                        packageName = session.clone.packageName,
                         modifier = Modifier.fillMaxSize(),
                     )
                     if (!live) {
@@ -1275,8 +1288,10 @@ private fun CloneViewPage(
         if (showElements) {
             ElementsPanel(
                 accent = accent,
-                displayId = displayId,
-                packageName = HeadlessCloneEngine.activeClonePackage.value,
+                // The viewer's clone, not "the display" — other clones may be
+                // running for other agents.
+                displayId = HeadlessCloneEngine.displayIdFor(session.clone.packageName),
+                packageName = session.clone.packageName,
                 onClose = { showElements = false },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1501,7 +1516,7 @@ private fun ElementsPanel(
                             onClick = {
                                 scope.launch {
                                     var result = withContext(Dispatchers.IO) {
-                                        A11yBridge.click(context, node.id)
+                                        A11yBridge.click(context, node.id, packageName)
                                     }
                                     var obj = runCatching { JSONObject(result) }.getOrNull()
                                     // Node paths are only valid inside one tree.
@@ -1519,7 +1534,7 @@ private fun ElementsPanel(
                                         }
                                         if (again != null) {
                                             result = withContext(Dispatchers.IO) {
-                                                A11yBridge.click(context, again.id)
+                                                A11yBridge.click(context, again.id, packageName)
                                             }
                                             obj = runCatching { JSONObject(result) }.getOrNull()
                                         }
@@ -1779,6 +1794,7 @@ private fun copyText(context: Context, text: String, label: String) {
 private fun ViewerFrame(
     bitmap: Bitmap,
     touchEnabled: Boolean,
+    packageName: String?,
     modifier: Modifier = Modifier,
 ) {
     var boxSize by remember { mutableStateOf(IntSize.Zero) }
@@ -1803,7 +1819,7 @@ private fun ViewerFrame(
         modifier = modifier
             .background(Color.Black)
             .onSizeChanged { boxSize = it }
-            .pointerInput(touchEnabled, imageWidth, imageHeight, boxSize) {
+            .pointerInput(touchEnabled, imageWidth, imageHeight, boxSize, packageName) {
                 if (!touchEnabled) return@pointerInput
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
@@ -1820,7 +1836,7 @@ private fun ViewerFrame(
                     }
                     if (total.getDistance() < viewConfiguration.touchSlop) {
                         val point = toDisplay(down.position)
-                        HeadlessCloneEngine.tap(point.x.toInt(), point.y.toInt())
+                        HeadlessCloneEngine.tap(point.x.toInt(), point.y.toInt(), packageName)
                     } else {
                         val start = toDisplay(down.position)
                         val end = toDisplay(last)
@@ -1830,6 +1846,7 @@ private fun ViewerFrame(
                             end.x.toInt(),
                             end.y.toInt(),
                             260,
+                            packageName,
                         )
                     }
                 }

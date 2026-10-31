@@ -37,6 +37,9 @@ class ClonePipActivity : ComponentActivity() {
         val width = intent.getIntExtra("width", 720).coerceAtLeast(1)
         val height = intent.getIntExtra("height", 1280).coerceAtLeast(1)
         val fps = intent.getIntExtra("fps", 30).coerceIn(10, 120)
+        // PiP can be opened while several clones run; show this one, not
+        // whichever display happens to be the viewer's.
+        val packageName = intent.getStringExtra("package")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             runCatching {
                 setPictureInPictureParams(
@@ -49,13 +52,17 @@ class ClonePipActivity : ComponentActivity() {
         setContent {
             val preview by HeadlessCloneEngine.preview.collectAsState()
             val connected by HeadlessCloneEngine.connected.collectAsState()
-            LaunchedEffect(connected, fps) {
+            LaunchedEffect(connected, fps, packageName) {
                 if (!connected) return@LaunchedEffect
                 // PiP is a small surface: 24 fps is enough and leaves the CPU
                 // headroom for the cloned app and the rest of the UI.
                 val frameDelay = (1000 / fps.coerceIn(10, 24)).coerceAtLeast(42).toLong()
                 while (isActive) {
-                    HeadlessCloneEngine.capturePreview()
+                    if (packageName.isNullOrBlank()) {
+                        HeadlessCloneEngine.capturePreview()
+                    } else {
+                        HeadlessCloneEngine.capturePreviewOf(packageName)
+                    }
                     delay(frameDelay)
                 }
             }

@@ -27,9 +27,10 @@ Altaris local clone control
   altaris swipe <x1> <y1> <x2> <y2> [ms] [--package pkg]
   altaris text <text...> [--package pkg]
   altaris key <back|home|enter|tab|esc|recents|keycode> [--package pkg]
-  altaris record start [fps] [width]
+  altaris record start [fps] [width] [--package pkg]
   altaris record stop
   altaris record status
+  altaris open <url>
   altaris mcp
   altaris endpoint
 
@@ -273,12 +274,15 @@ case "$cmd" in
   record)
     sub="$1"
     case "$sub" in
-      start) post /record/start "{\"fps\":${2:-6},\"width\":${3:-720}}" ;;
+      start) post /record/start "{\"fps\":${2:-6},\"width\":${3:-720}$(pkg_field)}" ;;
       stop) post /record/stop "{}" ;;
       status|"") get /record/status ;;
       *) echo "altaris record: start|stop|status required" >&2; exit 1 ;;
     esac
     ;;
+  open|browse|xdg-open)
+    [ -n "$1" ] || { echo "altaris open: url required" >&2; exit 1; }
+    post /open-url "{\"url\":\"$(jesc "$1")\"}" ;;
   help|-h|--help) usage ;;
   *) echo "altaris: unknown command '$cmd'" >&2; usage; exit 1 ;;
 esac

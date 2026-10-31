@@ -224,8 +224,9 @@ object ControlServer {
                   POST /swipe          {"x1":100,"y1":300,"x2":100,"y2":900,"ms":260,"package":"<clone>"}
                   POST /text           {"text":"hello","package":"<clone>"}
                   POST /key            {"key":"back","package":"<clone>"}
+                  POST /open-url       {"url":"https://example.com"} — open a guest link in the phone browser
                   GET  /record/status
-                  POST /record/start   {"fps":6,"width":720}
+                  POST /record/start   {"fps":6,"width":720,"package":"<clone>"}
                   POST /record/stop
                   GET  /uiauto/status
                   GET  /uiauto?display=<id>&max=<n>
@@ -441,10 +442,34 @@ object ControlServer {
                     )
                 }
             )
+            "/open-url" -> {
+                // A guest shell has no browser: the app opens the link instead.
+                val requested = obj.optString("url")
+                val opened = UrlOpener.open(appContext, requested)
+                if (opened == null) {
+                    json(
+                        400,
+                        JSONObject()
+                            .put("ok", false)
+                            .put("error", "cannot open that link (only http, https, mailto, tel and sms)")
+                            .put("url", requested),
+                    )
+                } else {
+                    json(200, JSONObject().put("ok", true).put("url", opened))
+                }
+            }
             "/record/start" -> {
                 val ctx = appContext
                 if (ctx == null) json(500, JSONObject().put("ok", false).put("error", "App context unavailable"))
-                else json(200, CloneRecorder.start(ctx, obj.optInt("fps", 6), obj.optInt("width", 720)))
+                else json(
+                    200,
+                    CloneRecorder.start(
+                        ctx,
+                        obj.optInt("fps", 6),
+                        obj.optInt("width", 720),
+                        obj.optString("package").takeIf { it.isNotBlank() },
+                    ),
+                )
             }
             "/record/stop" -> json(200, CloneRecorder.stop())
             "/uiauto/click" -> {

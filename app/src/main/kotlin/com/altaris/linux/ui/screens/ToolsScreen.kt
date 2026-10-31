@@ -112,9 +112,10 @@ altaris tap <x> <y> [--package pkg]
 altaris swipe <x1> <y1> <x2> <y2> [ms] [--package pkg]
 altaris text <text...> [--package pkg]
 altaris key <back|home|enter|tab|esc|recents|keycode> [--package pkg]
-altaris record start [fps] [width]
+altaris record start [fps] [width] [--package pkg]
 altaris record stop
-altaris record status"""
+altaris record status
+altaris open <url>"""
 
 private const val AGENT_BRIEF = """You are controlling Altaris clones through MCP.
 Endpoint: http://127.0.0.1:47831/mcp
@@ -137,6 +138,9 @@ Rules:
   clone only releases that clone's display.
 - Screenshots and OCR are available even when the viewer is not open.
 - The same operations are available in any distro terminal as `altaris ...`.
+- `altaris open <url>` opens a link in the phone browser. Guest shells have no
+  browser, so xdg-open / sensible-browser / $BROWSER already point at it; use it
+  for sign-in links that a CLI prints instead of expecting a desktop browser.
 
 If a task needs visual confirmation, take a screenshot after every action group.
 The UI action feed in the clone viewer shows your taps, swipes, text and keys."""
