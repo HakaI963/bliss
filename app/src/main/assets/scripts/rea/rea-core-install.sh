@@ -117,13 +117,30 @@ export npm_config_fund=false
 export npm_config_progress=false
 mkdir -p "$BASE/npm" || fail "cannot create $BASE/npm"
 
+# npm renames the existing package directory aside before unpacking the new
+# one. When a previous attempt died mid-install (download abort, kill, power
+# loss) that directory is left half-populated and the rename fails with
+# ENOTEMPTY, which no amount of retrying fixes. Clearing the stale package and
+# its temp dirs makes the install idempotent.
+clean_npm_state() {
+  rm -rf "$BASE/npm/lib/node_modules/rea-agents" 2>/dev/null
+  rm -rf "$BASE/npm/lib/node_modules/".rea-agents-* 2>/dev/null
+  rm -rf "$BASE/npm/lib/node_modules/.package-lock.json" 2>/dev/null
+  # npm's staging directory for the package being replaced.
+  find "$BASE/npm" -maxdepth 4 -name ".rea-agents-*" -type d 2>/dev/null \
+    | while read -r d; do rm -rf "$d"; done
+}
+
 install_rea() {
+  clean_npm_state
   "$NPM" install -g "rea-agents@$REA_VERSION" --prefix "$BASE/npm" \
     --no-audit --no-fund --loglevel=error
 }
 
 if ! install_rea; then
-  say "npm install failed, retrying against the public registry"
+  say "npm install failed, retrying with a clean package directory"
+  clean_npm_state
+  rm -rf "$BASE/npm/lib/node_modules" 2>/dev/null
   npm_config_registry=https://registry.npmjs.org install_rea \
     || fail "npm could not install rea-agents@$REA_VERSION"
 fi

@@ -458,7 +458,12 @@ object ReaManager {
                 JDK_TEMURIN,
                 GHIDRA_SCRIPTS + "/ghidra-decompiler-build.sh",
             )
-            val script = "sh " + shellPath("ghidra-install.sh") + " " + shellPath(ROOT) + " " +
+            // ROOT is an absolute path: quoting it directly. shellPath() would
+            // prepend the scripts directory and produce
+            // /opt/altaris/rea/scripts//opt/altaris/rea, which is why the zip
+            // landed somewhere unzip could not find.
+            val script = "sh " + shellPath("ghidra-install.sh") + " " +
+                GuestExec.shellQuote(ROOT) + " " +
                 args.joinToString(" ") { GuestExec.shellQuote(it) }
             val result = GuestExec.run(app, distroId, script, timeoutMs = 90 * 60_000L) { line(it) }
             ToolOutcome(

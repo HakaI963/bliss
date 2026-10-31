@@ -193,14 +193,26 @@ object ReaCatalog {
             id = "rizin",
             label = "Rizin",
             description = "Scriptable binary analysis and one-shot command execution.",
+            // Debian 13 does not ship rizin (the trixie package does not exist),
+            // so the apt path must be empty or the archive fallback is never
+            // reached and the tool fails.
             variants = mapOf(
-                "apt" to every(listOf("rizin")),
-                // Alpine keeps rizin in testing, which is not enabled by default.
+                "apt" to emptyList(),
                 "apk" to emptyList(),
                 "dnf" to every(listOf("rizin")),
                 "pacman" to every(listOf("rizin")),
             ),
-            probes = listOf("rizin"),
+            probes = listOf("rizin", "rz-bin"),
+            // Rizin is not in Debian 13 either; the official aarch64 tarball is
+            // the supported way to get it on-device.
+            archive = ReaArchive(
+                url = "https://github.com/rizinorg/rizin/releases/download/v0.9.1/rizin-v0.9.1-android-aarch64.tar.gz",
+                fileName = "rizin-v0.9.1-android-aarch64.tar.gz",
+                dir = "$ARCHIVE_ROOT/rizin",
+                launcher = "bin/rizin",
+                minBytes = 10_000_000L,
+            ),
+            note = "Debian 13 does not package rizin; installed from the official arm64 release.",
         ),
         ReaDependency(
             id = "python3",
@@ -294,13 +306,24 @@ object ReaCatalog {
             id = "radare2",
             label = "radare2",
             description = "Native disassembler and debugger; fast on ARM, ideal for quick triage beside Ghidra.",
+            // Debian 13 dropped radare2 (last packaged in bullseye), and the
+            // RPM/Arch names differ too, so the package path is deliberately
+            // empty and the official arm64 release is the install path.
             variants = mapOf(
-                "apt" to every(listOf("radare2")),
+                "apt" to emptyList(),
                 "apk" to every(listOf("radare2")),
                 "dnf" to every(listOf("radare2")),
                 "pacman" to every(listOf("radare2")),
             ),
             probes = listOf("radare2", "r2"),
+            archive = ReaArchive(
+                url = "https://github.com/radareorg/radare2/releases/download/6.2.4/radare2-6.2.4-android-aarch64.tar.gz",
+                fileName = "radare2-6.2.4-android-aarch64.tar.gz",
+                dir = "$ARCHIVE_ROOT/radare2",
+                launcher = "bin/r2",
+                minBytes = 10_000_000L,
+            ),
+            note = "Debian 13 does not package radare2; installed from the official arm64 release.",
         ),
         ReaDependency(
             id = "ghidra",

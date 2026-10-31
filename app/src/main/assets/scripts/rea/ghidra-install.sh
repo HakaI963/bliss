@@ -130,25 +130,43 @@ else
     || fail "neither curl nor wget is available in the distro"
 
   URL="https://github.com/NationalSecurityAgency/ghidra/releases/download/$TAG/$ASSET"
+  ZIP="$BASE/ghidra-dl.zip"
   say "downloading Ghidra: $URL"
-  rm -f "$BASE/ghidra-dl.zip"
-  if command -v curl >/dev/null 2>&1; then
-    curl -fL --retry 3 -o "$BASE/ghidra-dl.zip" "$URL"
-  else
-    wget -O "$BASE/ghidra-dl.zip" "$URL"
-  fi
-  SIZE=$(wc -c < "$BASE/ghidra-dl.zip" 2>/dev/null | tr -d ' ')
+  # Resume instead of restarting. A 435 MB file over a phone link drops often;
+  # the previous code deleted the partial and started again, so a connection
+  # that aborted at 233 MB discarded all of it and the next attempt began at
+  # zero. -C - continues from what is already on disk.
+  attempt=1
+  while [ "$attempt" -le 5 ]; do
+    if command -v curl >/dev/null 2>&1; then
+      curl -fL --retry 3 --retry-delay 2 -C - -o "$ZIP" "$URL" && break
+    else
+      # wget resumes with -c and does not truncate an existing file.
+      wget -c -O "$ZIP" "$URL" && break
+    fi
+    attempt=$((attempt + 1))
+    say "download interrupted, resuming (attempt $attempt/5)"
+    sleep 2
+  done
+  SIZE=$(wc -c < "$ZIP" 2>/dev/null | tr -d ' ')
   case "$SIZE" in ''|*[!0-9]*) SIZE=0 ;; esac
   # A truncated or HTML-error download must not be unpacked.
   if [ "$SIZE" -lt 100000000 ]; then
-    rm -f "$BASE/ghidra-dl.zip"
+    rm -f "$ZIP"
     fail "Ghidra download is too small ($SIZE bytes); check the network"
+  fi
+  # The zip must be readable before unzip is trusted with it: a truncated
+  # archive reports "End-of-central-directory signature not found" later, which
+  # looks like a corrupt file rather than an incomplete download.
+  if ! unzip -tqq "$ZIP" >/dev/null 2>&1; then
+    rm -f "$ZIP"
+    fail "Ghidra download is incomplete or corrupt ($SIZE bytes); retry"
   fi
   say "extracting Ghidra ($SIZE bytes)"
   rm -rf "$BASE/ghidra.tmp"
   mkdir -p "$BASE/ghidra.tmp" || fail "cannot create $BASE/ghidra.tmp"
-  unzip -q "$BASE/ghidra-dl.zip" -d "$BASE/ghidra.tmp" || fail "Ghidra zip could not be extracted"
-  rm -f "$BASE/ghidra-dl.zip"
+  unzip -q "$ZIP" -d "$BASE/ghidra.tmp" || fail "Ghidra zip could not be extracted"
+  rm -f "$ZIP"
   DIR=$(find "$BASE/ghidra.tmp" -mindepth 1 -maxdepth 1 -type d -name "ghidra*" | head -1)
   [ -n "$DIR" ] || DIR="$BASE/ghidra.tmp"
   rm -rf "$GH"
