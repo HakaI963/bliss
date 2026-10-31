@@ -319,7 +319,7 @@ object ReaManager {
         }
     }
 
-    private fun installDependency(
+    private suspend fun installDependency(
         app: Context,
         distroId: String,
         dep: ReaDependency,
