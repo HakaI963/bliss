@@ -57,7 +57,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.altaris.linux.core.rea.AgentWork
 import com.altaris.linux.core.rea.BinaryChunks
+import com.altaris.linux.core.rea.ChunkRow
 import com.altaris.linux.core.rea.ChunkState
 import com.altaris.linux.core.rea.Findings
 import com.altaris.linux.core.rea.ReaBridge
@@ -514,7 +516,7 @@ private fun BinaryChunkMap(
 
 /** The reference's side bar: one shaded bar per row. */
 @Composable
-private fun ChunkRailBar(accent: Color, row: BinaryChunks.Row, modifier: Modifier = Modifier) {
+private fun ChunkRailBar(accent: Color, row: ChunkRow, modifier: Modifier = Modifier) {
     val scheme = MaterialTheme.colorScheme
     Box(
         modifier = modifier
@@ -579,7 +581,7 @@ private fun AgentWorkCard(accent: Color, calls: List<ReaBridge.Call>) {
 }
 
 @Composable
-private fun AgentBar(accent: Color, agent: BinaryChunks.AgentWork) {
+private fun AgentBar(accent: Color, agent: AgentWork) {
     val scheme = MaterialTheme.colorScheme
     Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = 1.5.dp),
