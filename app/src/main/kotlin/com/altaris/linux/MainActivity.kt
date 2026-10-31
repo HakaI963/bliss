@@ -35,10 +35,11 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.filled.Apps
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Terminal
-import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.foundation.shape.CircleShape
@@ -865,6 +866,9 @@ class MainActivity : ComponentActivity() {
                                     onOpenHostShell = openHostShell
                                 )
                             }
+                            BottomTab.QUINN -> {
+                                com.altaris.linux.ui.screens.QuinnScreen()
+                            }
                             BottomTab.DISTROS -> {
                                 com.altaris.linux.ui.screens.DistroScreen(
                                     permissionState = permissionState,
@@ -922,6 +926,7 @@ class MainActivity : ComponentActivity() {
                     displayLive: Boolean,
                     cloneRunning: Boolean,
                     onOpenPalette: () -> Unit,
+                    onOpenTools: () -> Unit,
                     onOpenSettings: () -> Unit,
                     onOpenHostShell: () -> Unit,
                 ) {
@@ -934,6 +939,7 @@ class MainActivity : ComponentActivity() {
                         },
                         live = displayLive || cloneRunning,
                         onOpenPalette = onOpenPalette,
+                        onOpenTools = onOpenTools,
                         onOpenSettings = onOpenSettings,
                         onOpenHostShell = onOpenHostShell,
                         taskButton = {
@@ -1042,6 +1048,7 @@ class MainActivity : ComponentActivity() {
                                                     displayLive = session != null,
                                                     cloneRunning = activeClone != null,
                                                     onOpenPalette = { paletteOpen = true },
+                                                    onOpenTools = { currentTab = BottomTab.TOOLS },
                                                     onOpenSettings = { currentScreen = Screen.SETTINGS },
                                                     onOpenHostShell = openHostShell
                                                 )
@@ -1053,17 +1060,17 @@ class MainActivity : ComponentActivity() {
                                     if (showChrome) {
                                         AltarisDock(
                                             selected = when (currentTab) {
+                                                BottomTab.QUINN -> DockDestination.QUINN
                                                 BottomTab.DISTROS -> DockDestination.DISTROS
                                                 BottomTab.APPS -> DockDestination.APPS
-                                                BottomTab.TOOLS -> DockDestination.TOOLS
                                                 else -> DockDestination.HOME
                                             },
                                             onSelect = { destination ->
                                                 currentTab = when (destination) {
                                                     DockDestination.HOME -> BottomTab.HOME
+                                                    DockDestination.QUINN -> BottomTab.QUINN
                                                     DockDestination.DISTROS -> BottomTab.DISTROS
                                                     DockDestination.APPS -> BottomTab.APPS
-                                                    DockDestination.TOOLS -> BottomTab.TOOLS
                                                 }
                                             },
                                         )
@@ -1411,10 +1418,20 @@ class MainActivity : ComponentActivity() {
                             )
                             add(
                                 PaletteAction(
+                                    id = "quinn",
+                                    title = "Quinn",
+                                    subtitle = "Your assistant for Altaris",
+                                    icon = Icons.Default.AutoAwesome,
+                                    accent = MaterialTheme.colorScheme.secondary,
+                                    onSelect = { currentTab = BottomTab.QUINN },
+                                )
+                            )
+                            add(
+                                PaletteAction(
                                     id = "tools",
                                     title = "Tools",
-                                    subtitle = "Clone folder, MCP and agent actions",
-                                    icon = Icons.Default.Tune,
+                                    subtitle = "Reverse engineering, MCP and agent actions",
+                                    icon = Icons.Default.Build,
                                     accent = MaterialTheme.colorScheme.primary,
                                     onSelect = { currentTab = BottomTab.TOOLS },
                                 )

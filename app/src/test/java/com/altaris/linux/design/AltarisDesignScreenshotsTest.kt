@@ -30,6 +30,7 @@ import com.altaris.linux.ui.components.QStatusRow
 import com.altaris.linux.ui.components.QToggleRow
 import com.altaris.linux.ui.components.Quartz
 import com.altaris.linux.ui.screens.ClonedAppsScreen
+import com.altaris.linux.ui.screens.QuinnScreen
 import com.altaris.linux.ui.screens.ToolsScreen
 import com.altaris.linux.ui.theme.AltarisTheme
 import org.junit.Rule
@@ -169,6 +170,17 @@ class AltarisDesignScreenshotsTest {
                     CompositionLocalProvider(LocalActivityResultRegistryOwner provides NoopRegistryOwner) {
                         ToolsScreen()
                     }
+                }
+            }
+        }
+    }
+
+    @Test
+    fun quinn_tab() {
+        paparazzi.snapshot {
+            AltarisTheme(themeMode = ThemeMode.DARK) {
+                Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                    QuinnScreen()
                 }
             }
         }

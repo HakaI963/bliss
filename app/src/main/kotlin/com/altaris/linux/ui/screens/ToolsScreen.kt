@@ -807,6 +807,9 @@ private fun ReaToolsCard(context: Context, accent: Color) {
             val supported = manager.isBlank() ||
                 dep.kind != "package" ||
                 ReaCatalog.packagedFor(dep, manager)
+            // No package on this distro, but a release archive exists: the
+            // install still works, it just downloads from upstream.
+            val archive = manager.isNotBlank() && ReaCatalog.usesArchive(dep, manager)
             PrismRow(
                 title = dep.label,
                 subtitle = when {
@@ -816,6 +819,7 @@ private fun ReaToolsCard(context: Context, accent: Color) {
                         "Installed · ARM64 decompiler missing (function lists and strings work)"
                     installed -> "Installed"
                     !supported -> "Not packaged for $manager — install it manually"
+                    archive -> "Not in $manager — installs from the official release"
                     else -> dep.description
                 },
                 accent = accent,
@@ -826,6 +830,7 @@ private fun ReaToolsCard(context: Context, accent: Color) {
                             license -> "License"
                             installed -> "Installed"
                             !supported -> "N/A"
+                            archive -> "Download"
                             else -> "Install"
                         },
                         accent,

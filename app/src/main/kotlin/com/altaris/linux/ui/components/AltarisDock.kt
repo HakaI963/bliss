@@ -24,13 +24,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Android
 import androidx.compose.material.icons.filled.Apps
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Terminal
-import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -51,11 +51,15 @@ import androidx.compose.ui.unit.sp
 import com.altaris.linux.ui.theme.Prism
 
 /**
- * The screens the shell can show. The nav bar exposes four of them; the rest
+ * The screens the shell can show. The nav bar exposes five of them; the rest
  * (terminal, settings) are reached through the command palette.
+ *
+ * Tools is deliberately *not* in the dock: it is a maintenance surface, so it
+ * lives in the top bar as a wrench, next to Settings.
  */
 enum class BottomTab(val title: String, val icon: ImageVector) {
     HOME("Home", Icons.Default.Home),
+    QUINN("Quinn", Icons.Default.AutoAwesome),
     DISTROS("Distros", Icons.Default.List),
     APPS("Apps", Icons.Default.Android),
     TOOLS("Tools", Icons.Default.Build),
@@ -66,16 +70,16 @@ enum class BottomTab(val title: String, val icon: ImageVector) {
 /** The destinations of the navigation bar. */
 enum class DockDestination(val title: String, val icon: ImageVector) {
     HOME("Home", Icons.Default.Home),
+    QUINN("Quinn", Icons.Default.AutoAwesome),
     DISTROS("Distros", Icons.Default.Layers),
     APPS("Apps", Icons.Default.Apps),
-    TOOLS("Tools", Icons.Default.Tune),
 }
 
 private val DockSlots = listOf(
     DockDestination.HOME,
+    DockDestination.QUINN,
     DockDestination.DISTROS,
     DockDestination.APPS,
-    DockDestination.TOOLS,
 )
 
 /**

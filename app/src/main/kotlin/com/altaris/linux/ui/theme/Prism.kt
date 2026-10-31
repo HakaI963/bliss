@@ -83,6 +83,7 @@ object Prism {
  */
 enum class AltarisSection {
     HOME,
+    QUINN,
     DISTROS,
     APPS,
     TOOLS,

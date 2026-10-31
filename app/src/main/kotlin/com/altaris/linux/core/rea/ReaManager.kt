@@ -51,6 +51,19 @@ object ReaManager {
     const val GHIDRA_ASSET = "ghidra_11.4.3_PUBLIC_20251203.zip"
 
     /**
+     * Launchers for tools installed from release archives (JADX, Apktool).
+     *
+     * This directory is prepended to PATH by [PROBE_PATH] and by every REA
+     * run, so an archive install resolves exactly like a packaged one. It sits
+     * beside the archives, never inside them: the archive installer replaces
+     * its own directory on a reinstall.
+     */
+    const val ARCHIVE_BIN = ReaCatalog.ARCHIVE_ROOT + "/bin"
+
+    /** PATH prefix used by probes and analysis so archive tools are found. */
+    const val PROBE_PATH = ARCHIVE_BIN + ":" + ROOT + "/node/bin"
+
+    /**
      * Ghidra 11.4.3 requires Java 21+ (application.java.min=21) and its
      * launcher refuses a JRE: LaunchSupport checks for a javac executable.
      * 12.2 moved the minimum to Java 25, which no phone distro packages yet,
@@ -123,6 +136,9 @@ object ReaManager {
     }
 
     private fun probeScript(): String = listOf(
+        // Archive-installed tools live outside the distro PATH; put their bin
+        // first so `command -v jadx` finds them exactly like a packaged one.
+        "PATH=" + PROBE_PATH + ":\$PATH; export PATH",
         "echo arch=\$(uname -m)",
         "if [ -x " + REA_BIN + " ]; then echo rea=\$(PATH=" + ROOT + "/node/bin:\$PATH " + REA_BIN + " --version 2>/dev/null | head -n1); else echo rea=; fi",
         "if [ -x " + NODE_BIN + " ]; then echo node=\$(" + NODE_BIN + " -v 2>/dev/null); " +
@@ -334,11 +350,16 @@ object ReaManager {
             when {
                 manager.isBlank() || manager == "none" ->
                     ToolOutcome(dep.id, false, "no supported package manager in this distro")
+                // No package on this distro: install the release archive. Fedora
+                // ships neither jadx nor apktool, so "try another dnf name" was
+                // never going to work there.
+                batches.isEmpty() && dep.archive != null ->
+                    installFromArchive(app, distroId, dep, manager, dep.archive, line)
                 batches.isEmpty() ->
                     ToolOutcome(
                         dep.id,
                         false,
-                        "not packaged for " + manager + "; install it manually or use a Debian/Ubuntu distro",
+                        "not packaged for " + manager + " and has no release archive; install it manually",
                     )
                 else -> {
                     line(
@@ -365,6 +386,74 @@ object ReaManager {
         }
     }
 
+    /**
+     * Install [dep] from its release archive because no package manager on the
+     * distro ships it.
+     *
+     * A bare jar (Apktool) has no launcher of its own, so the wrapper is written
+     * here — into `<archive>/../bin`, which [PROBE_PATH] puts on PATH, and never
+     * into the archive directory the installer may replace.
+     */
+    private suspend fun installFromArchive(
+        app: Context,
+        distroId: String,
+        dep: ReaDependency,
+        manager: String,
+        archive: ReaArchive,
+        line: (String) -> Unit,
+    ): ToolOutcome {
+        line(
+            "not packaged for " + manager + " — installing " + dep.label +
+                " from the official release (" + archive.fileName + ")"
+        )
+        val probes = ReaCatalog.probesFor(dep).joinToString(",")
+        val launcher = archive.launcher
+
+        // Stage the wrapper before the installer runs: the installer only
+        // validates it, so a failure is reported before a 70 MB download.
+        if (launcher.isBlank()) {
+            val wrapperName = ReaCatalog.probesFor(dep).firstOrNull().orEmpty()
+            if (wrapperName.isBlank()) {
+                return ToolOutcome(dep.id, false, "no probe binary name for the wrapper")
+            }
+            val body = archive.wrapper.trim().replace("\r\n", "\n")
+            if (body.isBlank()) {
+                return ToolOutcome(dep.id, false, "archive has no launcher and no wrapper")
+            }
+            val stage = buildString {
+                append("set +e\n")
+                append("mkdir -p ").append(ARCHIVE_BIN).append("\n")
+                append("cat > ").append(ARCHIVE_BIN).append('/').append(wrapperName)
+                append(" <<'ALTARIS_WRAPPER_EOF'\n")
+                append(body).append('\n')
+                append("ALTARIS_WRAPPER_EOF\n")
+                append("chmod +x ").append(ARCHIVE_BIN).append('/').append(wrapperName).append('\n')
+            }
+            val staged = GuestExec.run(app, distroId, stage, timeoutMs = 60_000L) { line(it) }
+            if (!staged.ok) {
+                return ToolOutcome(dep.id, false, staged.tail(3).ifBlank { "cannot write the launcher" })
+            }
+        }
+
+        val script = "sh " + shellPath("install-archive.sh") + " " +
+            GuestExec.shellQuote(archive.url) + " " +
+            GuestExec.shellQuote(archive.fileName) + " " +
+            GuestExec.shellQuote(archive.dir) + " " +
+            GuestExec.shellQuote(probes) + " " +
+            GuestExec.shellQuote(launcher)
+        val result = GuestExec.run(app, distroId, script, timeoutMs = 30 * 60_000L) { line(it) }
+        val detail = result.output.lines()
+            .map { it.trim() }
+            .lastOrNull { it.startsWith("ok:") || it.startsWith("ERROR") }
+            .orEmpty()
+        return ToolOutcome(
+            dep.id,
+            result.ok,
+            if (result.ok) detail.removePrefix("ok:").trim()
+            else detail.removePrefix("ERROR:").trim().ifBlank { "archive install failed" },
+        )
+    }
+
     /** Absolute in-guest path of a staged REA helper script. */
     private fun shellPath(name: String): String = GuestExec.shellQuote(GHIDRA_SCRIPTS + "/" + name)
 
@@ -381,6 +470,7 @@ object ReaManager {
     private val VERBATIM_SCRIPTS = listOf(
         "rea-core-install.sh",
         "install-tool.sh",
+        "install-archive.sh",
         "ghidra-install.sh",
         "ghidra-decompiler-build.sh",
         "DumpInfo.java",

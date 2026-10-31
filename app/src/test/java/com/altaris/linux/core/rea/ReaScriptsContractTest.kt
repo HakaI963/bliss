@@ -35,6 +35,7 @@ class ReaScriptsContractTest {
         for (name in listOf(
             "rea-core-install.sh",
             "install-tool.sh",
+            "install-archive.sh",
             "ghidra-install.sh",
             "ghidra-decompiler-build.sh",
             "ghidra-analyze.sh",
@@ -50,6 +51,7 @@ class ReaScriptsContractTest {
         for (name in listOf(
             "rea-core-install.sh",
             "install-tool.sh",
+            "install-archive.sh",
             "ghidra-install.sh",
             "ghidra-decompiler-build.sh",
             "ghidra-analyze.sh",
@@ -100,6 +102,53 @@ class ReaScriptsContractTest {
             "probes must be split on commas, not words",
             script.contains("for p in \$PROBES"),
         )
+    }
+
+    @Test
+    fun archiveInstallerGuardsTruncatedDownloadsAndVerifiesTheProbe() {
+        val script = reaScript("install-archive.sh")
+        // A captive-portal HTML page or an interrupted transfer is a few KB;
+        // unpacking it would leave a half-installed tool.
+        assertTrue(script.contains("100000"))
+        assertTrue(script.contains("not a release archive"))
+        assertTrue(script.contains("probe_list()"))
+        assertTrue(script.contains("already installed"))
+        assertTrue(script.contains("ERROR:"))
+        // Releases wrap everything in one directory; the launcher path must be
+        // stable, so the top level is flattened.
+        assertTrue(script.contains("Flatten"))
+        // No set -e: a failure must print a reason, not abort silently.
+        assertFalse(script.contains("set -e"))
+    }
+
+    @Test
+    fun archiveInstallerLinksTheLauncherIntoPath() {
+        val script = reaScript("install-archive.sh")
+        assertTrue(script.contains("BIN=\"\$DIR/../bin\""))
+        assertTrue(script.contains("ln -sf"))
+        assertTrue(script.contains("chmod +x"))
+    }
+
+    @Test
+    fun managerInstallsArchiveToolsWhenNoPackageExists() {
+        val manager = repoFile("src/main/kotlin/com/altaris/linux/core/rea/ReaManager.kt").readText()
+        assertTrue(manager.contains("install-archive.sh"))
+        assertTrue(manager.contains("installFromArchive"))
+        // Archive launchers must be on PATH for probes and for REA itself.
+        assertTrue(manager.contains("ARCHIVE_BIN"))
+        assertTrue(manager.contains("PROBE_PATH"))
+        // The wrapper for a bare jar is staged before the download, so a
+        // missing launcher is reported before 15 MB is fetched.
+        assertTrue(manager.contains("ALTARIS_WRAPPER_EOF"))
+    }
+
+    @Test
+    fun reaRunsWithItsDocumentedPrerequisites() {
+        val stdio = repoFile("src/main/kotlin/com/altaris/linux/core/rea/ReaStdio.kt").readText()
+        // REA refuses several analysis families without a procps-compatible ps
+        // and documents the compact schema profile for large tool lists.
+        assertTrue(stdio.contains("PROBE_PATH"))
+        assertTrue(stdio.contains("REA_MCP_INPUT_SCHEMA_PROFILE"))
     }
 
     @Test

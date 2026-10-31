@@ -50,8 +50,16 @@ class ReaStdio(private val ctx: Context, val distroId: String) {
         val log = File(ctx.filesDir, "rea-mcp.log")
         // The rea shim is `#!/usr/bin/env node`, so node must be on PATH even
         // when the distro had no Node 22 and we installed our own copy.
-        val command = "PATH=" + ReaManager.ROOT + "/node/bin:\$PATH; export PATH; exec " +
-            ReaManager.REA_BIN + " mcp"
+        // Archive-installed tools (jadx, apktool) are prepended too: REA shells
+        // out to them by bare name.
+        //
+        // REA's newer releases also refuse Ghidra/JADX/firmware/JS analysis
+        // without a procps-compatible `ps` on PATH, and the compact schema
+        // profile keeps the advertised tool list small enough for a phone-side
+        // MCP client. Both are set here so they cannot drift per distro.
+        val command = "PATH=" + ReaManager.PROBE_PATH + ":\$PATH; export PATH; " +
+            "REA_MCP_INPUT_SCHEMA_PROFILE=\${REA_MCP_INPUT_SCHEMA_PROFILE:-compact}; export REA_MCP_INPUT_SCHEMA_PROFILE; " +
+            "exec " + ReaManager.REA_BIN + " mcp"
         val proc = if (profile.method == "chroot") {
             val path = profile.chrootPath
                 ?: throw IllegalStateException("chroot path missing for " + distroId)

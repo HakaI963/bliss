@@ -62,6 +62,7 @@ fun AltarisCommandBar(
     live: Boolean,
     onOpenPalette: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenTools: (() -> Unit)? = null,
     onOpenHostShell: (() -> Unit)? = null,
     taskButton: (@Composable () -> Unit)? = null,
 ) {
@@ -122,6 +123,16 @@ fun AltarisCommandBar(
                 contentDescription = "Jump to…",
                 onClick = onOpenPalette,
             )
+            // Tools sits beside Settings in the top bar rather than in the
+            // dock: it is a maintenance surface, not a daily destination.
+            if (onOpenTools != null) {
+                Spacer(Modifier.width(6.dp))
+                BarButton(
+                    icon = Icons.Default.Build,
+                    contentDescription = "Tools",
+                    onClick = onOpenTools,
+                )
+            }
             Spacer(Modifier.width(6.dp))
             BarButton(
                 icon = Icons.Default.Settings,
