@@ -2,6 +2,21 @@ package com.altaris.linux.core.quinn
 
 import java.util.UUID
 
+/** What kind of thing a Quinn target is. */
+enum class TargetKind {
+    /** A coding agent CLI inside a distro or the host prefix. */
+    AGENT,
+
+    /**
+     * The built-in REA analysis environment.
+     *
+     * It is a target like any other in the chat: you attach a file, pick REA,
+     * and send. The difference is internal — an agent target runs the agent's
+     * CLI, while this one drives REA's MCP tools through the configured model.
+     */
+    REA,
+}
+
 /** One (distro, agent) pair Quinn can talk to. */
 data class AgentTarget(
     /** Distro id, e.g. `debian` or `fedora_chroot`. */
@@ -12,11 +27,14 @@ data class AgentTarget(
     val binary: String,
     val label: String,
     val headless: Boolean,
+    val kind: TargetKind = TargetKind.AGENT,
 ) {
     /** Stable identity: the same agent in two distros is two targets. */
     val key: String get() = "$distroId/$binary"
 
     val displayName: String get() = "$label · $distroName"
+
+    val isRea: Boolean get() = kind == TargetKind.REA
 }
 
 /** Who wrote one message. */
@@ -33,6 +51,8 @@ data class Turn(
     val streaming: Boolean = false,
     /** Non-null when the turn failed; shown in the bubble. */
     val error: String? = null,
+    /** Tool steps, for a REA turn. Empty for a plain agent reply. */
+    val steps: List<ReaAnalysis.Step> = emptyList(),
 )
 
 /**
@@ -59,6 +79,9 @@ data class QuinnSession(
                 ?.ifBlank { null }
                 ?: target.displayName
         }
+
+    /** True when this thread is the REA analysis target. */
+    val isRea: Boolean get() = target.isRea
 }
 
 /**

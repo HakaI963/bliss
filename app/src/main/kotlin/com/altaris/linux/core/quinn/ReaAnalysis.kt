@@ -19,23 +19,24 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Drives REA from Quinn using the user's own OpenAI-compatible endpoint.
  *
  * REA is an MCP *server*: it exposes analysis tools and contains no model. The
- * recording this tab is modelled on worked because an agent (Kimi K3) decided
- * which REA tool to call. Quinn takes that role here: it asks the configured
- * model what to do, executes the REA tool the model chose, feeds the result
- * back, and repeats until the model stops asking for tools.
+ * recording this tab is modelled on worked because an agent decided which REA
+ * tool to call. Quinn takes that role: it asks the configured model what to do,
+ * executes the REA tool the model chose, feeds the result back, and repeats
+ * until the model stops asking for tools.
  *
- * That loop is what makes the REA tab useful without a second app: the user
- * supplies one key, and the analysis runs inside the hidden REA distro.
+ * The model is told what REA is and which tools exist on every run, so nothing
+ * about REA has to be explained by the user.
  */
 object ReaAnalysis {
 
     private const val TAG = "QuinnRea"
-    private const val MAX_STEPS = 8
+    private const val MAX_STEPS = 12
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -47,18 +48,6 @@ object ReaAnalysis {
         .writeTimeout(60, TimeUnit.SECONDS)
         .build()
 
-    /** One analysis run: what was asked, and every step it took. */
-    data class Run(
-        val id: Long = System.nanoTime(),
-        val prompt: String,
-        val target: String = "",
-        val steps: List<Step> = emptyList(),
-        val running: Boolean = false,
-        val answer: String = "",
-        val error: String = "",
-        val model: String = "",
-    )
-
     /** One tool call the model asked for, and what it returned. */
     data class Step(
         val tool: String,
@@ -66,21 +55,67 @@ object ReaAnalysis {
         val result: String = "",
         val error: String = "",
         val ms: Long = 0L,
+        /** True while the call is still running (drives the live pulse). */
+        val running: Boolean = false,
     )
+
+    /** One analysis run: what was asked, and every step it took. */
+    data class Run(
+        val id: Long = System.nanoTime(),
+        val prompt: String,
+        val files: List<String> = emptyList(),
+        val steps: List<Step> = emptyList(),
+        val running: Boolean = false,
+        val answer: String = "",
+        val error: String = "",
+        val model: String = "",
+        val startedAt: Long = System.currentTimeMillis(),
+        /** Bytes of tool output received so far — the dashboard's byte counter. */
+        val bytes: Long = 0L,
+        /** Tool names the model has used, in order, for the activity strip. */
+        val activity: List<String> = emptyList(),
+    ) {
+        val elapsedMs: Long get() = System.currentTimeMillis() - startedAt
+    }
+
+    /** A single live event, for the dashboard's ticker. */
+    data class Event(
+        val text: String,
+        val kind: Kind = Kind.INFO,
+        val at: Long = System.currentTimeMillis(),
+    ) {
+        enum class Kind { INFO, TOOL, RESULT, ERROR }
+    }
 
     private val _runs = MutableStateFlow<List<Run>>(emptyList())
     val runs: StateFlow<List<Run>> = _runs.asStateFlow()
 
+    private val _events = MutableStateFlow<List<Event>>(emptyList())
+    /** Newest first, capped. The REA dashboard renders this as a live ticker. */
+    val events: StateFlow<List<Event>> = _events.asStateFlow()
+
     private val _busy = MutableStateFlow(false)
     val busy: StateFlow<Boolean> = _busy.asStateFlow()
+
+    /** Monotonic counters the dashboard plots; never reset by a new run. */
+    private val totalToolCalls = AtomicLong(0L)
+    private val totalBytes = AtomicLong(0L)
+
+    private val _totals = MutableStateFlow(Totals())
+    data class Totals(
+        val toolCalls: Long = 0L,
+        val bytes: Long = 0L,
+        val runs: Int = 0,
+    )
+    val totals: StateFlow<Totals> = _totals.asStateFlow()
 
     /**
      * Run one analysis.
      *
      * @param prompt what the user wants to know
-     * @param target absolute path inside the REA distro (optional)
+     * @param files absolute paths inside the REA distro
      */
-    fun analyze(context: Context, prompt: String, target: String = "") {
+    fun analyze(context: Context, prompt: String, files: List<String> = emptyList()) {
         if (prompt.isBlank() || _busy.value) return
         val app = context.applicationContext
         val config = QuinnModelConfig.load(app)
@@ -88,8 +123,8 @@ object ReaAnalysis {
             push(
                 Run(
                     prompt = prompt,
-                    target = target,
-                    error = "Add a model and API key in the REA tab first.",
+                    files = files,
+                    error = "Add a model and API key in the REA panel first.",
                     model = config.model,
                 )
             )
@@ -100,25 +135,33 @@ object ReaAnalysis {
             push(
                 Run(
                     prompt = prompt,
-                    target = target,
+                    files = files,
                     error = "REA is not installed. Install it from Tools > Reverse engineering.",
                     model = config.model,
                 )
             )
             return
         }
-        val run = Run(prompt = prompt, target = target, running = true, model = config.model)
+        val run = Run(prompt = prompt, files = files, running = true, model = config.model)
         push(run)
         _busy.value = true
+        log("analysis started · " + config.model, Event.Kind.INFO)
         scope.launch {
             try {
                 val answer = withContext(Dispatchers.IO) { loop(app, run, distroId, config) }
                 update(run.id) { it.copy(answer = answer, running = false) }
+                log("analysis complete", Event.Kind.RESULT)
             } catch (t: Throwable) {
                 Log.w(TAG, "analysis failed", t)
                 update(run.id) { it.copy(error = t.message ?: "Analysis failed", running = false) }
+                log(t.message ?: "analysis failed", Event.Kind.ERROR)
             } finally {
                 _busy.value = false
+                _totals.value = _totals.value.copy(
+                    toolCalls = totalToolCalls.get(),
+                    bytes = totalBytes.get(),
+                    runs = _totals.value.runs + 1,
+                )
             }
         }
     }
@@ -139,9 +182,10 @@ object ReaAnalysis {
         // idempotent and cheap when it already is.
         runCatching { ReaManager.start(context, distroId) }
         val tools = ReaManager.cachedTools() ?: ReaManager.probeTools(context, distroId)
+        log("${tools.length()} REA tools available", Event.Kind.INFO)
         val toolSpec = openAiTools(tools)
         val messages = JSONArray()
-            .put(JSONObject().put("role", "system").put("content", systemPrompt()))
+            .put(JSONObject().put("role", "system").put("content", systemPrompt(tools)))
             .put(JSONObject().put("role", "user").put("content", userPrompt(run)))
 
         for (step in 0 until MAX_STEPS) {
@@ -161,19 +205,33 @@ object ReaAnalysis {
                 val function = call.optJSONObject("function") ?: continue
                 val name = function.optString("name")
                 val rawArgs = function.optString("arguments")
+                val stepIndex = appendStep(
+                    run.id,
+                    Step(tool = name, arguments = rawArgs, running = true),
+                )
+                log(name, Event.Kind.TOOL)
                 val started = System.currentTimeMillis()
                 val (result, error) = callReaTool(context, distroId, name, rawArgs)
                 val elapsed = System.currentTimeMillis() - started
-                appendStep(
+                val bytes = result.length.toLong()
+                totalToolCalls.incrementAndGet()
+                totalBytes.addAndGet(bytes)
+                finishStep(
                     run.id,
+                    stepIndex,
                     Step(
                         tool = name,
                         arguments = rawArgs,
                         result = result,
                         error = error,
                         ms = elapsed,
-                    )
+                    ),
                 )
+                if (error.isBlank()) {
+                    log("$name → ${formatBytes(bytes)} in ${elapsed}ms", Event.Kind.RESULT)
+                } else {
+                    log("$name failed: $error", Event.Kind.ERROR)
+                }
                 messages.put(
                     JSONObject()
                         .put("role", "tool")
@@ -268,19 +326,55 @@ object ReaAnalysis {
         return out
     }
 
-    private fun systemPrompt(): String = """
-        You are the analysis engine inside Altaris. You answer questions about
-        software by calling the REA tools provided.
-        Rules:
-        - Prefer inspecting the actual target over guessing; call a tool first.
-        - Report what the evidence shows, and say when something is unknown.
-        - Keep the final answer short and concrete: what you found, and where.
-        - Never invent file contents, addresses or symbol names.
-    """.trimIndent()
+    /**
+     * The system prompt, generated from the live tool catalog.
+     *
+     * The model is told what REA is and exactly which tools it can call, so the
+     * user never has to explain the environment or name a tool.
+     */
+    private fun systemPrompt(tools: JSONArray): String {
+        val families = LinkedHashSet<String>()
+        for (i in 0 until tools.length()) {
+            val name = tools.optJSONObject(i)?.optString("name").orEmpty()
+            if (name.isBlank()) continue
+            families.add(name.substringBefore('-').substringBefore('_'))
+        }
+        val catalog = buildString {
+            append("Available tool families: ")
+            append(families.joinToString(", ").take(600))
+            append(". ")
+        }
+        return """
+            You are the analysis engine inside Altaris, running inside a private
+            Linux environment that already has reverse-engineering tools
+            installed (JADX, Apktool, aapt, radare2/rizin, binwalk, objdump,
+            gdb, sqlite3, Python and more).
 
-    private fun userPrompt(run: Run): String =
-        if (run.target.isBlank()) run.prompt
-        else "Target: ${run.target}\n\n${run.prompt}"
+            You are connected to REA (Reverse Engineering Agents), an MCP server
+            that exposes those tools. $catalog
+
+            How to work:
+            - Call a REA tool to inspect the real artifact before answering.
+            - For an Android package start with the JADX or Apktool tools; for a
+              native binary use the ELF/objdump/rizin tools; for firmware or an
+              archive use the artifact/entropy tools; for a database use the
+              SQLite tools.
+            - If a tool fails, read the error and try a different tool rather
+              than repeating the same call.
+            - Report what the evidence shows. Never invent file contents,
+              addresses, symbol names or offsets.
+            - Finish with a short, concrete answer: what you found, and where.
+        """.trimIndent()
+    }
+
+    private fun userPrompt(run: Run): String = buildString {
+        if (run.files.isNotEmpty()) {
+            append("Files inside the analysis environment:\n")
+            for (file in run.files) append("- ").append(file).append('\n')
+            append('\n')
+        }
+        append(run.prompt)
+    }
 
     private fun push(run: Run) {
         _runs.value = (listOf(run) + _runs.value).take(20)
@@ -290,12 +384,41 @@ object ReaAnalysis {
         _runs.value = _runs.value.map { if (it.id == id) block(it) else it }
     }
 
-    private fun appendStep(id: Long, step: Step) {
-        update(id) { it.copy(steps = it.steps + step) }
+    /** Append a step and return its index, so the caller can update it in place. */
+    private fun appendStep(id: Long, step: Step): Int {
+        var index = -1
+        update(id) {
+            index = it.steps.size
+            it.copy(steps = it.steps + step, activity = it.activity + step.tool)
+        }
+        return index
+    }
+
+    private fun finishStep(id: Long, index: Int, step: Step) {
+        update(id) {
+            if (index < 0 || index >= it.steps.size) return@update it
+            val steps = it.steps.toMutableList()
+            steps[index] = step
+            it.copy(steps = steps, bytes = it.bytes + step.result.length)
+        }
+    }
+
+    private fun log(text: String, kind: Event.Kind) {
+        _events.value = (listOf(Event(text, kind)) + _events.value).take(80)
     }
 
     fun clear() {
         _runs.value = emptyList()
+        _events.value = emptyList()
+    }
+
+    /** Human byte count for the dashboard. */
+    fun formatBytes(bytes: Long): String = when {
+        bytes <= 0L -> "0 B"
+        bytes < 1024L -> "$bytes B"
+        bytes < 1024L * 1024L -> String.format("%.1f KB", bytes / 1024.0)
+        bytes < 1024L * 1024L * 1024L -> String.format("%.1f MB", bytes / (1024.0 * 1024.0))
+        else -> String.format("%.2f GB", bytes / (1024.0 * 1024.0 * 1024.0))
     }
 
     private const val MAX_TOOL_CHARS = 24_000

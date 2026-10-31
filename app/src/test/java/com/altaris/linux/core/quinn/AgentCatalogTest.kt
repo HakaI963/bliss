@@ -105,6 +105,32 @@ class AgentCatalogTest {
     }
 
     @Test
+    fun agentsWithoutAnAttachmentFlagStillReceiveTheFilePaths() {
+        // A PTY/plain agent cannot take --file, but it must still be told which
+        // files the user attached instead of silently losing them.
+        val command = AgentCommand.build(
+            AgentCatalog.forBinary("gemini"), "summarise this", files = listOf("/root/a.apk"),
+        )
+        assertTrue(command.contains("/root/a.apk"))
+        assertFalse(command.contains("--file"))
+    }
+
+    @Test
+    fun reaIsARecognisedTargetBinary() {
+        assertTrue(AgentCatalog.isRea(AgentCatalog.REA_BINARY))
+        assertFalse(AgentCatalog.isRea("opencode"))
+    }
+
+    @Test
+    fun opencodeUsesTheNonInteractiveRunFlags() {
+        // A headless turn that prompts for tool approval would hang forever.
+        val command = AgentCommand.build(AgentCatalog.forBinary("opencode"), "hi")
+        assertTrue(command.startsWith("opencode run"))
+        assertTrue(command.contains("--auto"))
+        assertTrue(command.contains("--format json"))
+    }
+
+    @Test
     fun unknownAgentRunsItsOwnBinary() {
         assertEquals(
             "some-new-agent",

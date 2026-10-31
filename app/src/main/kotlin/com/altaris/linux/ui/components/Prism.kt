@@ -45,6 +45,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.altaris.linux.ui.theme.Prism
@@ -629,11 +630,12 @@ fun PrismNote(
     text: String,
     modifier: Modifier = Modifier,
     color: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    fontSize: TextUnit = 11.5.sp,
 ) {
     Text(
         text = text,
         modifier = modifier.fillMaxWidth().padding(horizontal = 2.dp),
-        fontSize = 11.5.sp,
+        fontSize = fontSize,
         lineHeight = 16.sp,
         color = color,
     )

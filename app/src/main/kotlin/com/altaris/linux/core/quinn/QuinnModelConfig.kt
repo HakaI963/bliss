@@ -24,7 +24,7 @@ object QuinnModelConfig {
         val baseUrl: String = "",
         val apiKey: String = "",
         val model: String = "",
-        /** Models fetched from [baseUrl]/models, newest selection first. */
+        /** Models fetched from [baseUrl]/models, provider order preserved. */
         val models: List<String> = emptyList(),
     ) {
         val configured: Boolean get() = baseUrl.isNotBlank() && apiKey.isNotBlank()
@@ -95,7 +95,14 @@ object QuinnModelConfig {
         return withScheme.trimEnd('/')
     }
 
-    /** Parse an OpenAI `/v1/models` reply into model ids, sorted. */
+    /**
+     * Parse an OpenAI `/v1/models` reply into model ids.
+     *
+     * **Order is preserved.** Sorting alphabetically used to push provider
+     * families like `nvidia/nemotron-3-super-120b-a12b` to position 45 of 85,
+     * so the UI (which showed the first N) never displayed them. Provider
+     * order is also the order a human expects: newest/most relevant first.
+     */
     fun parseModels(body: String): List<String> {
         val json = runCatching { org.json.JSONObject(body) }.getOrNull() ?: return emptyList()
         val data = json.optJSONArray("data") ?: return emptyList()
@@ -105,6 +112,24 @@ object QuinnModelConfig {
             val id = item.optString("id")
             if (id.isNotBlank()) out.add(id)
         }
-        return out.sorted()
+        return out.toList()
     }
+
+    /**
+     * Models matching [query], case-insensitively.
+     *
+     * The model list can be 85+ entries on a hosted provider, so search is the
+     * primary way to reach a family rather than scrolling a truncated row.
+     */
+    fun search(models: List<String>, query: String): List<String> {
+        val q = query.trim().lowercase()
+        if (q.isEmpty()) return models
+        // Matches on the full id first, then on any segment of it, so "super"
+        // finds "nvidia/nemotron-3-super-120b-a12b".
+        val direct = models.filter { it.lowercase().contains(q) }
+        return direct
+    }
+
+    /** Display label: the family part of a provider-prefixed model id. */
+    fun shortName(model: String): String = model.substringAfterLast('/')
 }

@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -32,13 +31,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.altaris.linux.core.quinn.QuinnEngine
 import com.altaris.linux.core.rea.ReaDistro
 import com.altaris.linux.ui.components.PrismOrb
 import com.altaris.linux.ui.screens.quinn.QuinnChatTab
 import com.altaris.linux.ui.screens.quinn.QuinnReaTab
 import com.altaris.linux.ui.theme.AltarisSection
 import com.altaris.linux.ui.theme.Prism
-import com.altaris.linux.ui.theme.altarisMutedText
 import com.altaris.linux.ui.theme.sectionAccent
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -52,23 +51,22 @@ private enum class QuinnTab(val label: String) {
 /**
  * Quinn — the AI surface.
  *
- * Two sub-tabs instead of a page title: **Chat** talks to every coding agent
- * installed in every distro, and **REA** is the analysis environment. The
- * header is a compact identity row plus the tab switch, so the content gets the
- * screen.
+ * A compact identity row and two sub-tabs, left to right: **Chat** talks to
+ * every coding agent installed in every distro, and **REA** is the analysis
+ * dashboard. The old descriptive subtitle ("your assistant for Altaris") is
+ * gone; the header names the section and nothing else.
  */
 @Composable
 fun QuinnScreen(modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val accent = sectionAccent(AltarisSection.QUINN)
     var tab by remember { mutableStateOf(QuinnTab.CHAT) }
-    var rea by remember { mutableStateOf(ReaDistro.state.value) }
+    val rea by ReaDistro.state.collectAsState()
+    val targets by QuinnEngine.targets.collectAsState()
 
     LaunchedEffect(Unit) {
-        rea = withContext(Dispatchers.IO) {
-            ReaDistro.refresh(context)
-            ReaDistro.state.value
-        }
+        withContext(Dispatchers.IO) { ReaDistro.refresh(context) }
+        QuinnEngine.refreshTargets(context)
     }
 
     Column(
@@ -77,7 +75,7 @@ fun QuinnScreen(modifier: Modifier = Modifier) {
             .padding(horizontal = Prism.Gutter)
             .padding(top = 8.dp),
     ) {
-        QuinnHeader(accent, tab, rea.installed) { tab = it }
+        QuinnHeader(accent, tab, rea.installed, targets.size) { tab = it }
         Spacer(Modifier.height(Prism.Stack))
         when (tab) {
             QuinnTab.CHAT -> QuinnChatTab(accent, Modifier.weight(1f))
@@ -91,30 +89,14 @@ private fun QuinnHeader(
     accent: Color,
     current: QuinnTab,
     reaInstalled: Boolean,
+    targetCount: Int,
     onSelect: (QuinnTab) -> Unit,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        PrismOrb(active = true, accent = accent)
-        Spacer(Modifier.width(8.dp))
-        Column(Modifier.weight(1f)) {
-            Text(
-                "QUINN",
-                fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold,
-                letterSpacing = 1.4.sp,
-                color = accent,
-            )
-            Text(
-                if (reaInstalled) "Master of your agents · REA ready"
-                else "Master of your agents · REA not installed",
-                fontSize = 10.sp,
-                color = altarisMutedText(),
-                maxLines = 1,
-            )
-        }
+        // Tabs start at the left edge and read left to right.
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             QuinnTab.entries.forEach { entry ->
                 HeaderTab(
@@ -122,6 +104,26 @@ private fun QuinnHeader(
                     accent = accent,
                     selected = entry == current,
                     onClick = { onSelect(entry) },
+                )
+            }
+        }
+        Spacer(Modifier.weight(1f))
+        // A quiet live indicator: how many targets Quinn can reach, and whether
+        // the analysis environment is ready.
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            PrismOrb(active = targetCount > 0, accent = accent)
+            Spacer(Modifier.width(6.dp))
+            Column(horizontalAlignment = Alignment.End) {
+                Text(
+                    "$targetCount agents",
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = if (targetCount > 0) accent else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    if (reaInstalled) "REA ready" else "REA off",
+                    fontSize = 8.5.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
@@ -143,13 +145,13 @@ private fun HeaderTab(
             .background(if (selected) accent.copy(alpha = 0.12f) else Color.Transparent)
             .border(1.dp, if (selected) accent else scheme.outline, shape)
             .clickable(onClick = onClick)
-            .heightIn(min = Prism.ChipHeight)
-            .padding(horizontal = 14.dp),
+            .heightIn(min = 32.dp)
+            .padding(horizontal = 16.dp),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             label,
-            fontSize = 11.5.sp,
+            fontSize = 12.sp,
             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
             color = if (selected) accent else scheme.onSurface,
         )

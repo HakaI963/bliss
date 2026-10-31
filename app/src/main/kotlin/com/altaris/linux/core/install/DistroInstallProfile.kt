@@ -748,9 +748,20 @@ data class DistroInstallProfile(
         fun forId(distroId: String): DistroInstallProfile? =
             BY_ID[distroId] ?: DistroInstances.profileFor(distroId)
 
-        /** The hidden REA analysis profile for a method, or null. */
-        fun reaProfile(method: String): DistroInstallProfile? =
-            if (method == "chroot") REA_CHROOT else REA_PROOT
+        /**
+         * The hidden REA analysis profile, by install method *or* distro id.
+         *
+         * Both forms are accepted because callers hold different things: the
+         * Tools screen has a method ("proot"/"chroot"), the rest of the app has
+         * a distro id ("altaris_rea"/"altaris_rea_chroot"). Comparing a method
+         * name against an id silently returned the proot profile for a chroot
+         * install, which is why choosing chroot used to download proot.
+         */
+        fun reaProfile(methodOrId: String): DistroInstallProfile? = when (methodOrId) {
+            "chroot", REA_CHROOT_ID -> REA_CHROOT
+            "proot", REA_PROOT_ID -> REA_PROOT
+            else -> null
+        }
 
         /** True when [distroId] is a profile the UI must never list. */
         fun isHidden(distroId: String?): Boolean =

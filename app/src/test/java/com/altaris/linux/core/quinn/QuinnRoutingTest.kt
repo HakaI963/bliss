@@ -139,7 +139,7 @@ class QuinnModelConfigTest {
     }
 
     @Test
-    fun modelListParsesTheOpenAiShape() {
+    fun modelListPreservesProviderOrder() {
         val body = """
             {"object":"list","data":[
               {"id":"gpt-5-6","object":"model"},
@@ -147,10 +147,47 @@ class QuinnModelConfigTest {
               {"id":"auto","object":"model"}
             ]}
         """.trimIndent()
+        // Provider order, not alphabetical: sorting pushed large provider
+        // families past the truncation point of the model picker.
         assertEquals(
-            listOf("auto", "gpt-5-3-mini", "gpt-5-6"),
+            listOf("gpt-5-6", "gpt-5-3-mini", "auto"),
             QuinnModelConfig.parseModels(body),
         )
+    }
+
+    @Test
+    fun aNemotronModelIsReachableOnARealProviderList() {
+        // The regression: NVIDIA's /v1/models returns 85 entries and the
+        // Nemotron 3 family sorts past position 45, so a sorted list truncated
+        // to the first N never showed it.
+        val models = (1..45).map { "nvidia/other-$it" } +
+            listOf(
+                "nvidia/nemotron-3-super-120b-a12b",
+                "nvidia/nemotron-3-ultra-550b-a55b",
+            )
+        val parsed = QuinnModelConfig.parseModels(
+            org.json.JSONObject()
+                .put("data", org.json.JSONArray(models))
+                .toString()
+        )
+        assertEquals(models, parsed)
+        // And search finds it regardless of position.
+        assertTrue(
+            QuinnModelConfig.search(parsed, "nemotron-3-super")
+                .contains("nvidia/nemotron-3-super-120b-a12b")
+        )
+        assertTrue(
+            QuinnModelConfig.search(parsed, "ultra")
+                .contains("nvidia/nemotron-3-ultra-550b-a55b")
+        )
+    }
+
+    @Test
+    fun searchIsCaseInsensitiveAndMatchesSegments() {
+        val models = listOf("nvidia/nemotron-3-super-120b-a12b", "openai/gpt-5-6")
+        assertEquals(1, QuinnModelConfig.search(models, "SUPER").size)
+        assertEquals(2, QuinnModelConfig.search(models, "").size)
+        assertEquals("nemotron-3-super-120b-a12b", QuinnModelConfig.shortName(models.first()))
     }
 
     @Test

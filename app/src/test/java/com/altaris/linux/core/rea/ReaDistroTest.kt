@@ -4,6 +4,7 @@ import com.altaris.linux.core.install.DistroInstallProfile
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -27,6 +28,26 @@ class ReaDistroTest {
         assertTrue("REA chroot must be hidden", chroot!!.hidden)
         assertEquals("proot", proot.method)
         assertEquals("chroot", chroot.method)
+    }
+
+    /**
+     * The bug this locks down: the profile was looked up by comparing a method
+     * name against a distro id, so choosing chroot silently installed proot.
+     */
+    @Test
+    fun choosingChrootResolvesTheChrootProfile() {
+        val byMethod = DistroInstallProfile.reaProfile("chroot")
+        val byId = DistroInstallProfile.reaProfile(DistroInstallProfile.REA_CHROOT_ID)
+        assertEquals("chroot", byMethod?.method)
+        assertEquals("chroot", byId?.method)
+        assertEquals(DistroInstallProfile.REA_CHROOT_ID, byMethod?.distroId)
+        // And the proot side still resolves to proot, by either form.
+        assertEquals("proot", DistroInstallProfile.reaProfile("proot")?.method)
+        assertEquals(
+            "proot",
+            DistroInstallProfile.reaProfile(DistroInstallProfile.REA_PROOT_ID)?.method,
+        )
+        assertNull(DistroInstallProfile.reaProfile("debian"))
     }
 
     @Test
@@ -78,16 +99,18 @@ class ReaDistroTest {
     }
 
     @Test
-    fun defaultToolsCoverTheAnalysisFamiliesReaAdvertises() {
-        val tools = ReaDistro.DEFAULT_TOOLS
+    fun everyInstalledToolExistsInTheCatalog() {
+        val tools = ReaDistro.ALL_TOOLS
         // APK work, native work, firmware, captures and REA's own prerequisites.
         assertTrue(tools.contains("jadx"))
         assertTrue(tools.contains("apktool"))
+        assertTrue(tools.contains("aapt"))
         assertTrue(tools.contains("binutils"))
         assertTrue(tools.contains("gdb"))
         assertTrue(tools.contains("radare2"))
         assertTrue(tools.contains("binwalk"))
         assertTrue(tools.contains("python3"))
+        assertTrue(tools.contains("tshark"))
         // REA refuses several families without a procps-compatible ps.
         assertTrue(tools.contains("procps"))
         // Every default must exist in the catalog, or the install silently
@@ -95,6 +118,23 @@ class ReaDistroTest {
         for (id in tools) {
             assertNotNull("$id is not in ReaCatalog", ReaCatalog.byId(id))
         }
+    }
+
+    /**
+     * "Installing REA must install all its tools" — so the commercial engines
+     * are the only exclusions, and every redistributable tool is included.
+     */
+    @Test
+    fun allRedistributableToolsAreInstalledTogether() {
+        val commercial = setOf("ida", "hopper", "jeb")
+        val expected = ReaCatalog.DEPENDENCIES
+            .map { it.id }
+            .filterNot { it in commercial }
+        assertEquals(
+            "every redistributable tool must be part of the default install",
+            expected.toSet(),
+            ReaDistro.ALL_TOOLS.toSet(),
+        )
     }
 
     @Test
@@ -109,11 +149,50 @@ class ReaDistroTest {
     fun reaIsNotInstalledOnAFreshApp() {
         val dir = java.nio.file.Files.createTempDirectory("rea-fresh").toFile()
         try {
-            // No container on disk: the tab must render the "not installed" state.
+            // No container on disk: the dashboard must render the "not installed"
+            // state.
             val container = File(dir, "usr/var/lib/proot-distro/containers/${DistroInstallProfile.REA_PROOT_ID}/rootfs")
             assertFalse(container.exists())
         } finally {
             dir.deleteRecursively()
         }
+    }
+
+    /**
+     * The "shows installed while it is still downloading" bug.
+     *
+     * A rootfs directory appears on the first extracted file, so presence is
+     * not completion. The state carries an explicit fraction and byte
+     * counters, and only a finished install reports 100%.
+     */
+    @Test
+    fun aHalfFinishedInstallIsNotReportedAsReady() {
+        val partial = ReaDistro.State(
+            installed = false,
+            busy = "Downloading the base system",
+            percent = 41,
+            downloadedBytes = 320L * 1024 * 1024,
+            totalBytes = 780L * 1024 * 1024,
+        )
+        assertFalse(partial.installed)
+        assertFalse(partial.ready)
+        assertTrue(partial.fraction in 0.40f..0.42f)
+        assertTrue(partial.downloadText.contains("left"))
+
+        val done = ReaDistro.State(installed = true, ready = true, percent = 100)
+        assertTrue(done.installed)
+        assertEquals(1f, done.fraction, 0.001f)
+    }
+
+    @Test
+    fun downloadDetailParsingReadsTheRunnerFormat() {
+        // The runner formats "12.3 / 780.1 MB · 3.2 MB/s".
+        val parsed = ReaInstaller.parseDownload("12.3 / 780.1 MB · 3.2 MB/s")
+        assertNotNull(parsed)
+        assertEquals(12.3 * 1_048_576.0, parsed!!.first.toDouble(), 1024.0)
+        assertEquals(780.1 * 1_048_576.0, parsed.second.toDouble(), 1024.0)
+        // A phase label is not a byte counter.
+        assertNull(ReaInstaller.parseDownload("Extracting chroot rootfs"))
+        assertNull(ReaInstaller.parseDownload("0 / 0 MB"))
     }
 }

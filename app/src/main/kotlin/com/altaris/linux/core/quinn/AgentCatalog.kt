@@ -47,6 +47,9 @@ data class AgentProfile(
  */
 object AgentCatalog {
 
+    /** Binary name Quinn uses for the built-in REA analysis target. */
+    const val REA_BINARY = "rea"
+
     /**
      * Argument templates. Tokens:
      *  - `{prompt}`  the message text (shell-quoted by the caller)
@@ -62,9 +65,10 @@ object AgentCatalog {
             binary = "opencode",
             label = "OpenCode",
             kind = AgentProfile.Kind.HEADLESS,
-            // `opencode run` prints the assistant reply on stdout; -s resumes a
-            // named session, which is what keeps Quinn's threads stable.
-            template = "run --standalone {session} {model} {file} --format json -- {prompt}",
+            // `run` prints the assistant reply; `--auto` approves the tools the
+            // task needs (a headless run otherwise blocks on the first prompt),
+            // and `-s` creates or resumes the named session.
+            template = "run --auto --format json {session} {model} {file} -- {prompt}",
             resumable = true,
             attachments = true,
         ),
@@ -72,15 +76,18 @@ object AgentCatalog {
             binary = "claude",
             label = "Claude Code",
             kind = AgentProfile.Kind.HEADLESS,
-            template = "-p {prompt} {session} {model}",
+            // -p is the non-interactive print mode; --resume keeps the thread.
+            template = "-p {prompt} --output-format json {session} {model}",
             resumable = true,
-            note = "Session resume uses --resume <id>; attachments go through the prompt.",
+            attachments = true,
+            note = "Attachments are passed as file paths inside the prompt.",
         ),
         AgentProfile(
             binary = "codex",
             label = "Codex",
             kind = AgentProfile.Kind.HEADLESS,
-            template = "exec {model} -- {prompt}",
+            // `exec` is the headless entry point; --full-auto stops it asking.
+            template = "exec --full-auto {model} -- {prompt}",
             resumable = false,
             note = "Codex has no named sessions on the CLI; each prompt is independent.",
         ),
@@ -95,15 +102,35 @@ object AgentCatalog {
             binary = "aider",
             label = "Aider",
             kind = AgentProfile.Kind.HEADLESS,
-            template = "--message {prompt} --yes {model}",
+            template = "--message {prompt} --yes {model} {file}",
             resumable = false,
             attachments = true,
+        ),
+        AgentProfile(
+            binary = "crush",
+            label = "Crush",
+            kind = AgentProfile.Kind.HEADLESS,
+            template = "run {model} {prompt}",
+            resumable = false,
+        ),
+        AgentProfile(
+            binary = "goose",
+            label = "Goose",
+            kind = AgentProfile.Kind.HEADLESS,
+            template = "run -t {prompt} {model}",
+            resumable = false,
         ),
         AgentProfile(binary = "hermes", label = "Hermes"),
         AgentProfile(binary = "alpha", label = "Alpha"),
         AgentProfile(binary = "pi", label = "Pi"),
+        AgentProfile(binary = "kimi", label = "Kimi"),
+        AgentProfile(binary = "qwen", label = "Qwen Code"),
+        AgentProfile(binary = "droid", label = "Droid"),
+        AgentProfile(binary = "amp", label = "Amp"),
+        AgentProfile(binary = "auggie", label = "Auggie"),
         AgentProfile(binary = "cursor-agent", label = "Cursor Agent"),
         AgentProfile(binary = "copilot", label = "Copilot CLI"),
+        AgentProfile(binary = "chatgpt", label = "ChatGPT CLI"),
     )
 
     /** Profile for [binary], or a PTY fallback so unknown agents still work. */
@@ -113,6 +140,9 @@ object AgentCatalog {
 
     /** True when Quinn can drive this binary without scraping a terminal. */
     fun isHeadless(binary: String): Boolean = forBinary(binary).kind == AgentProfile.Kind.HEADLESS
+
+    /** True when [binary] is the built-in REA analysis target. */
+    fun isRea(binary: String): Boolean = binary == REA_BINARY
 }
 
 /**
@@ -153,8 +183,14 @@ object AgentCommand {
         } else {
             ""
         }
+        // An agent without an attachment flag still needs to know the files.
+        val promptText = if (files.isNotEmpty() && !profile.attachments) {
+            prompt + "\n\nFiles:\n" + files.joinToString("\n")
+        } else {
+            prompt
+        }
         return profile.binary + " " + profile.template
-            .replace("{prompt}", quote(prompt))
+            .replace("{prompt}", quote(promptText))
             .replace("{session}", sessionArg)
             .replace("{model}", modelArg)
             .replace("{file}", fileArg)
@@ -167,13 +203,11 @@ object AgentCommand {
 
     private fun sessionFlag(binary: String, session: String): String = when (binary) {
         "claude" -> "--resume " + quote(session)
+        "opencode" -> "--session " + quote(session)
         else -> "--session " + quote(session)
     }
 
     private fun modelFlag(binary: String, model: String): String = when (binary) {
-        "claude" -> "--model " + quote(model)
-        "codex" -> "--model " + quote(model)
-        "aider" -> "--model " + quote(model)
         else -> "--model " + quote(model)
     }
 

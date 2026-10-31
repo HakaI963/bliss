@@ -6,11 +6,11 @@ import com.altaris.linux.core.control.AgentDetector
 import com.altaris.linux.core.control.DetectedAgent
 import com.altaris.linux.core.control.DistroAgentReport
 import com.altaris.linux.core.rea.GuestExec
+import com.altaris.linux.core.rea.ReaDistro
 import com.altaris.linux.core.terminal.HostCommandBuilder
 import com.altaris.linux.core.terminal.ShellCommandRunner
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -23,7 +23,9 @@ import kotlinx.coroutines.withContext
  *
  * Design rules that matter:
  *  - Quinn is a *master of agents*, not an agent. It never holds a model key
- *    and never reasons itself; every turn runs in the agent you already have.
+ *    for its own reasoning; every agent turn runs in the agent you already
+ *    have. The one exception is the REA target, which is a tool server with no
+ *    model of its own and therefore uses the configured endpoint.
  *  - Discovery is live, not a fixed list: install an agent in a distro and the
  *    next scan picks it up with no registration step.
  *  - Each turn is its own process keyed by the session's agent-session-id, so
@@ -39,7 +41,7 @@ object QuinnEngine {
     private val _sessions = MutableStateFlow<Map<String, QuinnSession>>(emptyMap())
     val sessions: StateFlow<Map<String, QuinnSession>> = _sessions.asStateFlow()
 
-    /** Every agent Quinn can reach right now. */
+    /** Every target Quinn can reach right now (agents + REA). */
     private val _targets = MutableStateFlow<List<AgentTarget>>(emptyList())
     val targets: StateFlow<List<AgentTarget>> = _targets.asStateFlow()
 
@@ -63,7 +65,8 @@ object QuinnEngine {
      * Rescan every installed distro for agent binaries.
      *
      * Uses the same [AgentDetector] the Tools screen shows, so the two can
-     * never disagree about what is installed.
+     * never disagree about what is installed. REA is appended as a target of
+     * its own when the analysis environment is ready.
      */
     fun refreshTargets(context: Context) {
         if (!_scanning.compareAndSet(false, true)) return
@@ -89,9 +92,10 @@ object QuinnEngine {
                         )
                     )
                 }
+                reaTarget(context)?.let { found.add(it) }
                 _targets.value = found
                     .distinctBy { it.key }
-                    .sortedWith(compareBy({ it.distroName.lowercase() }, { it.label.lowercase() }))
+                    .sortedWith(compareBy({ it.kind.ordinal }, { it.distroName.lowercase() }, { it.label.lowercase() }))
                 _lastError.value = null
             } catch (t: Throwable) {
                 Log.w(TAG, "agent scan failed", t)
@@ -100,6 +104,27 @@ object QuinnEngine {
                 _scanning.value = false
             }
         }
+    }
+
+    /**
+     * The REA target, when the analysis environment is ready.
+     *
+     * It is presented exactly like an agent in the picker: that is the whole
+     * point of "select a file, select REA, run".
+     */
+    private fun reaTarget(context: Context): AgentTarget? {
+        ReaDistro.refresh(context)
+        val state = ReaDistro.state.value
+        if (!state.installed) return null
+        return AgentTarget(
+            distroId = state.method?.id ?: return null,
+            distroName = "Analysis",
+            method = state.method?.label ?: "proot",
+            binary = AgentCatalog.REA_BINARY,
+            label = "REA",
+            headless = true,
+            kind = TargetKind.REA,
+        )
     }
 
     private fun toTarget(report: DistroAgentReport, agent: DetectedAgent) = AgentTarget(
@@ -113,7 +138,12 @@ object QuinnEngine {
 
     // ------------------------------------------------------------------ sessions
 
-    /** Create (or reuse) the thread for [target]. */
+    /**
+     * Create (or reuse) the thread for [target].
+     *
+     * Reuse is per (target, model) so switching the model in the composer gives
+     * a fresh thread instead of silently continuing the old model's session.
+     */
     fun openSession(target: AgentTarget): QuinnSession {
         val existing = _sessions.value.values.firstOrNull { it.target.key == target.key }
         if (existing != null) return existing
@@ -171,6 +201,12 @@ object QuinnEngine {
         model: String?,
     ) {
         val session = _sessions.value[sessionId] ?: return
+        // The REA target is not a CLI: it drives REA's MCP tools through the
+        // configured model, and its steps land in the same thread.
+        if (session.target.isRea) {
+            runReaTurn(context, sessionId, prompt, files)
+            return
+        }
         val profile = AgentCatalog.forBinary(session.target.binary)
         val command = AgentCommand.build(
             profile = profile,
@@ -205,12 +241,68 @@ object QuinnEngine {
                 finishStreaming(
                     sessionId,
                     if (result.ok) text.ifBlank { "(the agent returned no output)" }
-                    else "Agent exited ${result.exit}: " + result.tail(12),
+                    else "Agent exited ${result.exit}:\n" + result.tail(12),
                     error = if (result.ok) null else "exit ${result.exit}",
                 )
             } catch (t: Throwable) {
                 Log.w(TAG, "turn failed", t)
                 finishStreaming(sessionId, t.message ?: "Turn failed", error = t.message ?: "error")
+            } finally {
+                bumpRunning(-1)
+            }
+        }
+    }
+
+    /**
+     * One REA turn.
+     *
+     * The analysis engine publishes its own run/step state; this mirrors it
+     * into the chat thread so the conversation reads like any other agent, and
+     * the REA dashboard shows the same run live.
+     */
+    private fun runReaTurn(
+        context: Context,
+        sessionId: String,
+        prompt: String,
+        files: List<String>,
+    ) {
+        appendTurns(
+            sessionId,
+            Turn(TurnRole.USER, prompt, files = files),
+            Turn(TurnRole.AGENT, "", streaming = true),
+        )
+        bumpRunning(1)
+        ReaAnalysis.analyze(context, prompt, files)
+        scope.launch {
+            try {
+                // Mirror the newest run's state into this thread until it ends.
+                var lastAnswer = ""
+                var lastError = ""
+                var steps = 0
+                while (true) {
+                    val run = ReaAnalysis.runs.value.firstOrNull { it.prompt == prompt }
+                    if (run == null) break
+                    steps = run.steps.size
+                    val pending = run.steps.lastOrNull { it.running }?.tool
+                    val progress = if (pending != null) "calling $pending…"
+                    else if (run.running) "thinking…" else run.answer
+                    if (progress.isNotBlank()) replaceStreaming(sessionId, progress, run.steps)
+                    lastAnswer = run.answer
+                    lastError = run.error
+                    if (!run.running) break
+                    kotlinx.coroutines.delay(400L)
+                }
+                finishStreaming(
+                    sessionId,
+                    lastAnswer.ifBlank {
+                        if (lastError.isNotBlank()) lastError else "(the analysis returned no answer)"
+                    },
+                    error = lastError.ifBlank { null },
+                    steps = ReaAnalysis.runs.value.firstOrNull { it.prompt == prompt }?.steps.orEmpty(),
+                )
+            } catch (t: Throwable) {
+                Log.w(TAG, "rea turn failed", t)
+                finishStreaming(sessionId, t.message ?: "Analysis failed", error = "error")
             } finally {
                 bumpRunning(-1)
             }
@@ -236,6 +328,8 @@ object QuinnEngine {
                 distroId = target.distroId,
                 script = script,
                 timeoutMs = TURN_TIMEOUT_MS,
+                // Distro agents run as the guest user, not root: an agent that
+                // writes files as root leaves a rootfs the user cannot clean up.
                 asRoot = false,
                 onLine = onLine,
             )
@@ -259,6 +353,7 @@ object QuinnEngine {
             "export $k=" + GuestExec.shellQuote(v) + "; "
         }
         return "set +e; " + env + "cd \"\${HOME:-/root}\" 2>/dev/null || cd /; " +
+            "export PATH=\"\$HOME/.local/bin:\$HOME/.npm-global/bin:/usr/local/bin:\$PATH\"; " +
             "exec " + command
     }
 
@@ -266,21 +361,36 @@ object QuinnEngine {
         update(id) { it.copy(turns = it.turns + turns) }
     }
 
-    private fun replaceStreaming(id: String, text: String) {
-        update(id) { session ->
-            val turns = session.turns.toMutableList()
-            val index = turns.indexOfLast { it.role == TurnRole.AGENT && it.streaming }
-            if (index >= 0) turns[index] = turns[index].copy(text = text)
-            session.copy(turns = turns)
-        }
-    }
-
-    private fun finishStreaming(id: String, text: String, error: String?) {
+    private fun replaceStreaming(id: String, text: String, steps: List<ReaAnalysis.Step>? = null) {
         update(id) { session ->
             val turns = session.turns.toMutableList()
             val index = turns.indexOfLast { it.role == TurnRole.AGENT && it.streaming }
             if (index >= 0) {
-                turns[index] = turns[index].copy(text = text, streaming = false, error = error)
+                turns[index] = turns[index].copy(
+                    text = text,
+                    steps = steps ?: turns[index].steps,
+                )
+            }
+            session.copy(turns = turns)
+        }
+    }
+
+    private fun finishStreaming(
+        id: String,
+        text: String,
+        error: String?,
+        steps: List<ReaAnalysis.Step> = emptyList(),
+    ) {
+        update(id) { session ->
+            val turns = session.turns.toMutableList()
+            val index = turns.indexOfLast { it.role == TurnRole.AGENT && it.streaming }
+            if (index >= 0) {
+                turns[index] = turns[index].copy(
+                    text = text,
+                    streaming = false,
+                    error = error,
+                    steps = if (steps.isNotEmpty()) steps else turns[index].steps,
+                )
             }
             session.copy(turns = turns, running = false)
         }

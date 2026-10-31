@@ -679,15 +679,11 @@ private fun AutomationCard(context: Context, accent: Color) {
 @Composable
 private fun ReaCard(context: Context, accent: Color) {
     val scope = rememberCoroutineScope()
-    var state by remember { mutableStateOf(ReaDistro.state.value) }
+    val state by ReaDistro.state.collectAsState()
     var method by remember { mutableStateOf(ReaDistro.Method.PROOT) }
-    var tick by remember { mutableIntStateOf(0) }
 
-    LaunchedEffect(tick) {
-        state = withContext(Dispatchers.IO) {
-            ReaDistro.refresh(context)
-            ReaDistro.state.value
-        }
+    LaunchedEffect(Unit) {
+        withContext(Dispatchers.IO) { ReaDistro.refresh(context) }
     }
 
     PrismSectionLabel("Reverse engineering", accent)
@@ -696,15 +692,15 @@ private fun ReaCard(context: Context, accent: Color) {
             title = "REA analysis environment",
             subtitle = when {
                 state.busy.isNotBlank() -> state.busy
-                state.installed && state.ready -> "Installed (" + (state.method?.label ?: "proot") + ") · used by Quinn"
-                state.installed -> "Installed, REA core missing"
+                state.installed -> "Installed (" + (state.method?.label ?: "proot") + ") · used by Quinn"
                 else -> "Not installed"
             },
             accent = accent,
-            leading = { PrismOrb(active = state.installed && state.ready, accent = accent) },
+            leading = { PrismOrb(active = state.installed, accent = accent) },
             trailing = {
                 PrismChip(
                     when {
+                        state.busy.isNotBlank() && state.percent >= 0 -> "${state.percent}%"
                         state.installed -> "Installed"
                         else -> "Missing"
                     },
@@ -714,10 +710,39 @@ private fun ReaCard(context: Context, accent: Color) {
             },
         )
 
+        // Live progress: the install is a multi-GB download, so it must never
+        // look stuck.
+        if (state.busy.isNotBlank()) {
+            Spacer(Modifier.height(Prism.Tight))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(6.dp)
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.4f))
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(state.fraction.coerceIn(0f, 1f))
+                        .height(6.dp)
+                        .clip(RoundedCornerShape(3.dp))
+                        .background(accent)
+                )
+            }
+            if (state.downloadText.isNotBlank()) {
+                Spacer(Modifier.height(4.dp))
+                PrismNote(state.downloadText)
+            }
+            if (state.detail.isNotBlank()) {
+                PrismNote(state.detail, fontSize = 10.sp)
+            }
+        }
+
         Spacer(Modifier.height(Prism.Tight))
         PrismNote(
             "REA runs inside its own private distro that Quinn creates here, so it " +
-                "never touches your distros and no MCP link is needed. Pick how it runs:"
+                "never touches your distros and no MCP link is needed. Every analysis " +
+                "tool is installed with it. Pick how it runs:"
         )
         Spacer(Modifier.height(Prism.Tight))
         Row(horizontalArrangement = Arrangement.spacedBy(Prism.ControlGap)) {
@@ -746,6 +771,7 @@ private fun ReaCard(context: Context, accent: Color) {
         PrismActions {
             PrismButton(
                 text = when {
+                    state.busy.isNotBlank() -> "Installing…"
                     state.installed -> "Reinstall analysis environment"
                     else -> "Install analysis environment"
                 },
@@ -755,22 +781,24 @@ private fun ReaCard(context: Context, accent: Color) {
                 enabled = state.busy.isBlank() &&
                     (method != ReaDistro.Method.CHROOT || state.chrootPossible),
             ) {
-                scope.launch {
-                    ReaDistro.install(context, method)
-                    tick++
-                }
+                scope.launch { ReaDistro.install(context, method) }
             }
             if (state.installed) {
+                PrismSecondaryButton(
+                    text = "Install missing tools",
+                    accent = accent,
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = state.busy.isBlank(),
+                ) {
+                    scope.launch { ReaDistro.installMissingTools(context) }
+                }
                 PrismSecondaryButton(
                     text = "Remove analysis environment",
                     accent = MaterialTheme.colorScheme.error,
                     modifier = Modifier.fillMaxWidth(),
                     enabled = state.busy.isBlank(),
                 ) {
-                    scope.launch {
-                        ReaDistro.uninstall(context)
-                        tick++
-                    }
+                    scope.launch { ReaDistro.uninstall(context) }
                 }
             }
         }
