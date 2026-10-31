@@ -57,8 +57,6 @@ import com.altaris.linux.core.clone.HeadlessCloneEngine
 import com.altaris.linux.core.control.AltarisCliInstaller
 import com.altaris.linux.core.control.CloneControlService
 import com.altaris.linux.core.control.ControlServer
-import com.altaris.linux.core.control.DetectedAgent
-import com.altaris.linux.core.control.DistroAgentReport
 import com.altaris.linux.core.rea.ReaCatalog
 import com.altaris.linux.core.rea.ReaDistro
 import com.altaris.linux.core.rea.ReaBridge
