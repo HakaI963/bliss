@@ -84,7 +84,7 @@ object ReaKnowledge {
 
         ## 4. Compare instead of eyeballing
 
-        When the task is "is this a faithful rebuild", use the comparison tool:
+        When the task is "is this a faithful rebuild", use `compare-artifacts`:
         it reports matched bytes, differing bytes, total bytes and the ranges
         that differ. Do not compare by reading two dumps side by side — you will
         miss offsets and you cannot count bytes reliably.
