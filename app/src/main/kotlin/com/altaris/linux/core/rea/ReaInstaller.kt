@@ -56,7 +56,7 @@ object ReaInstaller {
         runner.start(
             distroId = profile.distroId,
             desktops = setOf(DesktopChoice.NONE),
-        ) { progress ->
+        ) { progress: OnboardingInstallRunner.Progress ->
             progress.logLine?.takeIf { it.isNotBlank() }?.let(onLog)
             if (progress.failed) {
                 progress.errorMessage?.let { onLog("ERROR: $it") }
@@ -70,7 +70,7 @@ object ReaInstaller {
         val finished = withTimeoutOrNull(INSTALL_TIMEOUT_MS) { done.await() } ?: false
         if (!finished) {
             onLog("ERROR: the analysis environment did not finish installing")
-            runCatching { runner.cancelActive() }
+            runCatching { OnboardingInstallRunner.cancelActive() }
             return@withContext false
         }
         val ok = containerExists(context, profile)

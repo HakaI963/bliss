@@ -44,15 +44,17 @@ object ReaFiles {
                 ?: return@withContext Result.failure(IllegalStateException("REA is not installed"))
             val safe = normalize(path)
             // -printf keeps one field per line and avoids parsing `ls` output.
+            // Every `$` is escaped for Kotlin, so the guest shell expands the
+            // variables at run time instead of Kotlin interpolating them here.
             val script = buildString {
                 append("set +e\n")
                 append("cd ").append(GuestExec.shellQuote(safe)).append(" 2>/dev/null || exit 3\n")
                 append("for f in * .[!.]*; do\n")
-                append("  [ -e \"\\$f\" ] || continue\n")
-                append("  if [ -d \"\\$f\" ]; then t=d; else t=f; fi\n")
-                append("  s=\\$(wc -c < \"\\$f\" 2>/dev/null | tr -d ' ')\n")
-                append("  m=\\$(date -r \"\\$f\" +%s 2>/dev/null || echo 0)\n")
-                append("  printf '%s\\t%s\\t%s\\t%s\\n' \"\\$t\" \"\\$s\" \"\\$m\" \"\\$f\"\n")
+                append("  [ -e \"\$f\" ] || continue\n")
+                append("  if [ -d \"\$f\" ]; then t=d; else t=f; fi\n")
+                append("  s=\$(wc -c < \"\$f\" 2>/dev/null | tr -d ' ')\n")
+                append("  m=\$(date -r \"\$f\" +%s 2>/dev/null || echo 0)\n")
+                append("  printf '%s\\t%s\\t%s\\t%s\\n' \"\$t\" \"\$s\" \"\$m\" \"\$f\"\n")
                 append("done\n")
             }
             val result = GuestExec.run(context, distroId, script, timeoutMs = 30_000L)

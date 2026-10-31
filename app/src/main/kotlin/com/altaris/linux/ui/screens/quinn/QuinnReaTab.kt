@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -361,8 +362,9 @@ private fun ModelCard(
         if (config.models.isNotEmpty()) {
             Spacer(Modifier.height(Prism.Tight))
             Row(
-                modifier = Modifier.fillMaxWidth()
-                    .horizontalScrollCompat(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 config.models.take(24).forEach { model ->
@@ -381,11 +383,6 @@ private fun ModelCard(
         }
     }
 }
-
-/** Local helper so the model row scrolls without importing the modifier twice. */
-@Composable
-private fun Modifier.horizontalScrollCompat(): Modifier =
-    this.then(androidx.compose.foundation.horizontalScroll(rememberScrollState()))
 
 @Composable
 private fun NotInstalledCard(accent: Color) {
