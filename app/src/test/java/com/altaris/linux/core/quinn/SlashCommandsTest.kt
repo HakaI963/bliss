@@ -149,7 +149,8 @@ class ContextBudgetTest {
             messages = listOf("c".repeat(200) to "d".repeat(200)),
             window = 10_000,
         )
-        assertEquals(4, estimate.parts.size)
+        // System, Tools and Messages; the empty Skills part is dropped.
+        assertEquals(3, estimate.parts.size)
         assertTrue(estimate.total > 0)
         val sum = estimate.parts.sumOf { it.fraction.toDouble() }
         assertEquals(1.0, sum, 0.001)
