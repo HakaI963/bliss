@@ -517,7 +517,6 @@ private fun AgentsCard(context: Context, accent: Color) {
         }
     }
 
-    Spacer(Modifier.height(Prism.Stack))
     PrismSectionLabel("Host desktop agents", accent)
     PrismCard(accent = accent) {
         if (!scanned) {
@@ -536,7 +535,6 @@ private fun AgentsCard(context: Context, accent: Color) {
         }
     }
 
-    Spacer(Modifier.height(Prism.Stack))
     PrismSectionLabel("Agent brief", accent)
     PrismCard(accent = accent) {
         CodeBlock(AGENT_BRIEF)
@@ -597,7 +595,6 @@ private fun McpCard(context: Context, accent: Color) {
             onClick = { copy(context, MCP_CONFIG, "MCP config copied") }
         )
     }
-    Spacer(Modifier.height(Prism.Stack))
     PrismSectionLabel("Tools", accent)
     PrismCard(accent = accent) {
         val tools = listOf(
@@ -667,7 +664,6 @@ private fun AutomationCard(context: Context, accent: Color) {
             }
         )
     }
-    Spacer(Modifier.height(Prism.Stack))
     PrismSectionLabel("Action feed", accent)
     PrismCard(accent = accent) {
         PrismNote(
@@ -754,29 +750,26 @@ private fun ReaCard(context: Context, accent: Color) {
                     tick++
                 }
             }
-            Row(
+            // Full-width, one per row: "Register in agents" is long enough that
+            // two half-width buttons truncate their labels on a phone.
+            PrismButton(
+                text = if (status.running) "Stop server" else "Start server",
+                accent = accent,
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(Prism.ControlGap),
+                enabled = status.installed && status.busy.isBlank(),
             ) {
-                PrismButton(
-                    text = if (status.running) "Stop server" else "Start server",
-                    accent = accent,
-                    modifier = Modifier.weight(1f),
-                    enabled = status.installed && status.busy.isBlank(),
-                ) {
-                    scope.launch {
-                        if (status.running) ReaManager.stop()
-                        else ReaManager.start(context, selected)
-                    }
+                scope.launch {
+                    if (status.running) ReaManager.stop()
+                    else ReaManager.start(context, selected)
                 }
-                PrismSecondaryButton(
-                    text = "Register in agents",
-                    accent = accent,
-                    modifier = Modifier.weight(1f),
-                    enabled = status.installed && status.busy.isBlank(),
-                ) {
-                    scope.launch { ReaManager.registerAgents(context, selected) }
-                }
+            }
+            PrismSecondaryButton(
+                text = "Register MCP in installed agents",
+                accent = accent,
+                modifier = Modifier.fillMaxWidth(),
+                enabled = status.installed && status.busy.isBlank(),
+            ) {
+                scope.launch { ReaManager.registerAgents(context, selected) }
             }
         }
         if (status.error.isNotBlank()) {

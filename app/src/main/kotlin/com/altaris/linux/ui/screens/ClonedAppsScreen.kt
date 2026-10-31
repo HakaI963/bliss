@@ -638,9 +638,11 @@ private fun PreferenceSection(
         modifier = modifier
             .verticalScroll(rememberScrollState())
             .padding(bottom = 108.dp),
+        // Without a rhythm the sections were separated only by the label's own
+        // 4 dp padding, so consecutive cards looked glued together.
+        verticalArrangement = Arrangement.spacedBy(Prism.Stack),
     ) {
         PrismSectionLabel("Shizuku", accent)
-        Spacer(Modifier.height(Prism.Tight))
         PrismCard(accent = accent) {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -699,9 +701,7 @@ private fun PreferenceSection(
             }
         }
 
-        Spacer(Modifier.height(Prism.Stack))
         PrismSectionLabel("Clone", accent)
-        Spacer(Modifier.height(Prism.Tight))
         PrismCard(accent = accent) {
             PrismRow(
                 title = "From APK file",
@@ -728,9 +728,7 @@ private fun PreferenceSection(
             }
         }
 
-        Spacer(Modifier.height(Prism.Stack))
         PrismSectionLabel("Display", accent)
-        Spacer(Modifier.height(Prism.Tight))
         PrismCard(accent = accent) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
