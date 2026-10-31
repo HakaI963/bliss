@@ -13,6 +13,9 @@ import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 import java.util.concurrent.atomic.AtomicReference
 
+/** Progress callback: (what is happening, overall percent, detail line). */
+typealias ReaInstallProgress = (line: String, percent: Int, detail: String) -> Unit
+
 /**
  * Creates and removes the container that hosts the hidden REA distro.
  *
@@ -32,9 +35,6 @@ object ReaInstaller {
 
     private const val TAG = "AltarisReaInstaller"
 
-    /** Progress callback: (what is happening, overall percent, detail line). */
-    typealias OnProgress = (line: String, percent: Int, detail: String) -> Unit
-
     /** True when the container already exists and looks usable. */
     fun containerExists(context: Context, profile: DistroInstallProfile): Boolean {
         val rootfs = rootfsOf(context, profile) ?: return false
@@ -48,7 +48,7 @@ object ReaInstaller {
     suspend fun ensureContainer(
         context: Context,
         profile: DistroInstallProfile,
-        onProgress: OnProgress = { _, _, _ -> },
+        onProgress: ReaInstallProgress = { _, _, _ -> },
     ): Boolean = withContext(Dispatchers.IO) {
         if (containerExists(context, profile)) {
             onProgress("Analysis environment already exists", 62, "")
