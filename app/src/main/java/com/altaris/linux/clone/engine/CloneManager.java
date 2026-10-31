@@ -580,7 +580,7 @@ final class CloneManager {
 
     // ---------------------------------------------------------------- launch
 
-    String launch(String clonePackage) {
+    String launch(String clonePackage, String key) {
         synchronized (lock) {
             try {
                 if (clonePackage == null || clonePackage.trim().isEmpty()) {
@@ -594,9 +594,12 @@ final class CloneManager {
                 if (!packageInstalled(clone)) {
                     return Jsons.error("clone is not installed: " + clone);
                 }
-                int displayId = engine.displayId();
+                // The display belongs to the caller's session key; a clone
+                // launched by another agent keeps its own display alive.
+                String sessionKey = key == null || key.trim().isEmpty() ? clone : key.trim();
+                int displayId = engine.displayIdFor(sessionKey);
                 if (displayId <= 0) {
-                    return Jsons.error("create the virtual display first");
+                    return Jsons.error("create the virtual display for " + sessionKey + " first");
                 }
                 String activity = record.optString("activity");
                 if (activity == null || activity.isEmpty()) {

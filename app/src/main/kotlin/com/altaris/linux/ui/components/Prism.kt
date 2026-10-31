@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -281,24 +282,26 @@ private fun PrismAction(
                 indication = null,
                 onClick = onClick,
             )
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+            .heightIn(min = Prism.ButtonHeight)
+            .padding(horizontal = Prism.ButtonPadH, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalArrangement = Arrangement.spacedBy(7.dp, Alignment.CenterHorizontally),
     ) {
         if (icon != null) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
                 tint = fg,
-                modifier = Modifier.size(14.dp),
+                modifier = Modifier.size(15.dp),
             )
         }
         Text(
             text = text,
-            fontSize = 12.sp,
+            fontSize = 12.5.sp,
             fontWeight = FontWeight.SemiBold,
             color = fg,
             maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }
@@ -363,12 +366,7 @@ fun PrismChip(
         animationSpec = tween(140),
         label = "chipFg",
     )
-    Text(
-        text = text,
-        fontSize = 11.sp,
-        fontWeight = FontWeight.Medium,
-        color = fg,
-        maxLines = 1,
+    Box(
         modifier = modifier
             .clip(shape)
             .background(bg)
@@ -384,8 +382,18 @@ fun PrismChip(
                     Modifier
                 }
             )
-            .padding(horizontal = 9.dp, vertical = 5.dp),
-    )
+            .heightIn(min = Prism.ChipHeight)
+            .padding(horizontal = 12.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = text,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Medium,
+            color = fg,
+            maxLines = 1,
+        )
+    }
 }
 
 /**
@@ -513,7 +521,15 @@ fun PrismOrb(
     }
 }
 
-/** A small uppercase group label. */
+/**
+ * A small uppercase group label.
+ *
+ * The asymmetric padding is deliberate. Screens put blocks in a `Column` with
+ * `spacedBy(Prism.Stack)`, so the parent supplies an equal gap on both sides of
+ * the label. With symmetric padding the label floated exactly halfway between
+ * the block above and the block below and read as a caption for the wrong one.
+ * Extra space above (plus zero below) binds it to the block it names.
+ */
 @Composable
 fun PrismSectionLabel(
     text: String,
@@ -522,7 +538,7 @@ fun PrismSectionLabel(
 ) {
     Text(
         text = text.uppercase(),
-        modifier = modifier.padding(horizontal = 2.dp, vertical = 4.dp),
+        modifier = modifier.padding(start = 2.dp, end = 2.dp, top = 10.dp),
         fontSize = 10.sp,
         fontWeight = FontWeight.SemiBold,
         letterSpacing = 0.6.sp,
@@ -587,5 +603,58 @@ fun PrismStatRow(
             PrismStat(value = value, label = label)
             if (index < stats.lastIndex) Spacer(Modifier.weight(1f))
         }
+    }
+}
+
+/**
+ * A stack of full-width actions. Every tools screen uses it so actions keep the
+ * same height and the same 10 dp rhythm instead of sitting flush against the
+ * row above them.
+ */
+@Composable
+fun PrismActions(
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(Prism.ControlGap),
+        content = content,
+    )
+}
+
+/** A quiet paragraph under a control: hints, error text, install results. */
+@Composable
+fun PrismNote(
+    text: String,
+    modifier: Modifier = Modifier,
+    color: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+) {
+    Text(
+        text = text,
+        modifier = modifier.fillMaxWidth().padding(horizontal = 2.dp),
+        fontSize = 11.5.sp,
+        lineHeight = 16.sp,
+        color = color,
+    )
+}
+
+/**
+ * A labelled block inside a panel: an uppercase label with real breathing room
+ * above it, so consecutive sections never look glued together.
+ */
+@Composable
+fun PrismGroup(
+    label: String?,
+    accent: Color,
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(Prism.Tight),
+    ) {
+        if (!label.isNullOrBlank()) PrismSectionLabel(label, accent)
+        content()
     }
 }

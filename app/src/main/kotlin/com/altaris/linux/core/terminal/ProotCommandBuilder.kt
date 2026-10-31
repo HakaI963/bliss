@@ -36,7 +36,11 @@ object ProotCommandBuilder {
         return listOf(
             "HOME=$home", "USER=$u", "LOGNAME=$u", "TERM=$term", "LANG=C",
             "TMPDIR=/tmp", "XDG_RUNTIME_DIR=/tmp", "PATH=$GUEST_PATH",
-            "PULSE_SERVER=tcp:127.0.0.1"
+            "PULSE_SERVER=tcp:127.0.0.1",
+            // No browser and no X display inside the guest, so anything that
+            // tries to open a link (AI CLI sign-in, `gh auth login`) must go
+            // through the app's URL shim.
+            "BROWSER=altaris-open"
         )
     }
 

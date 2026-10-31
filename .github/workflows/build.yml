@@ -9,9 +9,16 @@ on:
   pull_request:
   workflow_dispatch:
 
+# One build per ref: a newer push cancels the older run instead of racing it to
+# the same release tag.
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 90
     steps:
       - name: Checkout (with submodules)
         uses: actions/checkout@v4
@@ -40,7 +47,6 @@ jobs:
         run: |
           echo "ANDROID_HOME=$ANDROID_HOME"
           echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
-          ls "$ANDROID_HOME/cmdline-tools"
           export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
           yes | sdkmanager --licenses || true
           sdkmanager --install "platforms;android-36" "build-tools;36.0.0" "platform-tools" "ndk;29.0.14206865"
@@ -71,29 +77,76 @@ jobs:
 
       - name: Verify APK (targetSdk 28, bootstrap + jniLibs packaged)
         run: |
+          set -euo pipefail
           APK=$(ls app/build/outputs/apk/altaris/debug/*.apk | head -n 1)
           AAPT=$(ls "$ANDROID_HOME"/build-tools/*/aapt | head -n 1)
           echo "APK: $APK"
           "$AAPT" dump badging "$APK" | grep -E "^package:|sdkVersion|targetSdkVersion"
+          # The REA installers are shipped as assets; a missing one used to fail
+          # silently on device, so fail the build instead.
+          unzip -l "$APK" | grep -E "assets/scripts/rea/(rea-core-install|install-tool|ghidra-install|ghidra-decompiler-build|ghidra-analyze)\.sh"
           unzip -l "$APK" | grep -E "bootstrap\.tar|libbash\.so|libproot\.so|assets/clone\.keystore" | head -n 10
-          sha256sum "$APK"
+          sha256sum "$APK" | tee apk-sha256.txt
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         continue-on-error: true
         with:
           name: altaris-debug-apk
-          path: app/build/outputs/apk/altaris/debug/*.apk
+          path: |
+            app/build/outputs/apk/altaris/debug/*.apk
+            apk-sha256.txt
           if-no-files-found: warn
 
+      - name: Upload unit test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        continue-on-error: true
+        with:
+          name: unit-test-report
+          path: |
+            app/build/reports/tests/**
+            app/build/test-results/**
+          if-no-files-found: ignore
+
       - name: Publish GitHub release
-        if: github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          set -euo pipefail
           APK=app/build/outputs/apk/altaris/debug/app-altaris-debug.apk
-          TAG="altaris-debug-${GITHUB_SHA::7}"
+          AAPT=$(ls "$ANDROID_HOME"/build-tools/*/aapt | head -n 1)
+          VERSION=$("$AAPT" dump badging "$APK" | sed -n "s/.*versionName='\([^']*\)'.*/\1/p" | head -n 1)
+          [ -n "$VERSION" ] || VERSION=0.0.0
           SHA=$(sha256sum "$APK" | awk '{print $1}')
-          gh release create "$TAG" --title "Altaris 1.2.0 — autosuggest + history everywhere, named distro instances" \
-            --notes "Every guest shell now has inline command auto-suggestions and persistent history. zsh-autosuggestions v0.7.1 is vendored into the app and staged into /usr/local/share/altaris/zsh inside every proot and chroot distro (previously only Alpine shipped the plugin, so the other distros had no ghost suggestions), and every profile gets an explicit HISTFILE/HISTSIZE/SAVEHIST + inc_append_history/share_history block — bare zsh defaults to SAVEHIST=0 and the app kills shells on tab close, so up-arrow history used to die with the app. Bash guests get the same via a histappend + 'history -a' PROMPT_COMMAND block (and the PS1 switcher now preserves it), and the host shell rc matches. Distro instances: the same distro can now be installed any number of times under custom names — the install wizard has an Instance name field that creates a separate proot-distro container <base>-<name> registered in DistroInstances (base id stays for scripts/packages, component state is per instance), instances get their own Home rows, Distros cards, terminal shell entries and Settings, uninstall removes the registry entry, and a lost registry is recovered by scanning containers and mapping the guest os-release id. APK SHA-256: $SHA" || true
+          TAG="v${VERSION}-${GITHUB_SHA::7}"
+
+          PREV=$(git describe --tags --abbrev=0 --match 'v*' HEAD^ 2>/dev/null || true)
+          {
+            echo "## Altaris ${VERSION}"
+            echo
+            echo "Commit \`${GITHUB_SHA::7}\` · built $(date -u '+%Y-%m-%d %H:%M UTC') by GitHub Actions."
+            echo
+            echo "### Changes"
+            if [ -n "$PREV" ]; then
+              git log --no-merges --pretty='- %s' "${PREV}..HEAD" | head -n 60
+            else
+              git log --no-merges --max-count=20 --pretty='- %s' HEAD
+            fi
+            echo
+            echo "### Install"
+            echo "Download \`app-altaris-debug.apk\` below (arm64-v8a, package \`com.altaris.linux\`)."
+            echo
+            echo '```'
+            echo "sha256  ${SHA}"
+            echo '```'
+          } > release-notes.md
+
+          gh release create "$TAG" \
+            --title "Altaris ${VERSION} — ${GITHUB_SHA::7}" \
+            --notes-file release-notes.md \
+            --latest \
+            "$APK" || true
           gh release upload "$TAG" "$APK" --clobber
+          gh release view "$TAG" --json url,tagName,assets

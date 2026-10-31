@@ -18,6 +18,23 @@ final class Jsons {
         }
     }
 
+    /**
+     * Success reply for a display command: callers need the display id and the
+     * session key back so they can address this clone later without guessing.
+     */
+    static String display(String detail, int displayId, String key) {
+        try {
+            JSONObject object = new JSONObject();
+            object.put("ok", true);
+            object.put("detail", detail == null ? "" : detail);
+            object.put("display_id", displayId);
+            object.put("key", key == null ? "" : key);
+            return object.toString();
+        } catch (Throwable e) {
+            return ok(detail);
+        }
+    }
+
     static String error(String message) {
         try {
             JSONObject object = new JSONObject();

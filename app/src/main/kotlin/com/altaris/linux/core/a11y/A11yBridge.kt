@@ -80,8 +80,12 @@ object A11yBridge {
     /**
      * Click a node. Falls back to an engine tap at the node centre when the
      * node itself is not clickable.
+     *
+     * [packageName] names the clone that owns the node, so the fallback tap
+     * lands on that clone's display instead of the viewer's when several
+     * clones are running.
      */
-    fun click(context: Context, nodeId: String): String {
+    fun click(context: Context, nodeId: String, packageName: String? = null): String {
         val raw = call(context, "click", nodeId.toString(), null)
         val obj = runCatching { JSONObject(raw) }.getOrNull() ?: return raw
         if (obj.optBoolean("ok", false)) return raw
@@ -90,7 +94,7 @@ object A11yBridge {
         val values = IntArray(4) { bounds.optInt(it) }
         val cx = (values[0] + values[2]) / 2
         val cy = (values[1] + values[3]) / 2
-        if (!engineTap(cx, cy)) return raw
+        if (!engineTap(cx, cy, packageName)) return raw
         return JSONObject()
             .put("ok", true)
             .put("nodeId", nodeId)
@@ -163,7 +167,9 @@ object A11yBridge {
             }
             val nodeId = node.optString("id")
             if (!hit || nodeId.isBlank()) continue
-            val clickResult = runCatching { JSONObject(click(context, nodeId)) }.getOrNull()
+            val clickResult = runCatching {
+                JSONObject(click(context, nodeId, root.optString("package").takeIf { it.isNotBlank() }))
+            }.getOrNull()
             val ok = clickResult?.optBoolean("ok", false) ?: false
             return JSONObject()
                 .put("ok", ok)
@@ -226,9 +232,11 @@ object A11yBridge {
     }
 
     /** Tap through the clone engine input path (app process only). */
-    private fun engineTap(x: Int, y: Int): Boolean {
-        if (!HeadlessCloneEngine.connected.value || !HeadlessCloneEngine.displayReady.value) return false
-        HeadlessCloneEngine.tap(x, y)
+    private fun engineTap(x: Int, y: Int, packageName: String? = null): Boolean {
+        if (!HeadlessCloneEngine.connected.value) return false
+        // The engine decides whether that display exists; without a package
+        // the viewer's clone is used.
+        HeadlessCloneEngine.tap(x, y, packageName)
         return true
     }
 

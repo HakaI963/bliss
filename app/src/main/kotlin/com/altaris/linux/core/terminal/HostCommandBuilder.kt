@@ -55,6 +55,9 @@ object HostCommandBuilder {
         // daemon when it is set. Native clients use the unix socket via
         // PULSE_RUNTIME_PATH. Guests get tcp:127.0.0.1 from the builders.
         env["PULSE_RUNTIME_PATH"] = "${TermuxHostPaths.HOME}/.pulse"
+        // The host prefix has no browser either; the URL shim installed by
+        // AltarisCliInstaller routes links to the phone.
+        env["BROWSER"] = "altaris-open"
 
         val termuxExec = TermuxHostPaths.termuxExec(ctx)
         // On x86_64 hosts (NDK translation), the binfmt_misc runner is an x86_64

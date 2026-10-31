@@ -209,22 +209,24 @@ object ControlServer {
                 Altaris control API
                   GET  /health
                   GET  /status
+                  GET  /sessions
                   GET  /clones
                   GET  /apps
-                  GET  /screenshot?width=900&quality=90
-                  GET  /ocr?width=900
-                  GET  /logs?package=com.nopiece.hclone.x&lines=300
+                  GET  /screenshot?width=900&quality=90&package=<clone>
+                  GET  /ocr?width=900&package=<clone>
+                  GET  /logs?package=com.altaris.apps.x&lines=300
                   POST /install        {"path":"/sdcard/Download/app.apk"} or {"url":"https://…"}
                   POST /install-upload  raw APK bytes; headers X-Altaris-Filename / X-Altaris-Label
-                  POST /uninstall      {"package":"com.nopiece.hclone.x"}
-                  POST /launch         {"package":"com.nopiece.hclone.x","width":720,"height":1280,"fps":60}
-                  POST /stop           {"package":"com.nopiece.hclone.x"}
-                  POST /tap            {"x":100,"y":200}
-                  POST /swipe          {"x1":100,"y1":300,"x2":100,"y2":900,"ms":260}
-                  POST /text           {"text":"hello"}
-                  POST /key            {"key":"back"}
+                  POST /uninstall      {"package":"com.altaris.apps.x"}
+                  POST /launch         {"package":"com.altaris.apps.x","width":720,"height":1280,"fps":60}
+                  POST /stop           {"package":"com.altaris.apps.x"}
+                  POST /tap            {"x":100,"y":200,"package":"<clone>"}
+                  POST /swipe          {"x1":100,"y1":300,"x2":100,"y2":900,"ms":260,"package":"<clone>"}
+                  POST /text           {"text":"hello","package":"<clone>"}
+                  POST /key            {"key":"back","package":"<clone>"}
+                  POST /open-url       {"url":"https://example.com"} — open a guest link in the phone browser
                   GET  /record/status
-                  POST /record/start   {"fps":6,"width":720}
+                  POST /record/start   {"fps":6,"width":720,"package":"<clone>"}
                   POST /record/stop
                   GET  /uiauto/status
                   GET  /uiauto?display=<id>&max=<n>
@@ -253,6 +255,9 @@ object ControlServer {
         if (method == "GET" && path == "/status") {
             return json(200, runBlocking { HeadlessCloneEngine.apiStatus() })
         }
+        if (method == "GET" && path == "/sessions") {
+            return json(200, runBlocking { HeadlessCloneEngine.apiSessions() })
+        }
         if (method == "GET" && path == "/clones") {
             return json(200, runBlocking { HeadlessCloneEngine.apiClones() })
         }
@@ -262,14 +267,16 @@ object ControlServer {
         if (method == "GET" && path == "/screenshot") {
             val width = query["width"]?.toIntOrNull()?.coerceIn(200, 2160) ?: 900
             val quality = query["quality"]?.toIntOrNull()?.coerceIn(30, 100) ?: 90
-            val bytes = runBlocking { HeadlessCloneEngine.apiCapture(width, quality) }
+            val pkg = query["package"]?.takeIf { it.isNotBlank() }
+            val bytes = runBlocking { HeadlessCloneEngine.apiCapture(width, quality, 5_000, pkg) }
                 ?: return json(503, JSONObject().put("ok", false).put("error", "No display frame"))
             return Response(200, "image/jpeg", bytes)
         }
         if (method == "GET" && path == "/ocr") {
             val width = query["width"]?.toIntOrNull()?.coerceIn(200, 2160) ?: 1000
+            val pkg = query["package"]?.takeIf { it.isNotBlank() }
             return runBlocking {
-                val bytes = HeadlessCloneEngine.apiCapture(width, 92)
+                val bytes = HeadlessCloneEngine.apiCapture(width, 92, 5_000, pkg)
                     ?: return@runBlocking json(503, JSONObject().put("ok", false).put("error", "No display frame"))
                 val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
                     ?: return@runBlocking json(503, JSONObject().put("ok", false).put("error", "Frame decode failed"))
@@ -384,7 +391,13 @@ object ControlServer {
             }
             "/tap" -> json(
                 200,
-                runBlocking { HeadlessCloneEngine.apiTap(obj.optInt("x"), obj.optInt("y")) }
+                runBlocking {
+                    HeadlessCloneEngine.apiTap(
+                        obj.optInt("x"),
+                        obj.optInt("y"),
+                        obj.optString("package").takeIf { it.isNotBlank() },
+                    )
+                }
             )
             "/swipe" -> json(
                 200,
@@ -395,23 +408,68 @@ object ControlServer {
                         obj.optInt("x2"),
                         obj.optInt("y2"),
                         obj.optInt("ms", 260),
+                        obj.optString("package").takeIf { it.isNotBlank() },
                     )
                 }
             )
             "/text" -> json(
                 200,
-                runBlocking { HeadlessCloneEngine.apiText(obj.optString("text")) }
+                runBlocking {
+                    HeadlessCloneEngine.apiText(
+                        obj.optString("text"),
+                        obj.optString("package").takeIf { it.isNotBlank() },
+                    )
+                }
             )
             "/key" -> {
                 val code = keyCode(obj.optString("key").ifBlank { obj.optString("code") })
                 if (code == null) json(400, JSONObject().put("ok", false).put("error", "Unknown key"))
-                else json(200, runBlocking { HeadlessCloneEngine.apiKey(code) })
+                else json(
+                    200,
+                    runBlocking {
+                        HeadlessCloneEngine.apiKey(
+                            code,
+                            obj.optString("package").takeIf { it.isNotBlank() },
+                        )
+                    },
+                )
             }
-            "/release" -> json(200, runBlocking { HeadlessCloneEngine.apiReleaseDisplay() })
+            "/release" -> json(
+                200,
+                runBlocking {
+                    HeadlessCloneEngine.apiReleaseDisplay(
+                        obj.optString("package").takeIf { it.isNotBlank() },
+                    )
+                }
+            )
+            "/open-url" -> {
+                // A guest shell has no browser: the app opens the link instead.
+                val requested = obj.optString("url")
+                val opened = UrlOpener.open(appContext, requested)
+                if (opened == null) {
+                    json(
+                        400,
+                        JSONObject()
+                            .put("ok", false)
+                            .put("error", "cannot open that link (only http, https, mailto, tel and sms)")
+                            .put("url", requested),
+                    )
+                } else {
+                    json(200, JSONObject().put("ok", true).put("url", opened))
+                }
+            }
             "/record/start" -> {
                 val ctx = appContext
                 if (ctx == null) json(500, JSONObject().put("ok", false).put("error", "App context unavailable"))
-                else json(200, CloneRecorder.start(ctx, obj.optInt("fps", 6), obj.optInt("width", 720)))
+                else json(
+                    200,
+                    CloneRecorder.start(
+                        ctx,
+                        obj.optInt("fps", 6),
+                        obj.optInt("width", 720),
+                        obj.optString("package").takeIf { it.isNotBlank() },
+                    ),
+                )
             }
             "/record/stop" -> json(200, CloneRecorder.stop())
             "/uiauto/click" -> {
@@ -450,7 +508,13 @@ object ControlServer {
                     ctx == null -> json(503, JSONObject().put("ok", false).put("error", "App context is not ready"))
                     text.isBlank() -> json(400, JSONObject().put("ok", false).put("error", "text is required"))
                     else -> {
-                        val display = obj.optInt("display", HeadlessCloneEngine.displayId.value)
+                        val pkg = obj.optString("package").takeIf { it.isNotBlank() }
+                        val display = when {
+                            obj.has("display") -> obj.optInt("display")
+                            pkg != null -> HeadlessCloneEngine.displayIdFor(pkg)
+                                .takeIf { it > 0 } ?: HeadlessCloneEngine.displayId.value
+                            else -> HeadlessCloneEngine.displayId.value
+                        }
                         uiautoResponse(
                             A11yBridge.tapText(ctx, display, text, obj.optBoolean("exact", false)),
                         )

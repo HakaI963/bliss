@@ -40,6 +40,7 @@ object CloneRecorder {
         val frames: Int = 0,
         val fps: Int = 6,
         val error: String? = null,
+        val packageName: String? = null,
     )
 
     val state = MutableStateFlow(State())
@@ -48,7 +49,12 @@ object CloneRecorder {
     private var job: Job? = null
     @Volatile private var stopRequested = false
 
-    fun start(context: Context, fps: Int = 6, maxWidth: Int = 720): JSONObject {
+    fun start(
+        context: Context,
+        fps: Int = 6,
+        maxWidth: Int = 720,
+        packageName: String? = null,
+    ): JSONObject {
         if (job != null) {
             return JSONObject().put("ok", false).put("error", "Recording already active")
                 .put("path", state.value.path ?: JSONObject.NULL)
@@ -58,7 +64,10 @@ object CloneRecorder {
         val stamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date())
         val file = File(dir, "clone-$stamp.mp4")
         val rate = fps.coerceIn(2, 15)
-        state.value = State(recording = true, path = file.absolutePath, fps = rate)
+        // Record one display: several clones can run at the same time, so an
+        // agent must be able to say which one it is recording.
+        val target = packageName?.takeIf { it.isNotBlank() }
+        state.value = State(recording = true, path = file.absolutePath, fps = rate, packageName = target)
         stopRequested = false
         job = scope.launch {
             var codec: MediaCodec? = null
@@ -71,7 +80,7 @@ object CloneRecorder {
                 // The first capture initialises the display capture path and
                 // can take several seconds. Do not let a 5 s timeout turn a
                 // valid recording into an empty MP4.
-                val first = capture(maxWidth, timeoutMs = 15_000)
+                val first = capture(maxWidth, target, timeoutMs = 15_000)
                     ?: throw IllegalStateException("No display frame to record")
                 val size = evenSize(first.width, first.height, maxWidth)
                 val width = size.first
@@ -97,7 +106,7 @@ object CloneRecorder {
                 // Stop while the codec is still initialising. After that,
                 // honour the stop request immediately.
                 while (isActive && (!stopRequested || frameIndex == 0L)) {
-                    val frame = pending ?: capture(maxWidth)
+                    val frame = pending ?: capture(maxWidth, target)
                     pending = null
                     if (frame == null) {
                         if (stopRequested) break
@@ -244,10 +253,16 @@ object CloneRecorder {
         .put("path", state.value.path ?: JSONObject.NULL)
         .put("frames", state.value.frames)
         .put("fps", state.value.fps)
+        .put("package", state.value.packageName ?: JSONObject.NULL)
         .put("error", state.value.error ?: JSONObject.NULL)
 
-    private suspend fun capture(maxWidth: Int, timeoutMs: Int = 5_000): Bitmap? {
-        val bytes = HeadlessCloneEngine.apiCapture(maxWidth, 88, timeoutMs) ?: return null
+    private suspend fun capture(
+        maxWidth: Int,
+        packageName: String?,
+        timeoutMs: Int = 5_000,
+    ): Bitmap? {
+        val bytes = HeadlessCloneEngine.apiCapture(maxWidth, 88, timeoutMs, packageName)
+            ?: return null
         return BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
     }
 
