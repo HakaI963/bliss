@@ -30,6 +30,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.PlayArrow
@@ -710,7 +711,7 @@ private fun ResultFrame(accent: Color, run: ReaAnalysis.Run?) {
 /** Local helper: scroll inside a fixed panel. */
 @Composable
 private fun Modifier.verticalScrollFrame(): Modifier =
-    this.then(androidx.compose.foundation.verticalScroll(rememberScrollState()))
+    this.then(Modifier.verticalScroll(rememberScrollState()))
 
 /** The install strip: real progress, which tool, how many left. */
 @Composable

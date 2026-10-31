@@ -8,6 +8,8 @@ import com.altaris.linux.core.rea.ReaManager
 import com.altaris.linux.core.terminal.DistroFsCache
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
 
