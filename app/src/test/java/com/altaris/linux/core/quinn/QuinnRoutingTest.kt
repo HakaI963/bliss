@@ -165,11 +165,12 @@ class QuinnModelConfigTest {
                 "nvidia/nemotron-3-super-120b-a12b",
                 "nvidia/nemotron-3-ultra-550b-a55b",
             )
-        val parsed = QuinnModelConfig.parseModels(
-            org.json.JSONObject()
-                .put("data", org.json.JSONArray(models))
-                .toString()
-        )
+        // Built as text: the org.json constructors are stubs in unit tests,
+        // the parser is what is under test.
+        val body = models.joinToString(",", prefix = """{"data":[""", postfix = "]}") {
+            "\"" + it + "\""
+        }
+        val parsed = QuinnModelConfig.parseModels(body)
         assertEquals(models, parsed)
         // And search finds it regardless of position.
         assertTrue(
