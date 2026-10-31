@@ -168,7 +168,7 @@ class QuinnModelConfigTest {
         // Built as text: the org.json constructors are stubs in unit tests,
         // the parser is what is under test.
         val body = models.joinToString(",", prefix = """{"data":[""", postfix = "]}") {
-            "\"" + it + "\""
+            """{"id":"$it","object":"model"}"""
         }
         val parsed = QuinnModelConfig.parseModels(body)
         assertEquals(models, parsed)
