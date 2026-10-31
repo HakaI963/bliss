@@ -339,14 +339,14 @@ private fun MiniFrame(
  *    into chunks drawn as boxes. Each chunk carries the state of the work done
  *    on it — untouched, in progress, verified, mismatch — and the colours drift
  *    so the map reads as live rather than as a static picture.
- *  - **Chunk rail** (the reference's side bar): one bar per row of chunks,
- *    shaded by how much of that row is resolved, with a label for the count.
- *  - **Agent work** (where the reference has hit categories): one row per
- *    connected agent with a coloured bar for how much of its work is done.
+ *  - **Success rate** (the reference's side bar): one short bar per row of
+ *    chunks, shaded by how much of that row is resolved.
+ *  - **Agents** (where the reference has hit categories): one column per agent,
+ *    side by side, with a bar for how much of its work is done.
  *  - **Recent activity** (the reference's recent logs): dot-only rows.
  *
- * Nothing here is a fixed size: the map takes the remaining height, the rail and
- * the bars size to their content, and the whole column fits the screen.
+ * The three bands share the height by weight, so no band can push another off
+ * the bottom — which is what the previous layout did.
  */
 @Composable
 private fun OverviewTab(accent: Color) {
@@ -354,22 +354,22 @@ private fun OverviewTab(accent: Color) {
     val logs by ReaBridge.logs.collectAsState()
     val chunks = remember(calls) { BinaryChunks.build(calls) }
 
+    // Three bands that share the screen by weight, so nothing can push another
+    // band off the bottom. The previous version gave the map weight(1f) inside a
+    // plain Row, which made it swallow the whole column and shoved Agents and
+    // Activity out of the screen.
     Column(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(5.dp),
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().weight(1f),
+            modifier = Modifier.fillMaxWidth().weight(1.5f),
             horizontalArrangement = Arrangement.spacedBy(5.dp),
         ) {
-            // The map itself.
+            // The map.
             PrismCard(accent = accent, modifier = Modifier.weight(1f).fillMaxSize()) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        "Binary map",
-                        fontSize = 9.5.sp,
-                        fontWeight = FontWeight.SemiBold,
-                    )
+                    Text("Binary map", fontSize = 9.5.sp, fontWeight = FontWeight.SemiBold)
                     Spacer(Modifier.weight(1f))
                     Text(
                         chunks.rows.size.toString() + " rows",
@@ -377,40 +377,40 @@ private fun OverviewTab(accent: Color) {
                         color = altarisMutedText(),
                     )
                 }
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(3.dp))
                 BinaryChunkMap(
                     accent = accent,
                     chunks = chunks,
                     modifier = Modifier.fillMaxWidth().weight(1f),
                 )
-                Spacer(Modifier.height(3.dp))
+                Spacer(Modifier.height(2.dp))
                 ChunkLegend(accent)
             }
-            // The chunk rail: success rate per row.
-            PrismCard(accent = accent, modifier = Modifier.width(52.dp).fillMaxSize()) {
+            // Success rate per row: short bars, not a full-height rod.
+            PrismCard(accent = accent, modifier = Modifier.width(66.dp).fillMaxSize()) {
                 Text(
-                    "Rate",
-                    fontSize = 8.sp,
+                    "Success rate",
+                    fontSize = 7.5.sp,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                 )
                 Spacer(Modifier.height(3.dp))
                 Column(
                     modifier = Modifier.fillMaxWidth().weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                    verticalArrangement = Arrangement.spacedBy(1.5.dp),
                 ) {
                     chunks.rows.forEach { row ->
-                        ChunkRailBar(accent, row, Modifier.fillMaxWidth().weight(1f))
+                        SuccessRateRow(accent, row, Modifier.fillMaxWidth().weight(1f))
                     }
                 }
             }
         }
 
-        // Agent work: one bar per agent, sized to content.
-        AgentWorkCard(accent, calls)
+        // Agents, side by side, like the reference's category row.
+        AgentsCard(accent, calls, Modifier.weight(0.75f).fillMaxWidth())
 
-        // Recent activity: dots only.
-        PrismCard(accent = accent, modifier = Modifier.height(76.dp).fillMaxWidth()) {
+        // Recent activity.
+        PrismCard(accent = accent, modifier = Modifier.weight(1f).fillMaxWidth()) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Recent activity", fontSize = 9.sp, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.weight(1f))
@@ -514,26 +514,49 @@ private fun BinaryChunkMap(
     }
 }
 
-/** The reference's side bar: one shaded bar per row. */
+/**
+ * One row of the success-rate rail.
+ *
+ * A short bar plus its percentage, not a full-height rod: the rail is a summary
+ * of eight rows, so each entry is a compact row of its own.
+ */
 @Composable
-private fun ChunkRailBar(accent: Color, row: ChunkRow, modifier: Modifier = Modifier) {
+private fun SuccessRateRow(accent: Color, row: ChunkRow, modifier: Modifier = Modifier) {
     val scheme = MaterialTheme.colorScheme
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(1.5.dp))
-            .background(scheme.outline.copy(alpha = 0.18f)),
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
     ) {
+        Text(
+            row.label,
+            fontSize = 6.5.sp,
+            color = altarisMutedText(),
+            modifier = Modifier.width(7.dp),
+        )
         Box(
             modifier = Modifier
-                .fillMaxWidth(row.rate.coerceIn(0f, 1f))
-                .fillMaxSize()
-                .background(
-                    if (row.failed > 0) {
-                        scheme.error.copy(alpha = 0.55f)
-                    } else {
-                        accent.copy(alpha = 0.25f + row.rate * 0.55f)
-                    }
-                )
+                .weight(1f)
+                .height(4.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .background(scheme.outline.copy(alpha = 0.20f)),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(row.rate.coerceIn(0f, 1f))
+                    .height(4.dp)
+                    .background(
+                        if (row.failed > 0) scheme.error.copy(alpha = 0.70f)
+                        else accent.copy(alpha = 0.35f + row.rate * 0.5f)
+                    )
+            )
+        }
+        Text(
+            (row.rate * 100).toInt().toString(),
+            fontSize = 6.sp,
+            fontFamily = FontFamily.Monospace,
+            color = altarisMutedText(),
+            modifier = Modifier.width(14.dp),
         )
     }
 }
@@ -557,49 +580,72 @@ private fun LegendDot(label: String, color: Color) {
     }
 }
 
-/** One row per agent, with how much of its work is finished. */
+/**
+ * Agents, side by side.
+ *
+ * The reference lays its categories out in a row, not stacked, so each agent
+ * gets its own small column: name, a bar for how much of its work is done, and
+ * the count. Up to four fit; more wrap onto a second line.
+ */
 @Composable
-private fun AgentWorkCard(accent: Color, calls: List<ReaBridge.Call>) {
+private fun AgentsCard(
+    accent: Color,
+    calls: List<ReaBridge.Call>,
+    modifier: Modifier = Modifier,
+) {
     val agents = remember(calls) { BinaryChunks.agents(calls) }
-    PrismCard(accent = accent, modifier = Modifier.fillMaxWidth()) {
+    PrismCard(accent = accent, modifier = modifier) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Agent work", fontSize = 9.sp, fontWeight = FontWeight.SemiBold)
+            Text("Agents", fontSize = 9.sp, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.weight(1f))
             Text(agents.size.toString(), fontSize = 8.sp, color = altarisMutedText())
         }
         Spacer(Modifier.height(3.dp))
         if (agents.isEmpty()) {
-            Text(
-                "No agent connected yet",
-                fontSize = 8.sp,
-                color = altarisMutedText(),
-            )
+            Text("No agent connected yet", fontSize = 8.sp, color = altarisMutedText())
             return@PrismCard
         }
-        agents.take(4).forEach { agent -> AgentBar(accent, agent) }
+        // Two rows of columns: four across, then the rest below.
+        Column(
+            modifier = Modifier.fillMaxWidth().weight(1f),
+            verticalArrangement = Arrangement.spacedBy(3.dp),
+        ) {
+            agents.chunked(4).take(2).forEach { line ->
+                Row(
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    line.forEach { agent ->
+                        AgentColumn(accent, agent, Modifier.weight(1f).fillMaxSize())
+                    }
+                    // Keep the last line's columns the same width.
+                    repeat(4 - line.size) {
+                        Spacer(Modifier.weight(1f))
+                    }
+                }
+            }
+        }
     }
 }
 
+/** One agent: name, done bar, count. */
 @Composable
-private fun AgentBar(accent: Color, agent: AgentWork) {
+private fun AgentColumn(accent: Color, agent: AgentWork, modifier: Modifier = Modifier) {
     val scheme = MaterialTheme.colorScheme
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 1.5.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
+    Column(modifier = modifier) {
         Text(
             agent.label,
-            fontSize = 8.sp,
+            fontSize = 7.5.sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.width(58.dp),
         )
+        Spacer(Modifier.height(2.dp))
         Box(
             modifier = Modifier
-                .weight(1f)
+                .fillMaxWidth()
                 .height(4.dp)
                 .clip(RoundedCornerShape(2.dp))
-                .background(scheme.outline.copy(alpha = 0.25f)),
+                .background(scheme.outline.copy(alpha = 0.22f)),
         ) {
             Box(
                 modifier = Modifier
@@ -608,12 +654,13 @@ private fun AgentBar(accent: Color, agent: AgentWork) {
                     .background(if (agent.failed > 0) scheme.error else accent)
             )
         }
-        Spacer(Modifier.width(5.dp))
+        Spacer(Modifier.height(1.dp))
         Text(
-            (agent.done * 100).toInt().toString() + "%",
-            fontSize = 7.5.sp,
+            (agent.done * 100).toInt().toString() + "% · " + agent.calls,
+            fontSize = 6.5.sp,
+            fontFamily = FontFamily.Monospace,
             color = altarisMutedText(),
-            modifier = Modifier.width(24.dp),
+            maxLines = 1,
         )
     }
 }
