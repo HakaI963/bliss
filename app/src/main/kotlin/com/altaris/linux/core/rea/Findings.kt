@@ -157,11 +157,24 @@ object Findings {
         return parts.joinToString(" · ")
     }
 
+    /**
+     * The offset/address of a row.
+     *
+     * Checked as a number first: `optString` on a numeric JSON value returns
+     * the number's text, which would render a decimal address as if it were
+     * already formatted. A real string (often already `0x…`) wins.
+     */
     private fun offsetFor(node: JSONObject): String {
-        firstString(node, "offset", "address", "addr", "start", "va", "rva")
-            ?.let { return it }
-        val numeric = longOf(node, "offset", "address", "start")
-        return if (numeric > 0) "0x" + numeric.toString(16) else ""
+        for (key in listOf("offset", "address", "addr", "start", "va", "rva")) {
+            when (val value = node.opt(key)) {
+                is Number -> {
+                    val numeric = value.toLong()
+                    if (numeric > 0) return "0x" + numeric.toString(16)
+                }
+                is String -> if (value.isNotBlank() && value != "null") return value
+            }
+        }
+        return ""
     }
 
     private fun firstString(node: JSONObject, vararg keys: String): String? {
