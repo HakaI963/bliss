@@ -16,18 +16,43 @@ import org.junit.Test
 class AgentDetectorTest {
 
     /**
-     * The detector must accept unknown names: a new agent has to appear without
-     * a code change.
+     * The real agents the user named must be found.
      */
     @Test
-    fun unknownAgentNamesAreAccepted() {
-        assertTrue(AgentDetector.isAgentNameForTest("opencode"))
-        assertTrue(AgentDetector.isAgentNameForTest("claude"))
-        assertTrue(AgentDetector.isAgentNameForTest("kimi"))
-        assertTrue(AgentDetector.isAgentNameForTest("crush"))
-        assertTrue(AgentDetector.isAgentNameForTest("goose"))
+    fun knownAgentsAreAccepted() {
+        for (name in listOf(
+            "opencode", "claude", "codex", "gemini", "aider", "crush", "goose",
+            "kimi", "qwen", "droid", "amp", "auggie", "cursor-agent", "copilot",
+        )) {
+            assertTrue("$name must be detected", AgentDetector.isAgentNameForTest(name))
+        }
+    }
+
+    /**
+     * Agent-shaped names are still accepted, so a new release does not need an
+     * app update.
+     */
+    @Test
+    fun agentShapedNamesAreAccepted() {
         assertTrue(AgentDetector.isAgentNameForTest("some-brand-new-agent"))
         assertTrue(AgentDetector.isAgentNameForTest("qwen-code"))
+        assertTrue(AgentDetector.isAgentNameForTest("gemini-cli"))
+    }
+
+    /**
+     * The regression the user reported: distribution plumbing was listed as an
+     * agent because "not a known system binary" was the only filter.
+     */
+    @Test
+    fun distributionPlumbingIsRejected() {
+        for (name in listOf(
+            "addpart", "archive_colour", "zdump", "resizepart", "delpart",
+            "partx", "lsblk", "swaplabel", "wipefs", "cal", "col", "colcrt",
+            "colrm", "column", "rev", "look", "sponge", "shred", "expand",
+            "unexpand", "fmt", "fold", "nl", "pr", "ptx", "tsort",
+        )) {
+            assertFalse("$name must not be listed as an agent", AgentDetector.isAgentNameForTest(name))
+        }
     }
 
     /** System binaries must not fill the picker. */

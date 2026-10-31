@@ -51,10 +51,15 @@ object AgentDetector {
     /**
      * Directories (relative to a rootfs, or to the host prefix) where an agent
      * CLI is conventionally installed.
+     *
+     * Deliberately *not* every bin directory. Scanning all of `/usr/bin` made
+     * the picker fill with distribution plumbing (`addpart`, `archive_colour`,
+     * `zdump`) because "not a known system binary" is far too weak a filter.
+     * An agent is almost always installed by npm/pip/cargo/go into one of these
+     * places, so this list is where the precision comes from.
      */
     private val AGENT_DIRS = listOf(
         "usr/local/bin",
-        "usr/bin",
         "usr/local/sbin",
         "root/.local/bin",
         "root/.npm-global/bin",
@@ -64,8 +69,7 @@ object AgentDetector {
         "root/.cargo/bin",
         "root/.local/share/pnpm",
         "root/.local/share/npm/bin",
-        "root/bin",
-        "bin",
+        "opt/homebrew/bin",
     )
 
     /** Per-user agent directories, relative to a home directory. */
@@ -276,11 +280,50 @@ object AgentDetector {
     }
 
     /**
-     * True when [name] could be an agent CLI.
+     * Names that are known agent CLIs.
      *
-     * Excludes known system binaries and the usual packaging noise (shared
-     * libraries, version-suffixed runtime binaries) while accepting anything
-     * unknown — a new agent must appear without a code change.
+     * This is the precision half of detection: the user asked for the real
+     * agents (Claude, Kimi, Codex, Aider, Gemini, Crush, …) and nothing else.
+     * A binary outside this list is only accepted when it also matches an
+     * agent-shaped name pattern *and* lives in an agent directory — see
+     * [isAgentName].
+     */
+    private val KNOWN_AGENTS = setOf(
+        "opencode", "claude", "claude-code", "codex", "gemini", "aider", "crush",
+        "goose", "kimi", "kimi-cli", "qwen", "qwen-code", "droid", "amp", "auggie",
+        "cursor-agent", "cursor", "copilot", "gh-copilot", "chatgpt", "codex-cli",
+        "hermes", "alpha", "pi", "plandex", "openhands", "cline", "roo", "continue",
+        "bolt", "sweep", "mods", "sgpt", "shell-gpt", "llm", "fabric", "opencoder",
+        "windsurf", "trae", "zed-agent", "devika", "gpt-engineer", "mentat",
+    )
+
+    /**
+     * Suffixes that strongly suggest an agent CLI.
+     *
+     * Only applied inside [AGENT_DIRS], where a distribution's own binaries
+     * never live, so `archive_colour` in `/usr/bin` can never match.
+     */
+    private val AGENT_SUFFIXES = listOf("-agent", "-cli", "-code", "-chat", "-ai")
+
+    /** The curated names, exposed so the UI can suggest them. */
+    fun knownAgentNames(): List<String> = KNOWN_AGENTS.sorted()
+
+    /** Prefixes of well-known agent vendors, for `kimi-2`, `gemini-cli`, etc. */
+    private val AGENT_PREFIXES = listOf(
+        "claude", "codex", "gemini", "kimi", "qwen", "opencode", "aider",
+        "crush", "goose", "droid", "amp-", "auggie", "cursor", "copilot",
+    )
+
+    /**
+     * True when [name] is an agent CLI.
+     *
+     * Two acceptance paths, both narrow:
+     *  - a curated name from [KNOWN_AGENTS];
+     *  - an agent-shaped name ([AGENT_SUFFIXES] / [AGENT_PREFIXES]) found in an
+     *    agent directory, which [scanDir] guarantees.
+     *
+     * A distribution binary such as `addpart` or `archive_colour` matches
+     * neither, which is the bug this replaces.
      */
     private fun isAgentName(name: String): Boolean {
         if (name.isBlank()) return false
@@ -288,11 +331,18 @@ object AgentDetector {
         if (name.endsWith(".so") || name.contains(".so.")) return false
         if (name.endsWith(".pyc") || name.endsWith(".h") || name.endsWith(".a")) return false
         if (name.contains("-config")) return false
-        if (SYSTEM_BINARIES.contains(name)) return false
+        if (name in SYSTEM_BINARIES) return false
         // Version-suffixed runtime binaries (`python3.12`, `node18`) are not agents.
         val stem = name.trimEnd { it.isDigit() || it == '.' }
-        if (stem != name && SYSTEM_BINARIES.contains(stem)) return false
-        return true
+        if (stem != name && stem in SYSTEM_BINARIES) return false
+
+        val lower = name.lowercase()
+        if (lower in KNOWN_AGENTS) return true
+        if (AGENT_SUFFIXES.any { lower.endsWith(it) }) return true
+        // `gemini-cli`, `claude-2`, `kimi-cli`: a vendor prefix followed by a
+        // separator, never a bare word that happens to contain it.
+        if (AGENT_PREFIXES.any { lower.startsWith(it) && lower != it }) return true
+        return false
     }
 
     /**

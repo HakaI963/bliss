@@ -253,6 +253,12 @@ fun SettingsScreen(
         // (Daylight). Keeping the row would offer a choice that no longer
         // exists, so the group is removed rather than disabled.
 
+        // Quinn's own endpoint: its brain for // answers and for driving REA.
+        com.altaris.linux.ui.screens.settings.QuinnAiSettingsGroup(
+            accent = accent,
+            modifier = Modifier.staggerIn(2, entrance),
+        )
+
         // Home artwork — the anime banner on the home screen.
         SettingsGroup("Home artwork", accent, Modifier.staggerIn(4, entrance)) {
             Row(

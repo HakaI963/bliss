@@ -5,8 +5,12 @@ import android.util.Log
 import com.altaris.linux.core.control.AgentDetector
 import com.altaris.linux.core.control.DetectedAgent
 import com.altaris.linux.core.control.DistroAgentReport
+import com.altaris.linux.core.install.DistroInstallProfile
 import com.altaris.linux.core.rea.GuestExec
 import com.altaris.linux.core.rea.ReaDistro
+import com.altaris.linux.core.root.RootShell
+import com.altaris.linux.core.terminal.DistroFsCache
+import com.altaris.linux.core.terminal.TermuxHostPaths
 import com.altaris.linux.core.terminal.HostCommandBuilder
 import com.altaris.linux.core.terminal.ShellCommandRunner
 import kotlinx.coroutines.CoroutineScope
@@ -17,6 +21,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 
 /**
  * Quinn's engine: discovery plus one process per (distro, agent) turn.
@@ -93,6 +98,12 @@ object QuinnEngine {
                     )
                 }
                 reaTarget(context)?.let { found.add(it) }
+                // Hand-added agents. A user-supplied binary is checked for
+                // existence in the chosen distro (or every distro) rather than
+                // trusted blindly, so a typo does not become a dead target.
+                for (entry in CustomAgents.load(context)) {
+                    for (target in resolveCustom(context, entry)) found.add(target)
+                }
                 _targets.value = found
                     .distinctBy { it.key }
                     .sortedWith(compareBy({ it.kind.ordinal }, { it.distroName.lowercase() }, { it.label.lowercase() }))
@@ -135,6 +146,81 @@ object QuinnEngine {
         label = AgentCatalog.forBinary(agent.name).label,
         headless = AgentCatalog.isHeadless(agent.name),
     )
+
+    /**
+     * Turn a hand-added binary into a target, if it really exists.
+     *
+     * Checked with `command -v` inside the distro (or the host prefix) so the
+     * picker never shows an agent that cannot be run. A blank [CustomAgents.Entry.distroId]
+     * means "wherever it is installed".
+     */
+    private fun resolveCustom(context: Context, entry: CustomAgents.Entry): List<AgentTarget> {
+        val distros = if (entry.distroId.isNotBlank()) listOf(entry.distroId)
+        else installedDistroIds(context) + HOST_DISTRO
+        val out = ArrayList<AgentTarget>()
+        for (distroId in distros) {
+            val exists = runCatching {
+                if (distroId == HOST_DISTRO) {
+                    File(TermuxHostPaths.BIN, entry.binary).canExecute() ||
+                        hostWhich(context, entry.binary)
+                } else {
+                    val profile = DistroInstallProfile.forId(distroId) ?: return@runCatching false
+                    // A chroot is unreadable from here; ask root instead of
+                    // stat'ing a path we are not allowed to see.
+                    if (profile.method == "chroot") {
+                        val path = profile.chrootPath ?: return@runCatching false
+                        RootShell.captureResult(
+                            "test -x " + quote("$path/usr/local/bin/${entry.binary}") +
+                                " || test -x " + quote("$path/usr/bin/${entry.binary}") +
+                                " || command -v " + quote(entry.binary),
+                            20_000L,
+                        ).exitCode == 0
+                    } else {
+                        val rootfs = File(
+                            context.filesDir,
+                            "usr/var/lib/proot-distro/containers/${profile.prootName}/rootfs"
+                        )
+                        File(rootfs, "usr/local/bin/${entry.binary}").canExecute() ||
+                            File(rootfs, "usr/bin/${entry.binary}").canExecute()
+                    }
+                }
+            }.getOrDefault(false)
+            if (!exists) continue
+            out.add(
+                AgentTarget(
+                    distroId = distroId,
+                    distroName = if (distroId == HOST_DISTRO) "Host" else distroDisplayName(context, distroId),
+                    method = if (distroId == HOST_DISTRO) "host" else "proot",
+                    binary = entry.binary,
+                    label = AgentCatalog.forBinary(entry.binary).label,
+                    headless = AgentCatalog.isHeadless(entry.binary),
+                )
+            )
+        }
+        return out
+    }
+
+    private fun installedDistroIds(context: Context): List<String> =
+        runCatching {
+            DistroFsCache.get(context.applicationContext)
+                .installed
+                .filterNot { DistroInstallProfile.isHidden(it) }
+                .sorted()
+        }.getOrDefault(emptyList())
+
+    private fun distroDisplayName(context: Context, distroId: String): String =
+        DistroInstallProfile.forId(distroId)?.displayName?.ifBlank { distroId } ?: distroId
+
+    private fun hostWhich(context: Context, binary: String): Boolean =
+        runCatching {
+            ShellCommandRunner.runCaptureExit(
+                context,
+                arrayOf("/system/bin/sh", "-c", "command -v " + quote(binary)),
+                HostCommandBuilder.envMap(context, includeTerm = false),
+            ).first == 0
+        }.getOrDefault(false)
+
+    private fun quote(value: String): String = "'" + value.replace("'", "'\\''") + "'"
 
     // ------------------------------------------------------------------ sessions
 

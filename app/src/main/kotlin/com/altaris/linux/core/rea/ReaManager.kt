@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.altaris.linux.core.control.ControlServer
 import com.altaris.linux.core.install.DistroInstallProfile
+import com.altaris.linux.core.root.RootShell
 import com.altaris.linux.core.terminal.DistroFsCache
 import com.altaris.linux.core.terminal.HostCommandBuilder
 import com.altaris.linux.core.terminal.ShellCommandRunner
@@ -98,7 +99,23 @@ object ReaManager {
         val log: String = "",
         val error: String = "",
         val outcomes: List<ToolOutcome> = emptyList(),
-    )
+        /**
+         * Real progress through the tool list, not a fabricated ramp.
+         *
+         * The REA install is long (Node, then ~18 tools, then a 450 MB Ghidra),
+         * so the dashboard needs to say *which* tool it is on and how many are
+         * left instead of a bar that never moves.
+         */
+        val step: Int = 0,
+        val stepTotal: Int = 0,
+        val stepLabel: String = "",
+        val stepDone: List<String> = emptyList(),
+        val stepFailed: List<String> = emptyList(),
+    ) {
+        /** Fraction of the tool phase, 0..1. */
+        val stepFraction: Float
+            get() = if (stepTotal <= 0) 0f else step.toFloat() / stepTotal
+    }
 
     private val _status = MutableStateFlow(Status())
     val status: StateFlow<Status> = _status
@@ -136,19 +153,31 @@ object ReaManager {
     fun isInstalledIn(ctx: Context, distroId: String): Boolean {
         if (distroId.isBlank()) return false
         val profile = DistroInstallProfile.forId(distroId) ?: return false
-        val rootfs: File = when (profile.method) {
-            "chroot" -> profile.chrootPath?.let { File(it) } ?: return false
-            else -> {
-                if (profile.prootName.isBlank()) return false
-                File(
-                    ctx.filesDir,
-                    "usr/var/lib/proot-distro/containers/${profile.prootName}/rootfs"
-                )
+        // A chroot lives under /data/local, which this process cannot read:
+        // stat'ing it is always a false negative. Ask root instead.
+        if (profile.method == "chroot") {
+            val path = profile.chrootPath ?: return false
+            if (!RootShell.isRootAvailable()) {
+                return com.altaris.linux.core.chroot.ChrootInfoStore
+                    .cachedInstalled(ctx, distroId)
             }
+            return runCatching {
+                RootShell.captureResult(
+                    "test -x " + quote(path + REA_BIN),
+                    20_000L,
+                ).exitCode == 0
+            }.getOrDefault(false)
         }
+        val rootfs: File = if (profile.prootName.isBlank()) return false
+        else File(
+            ctx.filesDir,
+            "usr/var/lib/proot-distro/containers/${profile.prootName}/rootfs"
+        )
         val rea = File(rootfs, REA_BIN.removePrefix("/"))
         return rea.isFile
     }
+
+    private fun quote(value: String): String = "'" + value.replace("'", "'\\''") + "'"
 
     fun cachedTools(): JSONArray? = toolsCache
 
@@ -331,18 +360,49 @@ object ReaManager {
 
             val requested = dependencies.mapNotNull { ReaCatalog.byId(it) }
             if (requested.isNotEmpty()) {
-                update { it.copy(busy = "Installing tools") }
+                update {
+                    it.copy(
+                        busy = "Installing tools",
+                        step = 0,
+                        stepTotal = requested.size,
+                        stepLabel = requested.first().label,
+                        stepDone = emptyList(),
+                        stepFailed = emptyList(),
+                    )
+                }
             }
-            for (dep in requested) {
+            for ((index, dep) in requested.withIndex()) {
+                update {
+                    it.copy(
+                        busy = "Installing " + dep.label + " (" + (index + 1) + "/" + requested.size + ")",
+                        step = index,
+                        stepTotal = requested.size,
+                        stepLabel = dep.label,
+                    )
+                }
                 val outcome = installDependency(app, distroId, dep, manager) { line(it) }
                 outcomes.add(outcome)
+                update {
+                    it.copy(
+                        step = index + 1,
+                        stepDone = if (outcome.ok) it.stepDone + dep.label else it.stepDone,
+                        stepFailed = if (outcome.ok) it.stepFailed else it.stepFailed + dep.label,
+                    )
+                }
                 line(
                     (if (outcome.ok) "ok: " else "FAILED: ") + dep.label +
                         if (outcome.detail.isBlank()) "" else " — " + outcome.detail
                 )
             }
 
-            update { it.copy(busy = "", outcomes = outcomes) }
+            update {
+                it.copy(
+                    busy = "",
+                    outcomes = outcomes,
+                    step = outcomes.size,
+                    stepLabel = "",
+                )
+            }
             probe(app, distroId)
 
             val failure = coreError.ifBlank {

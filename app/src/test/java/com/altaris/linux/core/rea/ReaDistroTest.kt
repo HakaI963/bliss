@@ -165,23 +165,39 @@ class ReaDistroTest {
      * not completion. The state carries an explicit fraction and byte
      * counters, and only a finished install reports 100%.
      */
+    /**
+     * A container that exists but whose toolchain failed must still open the
+     * dashboard, with [ReaDistro.State.ready] false so the UI can offer a
+     * repair. Reporting it as "not installed" hid a real chroot install behind
+     * the frosted gate forever.
+     */
     @Test
-    fun aHalfFinishedInstallIsNotReportedAsReady() {
+    fun aPresentContainerOpensTheDashboardButIsNotReady() {
         val partial = ReaDistro.State(
-            installed = false,
-            busy = "Downloading the base system",
+            installed = true,
+            ready = false,
+            busy = "Installing JADX (3/18)",
             percent = 41,
             downloadedBytes = 320L * 1024 * 1024,
             totalBytes = 780L * 1024 * 1024,
         )
-        assertFalse(partial.installed)
-        assertFalse(partial.ready)
+        assertTrue("container present must open the dashboard", partial.installed)
+        assertFalse("toolchain incomplete must not be ready", partial.ready)
         assertTrue(partial.fraction in 0.40f..0.42f)
         assertTrue(partial.downloadText.contains("left"))
 
         val done = ReaDistro.State(installed = true, ready = true, percent = 100)
         assertTrue(done.installed)
+        assertTrue(done.ready)
         assertEquals(1f, done.fraction, 0.001f)
+    }
+
+    /** Nothing on disk is the only state that shows the frosted gate. */
+    @Test
+    fun onlyAnAbsentContainerIsNotInstalled() {
+        val absent = ReaDistro.State()
+        assertFalse(absent.installed)
+        assertFalse(absent.ready)
     }
 
     @Test

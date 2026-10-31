@@ -59,6 +59,12 @@ object ReaDistro {
     data class Step(val label: String, val done: Boolean = false)
 
     data class State(
+        /**
+         * True when the environment is usable enough to open the dashboard:
+         * a container exists. The toolchain may still be missing, which
+         * [ready] reports separately so the UI can offer a repair instead of
+         * hiding the whole page.
+         */
         val installed: Boolean = false,
         /** Which method is installed, if any. */
         val method: Method? = null,
@@ -120,12 +126,15 @@ object ReaDistro {
         val app = context.applicationContext
         val method = installedMethod(app)
         val ready = method != null && isReady(app, method)
-        val rootfs = method?.let { rootfsOf(app, it) }
         _state.value = _state.value.copy(
-            installed = ready,
+            // A present container opens the dashboard; [ready] drives the
+            // "REA core missing" banner. Reporting a half-installed
+            // environment as "not installed" was why a real chroot install
+            // showed the frosted gate forever.
+            installed = method != null,
             method = method,
             ready = ready,
-            sizeBytes = if (ready) sizeOf(app, method) else 0L,
+            sizeBytes = if (method != null) sizeOf(app, method) else 0L,
             chrootPossible = RootShell.isRootAvailable(),
             busy = _state.value.busy,
         )
@@ -137,26 +146,75 @@ object ReaDistro {
     /**
      * The installed method, if any.
      *
-     * A container that exists but has no marker is *not* installed: it is an
-     * interrupted install, and reporting it as installed would send the user to
-     * a dashboard whose tools are missing.
+     * Two bugs are fixed here:
+     *
+     *  1. **A chroot rootfs is unreadable from this process** (`/data/local/…`
+     *     is `shell_data_file` under SELinux), so `File.list()` returned null
+     *     and a perfectly good chroot REA was reported as "not installed".
+     *     Presence is now checked through [RootShell] for chroot.
+     *  2. The first non-empty container used to win, so a half-extracted proot
+     *     container shadowed a complete chroot install. A *ready* container now
+     *     wins over a merely present one.
      */
     private fun installedMethod(context: Context): Method? {
-        for (method in Method.entries) {
-            val rootfs = rootfsOf(context, method) ?: continue
-            if (rootfs.isDirectory && rootfs.list()?.isNotEmpty() == true) return method
+        val present = Method.entries.filter { containerPresent(context, it) }
+        if (present.isEmpty()) return null
+        return present.firstOrNull { isReady(context, it) } ?: present.first()
+    }
+
+    /**
+     * True when [method]'s container exists on disk at all.
+     *
+     * For proot that is a readable directory. For chroot it has to go through
+     * root: the app cannot see `/data/local`, so a direct check is always a
+     * false negative.
+     */
+    private fun containerPresent(context: Context, method: Method): Boolean {
+        val rootfs = rootfsOf(context, method) ?: return false
+        if (rootfs.isDirectory && rootfs.list()?.isNotEmpty() == true) return true
+        if (method != Method.CHROOT) return false
+        if (!RootShell.isRootAvailable()) {
+            // Fall back to the cached probe the chroot settings already keep.
+            return com.altaris.linux.core.chroot.ChrootInfoStore
+                .cachedInstalled(context, method.id)
         }
-        return null
+        val result = runCatching {
+            RootShell.captureResult(
+                "test -d " + quote(rootfs.absolutePath) +
+                    " && [ \"\$(ls -A " + quote(rootfs.absolutePath) + " 2>/dev/null | head -n1)\" ]",
+                20_000L,
+            )
+        }.getOrNull()
+        return result != null && result.exitCode == 0
     }
 
     /** True when [method]'s container exists *and* its toolchain finished. */
     private fun isReady(context: Context, method: Method): Boolean {
         val rootfs = rootfsOf(context, method) ?: return false
+        // A chroot's marker is equally invisible to this process; read it
+        // through root rather than stat'ing a path we cannot see.
+        if (method == Method.CHROOT) {
+            if (rootMarkerPresent(rootfs.absolutePath)) return true
+            return ReaManager.isInstalledIn(context, method.id)
+        }
         if (File(rootfs, READY_MARKER).isFile) return true
         // A container from an older build has no marker; REA's own binary is
         // the next best proof, and re-installing would waste a GB.
         return ReaManager.isInstalledIn(context, method.id)
     }
+
+    /** Root-side check for the ready marker inside a chroot. */
+    private fun rootMarkerPresent(rootfsPath: String): Boolean {
+        if (!RootShell.isRootAvailable()) return false
+        return runCatching {
+            RootShell.captureResult(
+                "test -f " + quote("$rootfsPath/$READY_MARKER"),
+                20_000L,
+            ).exitCode == 0
+        }.getOrDefault(false)
+    }
+
+    private fun quote(value: String): String = "'" + value.replace("'", "'\\''") + "'"
 
     private fun rootfsOf(context: Context, method: Method): File? =
         when (method) {
@@ -215,18 +273,45 @@ object ReaDistro {
                     )
                     return@withLock _state.value
                 }
+                // The dashboard may open from here on: the container is real
+                // even if the toolchain below still fails.
+                _state.value = _state.value.copy(installed = true)
                 markStep("Container created")
                 publish("Installing REA and the analysis tools", 62, "")
 
                 val status = ReaManager.install(app, method.id, tools) { line ->
                     onLog(line)
-                    // The toolchain install has no byte counter; map its
-                    // progress onto the remaining 62..99% band and show the
-                    // line it is on.
+                    // Real progress: the manager reports which tool of how
+                    // many. The container is done, so the toolchain owns
+                    // 62..99% and each completed tool moves the bar by a real
+                    // fraction instead of one invented percent per log line.
+                    val st = ReaManager.status.value
+                    val toolFraction = if (st.stepTotal > 0) {
+                        62f + st.stepFraction.coerceIn(0f, 1f) * 37f
+                    } else {
+                        _state.value.percent.toFloat().coerceAtLeast(62f)
+                    }
                     _state.value = _state.value.copy(
                         busy = line.take(90),
-                        percent = (_state.value.percent.coerceAtLeast(62) + 1).coerceAtMost(99),
-                        detail = line.take(120),
+                        percent = toolFraction.toInt().coerceIn(0, 99),
+                        detail = if (st.stepTotal > 0) {
+                            st.stepLabel + " · " + st.step + "/" + st.stepTotal +
+                                if (st.stepFailed.isEmpty()) ""
+                                else " · " + st.stepFailed.size + " failed"
+                        } else {
+                            line.take(120)
+                        },
+                        steps = listOf(
+                            Step("Container created", done = true),
+                            Step(
+                                "REA core",
+                                done = statusReady(),
+                            ),
+                            Step(
+                                "Analysis tools (" + st.step + "/" + st.stepTotal + ")",
+                                done = st.stepTotal > 0 && st.step >= st.stepTotal,
+                            ),
+                        ),
                     )
                 }
                 val ok = status.installed && ReaManager.isInstalledIn(app, method.id)
@@ -239,7 +324,7 @@ object ReaDistro {
                 _state.value = _state.value.copy(
                     busy = "",
                     percent = if (ok) 100 else _state.value.percent,
-                    installed = ok,
+                    installed = true,
                     method = method,
                     ready = ok,
                     error = status.error,
@@ -343,6 +428,9 @@ object ReaDistro {
             detail = detail,
         )
     }
+
+    /** True when the REA binary itself is present (the core step). */
+    private fun statusReady(): Boolean = ReaManager.status.value.installed
 
     private fun markStep(label: String) {
         _state.value = _state.value.copy(
