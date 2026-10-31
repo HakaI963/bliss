@@ -57,6 +57,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.altaris.linux.core.rea.BinaryChunks
+import com.altaris.linux.core.rea.ChunkState
 import com.altaris.linux.core.rea.Findings
 import com.altaris.linux.core.rea.ReaBridge
 import com.altaris.linux.core.rea.ReaDistro
@@ -104,15 +106,17 @@ fun ReaScreen(modifier: Modifier = Modifier) {
     val bridge by ReaBridge.state.collectAsState()
     var tab by remember { mutableStateOf(ReaTab.OVERVIEW) }
 
+    // The server is meant to always be up. Refresh the truth, then ensure it,
+    // and retry while it is down so a transient failure heals itself instead of
+    // leaving a dead screen with no button to press.
     LaunchedEffect(distro.installed, distro.ready) {
-        withContext(Dispatchers.IO) {
-            ReaDistro.refresh(context)
-            // Start the server only when REA can actually run, so the screen
-            // never shows a shell "not found" as the first thing you see.
-            val id = ReaDistro.distroId(context)
-            if (id != null && ReaDistro.state.value.ready && !ReaBridge.state.value.running) {
-                ReaBridge.start(context, id)
+        while (true) {
+            withContext(Dispatchers.IO) {
+                ReaDistro.refresh(context)
+                if (ReaDistro.state.value.ready) ReaBridge.ensureRunning(context)
             }
+            if (ReaBridge.state.value.running) break
+            kotlinx.coroutines.delay(4000L)
         }
     }
 
@@ -136,7 +140,7 @@ fun ReaScreen(modifier: Modifier = Modifier) {
 
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             when (tab) {
-                ReaTab.OVERVIEW -> OverviewTab(accent, bridge)
+                ReaTab.OVERVIEW -> OverviewTab(accent)
                 ReaTab.FUNCTIONS -> FunctionsTab(accent)
                 ReaTab.OBJDUMP -> OutputTab(accent, "Objdump", objdumpKinds)
                 ReaTab.FIDELITY -> FidelityTab(accent)
@@ -325,191 +329,311 @@ private fun MiniFrame(
 // ----------------------------------------------------------------- overview
 
 /**
- * Overview: a grid of small live frames.
+ * Overview — the working surface.
  *
- * The centre of gravity is the two things that show *work happening*: the
- * activity grid (one cell per call) and the live result feed, where the text an
- * agent is getting back scrolls as it arrives. The log strip sits at the bottom
- * inside the screen.
+ * Modelled on the supplied reference, with its parts renamed to REA:
+ *
+ *  - **Binary map** (where the reference has a plate heatmap): the artifact cut
+ *    into chunks drawn as boxes. Each chunk carries the state of the work done
+ *    on it — untouched, in progress, verified, mismatch — and the colours drift
+ *    so the map reads as live rather than as a static picture.
+ *  - **Chunk rail** (the reference's side bar): one bar per row of chunks,
+ *    shaded by how much of that row is resolved, with a label for the count.
+ *  - **Agent work** (where the reference has hit categories): one row per
+ *    connected agent with a coloured bar for how much of its work is done.
+ *  - **Recent activity** (the reference's recent logs): dot-only rows.
+ *
+ * Nothing here is a fixed size: the map takes the remaining height, the rail and
+ * the bars size to their content, and the whole column fits the screen.
  */
 @Composable
-private fun OverviewTab(accent: Color, bridge: ReaBridge.State) {
+private fun OverviewTab(accent: Color) {
     val calls by ReaBridge.calls.collectAsState()
     val logs by ReaBridge.logs.collectAsState()
-    val current = calls.firstOrNull { it.running } ?: calls.firstOrNull()
+    val chunks = remember(calls) { BinaryChunks.build(calls) }
 
     Column(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(5.dp),
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().weight(1f),
             horizontalArrangement = Arrangement.spacedBy(5.dp),
         ) {
-            MiniFrame(
-                title = "Activity",
-                accent = accent,
-                modifier = Modifier.weight(1.35f).height(84.dp),
-                trailing = if (bridge.running) "live" else "idle",
-            ) {
-                ActivityGrid(accent, calls, Modifier.fillMaxWidth().weight(1f))
-            }
-            MiniFrame(
-                title = "Now",
-                accent = accent,
-                modifier = Modifier.weight(1f).height(84.dp),
-                trailing = current?.tool?.take(12) ?: "",
-            ) {
-                if (current == null) {
-                    Text("idle", fontSize = 8.5.sp, color = altarisMutedText())
-                } else {
+            // The map itself.
+            PrismCard(accent = accent, modifier = Modifier.weight(1f).fillMaxSize()) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        current.tool,
-                        fontSize = 8.5.sp,
-                        fontFamily = FontFamily.Monospace,
-                        color = accent,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+                        "Binary map",
+                        fontSize = 9.5.sp,
+                        fontWeight = FontWeight.SemiBold,
                     )
+                    Spacer(Modifier.weight(1f))
                     Text(
-                        if (current.running) "running" else "${current.ms} ms",
+                        chunks.rows.size.toString() + " rows",
                         fontSize = 8.sp,
-                        color = altarisMutedText(),
-                    )
-                    Text(
-                        ReaBridge.formatBytes(current.bytes),
-                        fontSize = 8.sp,
-                        fontFamily = FontFamily.Monospace,
                         color = altarisMutedText(),
                     )
                 }
-            }
-        }
-
-        // The live output frame: real tool text as it comes back.
-        MiniFrame(
-            title = "Live output",
-            accent = accent,
-            modifier = Modifier.weight(1f).fillMaxWidth(),
-            trailing = current?.tool ?: "",
-        ) {
-            val preview = current?.preview.orEmpty()
-            if (preview.isBlank()) {
-                Text(
-                    "Nothing yet. When an agent calls a REA tool, its output appears here.",
-                    fontSize = 8.5.sp,
-                    lineHeight = 11.sp,
-                    color = altarisMutedText(),
+                Spacer(Modifier.height(4.dp))
+                BinaryChunkMap(
+                    accent = accent,
+                    chunks = chunks,
+                    modifier = Modifier.fillMaxWidth().weight(1f),
                 )
-            } else {
-                SelectionContainer {
-                    Text(
-                        preview.takeLast(1600),
-                        fontSize = 8.sp,
-                        lineHeight = 10.5.sp,
-                        fontFamily = FontFamily.Monospace,
-                        maxLines = 80,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                Spacer(Modifier.height(3.dp))
+                ChunkLegend(accent)
+            }
+            // The chunk rail: success rate per row.
+            PrismCard(accent = accent, modifier = Modifier.width(52.dp).fillMaxSize()) {
+                Text(
+                    "Rate",
+                    fontSize = 8.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                )
+                Spacer(Modifier.height(3.dp))
+                Column(
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    chunks.rows.forEach { row ->
+                        ChunkRailBar(accent, row, Modifier.fillMaxWidth().weight(1f))
+                    }
                 }
             }
         }
 
-        // The log strip, inside the screen.
-        MiniFrame(
-            title = "Logs",
-            accent = accent,
-            modifier = Modifier.height(84.dp).fillMaxWidth(),
-            trailing = logs.size.toString(),
-        ) {
+        // Agent work: one bar per agent, sized to content.
+        AgentWorkCard(accent, calls)
+
+        // Recent activity: dots only.
+        PrismCard(accent = accent, modifier = Modifier.height(76.dp).fillMaxWidth()) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Recent activity", fontSize = 9.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.weight(1f))
+                Text(logs.size.toString(), fontSize = 8.sp, color = altarisMutedText())
+            }
+            Spacer(Modifier.height(3.dp))
             Column(
                 modifier = Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(1.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
                 if (logs.isEmpty()) {
                     Text("no activity", fontSize = 8.sp, color = altarisMutedText())
                 }
-                logs.take(30).forEach { LogLineRow(it, accent) }
+                logs.take(40).forEach { line -> DotRow(line, accent) }
             }
         }
     }
 }
 
-/** One cell per tool call; shading is duration. */
+/**
+ * The binary map.
+ *
+ * Rows of boxes, one box per chunk of the artifact. A chunk's colour is its
+ * state, and the shading breathes so a live run is visibly moving. Rows are
+ * labelled on the left like the reference's A–H.
+ */
 @Composable
-private fun ActivityGrid(accent: Color, calls: List<ReaBridge.Call>, modifier: Modifier = Modifier) {
-    val transition = rememberInfiniteTransition(label = "grid")
-    val phase by transition.animateFloat(
+private fun BinaryChunkMap(
+    accent: Color,
+    chunks: BinaryChunks.Map,
+    modifier: Modifier = Modifier,
+) {
+    val transition = rememberInfiniteTransition(label = "chunks")
+    val pulse by transition.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(1600, easing = LinearEasing),
+            animation = tween(2200, easing = LinearEasing),
             repeatMode = RepeatMode.Restart,
         ),
-        label = "gridPhase",
+        label = "chunkPulse",
     )
     val scheme = MaterialTheme.colorScheme
-    Box(modifier = modifier.clip(RoundedCornerShape(3.dp)).background(scheme.background)) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val cols = 18
-            val rows = 3
-            val gap = 1.5.dp.toPx()
-            val cellW = ((size.width - gap * (cols - 1)) / cols).coerceAtLeast(1f)
-            val cellH = ((size.height - gap * (rows - 1)) / rows).coerceAtLeast(1f)
-            val ordered = calls.reversed()
-            for (row in 0 until rows) {
-                for (col in 0 until cols) {
-                    val call = ordered.getOrNull(row * cols + col)
-                    val base = when {
-                        call == null -> 0.06f
-                        call.error.isNotBlank() -> 0.85f
-                        call.running -> 0.7f
-                        else -> 0.25f + (call.ms / 4000f).coerceIn(0f, 0.55f)
-                    }
-                    val travel = if (call?.running == true) {
-                        val d = kotlin.math.abs((col.toFloat() / cols) - phase)
-                        (1f - d.coerceIn(0f, 1f)) * 0.25f
-                    } else 0f
-                    drawRoundRect(
-                        color = if (call?.error?.isNotBlank() == true) {
-                            scheme.error.copy(alpha = 0.7f)
+
+    Row(modifier = modifier) {
+        // Row labels.
+        Column(
+            modifier = Modifier.width(12.dp).fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            chunks.rows.forEach { row ->
+                Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+                    Text(row.label, fontSize = 6.5.sp, color = altarisMutedText())
+                }
+            }
+        }
+        Spacer(Modifier.width(3.dp))
+        Column(
+            modifier = Modifier.weight(1f).fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            chunks.rows.forEach { row ->
+                Row(
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    row.chunks.forEach { chunk ->
+                        // A live sweep: chunks lighten in a moving band.
+                        val wave = if (chunk.state == ChunkState.PROCESSING) {
+                            0.15f + 0.25f * kotlin.math.abs(
+                                kotlin.math.sin((pulse + chunk.index * 0.15f) * Math.PI).toFloat()
+                            )
                         } else {
-                            accent.copy(alpha = (base + travel).coerceIn(0.06f, 0.95f))
-                        },
-                        topLeft = Offset(col * (cellW + gap), row * (cellH + gap)),
-                        size = Size(cellW, cellH),
-                        cornerRadius = CornerRadius(1f, 1f),
-                    )
+                            0f
+                        }
+                        val base = chunk.state.alpha
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxSize()
+                                .clip(RoundedCornerShape(1.5.dp))
+                                .background(
+                                    when (chunk.state) {
+                                        ChunkState.UNTOUCHED ->
+                                            scheme.outline.copy(alpha = 0.22f)
+                                        ChunkState.PROCESSING ->
+                                            accent.copy(alpha = (base + wave).coerceIn(0f, 0.9f))
+                                        ChunkState.VERIFIED ->
+                                            accent.copy(alpha = 0.16f)
+                                        ChunkState.MISMATCH ->
+                                            scheme.error.copy(alpha = (base + wave).coerceIn(0f, 0.9f))
+                                        ChunkState.FAILED ->
+                                            scheme.error.copy(alpha = 0.85f)
+                                    }
+                                )
+                        )
+                    }
                 }
             }
         }
     }
 }
 
+/** The reference's side bar: one shaded bar per row. */
 @Composable
-private fun LogLineRow(line: ReaBridge.LogLine, accent: Color) {
+private fun ChunkRailBar(accent: Color, row: BinaryChunks.Row, modifier: Modifier = Modifier) {
+    val scheme = MaterialTheme.colorScheme
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(1.5.dp))
+            .background(scheme.outline.copy(alpha = 0.18f)),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(row.rate.coerceIn(0f, 1f))
+                .fillMaxSize()
+                .background(
+                    if (row.failed > 0) {
+                        scheme.error.copy(alpha = 0.55f)
+                    } else {
+                        accent.copy(alpha = 0.25f + row.rate * 0.55f)
+                    }
+                )
+        )
+    }
+}
+
+@Composable
+private fun ChunkLegend(accent: Color) {
+    Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+        LegendDot("untouched", MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
+        LegendDot("working", accent)
+        LegendDot("verified", accent.copy(alpha = 0.30f))
+        LegendDot("mismatch", MaterialTheme.colorScheme.error)
+    }
+}
+
+@Composable
+private fun LegendDot(label: String, color: Color) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(modifier = Modifier.size(4.dp).clip(CircleShape).background(color))
+        Spacer(Modifier.width(3.dp))
+        Text(label, fontSize = 6.5.sp, color = altarisMutedText(), maxLines = 1)
+    }
+}
+
+/** One row per agent, with how much of its work is finished. */
+@Composable
+private fun AgentWorkCard(accent: Color, calls: List<ReaBridge.Call>) {
+    val agents = remember(calls) { BinaryChunks.agents(calls) }
+    PrismCard(accent = accent, modifier = Modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Agent work", fontSize = 9.sp, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.weight(1f))
+            Text(agents.size.toString(), fontSize = 8.sp, color = altarisMutedText())
+        }
+        Spacer(Modifier.height(3.dp))
+        if (agents.isEmpty()) {
+            Text(
+                "No agent connected yet",
+                fontSize = 8.sp,
+                color = altarisMutedText(),
+            )
+            return@PrismCard
+        }
+        agents.take(4).forEach { agent -> AgentBar(accent, agent) }
+    }
+}
+
+@Composable
+private fun AgentBar(accent: Color, agent: BinaryChunks.AgentWork) {
+    val scheme = MaterialTheme.colorScheme
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 1.5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            agent.label,
+            fontSize = 8.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.width(58.dp),
+        )
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .height(4.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .background(scheme.outline.copy(alpha = 0.25f)),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(agent.done.coerceIn(0f, 1f))
+                    .height(4.dp)
+                    .background(if (agent.failed > 0) scheme.error else accent)
+            )
+        }
+        Spacer(Modifier.width(5.dp))
+        Text(
+            (agent.done * 100).toInt().toString() + "%",
+            fontSize = 7.5.sp,
+            color = altarisMutedText(),
+            modifier = Modifier.width(24.dp),
+        )
+    }
+}
+
+/** Dot-only activity rows, like the reference's recent logs. */
+@Composable
+private fun DotRow(line: ReaBridge.LogLine, accent: Color) {
+    val color = when (line.level) {
+        ReaBridge.LogLine.Level.ERROR -> MaterialTheme.colorScheme.error
+        ReaBridge.LogLine.Level.CALL -> accent
+        ReaBridge.LogLine.Level.RESULT -> accent.copy(alpha = 0.45f)
+        ReaBridge.LogLine.Level.INFO -> MaterialTheme.colorScheme.outline
+    }
     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Box(modifier = Modifier.size(4.dp).clip(CircleShape).background(color))
+        Spacer(Modifier.width(5.dp))
         Text(
             formatClock(line.at),
             fontSize = 7.5.sp,
             fontFamily = FontFamily.Monospace,
             color = altarisMutedText(),
             modifier = Modifier.width(44.dp),
-        )
-        Text(
-            when (line.level) {
-                ReaBridge.LogLine.Level.CALL -> "▸"
-                ReaBridge.LogLine.Level.RESULT -> "✓"
-                ReaBridge.LogLine.Level.ERROR -> "✕"
-                ReaBridge.LogLine.Level.INFO -> "·"
-            },
-            fontSize = 7.5.sp,
-            color = when (line.level) {
-                ReaBridge.LogLine.Level.ERROR -> MaterialTheme.colorScheme.error
-                ReaBridge.LogLine.Level.CALL -> accent
-                else -> altarisMutedText()
-            },
-            modifier = Modifier.width(9.dp),
         )
         Text(
             line.text,
@@ -846,37 +970,23 @@ private fun StatusTab(accent: Color, distro: ReaDistro.State, bridge: ReaBridge.
             DetailLine("Node", status.nodeVersion.ifBlank { "—" }, accent)
             DetailLine("Distro", distro.method?.label ?: "—", accent)
             Spacer(Modifier.height(4.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                PrismSecondaryButton(
-                    text = if (bridge.running) "Restart" else "Start",
-                    accent = accent,
-                    modifier = Modifier.weight(1f),
-                    onClick = {
-                        scope.launch {
-                            withContext(Dispatchers.IO) {
-                                ReaBridge.stop()
-                                ReaDistro.distroId(context)?.let { ReaBridge.start(context, it) }
-                            }
-                            tick++
+            // No start/stop: the server is meant to always be up, so the only
+            // action here is to install the tools it needs.
+            PrismSecondaryButton(
+                text = if (tools.running) "Installing…" else "Install missing tools",
+                accent = accent,
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !tools.running,
+                onClick = {
+                    scope.launch {
+                        withContext(Dispatchers.IO) {
+                            val id = ReaDistro.distroId(context) ?: return@withContext
+                            ReaToolInstaller.install(context, id, ReaDistro.ALL_TOOLS)
                         }
-                    },
-                )
-                PrismSecondaryButton(
-                    text = "Install tools",
-                    accent = accent,
-                    modifier = Modifier.weight(1f),
-                    enabled = !tools.running,
-                    onClick = {
-                        scope.launch {
-                            withContext(Dispatchers.IO) {
-                                val id = ReaDistro.distroId(context) ?: return@withContext
-                                ReaToolInstaller.install(context, id, ReaDistro.ALL_TOOLS)
-                            }
-                            tick++
-                        }
-                    },
-                )
-            }
+                        tick++
+                    }
+                },
+            )
         }
 
         MiniFrame("Run", accent, trailing = if (calls.any { it.running }) "live" else "idle") {

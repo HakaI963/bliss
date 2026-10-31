@@ -46,6 +46,9 @@ object ReaDistro {
     /** Size is cached: walking a multi-GB rootfs on every recomposition froze the UI. */
     private const val SIZE_TTL_MS = 120_000L
 
+    /** How much install output is kept. */
+    private const val MAX_LOG = 24_000
+
     enum class Method(val id: String, val label: String) {
         PROOT(DistroInstallProfile.REA_PROOT_ID, "proot"),
         CHROOT(DistroInstallProfile.REA_CHROOT_ID, "chroot");
@@ -85,6 +88,15 @@ object ReaDistro {
         val sizeBytes: Long = 0L,
         /** True when a chroot install is possible (root available). */
         val chrootPossible: Boolean = false,
+        /**
+         * Everything the container install printed, newest last.
+         *
+         * The container install runs through OnboardingInstallRunner, whose
+         * output used to be discarded, so a chroot failure was completely
+         * silent: the screen showed "needs root" or nothing at all and there was
+         * no way to see why. Every line now lands here.
+         */
+        val log: String = "",
     ) {
         val fraction: Float
             get() = when {
@@ -274,7 +286,9 @@ object ReaDistro {
                     percent = 0,
                     chrootPossible = RootShell.isRootAvailable(),
                     steps = defaultSteps(),
+                    log = "",
                 )
+                appendLog("creating the hidden REA distro (" + method.label + ")")
                 onLog("creating the hidden REA distro (" + method.label + ")")
 
                 val created = ReaInstaller.ensureContainer(app, profile) { line, percent, detail ->
@@ -282,9 +296,10 @@ object ReaDistro {
                     onLog(detail.ifBlank { line })
                 }
                 if (!created) {
+                    appendLog("ERROR: the container was not created")
                     _state.value = _state.value.copy(
                         busy = "",
-                        error = "Could not create the REA distro. Check the install log.",
+                        error = "Could not create the REA distro. See the install log below.",
                     )
                     return@withLock _state.value
                 }
@@ -350,6 +365,7 @@ object ReaDistro {
                 _state.value
             } catch (t: Throwable) {
                 Log.w(TAG, "REA distro install failed", t)
+                appendLog("ERROR: " + (t.message ?: t.javaClass.simpleName))
                 _state.value = _state.value.copy(
                     busy = "",
                     error = t.message ?: t.javaClass.simpleName,
@@ -425,7 +441,20 @@ object ReaDistro {
         }
     }
 
+    private fun appendLog(text: String) {
+        if (text.isBlank()) return
+        val current = _state.value.log
+        val next = (current + text.trimEnd() + "\n")
+        _state.value = _state.value.copy(
+            log = if (next.length > MAX_LOG) next.takeLast(MAX_LOG) else next
+        )
+    }
+
+    /** Test seam: the log tail. */
+    internal fun logTailForTest(): String = _state.value.log
+
     private fun publish(line: String, percent: Int, detail: String) {
+        appendLog(detail.ifBlank { line })
         _state.value = _state.value.copy(
             busy = line,
             percent = if (percent >= 0) percent else _state.value.percent,

@@ -155,10 +155,60 @@ internal class BridgeServer(
             }
         }
 
-        // Pass everything else through untouched.
+        // Pass everything else through untouched, adding the guide the agent
+        // needs to use REA well.
         return try {
             val result = when (method) {
                 "tools/list" -> JSONObject().put("tools", JSONArray(toolList()))
+                "resources/list" -> JSONObject().put(
+                    "resources",
+                    JSONArray().put(
+                        JSONObject()
+                            .put("uri", ReaKnowledge.URI)
+                            .put("name", "REA guide")
+                            .put("description", "How to work with REA's tools on a real artifact")
+                            .put("mimeType", "text/markdown")
+                    )
+                )
+                "resources/read" -> {
+                    val uri = params?.optString("uri").orEmpty()
+                    if (uri == ReaKnowledge.URI || uri.isBlank()) {
+                        JSONObject().put(
+                            "contents",
+                            JSONArray().put(
+                                JSONObject()
+                                    .put("uri", ReaKnowledge.URI)
+                                    .put("mimeType", "text/markdown")
+                                    .put("text", ReaKnowledge.GUIDE)
+                            )
+                        )
+                    } else {
+                        throw IllegalArgumentException("unknown resource: " + uri)
+                    }
+                }
+                "prompts/list" -> JSONObject().put(
+                    "prompts",
+                    JSONArray().put(
+                        JSONObject()
+                            .put("name", "rea-method")
+                            .put("description", "How to approach a reverse-engineering task with REA")
+                    )
+                )
+                "prompts/get" -> JSONObject()
+                    .put("description", "REA working method")
+                    .put(
+                        "messages",
+                        JSONArray().put(
+                            JSONObject()
+                                .put("role", "user")
+                                .put(
+                                    "content",
+                                    JSONObject()
+                                        .put("type", "text")
+                                        .put("text", ReaKnowledge.PROMPT)
+                                )
+                        )
+                    )
                 "ping" -> JSONObject()
                 else -> JSONObject()
             }

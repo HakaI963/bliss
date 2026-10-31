@@ -131,6 +131,15 @@ object ReaBridge {
     suspend fun start(context: Context, distroId: String = ""): State = withContext(Dispatchers.IO) {
         val app = context.applicationContext
         if (session?.isAlive == true && server != null) return@withContext _state.value
+        // A session whose process died (guest reboot, OOM kill) must be dropped
+        // before a new one is created, or the old reader thread keeps a dead
+        // queue and every request times out.
+        if (session?.isAlive == false) {
+            runCatching { server?.stop() }
+            server = null
+            runCatching { session?.stop() }
+            session = null
+        }
         val id = distroId.ifBlank { ReaDistro.distroId(app).orEmpty() }
         if (id.isBlank()) {
             _state.value = _state.value.copy(
@@ -181,6 +190,22 @@ object ReaBridge {
             log("failed: " + (t.message ?: "unknown"), LogLine.Level.ERROR)
             _state.value
         }
+    }
+
+    /**
+     * Make sure the server is up, starting it when needed.
+     *
+     * The server is meant to always run — there is no Start button — so every
+     * place that needs it calls this instead of owning the lifecycle. It is a
+     * no-op when the server is already alive and REA is installed.
+     */
+    suspend fun ensureRunning(context: Context): State = withContext(Dispatchers.IO) {
+        if (session?.isAlive == true && server != null) return@withContext _state.value
+        val id = ReaDistro.distroId(context) ?: return@withContext _state.value.copy(
+            running = false,
+            error = "REA is not installed. Install it from Tools → Reverse engineering.",
+        )
+        start(context, id)
     }
 
     suspend fun stop(): State = withContext(Dispatchers.IO) {

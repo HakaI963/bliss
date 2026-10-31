@@ -54,9 +54,26 @@ object ReaInstaller {
             onProgress("Analysis environment already exists", 62, "")
             return@withContext true
         }
-        if (profile.method == "chroot" && !RootShell.isRootAvailable()) {
-            onProgress("chroot needs root access", 0, "Root not available")
-            return@withContext false
+        if (profile.method == "chroot") {
+            // Same cold-cache trap as ReaDistro.install: isRootAvailable() only
+            // reads the cached probe, so on a fresh start it returned false and
+            // the install aborted before downloading anything. Force one real
+            // probe, and report the failure as a real log line.
+            val root = runCatching {
+                RootShell.isRootAvailable() || run {
+                    RootShell.clearSuCache()
+                    RootShell.isRootAvailable()
+                }
+            }.getOrDefault(false)
+            if (!root) {
+                onProgress(
+                    "chroot needs root",
+                    0,
+                    "Root was denied. Grant superuser to Altaris in the root manager, " +
+                        "then retry. proot needs no root.",
+                )
+                return@withContext false
+            }
         }
         onProgress("Downloading and unpacking the base system", 0, "starting")
         val done = CompletableDeferred<Boolean>()

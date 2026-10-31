@@ -661,8 +661,7 @@ private fun ReaCard(context: Context, accent: Color) {
                 accent = accent,
                 icon = Icons.Default.PlayArrow,
                 modifier = Modifier.fillMaxWidth(),
-                enabled = state.busy.isBlank() &&
-                    (method != ReaDistro.Method.CHROOT || state.chrootPossible),
+                enabled = state.busy.isBlank(),
             ) {
                 scope.launch { ReaDistro.install(context, method) }
             }
@@ -688,6 +687,17 @@ private fun ReaCard(context: Context, accent: Color) {
         if (state.error.isNotBlank()) {
             Spacer(Modifier.height(Prism.Tight))
             PrismNote(state.error, color = MaterialTheme.colorScheme.error)
+        }
+        if (state.log.isNotBlank()) {
+            Spacer(Modifier.height(Prism.Tight))
+            Text(
+                "Install log",
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Medium,
+                color = altarisMutedText(),
+            )
+            Spacer(Modifier.height(3.dp))
+            CodeBlock(state.log.takeLast(3000))
         }
     }
 }
