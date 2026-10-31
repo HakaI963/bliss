@@ -196,7 +196,7 @@ object ReaToolInstaller {
         for (dep in deps) {
             updates[dep.id] = ToolState(id = dep.id, label = dep.label)
         }
-        publish(deps)
+        publish(updates.values.toList())
     }
 
     private fun setStatus(dep: ReaDependency, status: ToolState.Status, detail: String) {

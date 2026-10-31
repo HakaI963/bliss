@@ -59,7 +59,7 @@ import com.altaris.linux.ui.theme.Prism
  */
 enum class BottomTab(val title: String, val icon: ImageVector) {
     HOME("Home", Icons.Default.Home),
-    REA("REA", Icons.Default.Search),
+    REA("REA", Icons.Default.Build),
     DISTROS("Distros", Icons.Default.List),
     APPS("Apps", Icons.Default.Android),
     TOOLS("Tools", Icons.Default.Build),
@@ -70,7 +70,7 @@ enum class BottomTab(val title: String, val icon: ImageVector) {
 /** The destinations of the navigation bar. */
 enum class DockDestination(val title: String, val icon: ImageVector) {
     HOME("Home", Icons.Default.Home),
-    REA("REA", Icons.Default.Search),
+    REA("REA", Icons.Default.Build),
     DISTROS("Distros", Icons.Default.Layers),
     APPS("Apps", Icons.Default.Apps),
 }

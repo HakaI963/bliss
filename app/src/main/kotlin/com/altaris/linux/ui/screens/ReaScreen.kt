@@ -162,7 +162,7 @@ fun ReaScreen(modifier: Modifier = Modifier) {
 
 @Composable
 private fun StatusPill(accent: Color, distro: ReaDistro.State, bridge: ReaBridge.State) {
-    val live = bridge.calls.value.any { it.running }
+    val live = ReaBridge.calls.collectAsState().value.any { it.running }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -199,7 +199,7 @@ private fun StatusPill(accent: Color, distro: ReaDistro.State, bridge: ReaBridge
 /** The reference's big counters. */
 @Composable
 private fun CounterRow(accent: Color, bridge: ReaBridge.State) {
-    val calls = bridge.calls.collectAsState().value
+    val calls = ReaBridge.calls.collectAsState().value
     val functions = calls.sumOf { call -> call.findings.count { it.kind == Findings.Row.Kind.FUNCTION } }
     val bytes = calls.sumOf { it.bytes }
     val diffs = calls.sumOf { it.differentBytes }
@@ -303,8 +303,8 @@ private fun TabBar(accent: Color, current: ReaTab, onSelect: (ReaTab) -> Unit) {
 
 @Composable
 private fun OverviewTab(accent: Color, bridge: ReaBridge.State) {
-    val calls = bridge.calls.collectAsState().value
-    val logs = bridge.logs.collectAsState().value
+    val calls = ReaBridge.calls.collectAsState().value
+    val logs = ReaBridge.logs.collectAsState().value
     Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         PrismCard(accent = accent, modifier = Modifier.weight(1f).fillMaxWidth()) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -463,7 +463,7 @@ private fun LogLineRow(line: ReaBridge.LogLine, accent: Color) {
 
 @Composable
 private fun FunctionsTab(accent: Color, bridge: ReaBridge.State) {
-    val calls = bridge.calls.collectAsState().value
+    val calls = ReaBridge.calls.collectAsState().value
     var selected by remember { mutableStateOf<Findings.Row?>(null) }
     var filter by remember { mutableStateOf("") }
 
@@ -597,7 +597,7 @@ private fun DetailLine(label: String, value: String, accent: Color) {
 
 @Composable
 private fun CompareTab(accent: Color, bridge: ReaBridge.State) {
-    val calls = bridge.calls.collectAsState().value
+    val calls = ReaBridge.calls.collectAsState().value
     // The most recent comparison a tool reported.
     val comparison = calls.firstOrNull { it.compared != null || it.differentBytes > 0 }
 
@@ -725,7 +725,7 @@ private fun StatusTab(
     val scope = rememberCoroutineScope()
     val tools by ReaToolInstaller.state.collectAsState()
     val status by ReaManager.status.collectAsState()
-    val calls = bridge.calls.collectAsState().value
+    val calls = ReaBridge.calls.collectAsState().value
 
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
