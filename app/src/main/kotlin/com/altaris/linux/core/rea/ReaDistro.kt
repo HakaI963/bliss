@@ -144,6 +144,23 @@ object ReaDistro {
     fun distroId(context: Context): String? = installedMethod(context)?.id
 
     /**
+     * Mark the environment installed after a successful install.
+     *
+     * The installer knows it worked; without this the screen waited for the next
+     * poll and the button stayed on "Install" after the work was done.
+     */
+    fun markReady(method: Method) {
+        _state.value = _state.value.copy(
+            installed = true,
+            ready = true,
+            method = method,
+            busy = "",
+            percent = 100,
+            error = "",
+        )
+    }
+
+    /**
      * The installed method, if any.
      *
      * Two bugs are fixed here:
@@ -188,31 +205,16 @@ object ReaDistro {
         return result != null && result.exitCode == 0
     }
 
-    /** True when [method]'s container exists *and* its toolchain finished. */
-    private fun isReady(context: Context, method: Method): Boolean {
-        val rootfs = rootfsOf(context, method) ?: return false
-        // A chroot's marker is equally invisible to this process; read it
-        // through root rather than stat'ing a path we cannot see.
-        if (method == Method.CHROOT) {
-            if (rootMarkerPresent(rootfs.absolutePath)) return true
-            return ReaManager.isInstalledIn(context, method.id)
-        }
-        if (File(rootfs, READY_MARKER).isFile) return true
-        // A container from an older build has no marker; REA's own binary is
-        // the next best proof, and re-installing would waste a GB.
-        return ReaManager.isInstalledIn(context, method.id)
-    }
-
-    /** Root-side check for the ready marker inside a chroot. */
-    private fun rootMarkerPresent(rootfsPath: String): Boolean {
-        if (!RootShell.isRootAvailable()) return false
-        return runCatching {
-            RootShell.captureResult(
-                "test -f " + quote("$rootfsPath/$READY_MARKER"),
-                20_000L,
-            ).exitCode == 0
-        }.getOrDefault(false)
-    }
+    /**
+     * True when REA's core is really installed.
+     *
+     * Deliberately the *same* check [ReaBridge] uses before it execs the binary,
+     * so the screen can never claim "Installed" while the server fails with
+     * `not found`. The marker file is an optimisation only: the binary itself is
+     * the source of truth.
+     */
+    private fun isReady(context: Context, method: Method): Boolean =
+        ReaManager.isInstalledIn(context, method.id)
 
     private fun quote(value: String): String = "'" + value.replace("'", "'\\''") + "'"
 
@@ -241,12 +243,25 @@ object ReaDistro {
     ): State = withContext(Dispatchers.IO) {
         mutex.withLock {
             val app = context.applicationContext
-            if (method == Method.CHROOT && !RootShell.isRootAvailable()) {
-                _state.value = _state.value.copy(
-                    busy = "",
-                    error = "chroot needs root access. Grant superuser to Altaris, or use proot.",
-                )
-                return@withLock _state.value
+            if (method == Method.CHROOT) {
+                // `isRootAvailable()` only reads the cached probe result, so on a
+                // cold start it reported "no root" and aborted before any
+                // download — which looked like chroot simply not working. Force
+                // one real probe first, and say exactly what failed.
+                val root = runCatching {
+                    RootShell.isRootAvailable() || run {
+                        RootShell.clearSuCache()
+                        RootShell.isRootAvailable()
+                    }
+                }.getOrDefault(false)
+                if (!root) {
+                    _state.value = _state.value.copy(
+                        busy = "",
+                        error = "chroot needs root. Open the root manager and grant " +
+                            "superuser to Altaris, then retry. proot needs no root.",
+                    )
+                    return@withLock _state.value
+                }
             }
             val profile = DistroInstallProfile.reaProfile(method.id) ?: run {
                 _state.value = _state.value.copy(error = "REA profile is missing")
@@ -316,6 +331,7 @@ object ReaDistro {
                 }
                 val ok = status.installed && ReaManager.isInstalledIn(app, method.id)
                 if (ok) {
+                    markReady(method)
                     // Only now is the environment really usable.
                     rootfsOf(app, method)?.let { runCatching { File(it, READY_MARKER).writeText("1") } }
                     markStep("REA core installed")

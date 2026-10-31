@@ -555,8 +555,15 @@ private fun ReaCard(context: Context, accent: Color) {
     val state by ReaDistro.state.collectAsState()
     var method by remember { mutableStateOf(ReaDistro.Method.PROOT) }
 
-    LaunchedEffect(Unit) {
-        withContext(Dispatchers.IO) { ReaDistro.refresh(context) }
+    // Re-read the truth while an install runs (and once when it ends), so the
+    // chip flips to Installed without leaving the screen. The previous version
+    // read the state once and stayed on "Install" after a successful install.
+    LaunchedEffect(state.busy.isNotBlank()) {
+        while (true) {
+            withContext(Dispatchers.IO) { ReaDistro.refresh(context) }
+            if (state.busy.isBlank()) break
+            kotlinx.coroutines.delay(1500L)
+        }
     }
 
     PrismSectionLabel("Reverse engineering", accent)
@@ -565,16 +572,19 @@ private fun ReaCard(context: Context, accent: Color) {
             title = "REA analysis environment",
             subtitle = when {
                 state.busy.isNotBlank() -> state.busy
-                state.installed -> "Installed (" + (state.method?.label ?: "proot") + ") · served over MCP"
+                state.installed && state.ready ->
+                    "Installed (" + (state.method?.label ?: "proot") + ") · served over MCP"
+                state.installed -> "Container present · REA core missing, tap Reinstall"
                 else -> "Not installed"
             },
             accent = accent,
-            leading = { PrismOrb(active = state.installed, accent = accent) },
+            leading = { PrismOrb(active = state.installed && state.ready, accent = accent) },
             trailing = {
                 PrismChip(
                     when {
                         state.busy.isNotBlank() && state.percent >= 0 -> "${state.percent}%"
-                        state.installed -> "Installed"
+                        state.installed && state.ready -> "Installed"
+                        state.installed -> "Incomplete"
                         else -> "Missing"
                     },
                     accent,

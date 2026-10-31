@@ -70,6 +70,14 @@ object ReaBridge {
         val error: String = "",
         /** Extracted rows (functions, sections, offsets) for the Functions tab. */
         val findings: List<Findings.Row> = emptyList(),
+        /**
+         * The first part of the result text, verbatim.
+         *
+         * The Decompile and Objdump tabs show real tool output, so the text has
+         * to be kept. It is capped: a Ghidra dump can be megabytes and this is
+         * for a phone screen, not for storage.
+         */
+        val preview: String = "",
         /** Set when the result reports a comparison. */
         val compared: Boolean? = null,
         val matchedBytes: Long = 0L,
@@ -105,6 +113,9 @@ object ReaBridge {
     val logs: StateFlow<List<LogLine>> = _logs.asStateFlow()
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /** How much result text is kept for the Decompile/Objdump views. */
+    private const val PREVIEW_CHARS = 20_000
     private val nextId = AtomicLong(0L)
 
     @Volatile private var session: Session? = null
@@ -129,6 +140,16 @@ object ReaBridge {
             return@withContext _state.value
         }
         _state.value = _state.value.copy(busy = "Starting REA", error = "", distroId = id)
+        // Pre-flight. Without this the failure surfaces as
+        // `/bin/sh: exec: /opt/altaris/rea/npm/bin/rea: not found`, which does
+        // not say that the core install never finished.
+        if (!ReaManager.coreInstalled(app, id)) {
+            val message = "REA core is not installed in " + id +
+                ". Install it from Tools → Reverse engineering first."
+            _state.value = _state.value.copy(running = false, busy = "", error = message)
+            log(message, LogLine.Level.ERROR)
+            return@withContext _state.value
+        }
         log("starting REA MCP server", LogLine.Level.INFO)
         try {
             val stdio = Session(app, id)
@@ -202,6 +223,7 @@ object ReaBridge {
                 running = false,
                 error = error,
                 findings = extracted.rows,
+                preview = if (error.isBlank()) previewOf(result) else "",
                 compared = extracted.compared,
                 matchedBytes = extracted.matchedBytes,
                 differentBytes = extracted.differentBytes,
@@ -223,6 +245,29 @@ object ReaBridge {
     fun clearHistory() {
         _calls.value = emptyList()
         _logs.value = emptyList()
+    }
+
+    /**
+     * The readable part of a tool result.
+     *
+     * MCP wraps output as `content: [{type:text, text:"…"}]`; that inner text is
+     * what a human wants to read, so it is unwrapped before truncation.
+     */
+    private fun previewOf(raw: String): String {
+        if (raw.isBlank()) return ""
+        val json = runCatching { JSONObject(raw) }.getOrNull()
+        val text = json?.optJSONArray("content")
+            ?.let { content ->
+                buildString {
+                    for (i in 0 until content.length()) {
+                        val part = content.optJSONObject(i)?.optString("text").orEmpty()
+                        if (part.isNotBlank()) append(part).append('\n')
+                    }
+                }
+            }
+            ?.takeIf { it.isNotBlank() }
+            ?: raw
+        return text.take(PREVIEW_CHARS)
     }
 
     private fun log(text: String, level: LogLine.Level) {

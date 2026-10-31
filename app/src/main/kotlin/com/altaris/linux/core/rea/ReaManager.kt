@@ -179,6 +179,33 @@ object ReaManager {
 
     private fun quote(value: String): String = "'" + value.replace("'", "'\\''") + "'"
 
+    /**
+     * True when REA's own binary exists in [distroId].
+     *
+     * This is the difference between "the container exists" and "REA can run".
+     * The MCP bridge needs it because `exec $REA_BIN` on a missing file reports
+     * only `not found`, which says nothing about the real problem: the core
+     * install never completed.
+     */
+    suspend fun coreInstalled(ctx: Context, distroId: String): Boolean =
+        withContext(Dispatchers.IO) {
+            if (distroId.isBlank()) return@withContext false
+            val profile = DistroInstallProfile.forId(distroId) ?: return@withContext false
+            val check = "test -x " + REA_BIN
+            if (profile.method == "chroot") {
+                if (!RootShell.isRootAvailable()) return@withContext false
+                return@withContext runCatching {
+                    RootShell.captureResult(check, 20_000L).exitCode == 0
+                }.getOrDefault(false)
+            }
+            if (profile.prootName.isBlank()) return@withContext false
+            val rootfs = File(
+                ctx.filesDir,
+                "usr/var/lib/proot-distro/containers/${profile.prootName}/rootfs"
+            )
+            File(rootfs, REA_BIN.removePrefix("/")).isFile
+        }
+
     fun cachedTools(): JSONArray? = toolsCache
 
     fun isReaTool(name: String): Boolean {

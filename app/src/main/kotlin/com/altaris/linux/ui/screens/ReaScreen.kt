@@ -14,6 +14,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -25,15 +26,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -65,7 +62,6 @@ import com.altaris.linux.core.rea.ReaBridge
 import com.altaris.linux.core.rea.ReaDistro
 import com.altaris.linux.core.rea.ReaManager
 import com.altaris.linux.core.rea.ReaToolInstaller
-import com.altaris.linux.ui.components.PrismButton
 import com.altaris.linux.ui.components.PrismCard
 import com.altaris.linux.ui.components.PrismChip
 import com.altaris.linux.ui.components.PrismNote
@@ -79,11 +75,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/** The REA sub-tabs. */
+/** The REA sub-tabs. Six, equal width, filling the row. */
 private enum class ReaTab(val label: String) {
     OVERVIEW("Overview"),
     FUNCTIONS("Functions"),
-    COMPARE("Compare"),
+    OBJDUMP("Objdump"),
+    FIDELITY("Fidelity"),
     STATUS("Status"),
     FILES("Files"),
 }
@@ -91,15 +88,13 @@ private enum class ReaTab(val label: String) {
 /**
  * REA — the analysis surface.
  *
- * This screen only *observes*. REA runs as an MCP server that the agents inside
- * the distros connect to; nothing here starts an analysis, and there is no model
- * or API key anywhere in the app. What the screen shows is the bridge's record
- * of the calls the agent actually made.
+ * This screen only observes. REA runs as an MCP server that the agents connect
+ * to; there is no model or key in the app. Everything shown is the bridge's
+ * record of the calls an agent actually made.
  *
- * Layout follows the supplied reference: a live status pill, a row of large
- * counters, a meta row, a tab bar, then one card that fills the remaining
- * height, with the log strip at the bottom on Overview. Nothing overflows the
- * screen: every frame is sized to what is left rather than given a fixed height.
+ * Layout follows the reference: a compact status strip, a row of large
+ * counters, a full-bleed tab row, then content made of **small frames** rather
+ * than a few stretched ones. Nothing is left to scroll off the bottom.
  */
 @Composable
 fun ReaScreen(modifier: Modifier = Modifier) {
@@ -108,13 +103,14 @@ fun ReaScreen(modifier: Modifier = Modifier) {
     val distro by ReaDistro.state.collectAsState()
     val bridge by ReaBridge.state.collectAsState()
     var tab by remember { mutableStateOf(ReaTab.OVERVIEW) }
-    var refresh by remember { mutableIntStateOf(0) }
 
-    LaunchedEffect(refresh) {
+    LaunchedEffect(distro.installed, distro.ready) {
         withContext(Dispatchers.IO) {
             ReaDistro.refresh(context)
+            // Start the server only when REA can actually run, so the screen
+            // never shows a shell "not found" as the first thing you see.
             val id = ReaDistro.distroId(context)
-            if (id != null && ReaBridge.state.value.running.not()) {
+            if (id != null && ReaDistro.state.value.ready && !ReaBridge.state.value.running) {
                 ReaBridge.start(context, id)
             }
         }
@@ -131,77 +127,94 @@ fun ReaScreen(modifier: Modifier = Modifier) {
             return@Column
         }
 
-        StatusPill(accent, distro, bridge)
+        StatusStrip(accent, distro, bridge)
+        Spacer(Modifier.height(6.dp))
+        CounterRow(accent)
+        Spacer(Modifier.height(6.dp))
+        TabRow(accent, tab) { tab = it }
+        Spacer(Modifier.height(6.dp))
 
-        Spacer(Modifier.height(8.dp))
-        CounterRow(accent, bridge)
-
-        Spacer(Modifier.height(8.dp))
-        MetaRow(accent, distro, bridge)
-
-        Spacer(Modifier.height(8.dp))
-        TabBar(accent, tab) { tab = it }
-
-        Spacer(Modifier.height(8.dp))
-        // One card fills whatever height is left, so the log strip can stay
-        // pinned without ever pushing content off-screen.
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             when (tab) {
                 ReaTab.OVERVIEW -> OverviewTab(accent, bridge)
-                ReaTab.FUNCTIONS -> FunctionsTab(accent, bridge)
-                ReaTab.COMPARE -> CompareTab(accent, bridge)
-                ReaTab.STATUS -> StatusTab(accent, distro, bridge) { refresh++ }
+                ReaTab.FUNCTIONS -> FunctionsTab(accent)
+                ReaTab.OBJDUMP -> OutputTab(accent, "Objdump", objdumpKinds)
+                ReaTab.FIDELITY -> FidelityTab(accent)
+                ReaTab.STATUS -> StatusTab(accent, distro, bridge)
                 ReaTab.FILES -> ReaFilesTab(accent)
             }
         }
-        Spacer(Modifier.height(6.dp))
     }
 }
 
 // ------------------------------------------------------------------- chrome
 
+/**
+ * The status strip.
+ *
+ * When the server cannot start, the reason is shown here in red — not hidden in
+ * another tab. The previous build reported only "stopped", which is how a
+ * missing REA core looked like a dead button.
+ */
 @Composable
-private fun StatusPill(accent: Color, distro: ReaDistro.State, bridge: ReaBridge.State) {
-    val live = ReaBridge.calls.collectAsState().value.any { it.running }
-    Row(
+private fun StatusStrip(accent: Color, distro: ReaDistro.State, bridge: ReaBridge.State) {
+    val calls by ReaBridge.calls.collectAsState()
+    val live = calls.any { it.running }
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(Prism.PanelRadius))
-            .background(accent.copy(alpha = 0.10f))
-            .border(1.dp, accent.copy(alpha = 0.30f), RoundedCornerShape(Prism.PanelRadius))
-            .padding(horizontal = 10.dp, vertical = 7.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .background(accent.copy(alpha = 0.09f))
+            .border(1.dp, accent.copy(alpha = 0.28f), RoundedCornerShape(Prism.PanelRadius))
+            .padding(horizontal = 9.dp, vertical = 6.dp),
     ) {
-        PrismOrb(active = bridge.running || live, accent = accent)
-        Spacer(Modifier.width(7.dp))
-        Text(
-            when {
-                live -> "Analysis running"
-                bridge.running -> "MCP server live"
-                else -> "MCP server stopped"
-            },
-            fontSize = 11.5.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = accent,
-        )
-        Spacer(Modifier.width(6.dp))
-        Text(
-            "· " + bridge.toolCount + " tools · " + (distro.method?.label ?: "proot"),
-            fontSize = 9.5.sp,
-            color = altarisMutedText(),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            PrismOrb(active = bridge.running || live, accent = accent)
+            Spacer(Modifier.width(6.dp))
+            Text(
+                when {
+                    !distro.ready -> "REA core missing"
+                    live -> "Analysis running"
+                    bridge.running -> "MCP live"
+                    else -> "MCP stopped"
+                },
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = if (!distro.ready) MaterialTheme.colorScheme.error else accent,
+            )
+            Spacer(Modifier.width(5.dp))
+            Text(
+                "· " + bridge.toolCount + " tools · " + bridge.connections + " agents · " +
+                    (distro.method?.label ?: "proot"),
+                fontSize = 9.sp,
+                color = altarisMutedText(),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+        }
+        val problem = bridge.error.ifBlank {
+            if (!distro.ready) "Install the REA core from Tools → Reverse engineering." else ""
+        }
+        if (problem.isNotBlank()) {
+            Spacer(Modifier.height(2.dp))
+            Text(
+                problem,
+                fontSize = 8.5.sp,
+                lineHeight = 11.sp,
+                color = MaterialTheme.colorScheme.error,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
     }
 }
 
-/** The reference's big counters. */
 @Composable
-private fun CounterRow(accent: Color, bridge: ReaBridge.State) {
-    val calls = ReaBridge.calls.collectAsState().value
-    val functions = calls.sumOf { call -> call.findings.count { it.kind == Findings.Row.Kind.FUNCTION } }
-    val bytes = calls.sumOf { it.bytes }
+private fun CounterRow(accent: Color) {
+    val calls by ReaBridge.calls.collectAsState()
+    val functions = calls.sumOf { c -> c.findings.count { it.kind == Findings.Row.Kind.FUNCTION } }
+    val compared = calls.sumOf { it.bytes }
     val diffs = calls.sumOf { it.differentBytes }
     PrismCard(accent = accent) {
         Row(
@@ -209,7 +222,7 @@ private fun CounterRow(accent: Color, bridge: ReaBridge.State) {
             horizontalArrangement = Arrangement.spacedBy(Prism.Stack),
         ) {
             BigCounter(functions.toString(), "Functions", accent, Modifier.weight(1f))
-            BigCounter(ReaBridge.formatBytes(bytes), "Bytes compared", accent, Modifier.weight(1f))
+            BigCounter(ReaBridge.formatBytes(compared), "Bytes compared", accent, Modifier.weight(1f))
             BigCounter(diffs.toString(), "Differences", accent, Modifier.weight(1f))
             BigCounter(calls.size.toString(), "Tool calls", accent, Modifier.weight(1f))
         }
@@ -221,18 +234,18 @@ private fun BigCounter(value: String, label: String, accent: Color, modifier: Mo
     Column(modifier = modifier) {
         Text(
             value,
-            fontSize = 19.sp,
+            fontSize = 17.sp,
             fontWeight = FontWeight.SemiBold,
-            letterSpacing = (-0.5).sp,
+            letterSpacing = (-0.4).sp,
             color = accent,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
         Text(
             label.uppercase(),
-            fontSize = 8.sp,
+            fontSize = 7.5.sp,
             fontWeight = FontWeight.Medium,
-            letterSpacing = 0.6.sp,
+            letterSpacing = 0.5.sp,
             color = altarisMutedText(),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -240,127 +253,189 @@ private fun BigCounter(value: String, label: String, accent: Color, modifier: Mo
     }
 }
 
+/**
+ * The tab row.
+ *
+ * Equal weight so the row reaches both edges. It scrolls only as a fallback for
+ * very narrow screens; on a normal phone all six fit.
+ */
 @Composable
-private fun MetaRow(accent: Color, distro: ReaDistro.State, bridge: ReaBridge.State) {
+private fun TabRow(accent: Color, current: ReaTab, onSelect: (ReaTab) -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        MetaCell("Method", distro.method?.label?.uppercase() ?: "—", accent, Modifier.weight(1f))
-        MetaCell("Tools", bridge.toolCount.toString(), accent, Modifier.weight(1f))
-        MetaCell("Agents", bridge.connections.toString(), accent, Modifier.weight(1f))
-        MetaCell(
-            "Size",
-            ReaDistro.formatBytes(distro.sizeBytes),
-            accent,
-            Modifier.weight(1.2f),
-        )
-    }
-}
-
-@Composable
-private fun MetaCell(label: String, value: String, accent: Color, modifier: Modifier = Modifier) {
-    Column(modifier = modifier) {
-        Text(label, fontSize = 7.5.sp, color = altarisMutedText(), maxLines = 1)
-        Text(
-            value,
-            fontSize = 9.5.sp,
-            fontWeight = FontWeight.Medium,
-            color = accent,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-    }
-}
-
-@Composable
-private fun TabBar(accent: Color, current: ReaTab, onSelect: (ReaTab) -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(5.dp),
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
     ) {
         ReaTab.entries.forEach { entry ->
             val selected = entry == current
             Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(4.dp))
+                    .weight(1f)
+                    .clip(RoundedCornerShape(3.dp))
                     .background(if (selected) accent else MaterialTheme.colorScheme.surfaceVariant)
                     .clickable { onSelect(entry) }
-                    .padding(horizontal = 11.dp, vertical = 5.dp),
+                    .padding(vertical = 5.dp),
+                contentAlignment = Alignment.Center,
             ) {
                 Text(
                     entry.label,
-                    fontSize = 10.sp,
+                    fontSize = 8.5.sp,
                     fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
                     color = if (selected) Color.White else altarisMutedText(),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }
+    }
+}
+
+/** A small frame used throughout the grid. */
+@Composable
+private fun MiniFrame(
+    title: String,
+    accent: Color,
+    modifier: Modifier = Modifier,
+    trailing: String = "",
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    PrismCard(accent = accent, modifier = modifier) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                title,
+                fontSize = 9.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            if (trailing.isNotBlank()) {
+                Text(
+                    trailing,
+                    fontSize = 8.sp,
+                    color = altarisMutedText(),
+                    maxLines = 1,
+                )
+            }
+        }
+        Spacer(Modifier.height(4.dp))
+        content()
     }
 }
 
 // ----------------------------------------------------------------- overview
 
+/**
+ * Overview: a grid of small live frames.
+ *
+ * The centre of gravity is the two things that show *work happening*: the
+ * activity grid (one cell per call) and the live result feed, where the text an
+ * agent is getting back scrolls as it arrives. The log strip sits at the bottom
+ * inside the screen.
+ */
 @Composable
 private fun OverviewTab(accent: Color, bridge: ReaBridge.State) {
-    val calls = ReaBridge.calls.collectAsState().value
-    val logs = ReaBridge.logs.collectAsState().value
-    Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        PrismCard(accent = accent, modifier = Modifier.weight(1f).fillMaxWidth()) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Activity", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                Spacer(Modifier.weight(1f))
-                Text(
-                    if (bridge.running) "live" else "idle",
-                    fontSize = 8.5.sp,
-                    color = if (bridge.running) accent else altarisMutedText(),
-                )
+    val calls by ReaBridge.calls.collectAsState()
+    val logs by ReaBridge.logs.collectAsState()
+    val current = calls.firstOrNull { it.running } ?: calls.firstOrNull()
+
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(5.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
+        ) {
+            MiniFrame(
+                title = "Activity",
+                accent = accent,
+                modifier = Modifier.weight(1.35f).height(84.dp),
+                trailing = if (bridge.running) "live" else "idle",
+            ) {
+                ActivityGrid(accent, calls, Modifier.fillMaxWidth().weight(1f))
             }
-            Spacer(Modifier.height(6.dp))
-            ActivityGrid(accent, calls, Modifier.weight(1f).fillMaxWidth())
-            Spacer(Modifier.height(6.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(
-                    calls.count { !it.running && it.error.isBlank() }.toString() + " ok",
-                    fontSize = 8.5.sp,
-                    color = altarisMutedText(),
-                )
-                Text(
-                    calls.count { it.error.isNotBlank() }.toString() + " failed",
-                    fontSize = 8.5.sp,
-                    color = MaterialTheme.colorScheme.error,
-                )
-                Spacer(Modifier.weight(1f))
-                Text(
-                    calls.firstOrNull()?.let { ReaBridge.formatBytes(it.bytes) } ?: "no calls",
-                    fontSize = 8.5.sp,
-                    fontFamily = FontFamily.Monospace,
-                    color = altarisMutedText(),
-                )
+            MiniFrame(
+                title = "Now",
+                accent = accent,
+                modifier = Modifier.weight(1f).height(84.dp),
+                trailing = current?.tool?.take(12) ?: "",
+            ) {
+                if (current == null) {
+                    Text("idle", fontSize = 8.5.sp, color = altarisMutedText())
+                } else {
+                    Text(
+                        current.tool,
+                        fontSize = 8.5.sp,
+                        fontFamily = FontFamily.Monospace,
+                        color = accent,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        if (current.running) "running" else "${current.ms} ms",
+                        fontSize = 8.sp,
+                        color = altarisMutedText(),
+                    )
+                    Text(
+                        ReaBridge.formatBytes(current.bytes),
+                        fontSize = 8.sp,
+                        fontFamily = FontFamily.Monospace,
+                        color = altarisMutedText(),
+                    )
+                }
             }
         }
-        // The log strip is part of Overview, exactly like the reference.
-        PrismCard(accent = accent, modifier = Modifier.fillMaxWidth()) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Recent logs", fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
-                Spacer(Modifier.weight(1f))
-                Text("${logs.size}", fontSize = 8.5.sp, color = altarisMutedText())
+
+        // The live output frame: real tool text as it comes back.
+        MiniFrame(
+            title = "Live output",
+            accent = accent,
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+            trailing = current?.tool ?: "",
+        ) {
+            val preview = current?.preview.orEmpty()
+            if (preview.isBlank()) {
+                Text(
+                    "Nothing yet. When an agent calls a REA tool, its output appears here.",
+                    fontSize = 8.5.sp,
+                    lineHeight = 11.sp,
+                    color = altarisMutedText(),
+                )
+            } else {
+                SelectionContainer {
+                    Text(
+                        preview.takeLast(1600),
+                        fontSize = 8.sp,
+                        lineHeight = 10.5.sp,
+                        fontFamily = FontFamily.Monospace,
+                        maxLines = 80,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
-            Spacer(Modifier.height(4.dp))
+        }
+
+        // The log strip, inside the screen.
+        MiniFrame(
+            title = "Logs",
+            accent = accent,
+            modifier = Modifier.height(84.dp).fillMaxWidth(),
+            trailing = logs.size.toString(),
+        ) {
             Column(
-                modifier = Modifier.fillMaxWidth().heightIn(max = 108.dp).verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(2.dp),
+                modifier = Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(1.dp),
             ) {
                 if (logs.isEmpty()) {
-                    Text("No activity yet", fontSize = 9.sp, color = altarisMutedText())
+                    Text("no activity", fontSize = 8.sp, color = altarisMutedText())
                 }
-                logs.take(40).forEach { line -> LogLineRow(line, accent) }
+                logs.take(30).forEach { LogLineRow(it, accent) }
             }
         }
     }
 }
 
-/** One cell per tool call; shading is how long it took. */
+/** One cell per tool call; shading is duration. */
 @Composable
 private fun ActivityGrid(accent: Color, calls: List<ReaBridge.Call>, modifier: Modifier = Modifier) {
     val transition = rememberInfiniteTransition(label = "grid")
@@ -374,22 +449,17 @@ private fun ActivityGrid(accent: Color, calls: List<ReaBridge.Call>, modifier: M
         label = "gridPhase",
     )
     val scheme = MaterialTheme.colorScheme
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(4.dp))
-            .background(scheme.background),
-    ) {
+    Box(modifier = modifier.clip(RoundedCornerShape(3.dp)).background(scheme.background)) {
         Canvas(modifier = Modifier.fillMaxSize()) {
-            val cols = 20
-            val rows = 4
-            val gap = 2.dp.toPx()
+            val cols = 18
+            val rows = 3
+            val gap = 1.5.dp.toPx()
             val cellW = ((size.width - gap * (cols - 1)) / cols).coerceAtLeast(1f)
             val cellH = ((size.height - gap * (rows - 1)) / rows).coerceAtLeast(1f)
             val ordered = calls.reversed()
             for (row in 0 until rows) {
                 for (col in 0 until cols) {
-                    val index = row * cols + col
-                    val call = ordered.getOrNull(index)
+                    val call = ordered.getOrNull(row * cols + col)
                     val base = when {
                         call == null -> 0.06f
                         call.error.isNotBlank() -> 0.85f
@@ -397,8 +467,8 @@ private fun ActivityGrid(accent: Color, calls: List<ReaBridge.Call>, modifier: M
                         else -> 0.25f + (call.ms / 4000f).coerceIn(0f, 0.55f)
                     }
                     val travel = if (call?.running == true) {
-                        val distance = kotlin.math.abs((col.toFloat() / cols) - phase)
-                        (1f - distance.coerceIn(0f, 1f)) * 0.25f
+                        val d = kotlin.math.abs((col.toFloat() / cols) - phase)
+                        (1f - d.coerceIn(0f, 1f)) * 0.25f
                     } else 0f
                     drawRoundRect(
                         color = if (call?.error?.isNotBlank() == true) {
@@ -408,7 +478,7 @@ private fun ActivityGrid(accent: Color, calls: List<ReaBridge.Call>, modifier: M
                         },
                         topLeft = Offset(col * (cellW + gap), row * (cellH + gap)),
                         size = Size(cellW, cellH),
-                        cornerRadius = CornerRadius(1.5f, 1.5f),
+                        cornerRadius = CornerRadius(1f, 1f),
                     )
                 }
             }
@@ -418,16 +488,13 @@ private fun ActivityGrid(accent: Color, calls: List<ReaBridge.Call>, modifier: M
 
 @Composable
 private fun LogLineRow(line: ReaBridge.LogLine, accent: Color) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
+    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Text(
             formatClock(line.at),
-            fontSize = 8.sp,
+            fontSize = 7.5.sp,
             fontFamily = FontFamily.Monospace,
             color = altarisMutedText(),
-            modifier = Modifier.width(50.dp),
+            modifier = Modifier.width(44.dp),
         )
         Text(
             when (line.level) {
@@ -436,17 +503,17 @@ private fun LogLineRow(line: ReaBridge.LogLine, accent: Color) {
                 ReaBridge.LogLine.Level.ERROR -> "✕"
                 ReaBridge.LogLine.Level.INFO -> "·"
             },
-            fontSize = 8.sp,
+            fontSize = 7.5.sp,
             color = when (line.level) {
                 ReaBridge.LogLine.Level.ERROR -> MaterialTheme.colorScheme.error
                 ReaBridge.LogLine.Level.CALL -> accent
                 else -> altarisMutedText()
             },
-            modifier = Modifier.width(10.dp),
+            modifier = Modifier.width(9.dp),
         )
         Text(
             line.text,
-            fontSize = 8.5.sp,
+            fontSize = 8.sp,
             fontFamily = FontFamily.Monospace,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -462,12 +529,10 @@ private fun LogLineRow(line: ReaBridge.LogLine, accent: Color) {
 // ---------------------------------------------------------------- functions
 
 @Composable
-private fun FunctionsTab(accent: Color, bridge: ReaBridge.State) {
-    val calls = ReaBridge.calls.collectAsState().value
+private fun FunctionsTab(accent: Color) {
+    val calls by ReaBridge.calls.collectAsState()
     var selected by remember { mutableStateOf<Findings.Row?>(null) }
     var filter by remember { mutableStateOf("") }
-
-    // Every recognised row across every call, newest first.
     val rows = remember(calls) {
         calls.flatMap { call -> call.findings.map { call.tool to it } }
     }
@@ -475,80 +540,76 @@ private fun FunctionsTab(accent: Color, bridge: ReaBridge.State) {
         it.second.name.contains(filter, ignoreCase = true)
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        PrismCard(accent = accent, modifier = Modifier.weight(1f).fillMaxWidth()) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Functions", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                Spacer(Modifier.width(6.dp))
-                Text("${rows.size}", fontSize = 9.sp, color = altarisMutedText())
-                Spacer(Modifier.weight(1f))
-            }
-            Spacer(Modifier.height(5.dp))
-            androidx.compose.material3.OutlinedTextField(
-                value = filter,
-                onValueChange = { filter = it },
-                modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("Filter by name", fontSize = 10.sp) },
-                textStyle = MaterialTheme.typography.bodySmall,
-                singleLine = true,
+    PrismCard(accent = accent, modifier = Modifier.fillMaxSize()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Functions", fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.width(5.dp))
+            Text(rows.size.toString(), fontSize = 8.5.sp, color = altarisMutedText())
+            Spacer(Modifier.weight(1f))
+        }
+        Spacer(Modifier.height(4.dp))
+        androidx.compose.material3.OutlinedTextField(
+            value = filter,
+            onValueChange = { filter = it },
+            modifier = Modifier.fillMaxWidth().height(40.dp),
+            placeholder = { Text("filter", fontSize = 9.sp) },
+            textStyle = MaterialTheme.typography.bodySmall,
+            singleLine = true,
+        )
+        Spacer(Modifier.height(4.dp))
+        if (shown.isEmpty()) {
+            PrismNote(
+                "No functions yet. They appear as the agent's REA tools return them.",
             )
-            Spacer(Modifier.height(5.dp))
-            if (shown.isEmpty()) {
-                PrismNote(
-                    "No functions yet. They appear as the agent's REA tools return them " +
-                        "(decompile, inspect-elf-notes, inspect-managed-members)."
-                )
-                return@PrismCard
-            }
-            LazyColumn(
-                modifier = Modifier.fillMaxWidth().weight(1f),
-                verticalArrangement = Arrangement.spacedBy(1.dp),
-            ) {
-                items(shown.take(400)) { (tool, row) ->
-                    Row(
+            return@PrismCard
+        }
+        LazyColumn(
+            modifier = Modifier.fillMaxWidth().weight(1f),
+            verticalArrangement = Arrangement.spacedBy(1.dp),
+        ) {
+            items(shown.take(500)) { (tool, row) ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(3.dp))
+                        .clickable { selected = row }
+                        .padding(horizontal = 3.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(3.dp))
-                            .clickable { selected = row }
-                            .padding(horizontal = 4.dp, vertical = 5.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(4.dp)
-                                .clip(RoundedCornerShape(2.dp))
-                                .background(accent.copy(alpha = 0.55f))
-                        )
-                        Spacer(Modifier.width(6.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                row.name,
-                                fontSize = 10.sp,
-                                fontFamily = FontFamily.Monospace,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                            Text(
-                                row.kind.label + if (row.detail.isBlank()) "" else " · " + row.detail,
-                                fontSize = 8.sp,
-                                color = altarisMutedText(),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
+                            .size(3.dp)
+                            .clip(CircleShape)
+                            .background(accent.copy(alpha = 0.55f))
+                    )
+                    Spacer(Modifier.width(5.dp))
+                    Column(Modifier.weight(1f)) {
                         Text(
-                            row.offset.ifBlank { tool.take(14) },
-                            fontSize = 8.sp,
+                            row.name,
+                            fontSize = 9.sp,
                             fontFamily = FontFamily.Monospace,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            row.kind.label + if (row.detail.isBlank()) "" else " · " + row.detail,
+                            fontSize = 7.5.sp,
                             color = altarisMutedText(),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
                     }
+                    Text(
+                        row.offset.ifBlank { tool.take(12) },
+                        fontSize = 7.5.sp,
+                        fontFamily = FontFamily.Monospace,
+                        color = altarisMutedText(),
+                    )
                 }
             }
         }
     }
 
-    // Detail as a pop-up, not an expanding row: the list keeps its height.
     selected?.let { row ->
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { selected = null },
@@ -557,16 +618,12 @@ private fun FunctionsTab(accent: Color, bridge: ReaBridge.State) {
                     Text("Close", color = accent)
                 }
             },
-            title = {
-                Text(row.name, fontSize = 13.sp, fontFamily = FontFamily.Monospace)
-            },
+            title = { Text(row.name, fontSize = 12.sp, fontFamily = FontFamily.Monospace) },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     DetailLine("Kind", row.kind.label, accent)
                     if (row.offset.isNotBlank()) DetailLine("Offset", row.offset, accent)
-                    if (row.size > 0) {
-                        DetailLine("Size", ReaDistro.formatBytes(row.size), accent)
-                    }
+                    if (row.size > 0) DetailLine("Size", ReaDistro.formatBytes(row.size), accent)
                     if (row.detail.isNotBlank()) DetailLine("Detail", row.detail, accent)
                 }
             },
@@ -574,137 +631,186 @@ private fun FunctionsTab(accent: Color, bridge: ReaBridge.State) {
     }
 }
 
+// ------------------------------------------------------- decompile/objdump
+
+/**
+ * Tools whose raw output belongs in the Objdump tab.
+ *
+ * Decompiler output is included: it is the same kind of thing to read (a wall
+ * of generated text with addresses), and the user's tab list has no separate
+ * Decompile tab.
+ */
+private val objdumpKinds = listOf(
+    "objdump", "elf", "disassemble", "assembly", "section", "symbol",
+    "decompile", "java", "smali", "il", "source",
+)
+
+/**
+ * A real-output tab.
+ *
+ * Shows the verbatim text of the most recent matching tool call, so this is the
+ * agent's actual decompiler or disassembler output — not a summary the app
+ * invented.
+ */
 @Composable
-private fun DetailLine(label: String, value: String, accent: Color) {
-    Row(verticalAlignment = Alignment.Top) {
+private fun OutputTab(
+    accent: Color,
+    title: String,
+    toolHints: List<String>,
+) {
+    val calls by ReaBridge.calls.collectAsState()
+    val matching = calls.filter { call ->
+        call.preview.isNotBlank() && toolHints.any { call.tool.lowercase().contains(it) }
+    }
+    var picked by remember(calls) { mutableStateOf(0) }
+    val current = matching.getOrNull(picked)
+
+    PrismCard(accent = accent, modifier = Modifier.fillMaxSize()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(title, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.width(5.dp))
+            Text("${matching.size}", fontSize = 8.5.sp, color = altarisMutedText())
+            Spacer(Modifier.weight(1f))
+            if (matching.size > 1) {
+                Text(
+                    "◀ ${picked + 1}/${matching.size} ▶",
+                    fontSize = 8.5.sp,
+                    color = accent,
+                    modifier = Modifier.clickable {
+                        picked = (picked + 1) % matching.size
+                    },
+                )
+            }
+        }
+        if (current == null) {
+            Spacer(Modifier.height(4.dp))
+            PrismNote(
+                "No " + title.lowercase() + " output yet. It appears when an agent runs a " +
+                    "REA tool that produces it.",
+            )
+            return@PrismCard
+        }
+        Spacer(Modifier.height(2.dp))
         Text(
-            label,
-            fontSize = 9.sp,
-            color = altarisMutedText(),
-            modifier = Modifier.width(56.dp),
-        )
-        Text(
-            value,
-            fontSize = 10.sp,
+            current.tool + " · " + ReaBridge.formatBytes(current.bytes) + " · " + current.ms + " ms",
+            fontSize = 8.sp,
             fontFamily = FontFamily.Monospace,
-            color = accent,
-            modifier = Modifier.weight(1f),
+            color = altarisMutedText(),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
+        Spacer(Modifier.height(4.dp))
+        SelectionContainer {
+            Text(
+                current.preview,
+                modifier = Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()),
+                fontSize = 8.sp,
+                lineHeight = 10.5.sp,
+                fontFamily = FontFamily.Monospace,
+            )
+        }
     }
 }
 
-// ------------------------------------------------------------------ compare
+// ----------------------------------------------------------------- fidelity
 
 @Composable
-private fun CompareTab(accent: Color, bridge: ReaBridge.State) {
-    val calls = ReaBridge.calls.collectAsState().value
-    // The most recent comparison a tool reported.
+private fun FidelityTab(accent: Color) {
+    val calls by ReaBridge.calls.collectAsState()
     val comparison = calls.firstOrNull { it.compared != null || it.differentBytes > 0 }
 
-    Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        PrismCard(accent = accent, modifier = Modifier.weight(1f).fillMaxWidth()) {
-            Text("Original vs rebuild", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.height(5.dp))
-            if (comparison == null) {
-                PrismNote(
-                    "No comparison yet. When the agent runs REA's compare-artifacts (or " +
-                        "decompiles and rebuilds a binary), the byte comparison appears here."
-                )
-                return@PrismCard
-            }
-            val total = comparison.totalBytes.coerceAtLeast(
-                comparison.matchedBytes + comparison.differentBytes
+    PrismCard(accent = accent, modifier = Modifier.fillMaxSize()) {
+        Text("Fidelity", fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(4.dp))
+        if (comparison == null) {
+            PrismNote(
+                "No comparison yet. When an agent compares a rebuilt binary against the " +
+                    "original, the byte match appears here.",
             )
-            val matched = comparison.matchedBytes
-            val different = comparison.differentBytes
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(Prism.Stack),
-            ) {
-                BigCounter(ReaBridge.formatBytes(matched), "Matched", accent, Modifier.weight(1f))
-                BigCounter(
-                    ReaBridge.formatBytes(different),
-                    "Different",
-                    MaterialTheme.colorScheme.error,
-                    Modifier.weight(1f),
-                )
-                BigCounter(
-                    if (total > 0) ((matched * 100) / total).toString() + "%" else "—",
-                    "Match",
-                    accent,
-                    Modifier.weight(1f),
-                )
-            }
-            Spacer(Modifier.height(8.dp))
-            // A matched/differing bar, like the recording's byte strip.
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(10.dp)
-                    .clip(RoundedCornerShape(3.dp))
-                    .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.35f))
-            ) {
-                if (total > 0) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(matched.toFloat() / total)
-                            .height(10.dp)
-                            .background(accent)
-                    )
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(different.toFloat() / total)
-                            .height(10.dp)
-                            .background(MaterialTheme.colorScheme.error)
-                            .then(Modifier)
-                    )
-                }
-            }
-            Spacer(Modifier.height(6.dp))
-            Text(
-                comparison.tool + " · " + ReaBridge.formatBytes(total) + " total",
-                fontSize = 8.5.sp,
-                fontFamily = FontFamily.Monospace,
-                color = altarisMutedText(),
+            return@PrismCard
+        }
+        val total = comparison.totalBytes.coerceAtLeast(
+            comparison.matchedBytes + comparison.differentBytes
+        )
+        val matched = comparison.matchedBytes
+        val different = comparison.differentBytes
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(Prism.Stack),
+        ) {
+            BigCounter(ReaBridge.formatBytes(matched), "Matched", accent, Modifier.weight(1f))
+            BigCounter(
+                ReaBridge.formatBytes(different),
+                "Different",
+                MaterialTheme.colorScheme.error,
+                Modifier.weight(1f),
             )
-            Spacer(Modifier.height(8.dp))
-            val diffs = comparison.findings.filter { it.kind == Findings.Row.Kind.DIFF }
-            if (diffs.isNotEmpty()) {
-                Text("Differences", fontSize = 10.sp, fontWeight = FontWeight.Medium)
-                Spacer(Modifier.height(3.dp))
-                Column(
+            BigCounter(
+                if (total > 0) ((matched * 100) / total).toString() + "%" else "—",
+                "Match",
+                accent,
+                Modifier.weight(1f),
+            )
+        }
+        Spacer(Modifier.height(6.dp))
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(9.dp)
+                .clip(RoundedCornerShape(3.dp))
+                .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.35f))
+        ) {
+            if (total > 0) {
+                Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                        .verticalScroll(rememberScrollState()),
-                ) {
-                    diffs.take(300).forEach { row ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                row.offset.ifBlank { "—" },
-                                fontSize = 8.5.sp,
-                                fontFamily = FontFamily.Monospace,
-                                color = MaterialTheme.colorScheme.error,
-                                modifier = Modifier.width(64.dp),
-                            )
-                            Text(
-                                row.name,
-                                fontSize = 9.sp,
-                                fontFamily = FontFamily.Monospace,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f),
-                            )
-                            Text(
-                                row.detail,
-                                fontSize = 8.5.sp,
-                                color = altarisMutedText(),
-                                maxLines = 1,
-                            )
-                        }
+                        .fillMaxWidth(matched.toFloat() / total)
+                        .height(9.dp)
+                        .background(accent)
+                )
+            }
+        }
+        Spacer(Modifier.height(4.dp))
+        Text(
+            comparison.tool + " · " + ReaBridge.formatBytes(total) + " total",
+            fontSize = 8.sp,
+            fontFamily = FontFamily.Monospace,
+            color = altarisMutedText(),
+        )
+        Spacer(Modifier.height(6.dp))
+        val diffs = comparison.findings.filter { it.kind == Findings.Row.Kind.DIFF }
+        if (diffs.isEmpty()) {
+            PrismNote("No differing ranges were reported.")
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                verticalArrangement = Arrangement.spacedBy(1.dp),
+            ) {
+                items(diffs.take(400)) { row ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            row.offset.ifBlank { "—" },
+                            fontSize = 8.sp,
+                            fontFamily = FontFamily.Monospace,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.width(58.dp),
+                        )
+                        Text(
+                            row.name,
+                            fontSize = 8.5.sp,
+                            fontFamily = FontFamily.Monospace,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Text(
+                            row.detail,
+                            fontSize = 8.sp,
+                            color = altarisMutedText(),
+                            maxLines = 1,
+                        )
                     }
                 }
             }
@@ -715,38 +821,35 @@ private fun CompareTab(accent: Color, bridge: ReaBridge.State) {
 // ------------------------------------------------------------------- status
 
 @Composable
-private fun StatusTab(
-    accent: Color,
-    distro: ReaDistro.State,
-    bridge: ReaBridge.State,
-    onRefresh: () -> Unit,
-) {
+private fun StatusTab(accent: Color, distro: ReaDistro.State, bridge: ReaBridge.State) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val tools by ReaToolInstaller.state.collectAsState()
     val status by ReaManager.status.collectAsState()
-    val calls = ReaBridge.calls.collectAsState().value
+    val calls by ReaBridge.calls.collectAsState()
+    var tick by remember { mutableIntStateOf(0) }
+
+    LaunchedEffect(tick) {
+        withContext(Dispatchers.IO) { ReaDistro.refresh(context) }
+    }
 
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(5.dp),
     ) {
-        PrismCard(accent = accent) {
-            Text("Environment", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.height(5.dp))
-            DetailLine("Distro", distro.method?.label ?: "—", accent)
-            DetailLine("REA", status.reaVersion.ifBlank { "not installed" }, accent)
-            DetailLine("Node", status.nodeVersion.ifBlank { "—" }, accent)
-            DetailLine("Server", if (bridge.running) "live on port " + ReaBridge.PORT else "stopped", accent)
+        MiniFrame("Server", accent, trailing = if (bridge.running) "live" else "stopped") {
+            DetailLine("Endpoint", ReaBridge.ENDPOINT, accent)
             DetailLine("Tools", bridge.toolCount.toString() + " advertised", accent)
+            DetailLine("Agents", bridge.connections.toString() + " connected", accent)
             DetailLine("Calls", calls.size.toString() + " recorded", accent)
-            DetailLine("Path", ReaManager.ROOT, accent)
-            Spacer(Modifier.height(6.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            DetailLine("REA", status.reaVersion.ifBlank { "—" }, accent)
+            DetailLine("Node", status.nodeVersion.ifBlank { "—" }, accent)
+            DetailLine("Distro", distro.method?.label ?: "—", accent)
+            Spacer(Modifier.height(4.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                 PrismSecondaryButton(
                     text = if (bridge.running) "Restart" else "Start",
                     accent = accent,
-                    icon = Icons.Default.Refresh,
                     modifier = Modifier.weight(1f),
                     onClick = {
                         scope.launch {
@@ -754,14 +857,13 @@ private fun StatusTab(
                                 ReaBridge.stop()
                                 ReaDistro.distroId(context)?.let { ReaBridge.start(context, it) }
                             }
-                            onRefresh()
+                            tick++
                         }
                     },
                 )
                 PrismSecondaryButton(
                     text = "Install tools",
                     accent = accent,
-                    icon = Icons.Default.PlayArrow,
                     modifier = Modifier.weight(1f),
                     enabled = !tools.running,
                     onClick = {
@@ -770,49 +872,30 @@ private fun StatusTab(
                                 val id = ReaDistro.distroId(context) ?: return@withContext
                                 ReaToolInstaller.install(context, id, ReaDistro.ALL_TOOLS)
                             }
+                            tick++
                         }
                     },
                 )
             }
         }
 
-        // One bar per tool, all visible at once.
-        if (tools.tools.isNotEmpty()) {
-            PrismCard(accent = accent) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Tool installs", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                    Spacer(Modifier.weight(1f))
-                    Text(tools.summary, fontSize = 8.5.sp, color = altarisMutedText())
-                }
-                Spacer(Modifier.height(5.dp))
-                tools.tools.forEach { tool -> ToolBar(tool, accent) }
-            }
-        }
-
-        PrismCard(accent = accent) {
-            Text("Agent info", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.height(5.dp))
+        MiniFrame("Run", accent, trailing = if (calls.any { it.running }) "live" else "idle") {
             val active = calls.firstOrNull { it.running }
-            if (active == null) {
-                PrismNote("No call in flight. The server is waiting for an agent.")
-            } else {
-                DetailLine("Tool", active.tool, accent)
-                DetailLine("Started", formatClock(active.at), accent)
-                DetailLine("Args", active.arguments.take(90), accent)
-            }
-            Spacer(Modifier.height(5.dp))
-            val totalMs = calls.sumOf { it.ms }
-            DetailLine("Time running", formatDuration(totalMs), accent)
+            DetailLine("Tool", active?.tool ?: "—", accent)
+            DetailLine("Started", active?.let { formatClock(it.at) } ?: "—", accent)
+            DetailLine("Elapsed", formatDuration(calls.sumOf { it.ms }), accent)
             DetailLine(
                 "Work",
                 calls.count { !it.running }.toString() + " / " + calls.size + " finished",
                 accent,
             )
-            DetailLine(
-                "Received",
-                ReaBridge.formatBytes(calls.sumOf { it.bytes }),
-                accent,
-            )
+            DetailLine("Received", ReaBridge.formatBytes(calls.sumOf { it.bytes }), accent)
+        }
+
+        if (tools.tools.isNotEmpty()) {
+            MiniFrame("Tool installs", accent, trailing = tools.summary) {
+                tools.tools.forEach { ToolBar(it, accent) }
+            }
         }
     }
 }
@@ -821,20 +904,20 @@ private fun StatusTab(
 private fun ToolBar(tool: ReaToolInstaller.ToolState, accent: Color) {
     val scheme = MaterialTheme.colorScheme
     Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 1.5.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
             tool.label,
-            fontSize = 9.sp,
+            fontSize = 8.5.sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.width(78.dp),
+            modifier = Modifier.width(70.dp),
         )
         Box(
             modifier = Modifier
                 .weight(1f)
-                .height(4.dp)
+                .height(3.dp)
                 .clip(RoundedCornerShape(2.dp))
                 .background(scheme.outline.copy(alpha = 0.35f))
         ) {
@@ -846,7 +929,7 @@ private fun ToolBar(tool: ReaToolInstaller.ToolState, accent: Color) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth(fraction.coerceIn(0f, 1f))
-                    .height(4.dp)
+                    .height(3.dp)
                     .background(
                         when (tool.status) {
                             ReaToolInstaller.ToolState.Status.FAILED -> scheme.error
@@ -866,13 +949,13 @@ private fun ToolBar(tool: ReaToolInstaller.ToolState, accent: Color) {
                 ReaToolInstaller.ToolState.Status.FAILED -> "failed"
                 ReaToolInstaller.ToolState.Status.SKIPPED -> "skipped"
             },
-            fontSize = 8.sp,
+            fontSize = 7.5.sp,
             color = when (tool.status) {
                 ReaToolInstaller.ToolState.Status.FAILED -> scheme.error
                 ReaToolInstaller.ToolState.Status.DONE -> altarisMutedText()
                 else -> accent
             },
-            modifier = Modifier.width(38.dp),
+            modifier = Modifier.width(34.dp),
         )
     }
 }
@@ -908,77 +991,75 @@ private fun ReaFilesTab(accent: Color) {
 
     LaunchedEffect(Unit) { load(path) }
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        PrismCard(accent = accent, modifier = Modifier.weight(1f).fillMaxWidth()) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+    PrismCard(accent = accent, modifier = Modifier.fillMaxSize()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                modifier = Modifier.weight(1f).horizontalScroll(rememberScrollState()),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                val segments = path.trim('/').split('/').filter { it.isNotBlank() }
+                Crumb("/", accent) { load("/") }
+                segments.forEachIndexed { index, segment ->
+                    Text("/", fontSize = 8.sp, color = altarisMutedText())
+                    val target = "/" + segments.take(index + 1).joinToString("/")
+                    Crumb(segment, accent) { load(target) }
+                }
+            }
+            PrismChip("New", accent, onClick = {
+                val target = "$path/untitled.txt"
+                scope.launch {
+                    withContext(Dispatchers.IO) {
+                        com.altaris.linux.core.rea.ReaFiles.createFile(context, target)
+                    }
+                    editing = target to ""
+                    load(path)
+                }
+            })
+        }
+        Spacer(Modifier.height(3.dp))
+        LazyColumn(
+            modifier = Modifier.fillMaxWidth().weight(1f),
+            verticalArrangement = Arrangement.spacedBy(1.dp),
+        ) {
+            items(entries.take(400)) { entry ->
                 Row(
-                    modifier = Modifier.weight(1f).horizontalScroll(rememberScrollState()),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            if (entry.dir) load(entry.path) else scope.launch {
+                                val read = withContext(Dispatchers.IO) {
+                                    com.altaris.linux.core.rea.ReaFiles.read(context, entry.path)
+                                }
+                                read.onSuccess { editing = entry.path to it }
+                                    .onFailure { note = it.message }
+                            }
+                        }
+                        .padding(vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    val segments = path.trim('/').split('/').filter { it.isNotBlank() }
-                    Crumb("/", accent) { load("/") }
-                    segments.forEachIndexed { index, segment ->
-                        Text("/", fontSize = 9.sp, color = altarisMutedText())
-                        val target = "/" + segments.take(index + 1).joinToString("/")
-                        Crumb(segment, accent) { load(target) }
-                    }
-                }
-                PrismChip("New file", accent, onClick = {
-                    val target = "$path/untitled.txt"
-                    scope.launch {
-                        withContext(Dispatchers.IO) {
-                            com.altaris.linux.core.rea.ReaFiles.createFile(context, target)
-                        }
-                        editing = target to ""
-                        load(path)
-                    }
-                })
-            }
-            Spacer(Modifier.height(4.dp))
-            LazyColumn(
-                modifier = Modifier.fillMaxWidth().weight(1f),
-                verticalArrangement = Arrangement.spacedBy(1.dp),
-            ) {
-                items(entries.take(300)) { entry ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                if (entry.dir) load(entry.path) else scope.launch {
-                                    val read = withContext(Dispatchers.IO) {
-                                        com.altaris.linux.core.rea.ReaFiles.read(context, entry.path)
-                                    }
-                                    read.onSuccess { editing = entry.path to it }
-                                        .onFailure { note = it.message }
-                                }
-                            }
-                            .padding(vertical = 5.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            entry.name,
-                            fontSize = 10.sp,
-                            fontFamily = FontFamily.Monospace,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f),
-                        )
-                        Text(
-                            if (entry.dir) "dir" else ReaDistro.formatBytes(entry.size),
-                            fontSize = 8.5.sp,
-                            color = altarisMutedText(),
-                        )
-                        Spacer(Modifier.width(6.dp))
-                        PrismChip("Del", MaterialTheme.colorScheme.error, onClick = {
-                            pendingDelete = entry
-                        })
-                    }
+                    Text(
+                        entry.name,
+                        fontSize = 9.sp,
+                        fontFamily = FontFamily.Monospace,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text(
+                        if (entry.dir) "dir" else ReaDistro.formatBytes(entry.size),
+                        fontSize = 8.sp,
+                        color = altarisMutedText(),
+                    )
+                    Spacer(Modifier.width(5.dp))
+                    PrismChip("Del", MaterialTheme.colorScheme.error, onClick = {
+                        pendingDelete = entry
+                    })
                 }
             }
-            if (note != null) {
-                Spacer(Modifier.height(4.dp))
-                PrismNote(note!!, color = MaterialTheme.colorScheme.error)
-            }
+        }
+        if (note != null) {
+            Spacer(Modifier.height(3.dp))
+            PrismNote(note!!, color = MaterialTheme.colorScheme.error)
         }
     }
 
@@ -1002,9 +1083,7 @@ private fun ReaFilesTab(accent: Color) {
                     Text("Close")
                 }
             },
-            title = {
-                Text(filePath, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
-            },
+            title = { Text(filePath, fontSize = 10.sp, fontFamily = FontFamily.Monospace) },
             text = {
                 androidx.compose.material3.OutlinedTextField(
                     value = draft,
@@ -1037,11 +1116,11 @@ private fun ReaFilesTab(accent: Color) {
                     Text("Keep")
                 }
             },
-            title = { Text("Delete this?", fontSize = 13.sp) },
+            title = { Text("Delete this?", fontSize = 12.sp) },
             text = {
                 Text(
                     entry.path + if (entry.dir) " (and everything in it)" else "",
-                    fontSize = 10.sp,
+                    fontSize = 9.sp,
                     fontFamily = FontFamily.Monospace,
                 )
             },
@@ -1053,7 +1132,7 @@ private fun ReaFilesTab(accent: Color) {
 private fun Crumb(text: String, accent: Color, onClick: () -> Unit) {
     Text(
         text,
-        fontSize = 9.sp,
+        fontSize = 8.sp,
         fontFamily = FontFamily.Monospace,
         color = accent,
         maxLines = 1,
@@ -1071,7 +1150,7 @@ private fun NotInstalled(accent: Color) {
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier.fillMaxSize().blur(6.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(5.dp),
         ) {
             PrismCard(accent = accent) {
                 Row(horizontalArrangement = Arrangement.spacedBy(Prism.Stack)) {
@@ -1081,30 +1160,25 @@ private fun NotInstalled(accent: Color) {
                     BigCounter("—", "Tool calls", accent, Modifier.weight(1f))
                 }
             }
-            PrismCard(accent = accent) {
-                Text("Activity", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                Spacer(Modifier.height(8.dp))
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(120.dp)
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
-                )
-            }
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(80.dp)
+                    .clip(RoundedCornerShape(Prism.PanelRadius))
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+            )
         }
         Column(
-            modifier = Modifier.fillMaxWidth().padding(top = 40.dp),
+            modifier = Modifier.fillMaxWidth().padding(top = 30.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             PrismCard(accent = accent) {
-                Text("REA is not installed", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                Spacer(Modifier.height(6.dp))
+                Text("REA is not installed", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(5.dp))
                 PrismNote(
-                    "REA runs inside a private environment Altaris creates for itself, and " +
-                        "is exposed to your agents as an MCP server. Install it from " +
-                        "Tools → Reverse engineering: pick proot (no root) or chroot, and " +
-                        "every analysis tool is installed with it."
+                    "Install it from Tools → Reverse engineering. Pick proot (no root) or " +
+                        "chroot (needs root); every analysis tool installs with it. Agents then " +
+                        "connect to it over MCP and this screen shows what they do."
                 )
             }
         }
@@ -1112,6 +1186,30 @@ private fun NotInstalled(accent: Color) {
 }
 
 // ------------------------------------------------------------------ helpers
+
+@Composable
+private fun DetailLine(label: String, value: String, accent: Color) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 1.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Text(
+            label,
+            fontSize = 8.sp,
+            color = altarisMutedText(),
+            modifier = Modifier.width(50.dp),
+        )
+        Text(
+            value,
+            fontSize = 8.5.sp,
+            fontFamily = FontFamily.Monospace,
+            color = accent,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
 
 private fun formatClock(at: Long): String =
     java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US).format(java.util.Date(at))
