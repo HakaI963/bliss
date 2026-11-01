@@ -7,9 +7,14 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.input.pointer.pointerInput
+import kotlinx.coroutines.withTimeoutOrNull
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -196,10 +201,7 @@ object TerminalKeyInjector {
         tv ?: return
         val keyCode = TerminalKeyCodes.SPECIAL_KEY_CODES[key]
         if (keyCode != null) {
-            var meta = 0
-            if (ctrl) meta = meta or KeyEvent.META_CTRL_ON or KeyEvent.META_CTRL_LEFT_ON
-            if (alt) meta = meta or KeyEvent.META_ALT_ON or KeyEvent.META_ALT_LEFT_ON
-            if (shift) meta = meta or KeyEvent.META_SHIFT_ON or KeyEvent.META_SHIFT_LEFT_ON
+            val meta = metaFor(ctrl, alt, shift)
             val evDown = KeyEvent(0, 0, KeyEvent.ACTION_DOWN, keyCode, 0, meta)
             tv.onKeyDown(keyCode, evDown)
             val evUp = KeyEvent(0, 0, KeyEvent.ACTION_UP, keyCode, 0, meta)
@@ -208,6 +210,56 @@ object TerminalKeyInjector {
             key.codePoints().forEach { cp -> tv.inputCodePoint(cp, ctrl, alt) }
         }
     }
+
+    /**
+     * A key that repeats while it is held.
+     *
+     * Holding an arrow should scroll, and holding backspace should delete —
+     * that is what every keyboard does. The bar could not do it because a
+     * long-press was taken by the edit menu, and because one tap sends a whole
+     * down+up pair, so there was nothing to repeat.
+     *
+     * This sends a single ACTION_DOWN, then one more key per repeat tick, and
+     * the matching ACTION_UP when the finger lifts. Repeating the *down* is
+     * what a real keyboard does when a key auto-repeats.
+     *
+     * Only keys that make sense to repeat are routed here; a modifier or a
+     * text macro keeps the plain tap behaviour.
+     */
+    fun isRepeatable(key: String): Boolean =
+        TerminalKeyCodes.SPECIAL_KEY_CODES[key] != null
+
+    fun keyDown(tv: TerminalView?, key: String, ctrl: Boolean, alt: Boolean, shift: Boolean) {
+        tv ?: return
+        val keyCode = TerminalKeyCodes.SPECIAL_KEY_CODES[key] ?: return
+        tv.onKeyDown(keyCode, KeyEvent(0, 0, KeyEvent.ACTION_DOWN, keyCode, 0, metaFor(ctrl, alt, shift)))
+    }
+
+    /** One auto-repeat tick: a fresh down, with a non-zero repeat count. */
+    fun keyRepeat(tv: TerminalView?, key: String, ctrl: Boolean, alt: Boolean, shift: Boolean) {
+        tv ?: return
+        val keyCode = TerminalKeyCodes.SPECIAL_KEY_CODES[key] ?: return
+        tv.onKeyDown(
+            keyCode,
+            KeyEvent(
+                0, 0, KeyEvent.ACTION_DOWN, keyCode, 1, metaFor(ctrl, alt, shift),
+            ),
+        )
+    }
+
+    fun keyUp(tv: TerminalView?, key: String, ctrl: Boolean, alt: Boolean, shift: Boolean) {
+        tv ?: return
+        val keyCode = TerminalKeyCodes.SPECIAL_KEY_CODES[key] ?: return
+        tv.onKeyUp(keyCode, KeyEvent(0, 0, KeyEvent.ACTION_UP, keyCode, 0, metaFor(ctrl, alt, shift)))
+    }
+
+    private fun metaFor(ctrl: Boolean, alt: Boolean, shift: Boolean): Int {
+        var meta = 0
+        if (ctrl) meta = meta or KeyEvent.META_CTRL_ON or KeyEvent.META_CTRL_LEFT_ON
+        if (alt) meta = meta or KeyEvent.META_ALT_ON or KeyEvent.META_ALT_LEFT_ON
+        if (shift) meta = meta or KeyEvent.META_SHIFT_ON or KeyEvent.META_SHIFT_LEFT_ON
+        return meta
+    }
 }
 
 /** Compact frost key metrics shared by every toolbar key. */
@@ -215,6 +267,12 @@ private val KeyShape = RoundedCornerShape(9.dp)
 private val KeyBaseHeight = 34.dp
 private val MinKeyWidth = 40.dp
 private const val KeyGapDp = 4
+/** How long a key must be held before it starts repeating. */
+private const val HOLD_DELAY_MS = 350L
+
+/** Gap between auto-repeats once the key is repeating. */
+private const val HOLD_REPEAT_MS = 55L
+
 /** One M-sized key = 1 unit; rows wrap once the next key would pass this budget. */
 private const val RowCapacityUnits = 5.2f
 
@@ -263,6 +321,29 @@ fun TerminalExtraKeys(
 
     fun inject(key: TerminalShortcutKey, ctrl: Boolean, alt: Boolean, shift: Boolean) {
         TerminalKeyInjector.injectKey(terminalView(), key.payload, ctrl, alt, shift)
+        modState.consumeModifiers()
+    }
+
+    // ---- press and hold -------------------------------------------------
+    //
+    // Holding an arrow scrolls; holding backspace deletes. The modifiers are
+    // read once when the press starts, so a lock toggled mid-hold cannot
+    // change the meaning of the key under the finger.
+    var holdCtrl = false
+    var holdAlt = false
+    var holdShift = false
+
+    val onHoldStart: (TerminalShortcutKey) -> Unit = { key ->
+        holdCtrl = key.ctrl || modState.ctrlActive
+        holdAlt = key.alt || modState.altActive
+        holdShift = key.shift || modState.shiftActive
+        TerminalKeyInjector.keyDown(terminalView(), key.payload, holdCtrl, holdAlt, holdShift)
+    }
+    val onHoldRepeat: (TerminalShortcutKey) -> Unit = { key ->
+        TerminalKeyInjector.keyRepeat(terminalView(), key.payload, holdCtrl, holdAlt, holdShift)
+    }
+    val onHoldEnd: (TerminalShortcutKey) -> Unit = { key ->
+        TerminalKeyInjector.keyUp(terminalView(), key.payload, holdCtrl, holdAlt, holdShift)
         modState.consumeModifiers()
     }
 
@@ -349,7 +430,10 @@ fun TerminalExtraKeys(
                     onTapKey = { activate(it) },
                     onLongPressKey = { onLongPress(it) },
                     onCloseMenu = { menuKeyId = null },
-                    actions = actions
+                    actions = actions,
+                    onHoldStart = onHoldStart,
+                    onHoldRepeat = onHoldRepeat,
+                    onHoldEnd = onHoldEnd,
                 )
             }
 
@@ -373,7 +457,10 @@ fun TerminalExtraKeys(
                             onTap = { activate(key) },
                             onLongPress = { onLongPress(key) },
                             onMenuDismiss = { menuKeyId = null },
-                            actions = actions
+                            actions = actions,
+                            onHoldStart = onHoldStart,
+                            onHoldRepeat = onHoldRepeat,
+                            onHoldEnd = onHoldEnd,
                         )
                     }
                 }
@@ -393,6 +480,33 @@ fun TerminalExtraKeys(
                         text = "No keys — tap to edit",
                         fontSize = 11.sp,
                         color = TextSecondary
+                    )
+                }
+            }
+
+            // The bar's own edit affordance.
+            //
+            // Long-press used to open the per-key menu, but it is now the
+            // press-and-hold gesture (an arrow must scroll while held). Without
+            // this row the only way into the editor would be a hidden gesture,
+            // so the bar carries an explicit, always-visible entry point.
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .height(keyHeight * 0.72f)
+                        .clip(KeyShape)
+                        .border(1.dp, FrostHairline, KeyShape)
+                        .clickable { actions.onEditBar() }
+                        .padding(horizontal = 8.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = "Edit keys",
+                        fontSize = 9.5.sp,
+                        color = TextSecondary,
                     )
                 }
             }
@@ -429,7 +543,10 @@ private fun ShortcutBarRow(
     onTapKey: (TerminalShortcutKey) -> Unit,
     onLongPressKey: (TerminalShortcutKey) -> Unit,
     onCloseMenu: () -> Unit,
-    actions: ShortcutBarActions
+    actions: ShortcutBarActions,
+    onHoldStart: (TerminalShortcutKey) -> Unit,
+    onHoldRepeat: (TerminalShortcutKey) -> Unit,
+    onHoldEnd: (TerminalShortcutKey) -> Unit,
 ) {
     BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
         val gap = KeyGapDp.dp
@@ -463,7 +580,10 @@ private fun ShortcutBarRow(
                     onTap = { onTapKey(key) },
                     onLongPress = { onLongPressKey(key) },
                     onMenuDismiss = onCloseMenu,
-                    actions = actions
+                    actions = actions,
+                    onHoldStart = onHoldStart,
+                    onHoldRepeat = onHoldRepeat,
+                    onHoldEnd = onHoldEnd,
                 )
             }
         }
@@ -483,10 +603,18 @@ private fun ShortcutBarKeyItem(
     onTap: () -> Unit,
     onLongPress: () -> Unit,
     onMenuDismiss: () -> Unit,
-    actions: ShortcutBarActions
+    actions: ShortcutBarActions,
+    onHoldStart: (TerminalShortcutKey) -> Unit,
+    onHoldRepeat: (TerminalShortcutKey) -> Unit,
+    onHoldEnd: (TerminalShortcutKey) -> Unit,
 ) {
     Box(modifier = modifier) {
         val painter = shortcutKeyPainter(key)
+        // Only keys that make sense to repeat get the hold gesture: arrows,
+        // backspace, tab, escape and friends. Modifiers and text macros keep a
+        // plain tap, because repeating them is meaningless.
+        val repeatable = key.kind == TerminalShortcutKind.SPECIAL &&
+            TerminalKeyInjector.isRepeatable(key.payload)
         TerminalKey(
             label = if (painter == null) key.displayLabel() else null,
             painter = painter,
@@ -498,6 +626,9 @@ private fun ShortcutBarKeyItem(
             labelSize = labelSize,
             onClick = onTap,
             onLongClick = onLongPress,
+            onHoldStart = if (repeatable) ({ onHoldStart(key) }) else null,
+            onHoldRepeat = if (repeatable) ({ onHoldRepeat(key) }) else null,
+            onHoldEnd = if (repeatable) ({ onHoldEnd(key) }) else null,
             modifier = Modifier.fillMaxSize()
         )
         DropdownMenu(
@@ -617,7 +748,18 @@ private fun TerminalKey(
     active: Boolean = false,
     locked: Boolean = false,
     labelSize: TextUnit = 10.sp,
-    onLongClick: (() -> Unit)? = null
+    onLongClick: (() -> Unit)? = null,
+    /**
+     * Optional press-and-hold behaviour.
+     *
+     * When set, pressing the key runs [onHoldStart] immediately and then
+     * [onHoldRepeat] on a timer until the finger lifts, followed by
+     * [onHoldEnd]. This is what makes an arrow scroll and backspace delete
+     * while held, instead of requiring a tap per character.
+     */
+    onHoldStart: (() -> Unit)? = null,
+    onHoldRepeat: (() -> Unit)? = null,
+    onHoldEnd: (() -> Unit)? = null,
 ) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
@@ -644,11 +786,50 @@ private fun TerminalKey(
                 color = if (locked) scheme.background else scheme.outline,
                 shape = KeyShape
             )
-            .combinedClickable(
-                interactionSource = interaction,
-                indication = null,
-                onClick = onClick,
-                onLongClick = onLongClick
+            .then(
+                if (onHoldStart != null && onHoldRepeat != null) {
+                    // Press-and-hold: the key repeats while the finger is down.
+                    Modifier.pointerInput(onHoldStart, onHoldRepeat, onHoldEnd) {
+                        awaitEachGesture {
+                            val down = awaitFirstDown(requireUnconsumed = false)
+                            down.consume()
+                            interaction.emit(PressInteraction.Press(down.position))
+                            onHoldStart()
+                            var held = true
+                            // Repeat until the finger lifts.
+                            //
+                            // The first repeat waits HOLD_DELAY_MS so a normal
+                            // tap never produces a second character; after that
+                            // every repeat waits HOLD_REPEAT_MS. Tracking the
+                            // deadline explicitly is what makes the second and
+                            // later repeats fast — recomputing from a fixed
+                            // start time kept them at the initial delay.
+                            var nextRepeatAt = System.currentTimeMillis() + HOLD_DELAY_MS
+                            while (held) {
+                                val wait = (nextRepeatAt - System.currentTimeMillis())
+                                    .coerceAtLeast(1L)
+                                val event = withTimeoutOrNull(wait) { awaitPointerEvent() }
+                                if (event == null) {
+                                    onHoldRepeat()
+                                    nextRepeatAt = System.currentTimeMillis() + HOLD_REPEAT_MS
+                                } else {
+                                    val change = event.changes.firstOrNull { it.id == down.id }
+                                    if (change == null || !change.pressed) held = false
+                                    change?.consume()
+                                }
+                            }
+                            interaction.emit(PressInteraction.Release(down.position))
+                            onHoldEnd?.invoke()
+                        }
+                    }
+                } else {
+                    Modifier.combinedClickable(
+                        interactionSource = interaction,
+                        indication = null,
+                        onClick = onClick,
+                        onLongClick = onLongClick
+                    )
+                }
             )
     ) {
         if (painter != null) {

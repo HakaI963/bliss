@@ -114,11 +114,15 @@ fun ReaScreen(modifier: Modifier = Modifier) {
     // watching after a successful start, so an install that finishes while this
     // screen is open brings the server up without any interaction.
     LaunchedEffect(Unit) {
+        var first = true
         while (true) {
             withContext(Dispatchers.IO) {
-                // Shallow: this is a poll. Deep reads (rootfs size, a real
-                // chroot probe) are for the explicit actions below.
-                ReaDistro.refresh(context)
+                // The first read is deep: it is what proves the environment is
+                // really there and fills the cache the polls then read. Every
+                // later tick is shallow, so a poll never walks the rootfs or
+                // forks a root shell.
+                ReaDistro.refresh(context, deep = first)
+                first = false
                 if (ReaDistro.state.value.ready) ReaBridge.ensureRunning(context)
             }
             // Poll faster while waiting for an install, slower when healthy.
@@ -135,6 +139,15 @@ fun ReaScreen(modifier: Modifier = Modifier) {
     ) {
         if (!distro.installed) {
             NotInstalled(accent)
+            // The gate above is driven by the cached state. If the cache is
+            // cold or stale, the screen would sit on "not installed" for a
+            // chroot that is actually there — which is exactly what it did.
+            // The poll above does one deep read when the screen opens; this
+            // makes that read happen again on demand instead of asking the
+            // user to leave and come back.
+            LaunchedEffect(Unit) {
+                withContext(Dispatchers.IO) { ReaDistro.refresh(context, deep = true) }
+            }
             return@Column
         }
 
@@ -1007,8 +1020,10 @@ private fun StatusTab(accent: Color, distro: ReaDistro.State, bridge: ReaBridge.
     val calls by ReaBridge.calls.collectAsState()
     var tick by remember { mutableIntStateOf(0) }
 
+    // The Status tab is opened on purpose and already runs the diagnosis, so a
+    // deep read here is what the user is asking for — not a background poll.
     LaunchedEffect(tick) {
-        withContext(Dispatchers.IO) { ReaDistro.refresh(context, deep = tick > 0) }
+        withContext(Dispatchers.IO) { ReaDistro.refresh(context, deep = true) }
     }
 
     Column(

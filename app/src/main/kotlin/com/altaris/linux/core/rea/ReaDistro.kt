@@ -174,6 +174,15 @@ object ReaDistro {
     @Volatile private var lastRefreshAt = 0L
 
     /**
+     * Last known "REA core is present" per method.
+     *
+     * Only a deep refresh writes it, because the chroot check runs `su`. A
+     * shallow poll reads it, so the dashboard keeps reporting an installed
+     * chroot without forking a root shell every few seconds.
+     */
+    private val readyCache = java.util.concurrent.ConcurrentHashMap<String, Boolean>()
+
+    /**
      * Recompute [state] from the filesystem.
      *
      * **Cheap by construction.** The screens call this on a poll loop, and it
@@ -208,7 +217,27 @@ object ReaDistro {
         val rootKnown = RootShell.peekSuInvocation() != null
         val present = presentMethods(app, probeRoot = deep && rootKnown)
         val active = chooseActive(app, present, rootKnown)
-        val ready = active != null && isReady(app, active, rootKnown)
+        val ready = active != null && isReady(app, active, deep && rootKnown)
+        // Record what a deep read proved, so the next *cheap* poll can answer
+        // without forking `su`. Without this the cache was never written for
+        // the REA chroot (only the Distros screen writes it, for its own ids),
+        // so every shallow refresh reported the chroot as absent and the REA
+        // tab showed "not installed" for a chroot that was installed.
+        if (deep && rootKnown) {
+            for (method in present) {
+                runCatching {
+                    com.altaris.linux.core.chroot.ChrootInfoStore.saveInstallInfo(
+                        ctx = app,
+                        distroId = method.id,
+                        installed = true,
+                        dirExists = true,
+                        bytes = if (method == active) _state.value.sizeBytes else null,
+                        rootOk = true,
+                        viaRoot = method == Method.CHROOT,
+                    )
+                }.onFailure { Log.w(TAG, "cannot cache ${method.label} presence", it) }
+            }
+        }
         lastRefreshAt = now
         _state.value = _state.value.copy(
             // A present container opens the dashboard; [ready] drives the
@@ -282,7 +311,7 @@ object ReaDistro {
         if (remembered != null && remembered in present) return remembered
         // No choice recorded yet: prefer a *ready* container, then proot, since
         // proot needs no root and is always usable.
-        present.firstOrNull { isReady(context, it, rootKnown) }?.let { return it }
+        present.firstOrNull { isReady(context, it, probeRoot = rootKnown) }?.let { return it }
         return present.firstOrNull { it == Method.PROOT } ?: present.first()
     }
 
@@ -345,8 +374,7 @@ object ReaDistro {
         // Never fork `su` for a poll. The cached chroot probe is good enough to
         // *display* the state; a deep refresh asks root for the truth.
         if (!probeRoot || !RootShell.isRootAvailable()) {
-            return com.altaris.linux.core.chroot.ChrootInfoStore
-                .cachedInstalled(context, method.id)
+            return cachedChrootPresent(context, method)
         }
         val result = runCatching {
             RootShell.captureResult(
@@ -359,6 +387,23 @@ object ReaDistro {
     }
 
     /**
+     * Cached presence of a chroot, tolerant of the two keys it may live under.
+     *
+     * [com.altaris.linux.core.chroot.ChrootInfoStore] is keyed by distro id, and
+     * the REA chroot can be written under either its method label ("chroot") or
+     * its distro id ("altaris_rea_chroot") depending on which code path probed
+     * it last. Asking only one of them reported an installed chroot as absent.
+     */
+    private fun cachedChrootPresent(context: Context, method: Method): Boolean {
+        val store = com.altaris.linux.core.chroot.ChrootInfoStore
+        return runCatching {
+            store.cachedInstalled(context, method.id) ||
+                store.cachedInstalled(context, method.label) ||
+                store.cachedInstalled(context, DistroInstallProfile.REA_CHROOT_ID)
+        }.getOrDefault(false)
+    }
+
+    /**
      * True when REA's core is really installed.
      *
      * Deliberately the *same* check [ReaBridge] uses before it execs the binary,
@@ -366,13 +411,18 @@ object ReaDistro {
      * `not found`. The marker file is an optimisation only: the binary itself is
      * the source of truth.
      */
-    private fun isReady(context: Context, method: Method, rootKnown: Boolean): Boolean {
-        // Same rule as presence: a chroot check forks `su`, so only do it when
-        // the caller asked for a deep read and root is actually available.
-        if (method == Method.CHROOT && (!rootKnown || !RootShell.isRootAvailable())) {
-            return _state.value.method == Method.CHROOT && _state.value.ready
+    private fun isReady(context: Context, method: Method, probeRoot: Boolean): Boolean {
+        // A proot check is one `File.isFile`: always cheap, always accurate.
+        if (method != Method.CHROOT) return ReaManager.isInstalledIn(context, method.id)
+        // A chroot check runs `su`. Only do it on a deep read; otherwise reuse
+        // the last answer, so a poll never forks a root shell.
+        if (!probeRoot || !RootShell.isRootAvailable()) {
+            return readyCache[method.id] ?: (method == _state.value.method && _state.value.ready)
         }
-        return ReaManager.isInstalledIn(context, method.id)
+        val ready = runCatching { ReaManager.isInstalledIn(context, method.id) }
+            .getOrDefault(false)
+        readyCache[method.id] = ready
+        return ready
     }
 
     private fun quote(value: String): String = "'" + value.replace("'", "'\\''") + "'"
