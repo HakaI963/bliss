@@ -647,7 +647,7 @@ object ReaBridge {
      */
     fun configJson(): String = """
         {
-          "$schema": "https://opencode.ai/config.json",
+          "${'$'}schema": "https://opencode.ai/config.json",
           "mcp": {
             "servers": {
               "rea": {

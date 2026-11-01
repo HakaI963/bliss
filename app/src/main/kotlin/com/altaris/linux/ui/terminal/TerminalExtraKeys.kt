@@ -283,8 +283,9 @@ data class ShortcutBarActions(
  * keys live in a scrollable strip toggled by the Fn key. Input still goes
  * exclusively through [TerminalKeyInjector.injectKey] — special keys via
  * `TerminalView.onKeyDown/onKeyUp`, printable keys via `inputCodePoint`, TEXT keys
- * via [onSendText] (pty paste/write). Long-press a modifier = lock (unchanged);
- * long-press any other key = quick actions (edit / duplicate / remove / edit bar).
+ * via [onSendText] (pty paste/write). Long-press a modifier = lock. Holding a
+ * key that carries a key code repeats it (an arrow scrolls, backspace deletes).
+ * Keys are added, edited and removed from Terminal → Tools, not from the bar.
  */
 @Composable
 fun TerminalExtraKeys(
@@ -417,7 +418,6 @@ fun TerminalExtraKeys(
                     fnVisible = fnVisible,
                     onTapKey = { activate(it) },
                     onLongPressKey = { onLongPress(it) },
-                    actions = actions,
                     onHoldStart = onHoldStart,
                     onHoldRepeat = onHoldRepeat,
                     onHoldEnd = onHoldEnd,
@@ -442,7 +442,6 @@ fun TerminalExtraKeys(
                             modifier = Modifier.width(fnKeyWidth).height(keyHeight),
                             onTap = { activate(key) },
                             onLongPress = { onLongPress(key) },
-                            actions = actions,
                             onHoldStart = onHoldStart,
                             onHoldRepeat = onHoldRepeat,
                             onHoldEnd = onHoldEnd,
@@ -499,7 +498,6 @@ private fun ShortcutBarRow(
     fnVisible: Boolean,
     onTapKey: (TerminalShortcutKey) -> Unit,
     onLongPressKey: (TerminalShortcutKey) -> Unit,
-    actions: ShortcutBarActions,
     onHoldStart: (TerminalShortcutKey) -> Unit,
     onHoldRepeat: (TerminalShortcutKey) -> Unit,
     onHoldEnd: (TerminalShortcutKey) -> Unit,
@@ -534,7 +532,6 @@ private fun ShortcutBarRow(
                         .height(keyHeight),
                     onTap = { onTapKey(key) },
                     onLongPress = { onLongPressKey(key) },
-                    actions = actions,
                     onHoldStart = onHoldStart,
                     onHoldRepeat = onHoldRepeat,
                     onHoldEnd = onHoldEnd,
