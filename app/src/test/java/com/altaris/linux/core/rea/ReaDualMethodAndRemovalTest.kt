@@ -93,7 +93,7 @@ class ReaDualMethodAndRemovalTest {
             .substringBefore("private fun appendLog(")
         assertTrue(
             "must enumerate every installed method",
-            uninstall.contains("val targets = presentMethods(app)"),
+            uninstall.contains("val targets = presentMethods(app, probeRoot = true)"),
         )
         assertTrue("must loop over them", uninstall.contains("for (method in targets)"))
         assertTrue(
@@ -141,7 +141,7 @@ class ReaDualMethodAndRemovalTest {
         // Installing the second method must not forget the first.
         assertTrue(
             "installing must preserve the other method",
-            distro.contains("methods = presentMethods(app).toSet()"),
+            distro.contains("methods = presentMethods(app, probeRoot = true).toSet()"),
         )
     }
 
@@ -176,7 +176,7 @@ class ReaDualMethodAndRemovalTest {
         )
         assertTrue(
             "must show which method is in use",
-            screen.contains("· in use"),
+            screen.contains("\"In use\""),
         )
         assertTrue(
             "must offer installing the other method",
