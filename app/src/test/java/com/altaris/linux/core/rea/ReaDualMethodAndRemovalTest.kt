@@ -179,13 +179,18 @@ class ReaDualMethodAndRemovalTest {
             screen.contains("\"In use\""),
         )
         assertTrue(
-            "must offer installing the other method",
-            screen.contains("ReaDistro.install(context, entry)"),
+            "must offer installing the selected method",
+            screen.contains("ReaDistro.install(context, method)"),
         )
         assertTrue(
-            "must offer switching",
-            screen.contains("ReaDistro.select(context, entry)"),
+            "must offer switching without reinstalling",
+            screen.contains("ReaDistro.select(context, method)"),
         )
+        // Switching must never fall through to an install.
+        val switch = screen.substringAfter("if (selectedInstalled && !selectedActive) {")
+            .substringBefore("} else {")
+        assertTrue("switching uses select", switch.contains("ReaDistro.select(context, method)"))
+        assertFalse("switching must not install", switch.contains("ReaDistro.install("))
     }
 
     // ---------------------------------------------------------------- clients
