@@ -122,7 +122,7 @@ class ReaRemoveSafetyTest {
         // without the mount guard having passed first.
         val script = readAsset("scripts/chroot/remove-chroot.sh")
         val guard = script.indexOf("REFUSING to delete")
-        val del = script.indexOf('deleting \$GUEST')
+        val del = script.indexOf("deleting \$GUEST")
         assertTrue("the guard must come first", guard in 0..del)
     }
 
