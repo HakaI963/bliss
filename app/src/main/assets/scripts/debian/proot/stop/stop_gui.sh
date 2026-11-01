@@ -28,7 +28,7 @@ GUEST_DE_PROCS="xfce4-session xfwm4 xfdesktop xfce4-panel xfce4-notifyd startxfc
 echo "[1/4] Stopping desktop in guest ($DISTRO)..."
 if [ -f "$TERMUX__PREFIX/bin/proot-distro" ]; then
   python "$TERMUX__PREFIX/bin/proot-distro" login "$DISTRO" -- \
-    /bin/bash -c "killall -9 $GUEST_DE_PROCS 2>/dev/null; rm -rf /home/flux/.cache/runtime 2>/dev/null; true" \
+    /bin/bash -c "killall -9 $GUEST_DE_PROCS 2>/dev/null; rm -rf /home/altaris/.cache/runtime 2>/dev/null; true" \
     >/dev/null 2>&1 || true
 fi
 # Best-effort host-side names too (some proot trees expose them)

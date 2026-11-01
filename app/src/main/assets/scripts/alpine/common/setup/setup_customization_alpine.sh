@@ -3,7 +3,7 @@
 # Altaris branding for Alpine XFCE4 (proot + chroot).
 # apk/musl port of setup_customization_debian.sh core path.
 
-CUSTOM_USER="flux"
+CUSTOM_USER="altaris"
 CUSTOM_GROUP="altaris"
 USER_HOME="/home/$CUSTOM_USER"
 THEME_DIR="/usr/share/themes"
@@ -33,7 +33,7 @@ export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin${PATH:
 _altaris_chown() { chown "$@" 2>/dev/null || true; }
 _altaris_chown_r() { chown -R "$@" 2>/dev/null || true; }
 
-# Resolve group for flux (Alpine useradd often creates matching group)
+# Resolve the account group (Alpine useradd often creates a matching group)
 if id -gn "$CUSTOM_USER" >/dev/null 2>&1; then
     CUSTOM_GROUP="$(id -gn "$CUSTOM_USER")"
 fi
@@ -347,7 +347,7 @@ _altaris_chown_r "$CUSTOM_USER:$CUSTOM_GROUP" "$USER_HOME" 2>/dev/null || true
 
 _altaris_write_altaris_xfce_panel() {
     _pcfg="$1"
-    _phome="${2:-/home/flux}"
+    _phome="${2:-/home/altaris}"
     [ -n "$_pcfg" ] || return 0
     mkdir -p "$_pcfg" 2>/dev/null || return 0
 
@@ -679,8 +679,8 @@ _altaris_write_altaris_xfce_compact() {
       <property name="&lt;Primary&gt;&lt;Alt&gt;t" type="string" value="xfce4-terminal">
         <property name="startup-notify" type="bool" value="true"/>
       </property>
-      <property name="Print" type="string" value="xfce4-screenshooter -f -s /home/flux/Pictures"/>
-      <property name="&lt;Shift&gt;Print" type="string" value="xfce4-screenshooter -r -s /home/flux/Pictures"/>
+      <property name="Print" type="string" value="xfce4-screenshooter -f -s /home/altaris/Pictures"/>
+      <property name="&lt;Shift&gt;Print" type="string" value="xfce4-screenshooter -r -s /home/altaris/Pictures"/>
       <property name="&lt;Alt&gt;F1" type="string" value="xfce4-popup-$_menu_plugin"/>
       <property name="&lt;Primary&gt;&lt;Alt&gt;Delete" type="string" value="xfce4-session-logout"/>
       <property name="override" type="bool" value="true"/>
@@ -887,7 +887,7 @@ if [ -f "$ZSH/oh-my-zsh.sh" ]; then
   source "$ZSH/oh-my-zsh.sh"
 fi
 
-# Alpine: package manager needs root. NOPASSWD sudo is configured for flux.
+# Alpine: package manager needs root. NOPASSWD sudo is configured for altaris.
 # Function (not alias) so it works in scripts and interactive shells.
 if command -v apk >/dev/null 2>&1 && command -v sudo >/dev/null 2>&1; then
   apk() { command sudo apk "$@"; }

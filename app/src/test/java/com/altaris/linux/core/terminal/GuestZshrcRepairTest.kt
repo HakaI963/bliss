@@ -171,7 +171,7 @@ class GuestZshrcRepairTest {
             val passwd = File(dir, "etc/passwd")
             passwd.writeText(
                 "root:x:0:0:root:/root:/bin/sh\n" +
-                    "altaris:x:1000:1000::/home/flux:/bin/bash\n"
+                    "altaris:x:1000:1000::/home/altaris:/bin/bash\n"
             )
             GuestZshrcRepair.ensureAltarisLoginShellZsh(dir)
             val line = passwd.readLines().first { it.startsWith("altaris:") }
@@ -187,7 +187,7 @@ class GuestZshrcRepairTest {
         try {
             File(dir, "etc").mkdirs()
             val passwd = File(dir, "etc/passwd")
-            passwd.writeText("altaris:x:1000:1000::/home/flux:/bin/bash\n")
+            passwd.writeText("altaris:x:1000:1000::/home/altaris:/bin/bash\n")
             GuestZshrcRepair.ensureAltarisLoginShellZsh(dir)
             assertTrue(passwd.readText().contains(":/bin/bash"))
         } finally {
@@ -204,7 +204,7 @@ class GuestZshrcRepairTest {
         try {
             val home = File(
                 dir,
-                "usr/var/lib/proot-distro/containers/chimera/rootfs/home/flux"
+                "usr/var/lib/proot-distro/containers/chimera/rootfs/home/altaris"
             )
             home.mkdirs()
             val ctx = FakeContext(dir, "$dir/jni")
@@ -225,7 +225,7 @@ class GuestZshrcRepairTest {
         try {
             val home = File(
                 dir,
-                "usr/var/lib/proot-distro/containers/deepin/rootfs/home/flux"
+                "usr/var/lib/proot-distro/containers/deepin/rootfs/home/altaris"
             )
             home.mkdirs()
             val ctx = FakeContext(dir, "$dir/jni")
@@ -245,7 +245,7 @@ class GuestZshrcRepairTest {
         try {
             val home = File(
                 dir,
-                "usr/var/lib/proot-distro/containers/manjaro/rootfs/home/flux"
+                "usr/var/lib/proot-distro/containers/manjaro/rootfs/home/altaris"
             )
             home.mkdirs()
             val ctx = FakeContext(dir, "$dir/jni")
@@ -285,7 +285,7 @@ class GuestZshrcRepairTest {
         try {
             val home = File(
                 dir,
-                "usr/var/lib/proot-distro/containers/ubuntu/rootfs/home/flux"
+                "usr/var/lib/proot-distro/containers/ubuntu/rootfs/home/altaris"
             )
             home.mkdirs()
             val ctx = FakeContext(dir, "$dir/jni")
@@ -304,7 +304,7 @@ class GuestZshrcRepairTest {
         try {
             val home = File(
                 dir,
-                "usr/var/lib/proot-distro/containers/archlinux/rootfs/home/flux"
+                "usr/var/lib/proot-distro/containers/archlinux/rootfs/home/altaris"
             )
             home.mkdirs()
             val ctx = FakeContext(dir, "$dir/jni")
@@ -324,7 +324,7 @@ class GuestZshrcRepairTest {
             listOf("kali", "parrot").forEach { name ->
                 val home = File(
                     dir,
-                    "usr/var/lib/proot-distro/containers/$name/rootfs/home/flux"
+                    "usr/var/lib/proot-distro/containers/$name/rootfs/home/altaris"
                 )
                 home.mkdirs()
                 val ctx = FakeContext(dir, "$dir/jni")
@@ -369,7 +369,7 @@ class GuestZshrcRepairTest {
         try {
             val home = File(
                 dir,
-                "usr/var/lib/proot-distro/containers/alpine/rootfs/home/flux"
+                "usr/var/lib/proot-distro/containers/alpine/rootfs/home/altaris"
             )
             home.mkdirs()
             val ctx = FakeContext(dir, "$dir/jni")

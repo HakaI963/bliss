@@ -745,7 +745,7 @@ _altaris_chown_r "$CUSTOM_USER:$CUSTOM_GROUP" "$USER_HOME" 2>/dev/null || true
 
 _altaris_write_altaris_xfce_panel() {
     _pcfg="$1"
-    _phome="${2:-/home/flux}"
+    _phome="${2:-/home/altaris}"
     [ -n "$_pcfg" ] || return 0
     mkdir -p "$_pcfg" 2>/dev/null || return 0
 
@@ -1077,8 +1077,8 @@ _altaris_write_altaris_xfce_compact() {
       <property name="&lt;Primary&gt;&lt;Alt&gt;t" type="string" value="xfce4-terminal">
         <property name="startup-notify" type="bool" value="true"/>
       </property>
-      <property name="Print" type="string" value="xfce4-screenshooter -f -s /home/flux/Pictures"/>
-      <property name="&lt;Shift&gt;Print" type="string" value="xfce4-screenshooter -r -s /home/flux/Pictures"/>
+      <property name="Print" type="string" value="xfce4-screenshooter -f -s /home/altaris/Pictures"/>
+      <property name="&lt;Shift&gt;Print" type="string" value="xfce4-screenshooter -r -s /home/altaris/Pictures"/>
       <property name="&lt;Alt&gt;F1" type="string" value="xfce4-popup-$_menu_plugin"/>
       <property name="&lt;Primary&gt;&lt;Alt&gt;Delete" type="string" value="xfce4-session-logout"/>
       <property name="override" type="bool" value="true"/>

@@ -56,6 +56,15 @@ object ReaDistro {
     /** How much install output is kept. */
     private const val MAX_LOG = 24_000
 
+    /**
+     * Minimum gap between two non-deep refreshes.
+     *
+     * Screens poll [refresh]; without this every poll re-ran the presence
+     * checks (and, for a chroot, a root probe) even though nothing could have
+     * changed. Two seconds keeps the UI honest and costs nothing.
+     */
+    private const val REFRESH_MIN_INTERVAL_MS = 2_000L
+
     enum class Method(val id: String, val label: String) {
         PROOT(DistroInstallProfile.REA_PROOT_ID, "proot"),
         CHROOT(DistroInstallProfile.REA_CHROOT_ID, "chroot");
@@ -161,18 +170,46 @@ object ReaDistro {
     @Volatile private var cachedSizeAt = 0L
     @Volatile private var cachedSizeFor: String? = null
 
+    /** Last full refresh, so a poll loop cannot re-run the expensive probes. */
+    @Volatile private var lastRefreshAt = 0L
+
     /**
      * Recompute [state] from the filesystem.
      *
-     * Cheap and safe to call often: the only expensive part (the rootfs size)
-     * is cached per method for [SIZE_TTL_MS], and an install in flight is never
-     * overwritten by a refresh.
+     * **Cheap by construction.** The screens call this on a poll loop, and it
+     * used to be anything but cheap:
+     *
+     *  - every call walked the whole rootfs to compute [State.sizeBytes], which
+     *    is tens of thousands of `stat` calls over several GB, and
+     *  - every call ran `su` once or twice (chroot presence, chroot readiness),
+     *    and each `su` forks a root shell.
+     *
+     * On a phone that is enough to make the whole app stutter while any screen
+     * with a REA poll is open, because the work competes with the UI thread for
+     * the CPU and the storage. So:
+     *
+     *  - the size is only recomputed when its cached value is older than
+     *    [SIZE_TTL_MS] *and* the caller asked for a deep refresh;
+     *  - a refresh within [REFRESH_MIN_INTERVAL_MS] of the previous one reuses
+     *    the last state, which is what a poll wants;
+     *  - root work is only attempted when the cached probe says root is there,
+     *    and never blocks a caller on a cold cache.
+     *
+     * @param deep re-probe the slow facts (size, chroot via root). Pass true
+     *   after an install or a removal, not from a poll.
      */
-    fun refresh(context: Context) {
+    fun refresh(context: Context, deep: Boolean = false) {
         val app = context.applicationContext
-        val present = presentMethods(app)
-        val active = chooseActive(app, present)
-        val ready = active != null && isReady(app, active)
+        val now = System.currentTimeMillis()
+        // A poll within the interval is a no-op: the state cannot have changed
+        // in a way this cheap path would see anyway.
+        if (!deep && now - lastRefreshAt < REFRESH_MIN_INTERVAL_MS) return
+
+        val rootKnown = RootShell.peekSuInvocation() != null
+        val present = presentMethods(app, probeRoot = deep && rootKnown)
+        val active = chooseActive(app, present, rootKnown)
+        val ready = active != null && isReady(app, active, rootKnown)
+        lastRefreshAt = now
         _state.value = _state.value.copy(
             // A present container opens the dashboard; [ready] drives the
             // "REA core missing" banner. Reporting a half-installed
@@ -183,12 +220,13 @@ object ReaDistro {
             methods = present.toSet(),
             ready = ready,
             activeReady = ready,
-            sizeBytes = if (active != null) sizeOf(app, active) else 0L,
+            // Never walk the rootfs unless asked: this is the expensive one.
+            sizeBytes = if (active != null && deep) sizeOf(app, active) else _state.value.sizeBytes,
             // Only a *known* answer may override the last one. isRootAvailable()
             // reads the cached probe, so on a cold start it is false even on a
             // device that has granted root — which used to hide the chroot
             // option until something else happened to probe.
-            chrootPossible = if (RootShell.peekSuInvocation() != null) {
+            chrootPossible = if (rootKnown) {
                 RootShell.isRootAvailable()
             } else {
                 _state.value.chrootPossible
@@ -202,11 +240,11 @@ object ReaDistro {
 
     /** Every method whose container is present, in a stable order. */
     fun installedMethods(context: Context): Set<Method> =
-        presentMethods(context.applicationContext).toSet()
+        presentMethods(context.applicationContext, probeRoot = true).toSet()
 
-    /** True when [method]'s container is present. */
+    /** True when [method]'s container is present (asks root for a chroot). */
     fun isMethodInstalled(context: Context, method: Method): Boolean =
-        containerPresent(context.applicationContext, method)
+        containerPresent(context.applicationContext, method, probeRoot = true)
 
     /**
      * Make [method] the one the MCP server uses, and remember the choice.
@@ -222,8 +260,11 @@ object ReaDistro {
     }
 
     /** The method the MCP server should use, or null when nothing is installed. */
-    fun activeMethod(context: Context): Method? =
-        chooseActive(context.applicationContext, presentMethods(context.applicationContext))
+    fun activeMethod(context: Context): Method? {
+        val app = context.applicationContext
+        val rootKnown = RootShell.peekSuInvocation() != null
+        return chooseActive(app, presentMethods(app, probeRoot = rootKnown), rootKnown)
+    }
 
     /**
      * The remembered method when it is installed, else the other one.
@@ -231,13 +272,17 @@ object ReaDistro {
      * Falls back instead of failing: uninstalling the active method while the
      * other is present must not leave REA unusable.
      */
-    private fun chooseActive(context: Context, present: List<Method>): Method? {
+    private fun chooseActive(
+        context: Context,
+        present: List<Method>,
+        rootKnown: Boolean,
+    ): Method? {
         if (present.isEmpty()) return null
         val remembered = Method.fromId(prefs(context).getString(KEY_ACTIVE_METHOD, null))
         if (remembered != null && remembered in present) return remembered
         // No choice recorded yet: prefer a *ready* container, then proot, since
         // proot needs no root and is always usable.
-        present.firstOrNull { isReady(context, it) }?.let { return it }
+        present.firstOrNull { isReady(context, it, rootKnown) }?.let { return it }
         return present.firstOrNull { it == Method.PROOT } ?: present.first()
     }
 
@@ -277,8 +322,10 @@ object ReaDistro {
      *     container shadowed a complete chroot install. Selection is now a
      *     remembered user choice, with a readiness-aware fallback.
      */
-    private fun presentMethods(context: Context): List<Method> =
-        Method.entries.filter { containerPresent(context, it) }
+    private fun presentMethods(
+        context: Context,
+        probeRoot: Boolean,
+    ): List<Method> = Method.entries.filter { containerPresent(context, it, probeRoot) }
 
     /**
      * True when [method]'s container exists on disk at all.
@@ -287,12 +334,17 @@ object ReaDistro {
      * root: the app cannot see `/data/local`, so a direct check is always a
      * false negative.
      */
-    private fun containerPresent(context: Context, method: Method): Boolean {
+    private fun containerPresent(
+        context: Context,
+        method: Method,
+        probeRoot: Boolean,
+    ): Boolean {
         val rootfs = rootfsOf(context, method) ?: return false
         if (rootfs.isDirectory && rootfs.list()?.isNotEmpty() == true) return true
         if (method != Method.CHROOT) return false
-        if (!RootShell.isRootAvailable()) {
-            // Fall back to the cached probe the chroot settings already keep.
+        // Never fork `su` for a poll. The cached chroot probe is good enough to
+        // *display* the state; a deep refresh asks root for the truth.
+        if (!probeRoot || !RootShell.isRootAvailable()) {
             return com.altaris.linux.core.chroot.ChrootInfoStore
                 .cachedInstalled(context, method.id)
         }
@@ -314,8 +366,14 @@ object ReaDistro {
      * `not found`. The marker file is an optimisation only: the binary itself is
      * the source of truth.
      */
-    private fun isReady(context: Context, method: Method): Boolean =
-        ReaManager.isInstalledIn(context, method.id)
+    private fun isReady(context: Context, method: Method, rootKnown: Boolean): Boolean {
+        // Same rule as presence: a chroot check forks `su`, so only do it when
+        // the caller asked for a deep read and root is actually available.
+        if (method == Method.CHROOT && (!rootKnown || !RootShell.isRootAvailable())) {
+            return _state.value.method == Method.CHROOT && _state.value.ready
+        }
+        return ReaManager.isInstalledIn(context, method.id)
+    }
 
     private fun quote(value: String): String = "'" + value.replace("'", "'\\''") + "'"
 
@@ -408,7 +466,7 @@ object ReaDistro {
                     log = "",
                     // Keep the methods already installed: installing the second
                     // one must not hide the first.
-                    methods = presentMethods(app).toSet(),
+                    methods = presentMethods(app, probeRoot = true).toSet(),
                 )
                 appendLog("creating the hidden REA distro (" + method.label + ")")
                 onLog("creating the hidden REA distro (" + method.label + ")")
@@ -612,7 +670,7 @@ object ReaDistro {
 
             // Remove every container, not just the active one: a failed switch
             // used to leave the other behind with no way to see or delete it.
-            val targets = presentMethods(app)
+            val targets = presentMethods(app, probeRoot = true)
             if (targets.isEmpty()) {
                 appendLog("no container was present")
             }

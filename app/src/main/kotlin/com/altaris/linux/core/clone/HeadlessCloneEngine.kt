@@ -58,7 +58,6 @@ object HeadlessCloneEngine {
 
     private const val TAG = "AltarisClone"
     private const val CLONE_PREFIX = "com.altaris.apps."
-    private const val LEGACY_CLONE_PREFIX = "com.nopiece.hclone."
 
     /** Session key used for an installed app opened without a clone. */
     const val KEY_PRIMARY = SessionKeys.PRIMARY
@@ -761,7 +760,6 @@ object HeadlessCloneEngine {
                     .filter { info ->
                         info.packageName != ctx.packageName &&
                             !info.packageName.startsWith(CLONE_PREFIX) &&
-                            !info.packageName.startsWith(LEGACY_CLONE_PREFIX) &&
                             (info.flags and ApplicationInfo.FLAG_SYSTEM) == 0
                     }
                     .distinctBy { it.packageName }
@@ -1403,7 +1401,7 @@ object HeadlessCloneEngine {
                 if (key.isBlank()) continue
                 map[key] = Session(
                     key = key,
-                    packageName = key.takeIf { it.startsWith(CLONE_PREFIX) || it.startsWith(LEGACY_CLONE_PREFIX) },
+                    packageName = key.takeIf { it.startsWith(CLONE_PREFIX) },
                     displayId = item.optInt("display_id", -1),
                     width = item.optInt("width", 0),
                     height = item.optInt("height", 0),

@@ -71,19 +71,19 @@ class ChrootCommandBuilderTest {
 
     @Test
     fun workdir_login_usesWorkdir() {
-        val inner = ChrootCommandBuilder.buildRootInner("mkdir -p /home/flux/proj && cd /home/flux/proj && exec zsh", user = "altaris")
-        assertEquals("exec sh $helper login --user altaris --shell zsh --workdir '/home/flux/proj'", inner)
+        val inner = ChrootCommandBuilder.buildRootInner("mkdir -p /home/altaris/proj && cd /home/altaris/proj && exec zsh", user = "altaris")
+        assertEquals("exec sh $helper login --user altaris --shell zsh --workdir '/home/altaris/proj'", inner)
     }
 
     @Test
     fun workdir_execBash_usesWorkdirAndShellFromParams() {
         val inner = ChrootCommandBuilder.buildRootInner(
-            "mkdir -p /home/flux/proj && cd /home/flux/proj && exec bash",
+            "mkdir -p /home/altaris/proj && cd /home/altaris/proj && exec bash",
             user = "altaris",
             loginShellAltaris = "bash"
         )
         assertEquals(
-            "exec sh $helper login --user altaris --shell bash --workdir '/home/flux/proj'",
+            "exec sh $helper login --user altaris --shell bash --workdir '/home/altaris/proj'",
             inner
         )
     }

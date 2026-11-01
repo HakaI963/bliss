@@ -116,9 +116,9 @@ class AltarisDesignScreenshotsTest {
     fun apps_installed_folders() {
         HeadlessCloneEngine.connected.value = true
         HeadlessCloneEngine.clones.value = listOf(
-            fakeClone("test1", "com.nopiece.hclone.h11111111"),
-            fakeClone("test2", "com.nopiece.hclone.h22222222"),
-            fakeClone("test3", "com.nopiece.hclone.h33333333"),
+            fakeClone("test1", "com.altaris.apps.h11111111"),
+            fakeClone("test2", "com.altaris.apps.h22222222"),
+            fakeClone("test3", "com.altaris.apps.h33333333"),
         )
         try {
             paparazzi.snapshot {

@@ -7,8 +7,6 @@
 # Global Variables
 DEBIANPATH="/data/local/altaris/chroots/debian"
 USERNAME="altaris"
-[ -d /data/local/bliss ] && [ ! -e /data/local/altaris ] && mv /data/local/bliss /data/local/altaris 2>/dev/null || true
-[ -d /data/local/folio ] && [ ! -e /data/local/altaris ] && mv /data/local/folio /data/local/altaris 2>/dev/null || true
 
 # Desktop contract: ALTARIS_DESKTOPS (space/comma separated) = xfce | kde | none;
 # legacy ALTARIS_DESKTOP / ALTARIS_DESKTOP_ENV remain valid single values. Unset/empty
@@ -400,7 +398,7 @@ fi
 
     # --- CHECK EXISTING INSTALLATION ---
     # Check for marker file indicating SUCCESSFUL configuration
-    if [ -f "$DEBIANPATH/.altaris_configured" ] || [ -f "$DEBIANPATH/.flux_configured" ]; then
+    if [ -f "$DEBIANPATH/.altaris_configured" ]; then
         success "Debian 13 Chroot appears to be already installed."
         progress "Skipping Download/Extraction/Config..."
         progress "Regenerating launch scripts..."

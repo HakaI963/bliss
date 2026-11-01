@@ -221,7 +221,7 @@ _altaris_ensure_dbus
 # User alarm occupies uid 1000. Prefer rename so home/files stay.
 if id alarm >/dev/null 2>&1 && ! id altaris >/dev/null 2>&1; then
     _altaris_log "Renaming alarm → altaris (uid 1000)"
-    usermod -l altaris -d /home/flux -m alarm 2>/dev/null \
+    usermod -l altaris -d /home/altaris -m alarm 2>/dev/null \
         || { userdel -r alarm 2>/dev/null || true; }
 fi
 # Chroot can leave both (usermod -l no-op + useradd flux=1001). One uid 1000.
@@ -230,7 +230,7 @@ if id alarm >/dev/null 2>&1 && id altaris >/dev/null 2>&1; then
     userdel -r alarm 2>/dev/null || userdel alarm 2>/dev/null || true
 fi
 if id altaris >/dev/null 2>&1 && ! id -u 1000 >/dev/null 2>&1; then
-    usermod -u 1000 -d /home/flux altaris 2>/dev/null || true
+    usermod -u 1000 -d /home/altaris altaris 2>/dev/null || true
 fi
 
 if [ -z "${DESKTOPS##*xfce*}" ]; then

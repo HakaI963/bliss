@@ -494,7 +494,6 @@ PROMPT2='%F{240}> %f'
         val sb = StringBuilder()
         sb.append("rm -f \"\$H/.oh-my-zsh/custom/themes/altaris.zsh-theme\" 2>/dev/null || true\n")
         sb.append("rm -f \"\$H/.local/share/applications/altaris-\"*.desktop 2>/dev/null || true\n")
-        sb.append("[ -d \"\$H/.config/altaris\" ] && rm -rf \"\$H/.config/folio\" 2>/dev/null || true\n")
         sb.append("if [ ! -f \"\$H/.zshrc\" ]; then\n")
         sb.append("  _put \"\$H/.zshrc\" '").append(b64(DEFENSIVE_ZSHRC)).append("'\n")
         sb.append("fi\n")
@@ -507,7 +506,6 @@ PROMPT2='%F{240}> %f'
         sb.append("if [ -f \"\$H/.zshrc\" ]; then\n")
         sb.append("  grep -q 'ZSH_THEME=\"agnosterzak\"' \"\$H/.zshrc\" 2>/dev/null && ")
             .append("sed -i 's|ZSH_THEME=\"agnosterzak\"|ZSH_THEME=\"altaris\"|' \"\$H/.zshrc\" 2>/dev/null || true\n")
-        sb.append("  sed -i 's|/.config/folio/|/.config/altaris/|g' \"\$H/.zshrc\" 2>/dev/null || true\n")
         sb.append("fi\n")
         // zsh shell integration (syntax coloring + autosuggestions): existing
         // chroot profiles get the marker block appended once, like proot.
@@ -777,8 +775,8 @@ alias ls='ls --color=auto' 2>/dev/null
                     ctx.filesDir,
                     "usr/var/lib/proot-distro/containers/$prootName/rootfs"
                 )
-                // The account was renamed flux -> altaris; use the real passwd
-                // home so a migrated /home/flux symlink is never traversed.
+                // Resolve the home from the guest passwd rather than assuming a
+                // path, so a rootfs with a different layout still works.
                 val passwd = GuestUserResolver.passwdOf(rootfs)
                 val user = GuestUserResolver.resolve("altaris", passwd)
                 val home = GuestUserResolver.homeOf(user, passwd)

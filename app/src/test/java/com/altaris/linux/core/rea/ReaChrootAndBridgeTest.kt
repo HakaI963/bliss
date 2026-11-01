@@ -8,8 +8,9 @@ import org.junit.Test
 /**
  * Two failures from the device log.
  *
- * 1. `useradd: user 'flux' already exists` — the family script created a user
- *    called flux and then added a different, non-existent user to sudo.
+ * 1. `useradd: user 'flux' already exists` — the family script created an
+ *    account under the retired product name and then granted sudo to a
+ *    different, non-existent one.
  * 2. `bind failed: EADDRINUSE` — the MCP bridge could not bind its port, so the
  *    server never came up.
  */
@@ -34,24 +35,26 @@ class ReaChrootAndBridgeTest {
             "sudo must be granted to the account that exists",
             script.contains("/etc/sudoers.d/\$GUEST_USER"),
         )
-        // The old bug: creating flux, then adding altaris (which did not exist),
-        // then writing a sudoers entry for flux.
+        // The old bug: creating one account, then granting sudo to another that
+        // did not exist.
         assertFalse(
-            "must not create a flux account",
+            "must not create an account under the retired name",
             script.contains("useradd -m -s /bin/bash flux"),
         )
         assertFalse(
-            "must not grant sudo to a hardcoded flux",
+            "must not grant sudo to a hardcoded account name",
             script.contains("usermod -aG sudo altaris"),
         )
     }
 
-    /** A stale flux account must lose sudo rather than keep it forever. */
+    /** The retired account name must not appear in the setup script at all. */
     @Test
-    fun aStaleFluxAccountLosesSudo() {
+    fun theRetiredAccountNameIsGone() {
         val script = readAsset("scripts/debian/common/setup/setup_debian_family.sh")
-        assertTrue(script.contains("deluser flux sudo"))
-        assertTrue(script.contains("rm -f /etc/sudoers.d/flux"))
+        assertFalse(
+            "no flux account may be created or referenced",
+            script.contains("flux"),
+        )
     }
 
     /**

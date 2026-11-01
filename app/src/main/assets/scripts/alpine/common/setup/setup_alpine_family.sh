@@ -1,7 +1,7 @@
 #!/bin/sh
 # setup_alpine_family.sh
 # Post-install base desktop for Alpine (proot + chroot). apk + musl.
-# Creates user flux, installs XFCE4. Must run as root inside the guest.
+# Creates user altaris, installs XFCE4. Must run as root inside the guest.
 
 # Helpers live in altaris_guest_common.sh (prepended by altaris_install /
 # familySetupPayload). Source it only when this file is run standalone.
@@ -78,7 +78,7 @@ apk add --no-cache \
         exit 1
     }
 
-# 5. Guest user: altaris (uid 1000). `flux` is kept as a legacy alias.
+# 5. Guest user: altaris (uid 1000).
 if ! id altaris >/dev/null 2>&1; then
     echo "Altaris: Creating the guest account..."
     if command -v useradd >/dev/null 2>&1; then
@@ -95,22 +95,8 @@ if ! id altaris >/dev/null 2>&1; then
     echo "altaris:altaris" | chpasswd 2>/dev/null || true
 fi
 
-# Legacy alias: same uid, and /home/flux is a link to the real home.
-if id altaris >/dev/null 2>&1 && ! id flux >/dev/null 2>&1; then
-    _a_uid=$(id -u altaris 2>/dev/null)
-    _a_gid=$(id -g altaris 2>/dev/null)
-    if [ -n "$_a_uid" ] && [ -n "$_a_gid" ]; then
-        echo "flux:x:${_a_uid}:${_a_gid}:Legacy:/home/flux:/bin/sh" >> /etc/passwd
-        grep -q "^flux:" /etc/group 2>/dev/null || echo "flux:x:${_a_gid}:" >> /etc/group
-    fi
-fi
-if [ -d /home/altaris ] && [ ! -e /home/flux ]; then
-    ln -s /home/altaris /home/flux 2>/dev/null || true
-fi
-
 # Groups (best-effort — names differ slightly across Alpine releases)
 for g in wheel audio video netdev input; do
-    addgroup flux "$g" 2>/dev/null || true
     addgroup altaris "$g" 2>/dev/null || true
 done
 
@@ -228,7 +214,7 @@ fi
 
 # 6. Sudo NOPASSWD
 mkdir -p /etc/sudoers.d
-printf '%s\n' "altaris ALL=(ALL) NOPASSWD:ALL" "flux ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/altaris
+printf '%s\n' "altaris ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/altaris
 chmod 0440 /etc/sudoers.d/altaris
 # Alpine ships @includedir; re-assert if a minimal sudoers was replaced
 if [ -f /etc/sudoers ] && ! grep -qE '@includedir[[:space:]]+/etc/sudoers\.d' /etc/sudoers 2>/dev/null; then
@@ -238,19 +224,19 @@ chmod 4755 /usr/bin/sudo 2>/dev/null || true
 
 # 7. Optional VNC xstartup parity with Debian family (desktop-aware)
 if id altaris >/dev/null 2>&1; then
-    mkdir -p /home/flux/.vnc
+    mkdir -p /home/altaris/.vnc
     _xs_de="startxfce4"
     if [ -z "${DESKTOPS##*kde*}" ] && [ -n "${DESKTOPS##*xfce*}" ]; then
         _xs_de="startplasma-x11"
     fi
-    cat > /home/flux/.vnc/xstartup <<EOF
+    cat > /home/altaris/.vnc/xstartup <<EOF
 #!/bin/sh
 export PULSE_SERVER=tcp:127.0.0.1
 [ -f "\$HOME/.Xresources" ] && xrdb "\$HOME/.Xresources"
 exec $_xs_de
 EOF
     unset _xs_de
-    chmod +x /home/flux/.vnc/xstartup
+    chmod +x /home/altaris/.vnc/xstartup
 fi
 if command -v _altaris_write_pulse_client >/dev/null 2>&1; then
     _altaris_write_pulse_client
@@ -274,19 +260,19 @@ EOF
 fi
 
 # Ensure home ownership / writability.
-# Proot: host process is the Android app uid; chown to flux's guest uid (e.g.
+# Proot: host process is the Android app uid; chown to altaris's guest uid (e.g.
 # 10302) can make mode-700 dirs unwritable on disk → xfconfd failsafe.
-# Prefer matching /home owner (app uid under proot), then best-effort flux:flux.
-if [ -d /home/flux ]; then
+# Prefer matching /home owner (app uid under proot), then best-effort altaris:altaris.
+if [ -d /home/altaris ]; then
     _home_uid=$(stat -c %u /home 2>/dev/null || true)
     _home_gid=$(stat -c %g /home 2>/dev/null || true)
     if [ -n "$_home_uid" ]; then
-        chown -R "$_home_uid:$_home_gid" /home/flux 2>/dev/null || true
+        chown -R "$_home_uid:$_home_gid" /home/altaris 2>/dev/null || true
     fi
-    chown -R flux:flux /home/flux 2>/dev/null || true
-    chmod 755 /home/flux 2>/dev/null || true
-    mkdir -p /home/flux/.config /home/flux/.cache /home/flux/.local/share
-    chmod -R u+rwX /home/flux/.config /home/flux/.cache /home/flux/.local 2>/dev/null || true
+    chown -R altaris:altaris /home/altaris 2>/dev/null || true
+    chmod 755 /home/altaris 2>/dev/null || true
+    mkdir -p /home/altaris/.config /home/altaris/.cache /home/altaris/.local/share
+    chmod -R u+rwX /home/altaris/.config /home/altaris/.cache /home/altaris/.local 2>/dev/null || true
 fi
 
 unset LC_ALL
@@ -313,7 +299,6 @@ _altaris_fix_apk_writable() {
 echo "Altaris: Ensuring apk database is writable (proot-safe)…"
 _altaris_fix_apk_writable
 
-[ -d /etc/bliss ] && [ ! -e /etc/altaris ] && mv /etc/bliss /etc/altaris 2>/dev/null || true
 mkdir -p /etc/altaris
 printf '%s\n' virgl > /etc/altaris/gpu_mode
 echo "Altaris: gpu_mode=virgl (first-paint; hw-accel may upgrade)"

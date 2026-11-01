@@ -50,7 +50,6 @@ class SessionKeysTest {
     @Test
     fun cloneKeysAreRecognised() {
         assertTrue(SessionKeys.isCloneKey(cloneA))
-        assertTrue(SessionKeys.isCloneKey("com.nopiece.hclone.legacy"))
         assertFalse(SessionKeys.isCloneKey(SessionKeys.PRIMARY))
         assertFalse(SessionKeys.isCloneKey("org.example.app"))
         assertFalse(SessionKeys.isCloneKey(null))

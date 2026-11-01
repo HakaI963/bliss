@@ -85,28 +85,18 @@ if [ "$DESKTOPS" != "none" ]; then
             mesa-utils libgl1-mesa-dri libegl1 \
         || true
 fi
-[ -d /etc/bliss ] && [ ! -e /etc/altaris ] && mv /etc/bliss /etc/altaris 2>/dev/null || true
 mkdir -p /etc/altaris
 printf '%s\n' virgl > /etc/altaris/gpu_mode
 echo "Altaris: gpu_mode=virgl (first-paint; hw-accel may upgrade)"
 
 # 2. Create the guest user.
 #
-# The account is `altaris`. Earlier builds created `flux` (the old product
-# name) and then tried to add a user that did not exist, which produced
-# "user 'flux' already exists" on the second run and left the sudoers file
-# pointing at the wrong account.
+# The guest account. One name, defined once, used everywhere below.
 GUEST_USER="altaris"
 if ! id "$GUEST_USER" >/dev/null 2>&1; then
     useradd -m -s /bin/bash "$GUEST_USER"
     echo "$GUEST_USER:$GUEST_USER" | chpasswd
 fi
-# A stale `flux` account from an earlier image must not keep sudo rights.
-if id flux >/dev/null 2>&1 && [ "$GUEST_USER" != "flux" ]; then
-    deluser flux sudo >/dev/null 2>&1 || true
-    rm -f /etc/sudoers.d/flux
-fi
-
 # 3. Configure Sudo for the account that actually exists.
 echo "$GUEST_USER ALL=(ALL) NOPASSWD:ALL" > "/etc/sudoers.d/$GUEST_USER"
 chmod 0440 "/etc/sudoers.d/$GUEST_USER" 2>/dev/null || true

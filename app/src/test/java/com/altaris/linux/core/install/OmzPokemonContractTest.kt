@@ -211,7 +211,7 @@ class OmzPokemonContractTest {
         val proot = repoFile(
             "src/main/assets/scripts/debian/proot/start/start_gui.sh"
         ).readText()
-        assertTrue(proot.contains("XDG_RUNTIME_DIR=/home/flux/.cache/runtime"))
+        assertTrue(proot.contains("XDG_RUNTIME_DIR=/home/altaris/.cache/runtime"))
         assertFalse(proot.contains("XDG_RUNTIME_DIR=/tmp/runtime-altaris"))
     }
 

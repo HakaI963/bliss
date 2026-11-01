@@ -24,12 +24,10 @@ object TermuxHostPaths {
      * the live [DATA_ROOT] so extracted text (profile, bash.bashrc, python
      * files) never points at another app's data dir (SELinux EACCES).
      */
-    private val LEGACY_DATA_ROOTS = listOf(
+    private val OTHER_APP_DATA_ROOTS = listOf(
         "/data/data/$STOCK_PACKAGE", // com.termux
         "/data/data/com.ivarna.fluxlinux",
-        "/data/data/com.zenithblue.fluxlinux",
-        "/data/data/com.nopiece.folio",
-        "/data/data/com.nopiece.bliss"
+        "/data/data/com.zenithblue.fluxlinux"
     )
 
     /** `/data/data/<package>` */
@@ -116,7 +114,7 @@ object TermuxHostPaths {
     /** Replace stock / legacy Termux data-root paths with this package's paths. */
     fun rewriteStockPaths(text: String): String {
         var out = text
-        for (root in LEGACY_DATA_ROOTS) {
+        for (root in OTHER_APP_DATA_ROOTS) {
             if (root == DATA_ROOT) continue
             if (out.contains(root)) out = out.replace(root, DATA_ROOT)
         }

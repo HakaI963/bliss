@@ -96,7 +96,7 @@ object A11yAutoEnable {
      * Component string of the accessibility service for the running app.
      *
      * The package part is the *application id* of the installed flavour
-     * (`com.nopiece.bliss` for the Altaris flavour, `com.ivarna.fluxlinux`
+     * (`com.altaris.linux` for the Altaris flavour, `com.ivarna.fluxlinux`
      * for F-Droid), the class part is the stable source class name — so the
      * string stays correct when the application id changes.
      */

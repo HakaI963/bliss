@@ -287,7 +287,11 @@ object ProotCommandBuilder {
         // A rootfs moved from the legacy package id has unreadable symlinks
         // (FBE key from the old app). Repair before resolving passwd/user.
         RootfsKeyRepair.ensureRepaired(ctx, rootfs)
-        GuestUserMigration.ensureAltaris(rootfs)
+        // A tool installed as root inside the guest can leave the home
+        // unwritable for the account (opencode, npm, bun all do this). The
+        // rootfs is inside our own data dir, so fixing it here costs one chown
+        // and needs no root.
+        GuestHomeRepair.ensureWritable(rootfs)
         val loginUser = GuestUserResolver.resolve(user, GuestUserResolver.passwdOf(rootfs))
         // Host package env + interactive TERM (guest login inherits package identity)
         val envMap = HostCommandBuilder.envMap(ctx, forceHostSetup = false, includeTerm = true)

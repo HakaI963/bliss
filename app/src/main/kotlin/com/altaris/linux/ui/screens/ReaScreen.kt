@@ -116,6 +116,8 @@ fun ReaScreen(modifier: Modifier = Modifier) {
     LaunchedEffect(Unit) {
         while (true) {
             withContext(Dispatchers.IO) {
+                // Shallow: this is a poll. Deep reads (rootfs size, a real
+                // chroot probe) are for the explicit actions below.
                 ReaDistro.refresh(context)
                 if (ReaDistro.state.value.ready) ReaBridge.ensureRunning(context)
             }
@@ -1006,7 +1008,7 @@ private fun StatusTab(accent: Color, distro: ReaDistro.State, bridge: ReaBridge.
     var tick by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(tick) {
-        withContext(Dispatchers.IO) { ReaDistro.refresh(context) }
+        withContext(Dispatchers.IO) { ReaDistro.refresh(context, deep = tick > 0) }
     }
 
     Column(

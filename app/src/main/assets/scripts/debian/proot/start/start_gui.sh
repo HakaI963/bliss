@@ -234,7 +234,7 @@ else
     export XDG_DATA_DIRS=/usr/local/share:/usr/share
     # Runtime dir must be 700 *and* writable by altaris. /tmp/runtime-altaris lives on
     # --shared-tmp (host PREFIX/tmp, app uid) so guest altaris cannot chmod/chown it.
-    export XDG_RUNTIME_DIR=/home/flux/.cache/runtime
+    export XDG_RUNTIME_DIR=/home/altaris/.cache/runtime
     mkdir -p "$XDG_RUNTIME_DIR" && chmod 700 "$XDG_RUNTIME_DIR"
     mkdir -p /tmp/.ICE-unix && chmod 1777 /tmp/.ICE-unix
 
@@ -243,23 +243,23 @@ else
     # → xfconfd "Unable to create configuration directory" → failsafe session.
     # Match /home ownership (app uid). Avoid nested single quotes (this block is
     # already inside proot-distro login ... -c '...' ).
-    if [ -d /home/flux ]; then
+    if [ -d /home/altaris ]; then
       _home_uid=$(stat -c %u /home 2>/dev/null || true)
       _home_gid=$(stat -c %g /home 2>/dev/null || true)
       if [ -n "$_home_uid" ]; then
-        chown -R "$_home_uid:$_home_gid" /home/flux 2>/dev/null || true
+        chown -R "$_home_uid:$_home_gid" /home/altaris 2>/dev/null || true
         if [ "$_home_uid" = "0" ]; then
-          chown -R flux:flux /home/flux 2>/dev/null || true
+          chown -R altaris:altaris /home/altaris 2>/dev/null || true
         fi
       fi
-      mkdir -p /home/flux/.config /home/flux/.cache /home/flux/.local/share
-      chmod 755 /home/flux 2>/dev/null || true
+      mkdir -p /home/altaris/.config /home/altaris/.cache /home/altaris/.local/share
+      chmod 755 /home/altaris 2>/dev/null || true
       # Open perms: host uid vs guest altaris uid mismatch is common under proot
-      chmod -R 777 /home/flux/.config /home/flux/.cache /home/flux/.local 2>/dev/null || true
+      chmod -R 777 /home/altaris/.config /home/altaris/.cache /home/altaris/.local 2>/dev/null || true
     fi
-    if [ -d /home/flux/.cache/runtime ]; then
-      chmod 700 /home/flux/.cache/runtime 2>/dev/null || true
-      chown flux:flux /home/flux/.cache/runtime 2>/dev/null || true
+    if [ -d /home/altaris/.cache/runtime ]; then
+      chmod 700 /home/altaris/.cache/runtime 2>/dev/null || true
+      chown altaris:altaris /home/altaris/.cache/runtime 2>/dev/null || true
     fi
     # dbus machine-id (session bus soft-depends on it on some builds)
     if command -v dbus-uuidgen >/dev/null 2>&1; then
@@ -410,12 +410,12 @@ KDE_EOF
       export PULSE_SERVER=tcp:127.0.0.1
       export XDG_CONFIG_DIRS=/etc/xdg
       export XDG_DATA_DIRS=/usr/local/share:/usr/share
-      export HOME=/home/flux
-      export XDG_CONFIG_HOME=/home/flux/.config
-      export XDG_CACHE_HOME=/home/flux/.cache
-      export XDG_DATA_HOME=/home/flux/.local/share
-      export XDG_RUNTIME_DIR=/home/flux/.cache/runtime
-      mkdir -p /home/flux/.config /home/flux/.cache /home/flux/.local/share
+      export HOME=/home/altaris
+      export XDG_CONFIG_HOME=/home/altaris/.config
+      export XDG_CACHE_HOME=/home/altaris/.cache
+      export XDG_DATA_HOME=/home/altaris/.local/share
+      export XDG_RUNTIME_DIR=/home/altaris/.cache/runtime
+      mkdir -p /home/altaris/.config /home/altaris/.cache /home/altaris/.local/share
       mkdir -p \"\$XDG_RUNTIME_DIR\" && chmod 700 \"\$XDG_RUNTIME_DIR\"
       export VTEST_SOCKET_NAME=/tmp/.virgl_test
       export GLYCIN_DISABLE_SANDBOX=i-know-the-risks

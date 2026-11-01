@@ -12,9 +12,9 @@ import java.io.File
  * Writes the launch-sticker payload (active art designs + `banner.sh` + rc
  * wiring) into every guest home:
  *
- * * proot rootfs: `filesDir/usr/var/lib/proot-distro/containers/<name>/rootfs/home/flux`
+ * * proot rootfs: `filesDir/usr/var/lib/proot-distro/containers/<name>/rootfs/home/altaris`
  * * host home: `filesDir/home`
- * * chroots: `/data/local/altaris/chroots/<name>/home/flux` — via the staged
+ * * chroots: `/data/local/altaris/chroots/<name>/home/altaris` — via the staged
  *   root helper ([RootShell.captureInChroot]), skipped when root is missing.
  *
  * All operations are best-effort: a missing asset set, an unwritable file or
@@ -132,7 +132,7 @@ object BannerArtWriter {
         // 1) setup: dirs, rc wiring/dedupe, caller extras. No deletions yet.
         val setup = StringBuilder()
         setup.append("set +e\n")
-        setup.append("H=/home/flux\n")
+        setup.append("H=/home/altaris\n")
         setup.append("[ -d \"${d}H\" ] || { echo $marker; exit 0; }\n")
         setup.append("_put() { printf '%s' \"${d}2\" | base64 -d > \"${d}1\" 2>/dev/null || true; }\n")
         setup.append("mkdir -p \"${d}H/.config/altaris/banner\" 2>/dev/null || true\n")
@@ -166,23 +166,23 @@ object BannerArtWriter {
             setup.toString(), user = "root", chrootPath = chrootPath,
             timeoutMs = 60_000L, context = ctx
         )
-        // Missing /home/flux prints the marker from the bail line.
+        // Missing /home/altaris prints the marker from the bail line.
         if (setupRes.stdout.contains(marker)) return true
         if (setupRes.exitCode != 0) return false
 
         // 2) content: banner.sh + .keep manifest + every active art (chunked).
         val sh = BannerAssets.bannerSh(ctx)
         val files = ArrayList<Pair<String, String>>(arts.size + 2)
-        if (sh.isNotEmpty()) files.add("/home/flux/.config/altaris/banner.sh" to sh)
+        if (sh.isNotEmpty()) files.add("/home/altaris/.config/altaris/banner.sh" to sh)
         if (arts.isNotEmpty()) {
             files.add(
-                "/home/flux/.config/altaris/banner/.keep" to
+                "/home/altaris/.config/altaris/banner/.keep" to
                     arts.joinToString("\n", postfix = "\n") { it.name }
             )
         }
         for (art in arts) {
             files.add(
-                "/home/flux/.config/altaris/banner/${art.name}" to withTrailingNewline(art.text)
+                "/home/altaris/.config/altaris/banner/${art.name}" to withTrailingNewline(art.text)
             )
         }
         if (!ChrootStager.writeFiles(ctx, chrootPath, files)) return false
@@ -190,7 +190,7 @@ object BannerArtWriter {
         // 3) finalize: prune stale arts via .keep, write rev, fix ownership.
         val fin = StringBuilder()
         fin.append("set +e\n")
-        fin.append("H=/home/flux\n")
+        fin.append("H=/home/altaris\n")
         fin.append("[ -d \"${d}H\" ] || { echo $marker; exit 0; }\n")
         fin.append("if [ -s \"${d}H/.config/altaris/banner/.keep\" ]; then\n")
         fin.append("  for _f in \"${d}H/.config/altaris/banner/\"*.txt; do\n")
@@ -221,7 +221,7 @@ object BannerArtWriter {
         try {
             val containers = File(app.filesDir, "usr/var/lib/proot-distro/containers")
             containers.listFiles()?.forEach { container ->
-                val home = File(container, "rootfs/home/flux")
+                val home = File(container, "rootfs/home/altaris")
                 if (home.isDirectory) {
                     try {
                         writeIntoHome(app, home)
@@ -246,14 +246,14 @@ object BannerArtWriter {
         try {
             if (!RootShell.isRootAvailable()) return
             val out = RootShell.capture(
-                "ls -d /data/local/altaris/chroots/*/home/flux 2>/dev/null",
+                "ls -d /data/local/altaris/chroots/*/home/altaris 2>/dev/null",
                 timeoutMs = 10_000L
             )
             out.lineSequence()
                 .map { it.trim() }
-                .filter { it.endsWith("/home/flux") && it.length > "/home/flux".length }
+                .filter { it.endsWith("/home/altaris") && it.length > "/home/altaris".length }
                 .forEach { path ->
-                    val chroot = path.removeSuffix("/home/flux")
+                    val chroot = path.removeSuffix("/home/altaris")
                     try {
                         if (pushChroot(app, chroot)) {
                             Log.i(TAG, "Banner pushed to chroot $chroot")

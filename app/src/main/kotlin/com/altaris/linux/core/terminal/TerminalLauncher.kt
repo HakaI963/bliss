@@ -76,9 +76,7 @@ object TerminalLauncher {
         if (!passwd.isFile) return true
         val text = runCatching { passwd.readText() }.getOrDefault("")
         if (text.isBlank()) return true
-        return !text.lineSequence().any {
-            it.startsWith("flux:") || it.startsWith("altaris:")
-        }
+        return !text.lineSequence().any { it.startsWith("altaris:") }
     }
 
     /** Host-safe guest rootfs shell probe (absolute busybox symlinks OK). */

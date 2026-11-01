@@ -41,7 +41,7 @@ class GuestLoginShellTest {
         assertFalse(GuestLoginShell.isLoginSentinel("echo hi"))
         assertFalse(
             GuestLoginShell.isLoginSentinel(
-                "mkdir -p /home/flux/p && cd /home/flux/p && exec zsh"
+                "mkdir -p /home/altaris/p && cd /home/altaris/p && exec zsh"
             )
         )
     }
@@ -50,7 +50,7 @@ class GuestLoginShellTest {
     fun interactiveLogin_includesWorkdirForm() {
         assertTrue(
             GuestLoginShell.isInteractiveLogin(
-                "mkdir -p /home/flux/p && cd /home/flux/p && exec zsh"
+                "mkdir -p /home/altaris/p && cd /home/altaris/p && exec zsh"
             )
         )
         assertTrue(GuestLoginShell.isInteractiveLogin("exec zsh"))
@@ -67,15 +67,15 @@ class GuestLoginShellTest {
     @Test
     fun parseInteractiveWorkdir_extractsDir() {
         assertEquals(
-            "/home/flux/p",
+            "/home/altaris/p",
             GuestLoginShell.parseInteractiveWorkdir(
-                "mkdir -p /home/flux/p && cd /home/flux/p && exec zsh"
+                "mkdir -p /home/altaris/p && cd /home/altaris/p && exec zsh"
             )
         )
         assertEquals(
-            "/home/flux/p",
+            "/home/altaris/p",
             GuestLoginShell.parseInteractiveWorkdir(
-                "mkdir -p /home/flux/p && cd /home/flux/p && exec bash"
+                "mkdir -p /home/altaris/p && cd /home/altaris/p && exec bash"
             )
         )
     }
@@ -84,7 +84,7 @@ class GuestLoginShellTest {
     fun parseInteractiveWorkdir_rejectsBadInput() {
         assertNull(
             GuestLoginShell.parseInteractiveWorkdir(
-                "mkdir -p /home/flux/o'brien && cd /home/flux/o'brien && exec zsh"
+                "mkdir -p /home/altaris/o'brien && cd /home/altaris/o'brien && exec zsh"
             )
         )
         assertNull(GuestLoginShell.parseInteractiveWorkdir("echo hi"))

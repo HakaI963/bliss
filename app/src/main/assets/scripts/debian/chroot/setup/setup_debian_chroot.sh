@@ -7,8 +7,6 @@
 # Global Variables
 DEBIANPATH="/data/local/altaris/chroots/debian"
 USERNAME="altaris"
-[ -d /data/local/bliss ] && [ ! -e /data/local/altaris ] && mv /data/local/bliss /data/local/altaris 2>/dev/null || true
-[ -d /data/local/folio ] && [ ! -e /data/local/altaris ] && mv /data/local/folio /data/local/altaris 2>/dev/null || true
 
 # Desktop contract: ALTARIS_DESKTOPS (space/comma separated) = xfce | kde | none;
 # legacy ALTARIS_DESKTOP / ALTARIS_DESKTOP_ENV remain valid single values. Unset/empty

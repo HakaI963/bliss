@@ -109,18 +109,18 @@ _altaris_ensure_user() {
         fi
         echo "altaris:altaris" | chpasswd 2>/dev/null || true
     fi
-    # Legacy `flux` name: same uid, and /home/flux points at /home/altaris so
+    # Legacy `flux` name: same uid, and /home/altaris points at /home/altaris so
     # the setup helpers and older desktop shortcuts keep resolving.
     if id altaris >/dev/null 2>&1 && ! id flux >/dev/null 2>&1; then
         _altaris_uid=$(id -u altaris 2>/dev/null)
         _altaris_gid=$(id -g altaris 2>/dev/null)
         if [ -n "$_altaris_uid" ] && [ -n "$_altaris_gid" ]; then
-            echo "flux:x:${_altaris_uid}:${_altaris_gid}:Legacy:/home/flux:${_altaris_shell}" >> /etc/passwd
+            echo "flux:x:${_altaris_uid}:${_altaris_gid}:Legacy:/home/altaris:${_altaris_shell}" >> /etc/passwd
             grep -q "^flux:" /etc/group 2>/dev/null || echo "flux:x:${_altaris_gid}:" >> /etc/group
         fi
     fi
-    if [ -d /home/altaris ] && [ ! -e /home/flux ]; then
-        ln -s /home/altaris /home/flux 2>/dev/null || true
+    if [ -d /home/altaris ] && [ ! -e /home/altaris ]; then
+        ln -s /home/altaris /home/altaris 2>/dev/null || true
     fi
     for g in wheel audio video netdev input users; do
         if command -v usermod >/dev/null 2>&1; then
@@ -206,33 +206,108 @@ EOF
     fi
 }
 
-_altaris_ensure_home() {
-    if [ ! -d /home/flux ]; then
-        mkdir -p /home/flux
+# The guest account's name and numeric ids, resolved from the passwd database.
+#
+# This used to be the literal `flux`, everywhere. The account was renamed to
+# `altaris` releases ago, so the home tree the setup wrote was /home/altaris while
+# the user's real home was /home/altaris. The consequence on device was exactly
+# what an ownership bug looks like:
+#
+#   opencode → EACCES: permission denied, mkdir '/home/altaris/.local/share/opencode'
+#   mkdir -p ~/.local/share/opencode → Permission denied
+#   sudo chown -R "$USER" ~/.local → still fails, because ~/.cache is next
+#
+# Everything that writes into the home now asks who the user is instead of
+# assuming, and the ownership pass covers the whole home (not just .config /
+# .cache / .local) so a tool that creates a new dot-directory as root is still
+# usable afterwards.
+_altaris_guest_user() {
+    if [ -n "${ALTARIS_GUEST_USER:-}" ]; then
+        printf '%s' "$ALTARIS_GUEST_USER"
+        return 0
     fi
-    _home_uid=$(_altaris_stat_u /home)
-    _home_gid=$(_altaris_stat_g /home)
-    if [ -n "$_home_uid" ]; then
-        chown -R "$_home_uid:$_home_gid" /home/flux 2>/dev/null || true
-        # Proot: /home is the Android app uid. chown flux:flux (uid 1000) makes
-        # xfconfd unable to write ~/.config → failsafe / "cannot create /home/flux".
-        # Only apply guest flux:flux ownership in real-root chroot (home owner 0).
-        if [ "$_home_uid" = "0" ]; then
-            chown -R flux:flux /home/flux 2>/dev/null || true
-        fi
+    if id altaris >/dev/null 2>&1; then
+        printf '%s' altaris
+    elif id flux >/dev/null 2>&1; then
+        printf '%s' flux
     else
-        chown -R flux:flux /home/flux 2>/dev/null || true
+        printf '%s' root
     fi
-    chmod 755 /home/flux 2>/dev/null || true
-    mkdir -p /home/flux/.config /home/flux/.cache /home/flux/.local/share /home/flux/.vnc
-    chmod -R u+rwX /home/flux/.config /home/flux/.cache /home/flux/.local 2>/dev/null || true
+}
+
+_altaris_guest_home() {
+    _u=$(_altaris_guest_user)
+    # getent is not in every minimal rootfs; read passwd directly as a fallback.
+    _h=$(getent passwd "$_u" 2>/dev/null | cut -d: -f6)
+    if [ -z "${_h:-}" ] && [ -r /etc/passwd ]; then
+        _h=$(awk -F: -v u="$_u" '$1==u {print $6; exit}' /etc/passwd)
+    fi
+    printf '%s' "${_h:-/home/$_u}"
+}
+
+_altaris_ensure_home() {
+    _u=$(_altaris_guest_user)
+    _h=$(_altaris_guest_home)
+    [ -n "${_h:-}" ] || _h="/home/$_u"
+
+    mkdir -p "$_h" 2>/dev/null || true
+    # Keep /home/altaris as a compatibility symlink: guests created before the
+    # rename have files there, and some scripts still reference it.
+    if [ "$_h" != "/home/altaris" ] && [ ! -e /home/altaris ]; then
+        ln -sfn "$_h" /home/altaris 2>/dev/null || true
+    fi
+
+    _uid=$(_altaris_stat_u "$_h")
+    _gid=$(_altaris_stat_g "$_h")
+    # Resolve the account's real uid/gid; stat on the directory is only a hint.
+    if [ -r /etc/passwd ]; then
+        _pw_uid=$(awk -F: -v u="$_u" '$1==u {print $3; exit}' /etc/passwd)
+        _pw_gid=$(awk -F: -v u="$_u" '$1==u {print $4; exit}' /etc/passwd)
+        [ -n "${_pw_uid:-}" ] && _uid="$_pw_uid"
+        [ -n "${_pw_gid:-}" ] && _gid="$_pw_gid"
+    fi
+
+    # Proot has no real uid mapping: /home belongs to the Android app uid and
+    # the account is presented as uid 0, so ownership must follow /home.
+    # A real chroot (root-owned /home) must be owned by the account itself, or
+    # the user cannot write their own dotfiles.
+    if [ "$_uid" = "0" ]; then
+        _home_uid=$(_altaris_stat_u /home)
+        _home_gid=$(_altaris_stat_g /home)
+        if [ -n "${_home_uid:-}" ] && [ "$_home_uid" != "0" ]; then
+            _uid="$_home_uid"
+            _gid="$_home_gid"
+        fi
+    fi
+
+    chmod 755 "$_h" 2>/dev/null || true
+    mkdir -p "$_h/.config" "$_h/.cache" "$_h/.local/share" "$_h/.vnc" \
+        "$_h/.local/state" "$_h/.local/bin" 2>/dev/null || true
+
+    if [ -n "${_uid:-}" ] && [ "$_u" != "root" ]; then
+        # The whole home, not a fixed list of three directories: a tool that
+        # creates ~/.npm, ~/.bun, ~/.config/opencode or ~/.local/share/opencode
+        # as root otherwise leaves the user unable to write there.
+        chown -R "$_uid:${_gid:-$_uid}" "$_h" 2>/dev/null || true
+    fi
+    chmod -R u+rwX "$_h" 2>/dev/null || true
+    # Directories a package manager or a CLI may have created as root, in a
+    # home that is not "$_h" (a legacy /home/altaris that is a real directory).
+    for _d in /home/altaris; do
+        [ -d "$_d" ] || continue
+        [ "$_d" = "$_h" ] && continue
+        [ -L "$_d" ] && continue
+        chown -R "${_uid:-$_u}:${_gid:-$_uid}" "$_d" 2>/dev/null || true
+        chmod -R u+rwX "$_d" 2>/dev/null || true
+    done
+
     # Desktop-aware session command (ALTARIS_DESKTOPS; legacy default xfce).
     _xs_de="startxfce4"
     case " ${DESKTOPS:-xfce} " in
         *" xfce "*) _xs_de="startxfce4" ;;
         *" kde "*) _xs_de="startplasma-x11" ;;
     esac
-    cat > /home/flux/.vnc/xstartup <<EOF
+    cat > "$_h/.vnc/xstartup" <<EOF
 #!/bin/sh
 export PULSE_SERVER=tcp:127.0.0.1
 [ -f "\$HOME/.Xresources" ] && xrdb "\$HOME/.Xresources"
@@ -241,14 +316,17 @@ export PULSE_SERVER=tcp:127.0.0.1
 exec $_xs_de
 EOF
     unset _xs_de
-    chmod +x /home/flux/.vnc/xstartup
+    chmod +x "$_h/.vnc/xstartup" 2>/dev/null || true
+    if [ -n "${_uid:-}" ] && [ "$_u" != "root" ]; then
+        chown -R "$_uid:${_gid:-$_uid}" "$_h/.vnc" 2>/dev/null || true
+    fi
     if command -v _altaris_write_pulse_client >/dev/null 2>&1; then
         _altaris_write_pulse_client
     fi
+    unset _u _h _uid _gid _home_uid _home_gid _pw_uid _pw_gid _d
 }
 
 _altaris_write_gpu_mode() {
-[ -d /etc/bliss ] && [ ! -e /etc/altaris ] && mv /etc/bliss /etc/altaris 2>/dev/null || true
     _mode="${1:-virgl}"
     mkdir -p /etc/altaris
     printf '%s\n' "$_mode" > /etc/altaris/gpu_mode
@@ -519,8 +597,9 @@ EOF
             printf 'autospawn = no\n' >> /etc/pulse/client.conf
         fi
     fi
-    if [ -f /home/flux/.vnc/xstartup ]; then
-        _altaris_sed_i 's|^export PULSE_SERVER=.*|export PULSE_SERVER=tcp:127.0.0.1|' /home/flux/.vnc/xstartup
+    _vnc_home=$(_altaris_guest_home)
+    if [ -f "$_vnc_home/.vnc/xstartup" ]; then
+        _altaris_sed_i 's|^export PULSE_SERVER=.*|export PULSE_SERVER=tcp:127.0.0.1|' "$_vnc_home/.vnc/xstartup"
     fi
 }
 
@@ -974,7 +1053,7 @@ _altaris_setup_pulse() {
 # callers are install / script re-run paths that just rewrote the defaults.
 # ─────────────────────────────────────────────────────────────────────────────
 _altaris_apply_altaris_appearance() {
-    _home="${1:-/home/flux}"
+    _home="${1:-$(_altaris_guest_home)}"
     _script="$_home/.config/altaris/appearance-apply.sh"
     [ -r "$_script" ] || { unset _home _script; return 0; }
     ALTARIS_APPLY_HOME="$_home" ALTARIS_APPLY_FORCE=1 \
@@ -1002,7 +1081,7 @@ _altaris_apply_altaris_appearance() {
 # ─────────────────────────────────────────────────────────────────────────────
 _altaris_write_altaris_xfce_panel() {
     _pcfg="$1"
-    _phome="${2:-/home/flux}"
+    _phome="${2:-$(_altaris_guest_home)}"
     [ -n "$_pcfg" ] || return 0
     mkdir -p "$_pcfg" 2>/dev/null || return 0
 
@@ -1316,7 +1395,7 @@ EOF
 # Full theming still happens in setup_customization_*.sh.
 # ─────────────────────────────────────────────────────────────────────────────
 _altaris_xfce_compact_defaults() {
-    _h="/home/flux"
+    _h=$(_altaris_guest_home)
     [ -d "$_h" ] || return 0
     _cfg="$_h/.config/xfce4/xfconf/xfce-perchannel-xml"
     mkdir -p "$_cfg" 2>/dev/null || return 0
@@ -1360,8 +1439,6 @@ _altaris_xfce_compact_defaults() {
     _wpdir="$_h/Pictures/Wallpapers"
     mkdir -p "$_wpdir" 2>/dev/null || true
     # Pre-rename installs: migrate the old wallpaper file names once (same images).
-    [ -f "$_wpdir/folio-android-dark.png" ] && [ ! -f "$_wpdir/altaris-android-dark.png" ] \
-        && mv -f "$_wpdir/folio-android-dark.png" "$_wpdir/altaris-android-dark.png" 2>/dev/null || true
     [ -f "$_wpdir/fluxlinux-dark.png" ] && [ ! -f "$_wpdir/altaris-dark.png" ] \
         && mv -f "$_wpdir/fluxlinux-dark.png" "$_wpdir/altaris-dark.png" 2>/dev/null || true
     [ -f "$_wpdir/fluxlinux-light.png" ] && [ ! -f "$_wpdir/altaris-light.png" ] \
@@ -1500,8 +1577,8 @@ EOF
       <property name="&lt;Primary&gt;&lt;Alt&gt;t" type="string" value="xfce4-terminal">
         <property name="startup-notify" type="bool" value="true"/>
       </property>
-      <property name="Print" type="string" value="xfce4-screenshooter -f -s /home/flux/Pictures"/>
-      <property name="&lt;Shift&gt;Print" type="string" value="xfce4-screenshooter -r -s /home/flux/Pictures"/>
+      <property name="Print" type="string" value="xfce4-screenshooter -f -s /home/altaris/Pictures"/>
+      <property name="&lt;Shift&gt;Print" type="string" value="xfce4-screenshooter -r -s /home/altaris/Pictures"/>
       <property name="&lt;Alt&gt;F1" type="string" value="xfce4-popup-$_menu_plugin"/>
       <property name="&lt;Primary&gt;&lt;Alt&gt;Delete" type="string" value="xfce4-session-logout"/>
       <property name="override" type="bool" value="true"/>
@@ -1643,13 +1720,14 @@ _altaris_shell_ensure_plugins() {
 
     _asug=""
     _ssyn=""
+    _zs_home=$(_altaris_guest_home)
     for _p in \
         /usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh \
         /usr/share/zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh \
         /usr/share/zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.plugin.zsh \
         /usr/local/share/zsh-autosuggestions/zsh-autosuggestions.zsh \
         /usr/local/share/altaris/zsh/zsh-autosuggestions/zsh-autosuggestions.zsh \
-        /home/flux/.oh-my-zsh/custom/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh \
+        "$_zs_home/.oh-my-zsh/custom/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh" \
         /root/.oh-my-zsh/custom/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh; do
         [ -r "$_p" ] && { _asug="$_p"; break; }
     done
@@ -1659,7 +1737,7 @@ _altaris_shell_ensure_plugins() {
         /usr/share/zsh-syntax-highlighting/zsh-syntax-highlighting.plugin.zsh \
         /usr/local/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh \
         /usr/local/share/altaris/zsh/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh \
-        /home/flux/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh \
+        "$_zs_home/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh" \
         /root/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh; do
         [ -r "$_p" ] && { _ssyn="$_p"; break; }
     done
@@ -1758,7 +1836,7 @@ _altaris_shell_bootstrap() {
         done
         unset _zp
     fi
-    for _h in /home/flux /home/altaris /root; do
+    for _h in /home/altaris /home/altaris /root; do
         _altaris_shell_write_profile "$_h"
     done
     unset _h _u

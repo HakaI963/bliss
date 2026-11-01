@@ -374,7 +374,7 @@ object TermuxIntentFactory {
         }
         
         // Default to 'altaris' user if setup, fallback to root if not (proot-distro handles login)
-        val command = "proot-distro login $distroId --user flux"
+        val command = "proot-distro login $distroId --user altaris"
         return buildRunCommandIntent(command, runInBackground = false)
     }
 

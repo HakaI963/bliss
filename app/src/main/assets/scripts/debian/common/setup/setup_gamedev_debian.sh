@@ -38,14 +38,14 @@ if [ "$1" = "uninstall" ]; then
     rm -f /usr/share/icons/hicolor/256x256/apps/godot.png
 
     # Remove Python venv with game libs
-    rm -rf /home/flux/gamedev_env
+    rm -rf /home/altaris/gamedev_env
 
     # Revert .bashrc / .zshrc Godot PATH entries
-    if [ -f /home/flux/.bashrc ]; then
-        sed -i '/# Godot Engine/d; /\/opt\/godot/d' /home/flux/.bashrc 2>/dev/null || true
+    if [ -f /home/altaris/.bashrc ]; then
+        sed -i '/# Godot Engine/d; /\/opt\/godot/d' /home/altaris/.bashrc 2>/dev/null || true
     fi
-    if [ -f /home/flux/.zshrc ]; then
-        sed -i '/# Godot Engine/d; /\/opt\/godot/d' /home/flux/.zshrc 2>/dev/null || true
+    if [ -f /home/altaris/.zshrc ]; then
+        sed -i '/# Godot Engine/d; /\/opt\/godot/d' /home/altaris/.zshrc 2>/dev/null || true
     fi
 
     # If Raylib was built from source (no apt package), remove the installed files

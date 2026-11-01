@@ -14,8 +14,6 @@ bb_ok() {
 }
 
 resolve_bb() {
-[ -d /data/local/bliss ] && [ ! -e /data/local/altaris ] && mv /data/local/bliss /data/local/altaris 2>/dev/null || true
-[ -d /data/local/folio ] && [ ! -e /data/local/altaris ] && mv /data/local/folio /data/local/altaris 2>/dev/null || true
   BB=""
   if [ -n "${ALTARIS_BB:-}" ] && bb_ok "$ALTARIS_BB"; then
     BB="$ALTARIS_BB"

@@ -259,7 +259,7 @@ _altaris_fix_pm_writable
 # Terminal-base polish shared with the other families. The helper ships in the
 # customization scripts, not in this payload — guarded no-op when absent.
 if command -v _altaris_write_altaris_banner >/dev/null 2>&1; then
-    _altaris_write_altaris_banner /home/flux 2>/dev/null || true
+    _altaris_write_altaris_banner /home/altaris 2>/dev/null || true
     _altaris_write_altaris_banner /root 2>/dev/null || true
 fi
 

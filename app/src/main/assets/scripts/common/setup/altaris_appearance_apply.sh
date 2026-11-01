@@ -23,7 +23,7 @@
 # Never fatal: every step is best-effort (`|| true`), no network, no packages.
 #
 # Env overrides (optional):
-#   ALTARIS_APPLY_HOME       guest home to configure (default: $HOME then /home/flux)
+#   ALTARIS_APPLY_HOME       guest home to configure (default: $HOME then /home/altaris)
 #   ALTARIS_APPLY_ROOT       prefix for guest-absolute paths for host-side runs
 #                          outside the chroot (file existence checks only; the
 #                          shipped hooks run inside the chroot, so this is a
@@ -34,19 +34,14 @@
 
 ALTARIS_APPEARANCE_SCRIPT_VERSION=2
 
-_fa_home="${ALTARIS_APPLY_HOME:-${HOME:-/home/flux}}"
+_fa_home="${ALTARIS_APPLY_HOME:-${HOME:-/home/altaris}}"
 [ -d "$_fa_home" ] || exit 0
 
-# Pre-rename installs: move ~/.config/folio → ~/.config/altaris (banner +
 # appearance config) before anything reads it. Guarded; never fatal.
-if [ -d "$_fa_home/.config/folio" ] && [ ! -e "$_fa_home/.config/altaris" ]; then
-    mv "$_fa_home/.config/folio" "$_fa_home/.config/altaris" 2>/dev/null || true
-fi
 
 # Pre-rename installs: drop old-name leftovers (all are regenerated as altaris-*).
 rm -f "$_fa_home/.oh-my-zsh/custom/themes/altaris.zsh-theme" 2>/dev/null || true
 rm -f "$_fa_home/.local/share/applications/altaris-"*.desktop 2>/dev/null || true
-[ -d "$_fa_home/.config/altaris" ] && rm -rf "$_fa_home/.config/folio" 2>/dev/null || true
 
 _fa_cfg="$_fa_home/.config/altaris"
 _fa_env="$_fa_cfg/appearance.env"
@@ -463,7 +458,7 @@ _fa_apply_panel() {
 # ── video wallpaper (opt-in, experimental) ───────────────────────────────────
 _fa_apply_video() {
     _df="$_fa_home/.config/autostart/altaris-video-wallpaper.desktop"
-    _df_old="$_fa_home/.config/autostart/folio-video-wallpaper.desktop"
+    _df_old="$_fa_home/.config/autostart/altaris-video-wallpaper.desktop"
     if [ -z "${ALTARIS_VIDEO_WALLPAPER:-}" ] || [ ! -f "$(_fa_guest_path "$ALTARIS_VIDEO_WALLPAPER")" ]; then
         rm -f "$_df" "$_df_old" 2>/dev/null || true
         return 0
@@ -494,7 +489,7 @@ _fa_apply_video() {
 _fa_ensure_autostart() {
     _ad="$_fa_home/.config/autostart"
     mkdir -p "$_ad" 2>/dev/null || return 0
-    rm -f "$_ad/folio-appearance.desktop" 2>/dev/null || true
+    rm -f "$_ad/altaris-appearance.desktop" 2>/dev/null || true
     cat > "$_ad/altaris-appearance.desktop" <<EOF
 [Desktop Entry]
 Type=Application

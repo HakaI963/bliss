@@ -36,7 +36,7 @@ if [ "$1" = "uninstall" ]; then
     apt update -y 2>/dev/null || true
 
     # Remove Rust (user-level)
-    rm -rf /home/flux/.cargo /home/flux/.rustup
+    rm -rf /home/altaris/.cargo /home/altaris/.rustup
     rm -f /usr/local/bin/cargo /usr/local/bin/rustup /usr/local/bin/rustc
 
     # Remove Go
@@ -53,19 +53,19 @@ if [ "$1" = "uninstall" ]; then
     rm -rf /usr/share/code
     rm -f /usr/bin/code
     rm -f /usr/share/applications/code.desktop
-    rm -rf /home/flux/.config/Code
+    rm -rf /home/altaris/.config/Code
 
     # Remove LunarVim
-    rm -rf /home/flux/.local/share/lunarvim
-    rm -f /home/flux/.local/bin/lvim
+    rm -rf /home/altaris/.local/share/lunarvim
+    rm -f /home/altaris/.local/bin/lvim
     rm -f /usr/share/applications/lunarvim.desktop
-    rm -rf /home/flux/.lvim* 2>/dev/null || true
+    rm -rf /home/altaris/.lvim* 2>/dev/null || true
 
     # Remove NPM global prefix
-    rm -rf /home/flux/.npm-global
+    rm -rf /home/altaris/.npm-global
 
     # Revert .bashrc / .zshrc PATH and config entries
-    for shell_rc in /home/flux/.bashrc /home/flux/.zshrc /etc/profile; do
+    for shell_rc in /home/altaris/.bashrc /home/altaris/.zshrc /etc/profile; do
         if [ -f "$shell_rc" ]; then
             sed -i '/# Rust Cargo/d; /\$HOME\/.cargo\/bin/d' "$shell_rc" 2>/dev/null || true
             sed -i '/# Go Language/d; /Go Root Bin/d; /Go User Bin/d; /\/opt\/go\/bin/d; /GOPATH=\$HOME\/go/d' "$shell_rc" 2>/dev/null || true

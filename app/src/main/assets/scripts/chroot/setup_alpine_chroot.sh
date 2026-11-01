@@ -5,8 +5,6 @@
 
 ALPINEPATH="${ALTARIS_CHROOT:-/data/local/altaris/chroots/alpine}"
 USERNAME="altaris"
-[ -d /data/local/bliss ] && [ ! -e /data/local/altaris ] && mv /data/local/bliss /data/local/altaris 2>/dev/null || true
-[ -d /data/local/folio ] && [ ! -e /data/local/altaris ] && mv /data/local/folio /data/local/altaris 2>/dev/null || true
 
 PKG="${TERMUX_APP__PACKAGE_NAME:-com.ivarna.fluxlinux}"
 APP_HOME="${TERMUX__HOME:-/data/data/${PKG}/files/home}"
@@ -265,7 +263,7 @@ HELPER=/data/local/altaris/helpers/altaris_chroot.sh
 [ -f "$HELPER" ] || { echo "altaris_chroot.sh missing" >&2; exit 127; }
 export ALTARIS_CHROOT="${ALTARIS_CHROOT:-/data/local/altaris/chroots/alpine}"
 echo "Entering Alpine Chroot (CLI)..."
-exec sh "$HELPER" login --user flux --shell zsh
+exec sh "$HELPER" login --user altaris --shell zsh
 EOF
     chmod 755 "$CLI_SCRIPT"
 
@@ -335,7 +333,7 @@ fi
 
     # Only treat as fully installed when marker + bash + altaris user exist.
     # Minirootfs always has bin/sh + sbin/apk — those alone must NOT skip configure.
-    if { [ -f "$ALPINEPATH/.altaris_configured" ] || [ -f "$ALPINEPATH/.flux_configured" ]; } && \
+    if { [ -f "$ALPINEPATH/.altaris_configured" ]; } && \
        { [ -e "$ALPINEPATH/bin/bash" ] || [ -e "$ALPINEPATH/usr/bin/bash" ]; } && \
        grep -q '^altaris:' "$ALPINEPATH/etc/passwd" 2>/dev/null; then
         success "Alpine Chroot already installed."

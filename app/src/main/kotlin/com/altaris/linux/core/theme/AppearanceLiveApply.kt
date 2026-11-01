@@ -126,9 +126,9 @@ object AppearanceLiveApply {
      *  3. reload xfdesktop and restart xfce4-panel (best-effort).
      */
     internal val GUEST_LIVE_CMD: String = """
-        _fa_sc=/home/flux/.config/altaris/appearance-apply.sh
+        _fa_sc=/home/altaris/.config/altaris/appearance-apply.sh
         if [ ! -r "${'$'}_fa_sc" ]; then echo ALTARIS_APPEARANCE_NO_SCRIPT; exit 0; fi
-        _fa_out=${'$'}(ALTARIS_APPLY_HOME=/home/flux ALTARIS_APPLY_FORCE=1 ALTARIS_APPLY_PRINT_PICK=1 /bin/sh "${'$'}_fa_sc" 2>/dev/null || true)
+        _fa_out=${'$'}(ALTARIS_APPLY_HOME=/home/altaris ALTARIS_APPLY_FORCE=1 ALTARIS_APPLY_PRINT_PICK=1 /bin/sh "${'$'}_fa_sc" 2>/dev/null || true)
         _fa_wp=${'$'}(printf '%s\n' "${'$'}_fa_out" | sed -n 's/^ALTARIS_APPEARANCE_PICK_IMAGE=//p' | head -n 1)
         _fa_st=${'$'}(printf '%s\n' "${'$'}_fa_out" | sed -n 's/^ALTARIS_APPEARANCE_PICK_STYLE=//p' | head -n 1)
         export DISPLAY=:0

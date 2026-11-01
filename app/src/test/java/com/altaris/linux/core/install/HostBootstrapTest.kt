@@ -39,11 +39,6 @@ class HostBootstrapTest {
             HostBootstrap.ALTARIS,
             HostBootstrap.forApplicationId(HostBootstrap.ALTARIS_PACKAGE)
         )
-        // Legacy pre-rename applicationId keeps resolving to the same pin.
-        assertEquals(
-            HostBootstrap.ALTARIS,
-            HostBootstrap.forApplicationId(HostBootstrap.LEGACY_FOLIO_PACKAGE)
-        )
         assertEquals(HostBootstrap.IVARNA, HostBootstrap.forApplicationId("unknown"))
     }
 

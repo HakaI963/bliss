@@ -581,7 +581,9 @@ private fun ReaCard(context: Context, accent: Color) {
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
             com.altaris.linux.core.root.RootShell.probeRootAvailableSuspending(forceClearCache = false)
-            ReaDistro.refresh(context)
+            // Deep: this is a one-off when the card opens, so paying for the
+            // size and the real chroot check here is what the user expects.
+            ReaDistro.refresh(context, deep = true)
         }
     }
 
@@ -648,108 +650,115 @@ private fun ReaCard(context: Context, accent: Color) {
         )
 
         Spacer(Modifier.height(Prism.Stack))
-        // Which method is installed, which one the server uses, and what each
-        // chip would do. Without this the screen only showed two unlabelled
-        // chips and there was no way to tell what was being installed.
-        PrismNote("Install method", fontSize = 10.sp, color = altarisMutedText())
+        // One decision, stated plainly: how should REA run?
+        //
+        // The previous version put two rows of chips here that both installed
+        // and switched, so it was impossible to tell whether a tap would start
+        // a multi-GB download or just change which container the server used.
+        // Now the rows only *select*; one button installs or switches, and it
+        // says which of the two it is about to do.
+        PrismNote("Run REA with", fontSize = 10.sp, color = altarisMutedText())
         Spacer(Modifier.height(Prism.Tight))
         ReaDistro.Method.entries.forEach { entry ->
             val installedHere = entry in state.methods
             val isActive = state.method == entry
             val blocked = entry == ReaDistro.Method.CHROOT && !state.chrootPossible
+            val selected = method == entry
             PrismRow(
                 title = when (entry) {
                     ReaDistro.Method.PROOT -> "proot"
                     ReaDistro.Method.CHROOT -> "chroot"
-                } + when {
-                    isActive && installedHere -> " · in use"
-                    installedHere -> " · installed"
-                    blocked -> " · root required"
-                    else -> " · not installed"
                 },
-                subtitle = when (entry) {
-                    ReaDistro.Method.PROOT -> "Works everywhere, no root needed"
-                    ReaDistro.Method.CHROOT -> "Faster, needs superuser"
+                subtitle = when {
+                    blocked -> "Needs root, which is not granted"
+                    isActive && installedHere -> "Installed and serving MCP"
+                    installedHere -> "Installed · not in use"
+                    else -> when (entry) {
+                        ReaDistro.Method.PROOT -> "No root needed · works everywhere"
+                        ReaDistro.Method.CHROOT -> "Faster · needs superuser"
+                    }
                 },
                 accent = accent,
                 leading = { PrismOrb(active = isActive && installedHere, accent = accent) },
                 trailing = {
-                    when {
-                        installedHere && !isActive -> PrismChip(
-                            "Use", accent,
-                            onClick = {
-                                ReaDistro.select(context, entry)
-                                method = entry
-                            },
-                        )
-                        installedHere -> PrismChip("Active", accent, selected = true)
-                        else -> PrismChip(
-                            if (blocked) "No root" else "Install", accent,
-                            selected = method == entry,
-                            onClick = {
-                                if (!blocked) {
-                                    method = entry
-                                    ReaDistro.install(context, entry)
-                                }
-                            },
-                        )
-                    }
+                    PrismChip(
+                        when {
+                            isActive && installedHere -> "In use"
+                            installedHere -> "Installed"
+                            blocked -> "No root"
+                            else -> "Install"
+                        },
+                        accent,
+                        selected = selected,
+                        onClick = {
+                            if (!blocked) method = entry
+                        },
+                    )
                 },
+                onClick = { if (!blocked) method = entry },
             )
         }
         Spacer(Modifier.height(Prism.Tight))
-        PrismNote(
-            "Both can be installed. The one marked in use is what the MCP server runs, " +
-                "and that choice is remembered.",
-            fontSize = 10.sp,
-        )
-        if (!state.chrootPossible) {
-            PrismNote(
-                "Root is not available, so chroot cannot be installed. proot works without it.",
-                color = MaterialTheme.colorScheme.error,
-            )
-        }
-
-        Spacer(Modifier.height(Prism.Stack))
-        PrismActions {
-            // A single, explicit action for the currently selected chip, kept
-            // for the common case where the user just wants the default.
-            PrismButton(
-                text = when {
-                    state.busy.isNotBlank() -> "Installing…"
-                    method in state.methods -> "Reinstall " + method.label
-                    else -> "Install " + method.label
-                },
-                accent = accent,
-                icon = Icons.Default.PlayArrow,
-                modifier = Modifier.fillMaxWidth(),
-                enabled = state.busy.isBlank() &&
-                    !(method == ReaDistro.Method.CHROOT && !state.chrootPossible),
-            ) {
+        // The one action, labelled with exactly what it will do.
+        val selectedInstalled = method in state.methods
+        val selectedActive = state.method == method
+        PrismButton(
+            text = when {
+                state.busy.isNotBlank() -> "Working…"
+                !selectedInstalled -> "Install " + method.label
+                selectedActive -> "Reinstall " + method.label
+                else -> "Switch to " + method.label
+            },
+            accent = accent,
+            icon = Icons.Default.PlayArrow,
+            modifier = Modifier.fillMaxWidth(),
+            enabled = state.busy.isBlank() &&
+                !(method == ReaDistro.Method.CHROOT && !state.chrootPossible),
+        ) {
+            if (selectedInstalled && !selectedActive) {
+                // Already there: switching must never re-download anything.
+                ReaDistro.select(context, method)
+            } else {
                 // Not launched from the screen's scope: a multi-gigabyte
                 // install outlives any composition, and launching it here is
                 // what produced "the coroutine scope left the composition".
                 ReaDistro.install(context, method)
             }
-            if (state.installed) {
-                PrismSecondaryButton(
-                    text = "Install missing tools",
-                    accent = accent,
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = state.busy.isBlank(),
-                ) {
-                    ReaDistro.installMissingTools(context)
-                }
-                PrismSecondaryButton(
-                    text = if (state.busy.isNotBlank()) "Removing…" else "Remove analysis environment",
-                    accent = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = state.busy.isBlank(),
-                ) {
-                    // Destructive and irreversible: confirm first, and say what
-                    // goes with it.
-                    confirmRemove = true
-                }
+        }
+        if (selectedInstalled && !selectedActive) {
+            Spacer(Modifier.height(Prism.Tight))
+            PrismNote(
+                "Both are installed. Switching only changes which container the MCP " +
+                    "server runs — nothing is downloaded.",
+                fontSize = 10.sp,
+            )
+        }
+        if (!state.chrootPossible) {
+            Spacer(Modifier.height(Prism.Tight))
+            PrismNote(
+                "Root is not granted, so chroot is unavailable. proot works without it.",
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
+        if (state.installed) {
+            Spacer(Modifier.height(Prism.Tight))
+            PrismSecondaryButton(
+                text = "Install missing tools",
+                accent = accent,
+                modifier = Modifier.fillMaxWidth(),
+                enabled = state.busy.isBlank(),
+            ) {
+                ReaDistro.installMissingTools(context)
+            }
+            PrismSecondaryButton(
+                text = if (state.busy.isNotBlank()) "Removing…" else "Remove analysis environment",
+                accent = MaterialTheme.colorScheme.error,
+                modifier = Modifier.fillMaxWidth(),
+                enabled = state.busy.isBlank(),
+            ) {
+                // Destructive and irreversible: confirm first, and say what
+                // goes with it.
+                confirmRemove = true
             }
         }
         if (state.error.isNotBlank()) {

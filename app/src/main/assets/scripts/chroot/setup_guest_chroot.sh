@@ -10,8 +10,6 @@
 
 GUESTPATH="${ALTARIS_CHROOT:-/data/local/altaris/chroots/guest}"
 USERNAME="altaris"
-[ -d /data/local/bliss ] && [ ! -e /data/local/altaris ] && mv /data/local/bliss /data/local/altaris 2>/dev/null || true
-[ -d /data/local/folio ] && [ ! -e /data/local/altaris ] && mv /data/local/folio /data/local/altaris 2>/dev/null || true
 DISTRO_LABEL="${ALTARIS_DISTRO_LABEL:-guest}"
 
 PKG="${TERMUX_APP__PACKAGE_NAME:-com.ivarna.fluxlinux}"
@@ -87,15 +85,51 @@ download_file() {
     goodbye
 }
 
+# True when the extracted tree is a usable rootfs.
+#
+# The old check accepted *any* of /bin/sh, /usr/bin/sh, /usr/bin/apk, bash —
+# and a partially-extracted or half-removed tree satisfies one of those while
+# missing the rest. Extraction was then skipped and the install carried on
+# against a broken rootfs: the guest had no /usr/bin/env, so every later
+# command failed with
+#   chroot: can't execute '/usr/bin/env': No such file or directory
+# and the app reported "package manager: unknown" for a Debian image that
+# should have had apt.
+#
+# A rootfs is only usable when it has a shell *and* the loader *and* the
+# basic utilities that the setup itself needs.
+rootfs_is_usable() { # rootfs_is_usable <dir>
+    _r="$1"
+    [ -d "$_r" ] || return 1
+    # A shell, resolvable as a real file or a symlink that resolves.
+    { [ -e "$_r/bin/sh" ] || [ -e "$_r/usr/bin/sh" ]; } || return 1
+    # The dynamic loader must exist for that shell to run at all.
+    [ -e "$_r/lib/ld-linux-aarch64.so.1" ] || \
+        [ -e "$_r/lib64/ld-linux-aarch64.so.1" ] || \
+        [ -e "$_r/lib/ld-musl-aarch64.so.1" ] || \
+        [ -e "$_r/usr/lib/ld-linux-aarch64.so.1" ] || return 1
+    # The utilities the rest of this script and apt/apt-get need.
+    [ -e "$_r/usr/bin/env" ] || [ -e "$_r/bin/env" ] || return 1
+    return 0
+}
+
 extract_file() {
     _dest="$1"
     _archive="${2:-}"
     progress "Extracting file from $_archive ..."
-    if [ -L "$_dest/bin/sh" ] || [ -e "$_dest/bin/sh" ] || \
-       [ -e "$_dest/usr/bin/sh" ] || [ -e "$_dest/usr/bin/apk" ] || \
-       [ -x "$_dest/usr/bin/bash" ] || [ -x "$_dest/bin/bash" ]; then
-        printf "\033[1;33m[!] Rootfs appears populated: %s\033[0m\n" "$_dest"
+    if rootfs_is_usable "$_dest"; then
+        printf "\033[1;33m[!] Rootfs already complete: %s\033[0m\n" "$_dest"
         return 0
+    fi
+    # A tree that is present but NOT usable is a failed previous attempt. It
+    # must be cleared, or tar will merge into the partial tree and the same
+    # broken result is reported as success again.
+    if [ -d "$_dest" ] && [ -n "$(ls -A "$_dest" 2>/dev/null | head -n1)" ]; then
+        printf "\033[1;33m[!] Incomplete rootfs at %s — clearing it before extracting\033[0m\n" "$_dest"
+        # Nothing is mounted yet at this point (mounts come later), so a plain
+        # delete stays inside $_dest.
+        $BB rm -rf "$_dest" 2>/dev/null || rm -rf "$_dest" 2>/dev/null
+        mkdir -p "$_dest"
     fi
     if [ ! -f "$_archive" ] || [ ! -s "$_archive" ]; then
         error "Rootfs archive missing: $_archive"
@@ -108,20 +142,32 @@ extract_file() {
     case "$_archive" in
         *.tar.xz|*.txz)
             if $_tar tar xJf "$_archive" -C "$_dest"; then
-                success "Rootfs extracted successfully (xz)."
-                return 0
+                if rootfs_is_usable "$_dest"; then
+                    success "Rootfs extracted successfully (xz)."
+                    return 0
+                fi
+                error "Extraction finished but the tree is incomplete (no shell/loader/env)."
+                goodbye
             fi
             ;;
         *.tar.gz|*.tgz)
             if $_tar tar xzf "$_archive" -C "$_dest"; then
-                success "Rootfs extracted successfully (gzip)."
-                return 0
+                if rootfs_is_usable "$_dest"; then
+                    success "Rootfs extracted successfully (gzip)."
+                    return 0
+                fi
+                error "Extraction finished but the tree is incomplete (no shell/loader/env)."
+                goodbye
             fi
             ;;
     esac
     if $_tar tar xf "$_archive" -C "$_dest"; then
-        success "Rootfs extracted successfully."
-        return 0
+        if rootfs_is_usable "$_dest"; then
+            success "Rootfs extracted successfully."
+            return 0
+        fi
+        error "Extraction finished but the tree is incomplete (no shell/loader/env)."
+        goodbye
     fi
     error "Extraction Failed!"
     goodbye
@@ -355,8 +401,14 @@ fi
 
     GUESTPATH="${ALTARIS_CHROOT:-/data/local/altaris/chroots/guest}"
 
-    if { [ -f "$GUESTPATH/.altaris_configured" ] || [ -f "$GUESTPATH/.flux_configured" ]; } && \
-       { [ -e "$GUESTPATH/bin/bash" ] || [ -e "$GUESTPATH/usr/bin/bash" ]; } && \
+    # "Already installed" must mean *usable*, not "a marker file exists".
+    #
+    # A previous attempt that died mid-extraction left the marker and a bash
+    # binary behind, so every retry took this branch and reported success on a
+    # rootfs that could not even run /usr/bin/env. rootfs_is_usable is the same
+    # check the extractor uses.
+    if { [ -f "$GUESTPATH/.altaris_configured" ]; } && \
+       rootfs_is_usable "$GUESTPATH" && \
        grep -q '^altaris:' "$GUESTPATH/etc/passwd" 2>/dev/null; then
         success "$DISTRO_LABEL Chroot already installed."
         progress "VERIFY: chroot present at $GUESTPATH"

@@ -18,12 +18,6 @@ object HostBootstrap {
     const val ZENITHBLUE_PACKAGE = "com.zenithblue.fluxlinux"
     const val ALTARIS_PACKAGE = "com.altaris.linux"
 
-    /** Pre-rename applicationId of the Altaris flavor. */
-    const val LEGACY_BLISS_PACKAGE = "com.nopiece.bliss"
-
-    /** Legacy applicationId (pre-Altaris rename); kept so old copies still resolve. */
-    const val LEGACY_FOLIO_PACKAGE = "com.nopiece.folio"
-
     val IVARNA = PinnedReleaseArchive(
         fileName = "bootstrap_com.ivarna.fluxlinux.tar",
         sha256 = "5b16c6597d38380c0cab9471d3cf69a0c7a23d9a4191125bd9dd6ddc77277f5c",
@@ -51,9 +45,7 @@ object HostBootstrap {
     fun forApplicationId(applicationId: String): PinnedReleaseArchive =
         when (applicationId) {
             ZENITHBLUE_PACKAGE -> ZENITHBLUE
-            ALTARIS_PACKAGE, LEGACY_BLISS_PACKAGE -> ALTARIS
-            // Legacy com.nopiece.folio id — same flavor before the Altaris rename.
-            LEGACY_FOLIO_PACKAGE -> ALTARIS
+            ALTARIS_PACKAGE -> ALTARIS
             else -> IVARNA
         }
 

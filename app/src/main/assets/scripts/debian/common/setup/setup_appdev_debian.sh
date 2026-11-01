@@ -43,7 +43,7 @@ if [ "$1" = "uninstall" ]; then
     # Remove Flutter
     rm -rf /opt/flutter
     rm -f /usr/local/bin/flutter /usr/local/bin/dart
-    rm -rf /home/flux/.config/flutter 2>/dev/null || true
+    rm -rf /home/altaris/.config/flutter 2>/dev/null || true
 
     # Remove Kotlin
     rm -rf /opt/kotlin /opt/kotlinc
@@ -54,7 +54,7 @@ if [ "$1" = "uninstall" ]; then
     rm -f /usr/bin/gradle /usr/local/bin/gradle
 
     # Revert .bashrc / .zshrc env vars added by this script
-    for shell_rc in /home/flux/.bashrc /home/flux/.zshrc; do
+    for shell_rc in /home/altaris/.bashrc /home/altaris/.zshrc; do
         if [ -f "$shell_rc" ]; then
             sed -i '/^export PATH="\/opt\/flutter\/bin:\$PATH"$/d' "$shell_rc" 2>/dev/null || true
             sed -i '/^export ANDROID_SDK_ROOT="\/opt\/android-sdk"$/d' "$shell_rc" 2>/dev/null || true
@@ -68,7 +68,7 @@ if [ "$1" = "uninstall" ]; then
     rm -f /etc/profile.d/android-sdk.sh
 
     # Remove Flutter user config (regen'd on next install)
-    rm -rf /home/flux/.flutter
+    rm -rf /home/altaris/.flutter
 
     echo "Altaris: App Development Environment Uninstalled."
     exit 0

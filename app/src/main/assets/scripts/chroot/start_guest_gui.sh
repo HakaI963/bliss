@@ -4,8 +4,6 @@
 # Paths: app package via ALTARIS_PACKAGE / TARGET_PREFIX (ivarna or zenithblue). Sticky guest /tmp preserved.
 
 CHROOT_ROOT="${CHROOT_ROOT:-${ALTARIS_CHROOT:-/data/local/altaris/chroots/guest}}"
-[ -d /data/local/bliss ] && [ ! -e /data/local/altaris ] && mv /data/local/bliss /data/local/altaris 2>/dev/null || true
-[ -d /data/local/folio ] && [ ! -e /data/local/altaris ] && mv /data/local/folio /data/local/altaris 2>/dev/null || true
 if [ -z "${TARGET_PREFIX:-}" ]; then
   if [ -n "${ALTARIS_PREFIX:-}" ]; then
     TARGET_PREFIX="$ALTARIS_PREFIX"
@@ -210,7 +208,6 @@ chmod 755 "$_bwrap" 2>/dev/null || true
 # Guest script: sticky /tmp X11 + host-tmp VirGL + gpu_mode file
 $BB chroot "$CHROOT_ROOT" /bin/sh -c "
 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-[ -d /etc/bliss ] && [ ! -e /etc/altaris ] && mv /etc/bliss /etc/altaris 2>/dev/null || true
 export TMPDIR=/tmp
 # Clear host-leaked bus; failsafe needs XDG_CONFIG_DIRS including /etc
 unset DBUS_SESSION_BUS_ADDRESS DBUS_SESSION_BUS_PID DBUS_SESSION_BUS_WINDOWID

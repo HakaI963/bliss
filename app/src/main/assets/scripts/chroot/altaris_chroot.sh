@@ -13,8 +13,6 @@
 #   altaris_chroot.sh exec  [--user altaris|root] -- CMD [ARGS...]
 #   altaris_chroot.sh b64   [--user altaris|root] -- BASE64_PAYLOAD
 #
-# --user also accepts the legacy alias `flux`; resolve_guest_user() maps it to
-# the account that actually exists in this rootfs.
 #
 # Env:
 #   ALTARIS_CHROOT  ALTARIS_PACKAGE  ALTARIS_HOST_TMP  ALTARIS_PREFIX  ALTARIS_BB  ALTARIS_SHELL
@@ -44,21 +42,19 @@ die() {
   exit 2
 }
 
-# The guest account was renamed flux -> altaris, but images built by earlier
-# releases still only carry the old name and some callers still pass it.
-# This script runs as root, so it can read the rootfs passwd directly (the app
-# uid cannot, which is why the app-side resolver guesses). Pick the account that
-# actually exists; anything else is a caller bug, so keep the strict default.
+# The guest account is `altaris`, and only `altaris`.
+#
+# This used to fall back to a legacy `flux` account for images built before the
+# rename. Those images are gone, so the fallback only served to keep the old
+# name alive in the code. A rootfs without the account is a bug, and the caller
+# should see it rather than silently running as a different user.
 resolve_guest_user() {
   [ "${USER_NAME:-}" = "root" ] && return 0
   _pw="${ALTARIS_CHROOT}/etc/passwd"
-  if [ -r "$_pw" ] && grep -q '^altaris:' "$_pw" 2>/dev/null; then
-    USER_NAME=altaris
-  elif [ -r "$_pw" ] && grep -q '^flux:' "$_pw" 2>/dev/null; then
-    USER_NAME=flux
-  else
-    USER_NAME=altaris
+  if [ -r "$_pw" ] && ! grep -q '^altaris:' "$_pw" 2>/dev/null; then
+    die "guest account 'altaris' is missing from $_pw (broken rootfs)"
   fi
+  USER_NAME=altaris
 }
 
 usage() {
@@ -235,8 +231,48 @@ ensure_devpts() {
   unset _pts _host_dev _guest_dev
 }
 
+# Repair ownership of the guest home, once per session.
+#
+# The setup scripts used to hardcode /home/flux while the account was already
+# `altaris`, so a tool installed as root left files the user could not write:
+#
+#   opencode → EACCES: permission denied, mkdir '/home/altaris/.local/share/opencode'
+#   mkdir -p ~/.local/share/opencode → Permission denied
+#
+# Even `sudo chown -R "$USER" ~/.local` only fixed one directory, because the
+# next tool failed on ~/.cache. This walks the whole home and fixes every
+# top-level entry, which is cheap (one chown per entry, not per file) and runs
+# before the guest command, so a fresh session is never broken.
+fix_guest_home_ownership() {
+  _home="$ALTARIS_CHROOT/home/altaris"
+  [ -d "$_home" ] || return 0
+  _pw="$ALTARIS_CHROOT/etc/passwd"
+  _uid=$(awk -F: '$1=="altaris" {print $3; exit}' "$_pw" 2>/dev/null)
+  _gid=$(awk -F: '$1=="altaris" {print $4; exit}' "$_pw" 2>/dev/null)
+  [ -n "${_uid:-}" ] || return 0
+  [ -n "${_gid:-}" ] || _gid="$_uid"
+  # A root-owned entry anywhere in the home is the bug. Only chown what is
+  # actually wrong: a full -R over a large home on every session would be slow.
+  _bad=$(find "$_home" -maxdepth 1 ! -user "$_uid" 2>/dev/null | head -n 40)
+  if [ -n "$_bad" ]; then
+    for _p in $_bad; do
+      chown -R "$_uid:$_gid" "$_p" 2>/dev/null || true
+    done
+  fi
+  # Directories a tool created as root deeper inside an already-correct parent
+  # are still unwritable; fix the common CLI state directories explicitly.
+  for _d in .local .cache .config .npm .bun .cargo .local/share .local/state; do
+    [ -e "$_home/$_d" ] || continue
+    chown -R "$_uid:$_gid" "$_home/$_d" 2>/dev/null || true
+  done
+  unset _home _pw _uid _gid _bad _p _d
+}
+
 ensure_mounts() {
   [ -d "$ALTARIS_CHROOT" ] || die "chroot missing: $ALTARIS_CHROOT"
+  # Fix a home that a root-run tool left unwritable, before the guest command
+  # needs to write to it. Idempotent and cheap when nothing is wrong.
+  fix_guest_home_ownership
   mkdir -p \
     "$ALTARIS_CHROOT/dev" "$ALTARIS_CHROOT/dev/pts" "$ALTARIS_CHROOT/dev/shm" \
     "$ALTARIS_CHROOT/proc" "$ALTARIS_CHROOT/sys" \
@@ -312,7 +348,7 @@ guest_path_for_user() {
   if [ "$USER_NAME" = "root" ]; then
     printf '%s' "$GUEST_PATH_ROOT"
   else
-    printf '%s' "/home/flux/.local/bin:/home/flux/bin:/home/flux/.cargo/bin:/opt/nodejs/bin:$GUEST_PATH_ROOT"
+    printf '%s' "/home/altaris/.local/bin:/home/altaris/bin:/home/altaris/.cargo/bin:/opt/nodejs/bin:$GUEST_PATH_ROOT"
   fi
 }
 
@@ -328,7 +364,7 @@ build_guest_env_args() {
   if [ "$USER_NAME" = "root" ]; then
     GUEST_ENV_ARGS="PATH=$_gp HOME=/root USER=root LOGNAME=root TERM=$_term LANG=$_lang TMPDIR=/tmp XDG_RUNTIME_DIR=/tmp PULSE_SERVER=tcp:127.0.0.1 DEBIAN_FRONTEND=noninteractive BROWSER=altaris-open"
   else
-    GUEST_ENV_ARGS="PATH=$_gp HOME=/home/flux USER=flux LOGNAME=flux NVM_DIR=/home/flux/.nvm TERM=$_term LANG=$_lang TMPDIR=/tmp XDG_RUNTIME_DIR=/tmp PULSE_SERVER=tcp:127.0.0.1 DEBIAN_FRONTEND=noninteractive BROWSER=altaris-open"
+    GUEST_ENV_ARGS="PATH=$_gp HOME=/home/altaris USER=altaris LOGNAME=altaris NVM_DIR=/home/altaris/.nvm TERM=$_term LANG=$_lang TMPDIR=/tmp XDG_RUNTIME_DIR=/tmp PULSE_SERVER=tcp:127.0.0.1 DEBIAN_FRONTEND=noninteractive BROWSER=altaris-open"
   fi
 }
 
@@ -453,7 +489,7 @@ resolve_login_shell() {
 }
 
 # Altaris profile bootstrap for the interactive users (altaris AND root). Old
-# builds only repaired /home/flux, so /root kept stale duplicated banner
+# builds only repaired /home/altaris, so /root kept stale duplicated banner
 # source lines + an unguarded banner.sh — every rc line printed its own art
 # in the same shell (the "flood" on root tabs).
 ensure_altaris_zsh_profile() {
@@ -1533,14 +1569,14 @@ FB_SH
   if [ -r "$_home/.config/altaris/appearance-apply.sh" ]; then
     "$BB" chroot "$ALTARIS_CHROOT" /bin/sh -c \
       'export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin; \
-       ALTARIS_APPLY_HOME=/home/flux /bin/sh /home/flux/.config/altaris/appearance-apply.sh \
+       ALTARIS_APPLY_HOME=/home/altaris /bin/sh /home/altaris/.config/altaris/appearance-apply.sh \
        >/dev/null 2>&1 || true' >/dev/null 2>&1 || true
   fi
   # Root parity: /root carries the SAME sticker + art set as altaris (copied, so
   # app-selected quality/NSFW follows), and the same rc dedupe so duplicated
   # old source lines can never flood the tab again.
-  if [ "$USER_NAME" = "root" ] && [ "$_home" != "$ALTARIS_CHROOT/home/flux" ]; then
-    _fsrc="$ALTARIS_CHROOT/home/flux/.config/altaris"
+  if [ "$USER_NAME" = "root" ] && [ "$_home" != "$ALTARIS_CHROOT/home/altaris" ]; then
+    _fsrc="$ALTARIS_CHROOT/home/altaris/.config/altaris"
     _rdir="$ALTARIS_CHROOT/root/.config/altaris"
     if [ -d "$_fsrc/banner" ]; then
       mkdir -p "$_rdir/banner" 2>/dev/null || true

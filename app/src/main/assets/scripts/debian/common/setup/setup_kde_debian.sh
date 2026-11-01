@@ -82,8 +82,8 @@ if [ "$1" = "uninstall" ] || [ "$2" = "uninstall" ]; then
     apt autoremove -y 2>/dev/null || true
 
     # Remove KDE-specific marker and runtime env helper only.
-    # Never remove /home/flux/.vnc — that file belongs to the XFCE component too.
-    rm -f /home/flux/.altarislinux/kde_installed
+    # Never remove /home/altaris/.vnc — that file belongs to the XFCE component too.
+    rm -f /home/altaris/.altarislinux/kde_installed
     rm -f /usr/local/lib/altarislinux/altaris_kde_env.sh
 
     echo "Altaris: KDE Plasma Environment Uninstalled."
@@ -219,16 +219,16 @@ chmod 440 /etc/sudoers.d/flux 2>/dev/null || true
 
 # 5. Configure VNC for KDE (xstartup)
 echo "[6/7] Setting up KDE session launcher..."
-mkdir -p /home/flux/.vnc
-cat > /home/flux/.vnc/xstartup << 'VNCEOF'
+mkdir -p /home/altaris/.vnc
+cat > /home/altaris/.vnc/xstartup << 'VNCEOF'
 #!/bin/bash
 export PULSE_SERVER=127.0.0.1
 export DBUS_SESSION_BUS_ADDRESS=$(dbus-launch --print-address)
 xrdb $HOME/.Xresources 2>/dev/null
 exec startplasma-x11
 VNCEOF
-chmod +x /home/flux/.vnc/xstartup
-chown -R flux:flux /home/flux/.vnc
+chmod +x /home/altaris/.vnc/xstartup
+chown -R altaris:altaris /home/altaris/.vnc
 
 # Compositing + effects off system-wide by default (XFCE parity; GPU accel path).
 # Per-user config is kept in sync at session start (altaris_kde_env.sh).
@@ -251,9 +251,9 @@ systemctl disable sddm 2>/dev/null || true
 
 # 7. Mark as KDE-capable environment
 echo "[7/7] Marking installation complete..."
-mkdir -p /home/flux/.altarislinux
-touch /home/flux/.altarislinux/kde_installed
-chown -R flux:flux /home/flux/.altarislinux
+mkdir -p /home/altaris/.altarislinux
+touch /home/altaris/.altarislinux/kde_installed
+chown -R altaris:altaris /home/altaris/.altarislinux
 
 echo ""
 echo "✅ Altaris: KDE Plasma base setup for ${DISTRO_NAME} complete!"

@@ -69,7 +69,7 @@ object AppearanceStore {
     const val SOLID_COLOR = "#0B0B0D"
 
     // ── guest paths ──────────────────────────────────────────────────────────
-    const val GUEST_HOME = "/home/flux"
+    const val GUEST_HOME = "/home/altaris"
     const val GUEST_CFG = "$GUEST_HOME/.config/altaris"
     const val GUEST_SHARE = "$GUEST_HOME/.local/share/altaris"
     const val GUEST_ENV_FILE = "appearance.env"
@@ -77,9 +77,6 @@ object AppearanceStore {
     const val GUEST_MARKER = ".appearance.applied"
     const val GUEST_AUTOSTART_DIR = "$GUEST_HOME/.config/autostart"
     const val GUEST_AUTOSTART_FILE = "altaris-appearance.desktop"
-
-    /** Pre-rename autostart entry, removed when (re)staging into a guest. */
-    private const val GUEST_AUTOSTART_FILE_LEGACY = "folio-appearance.desktop"
 
     /** Staged name of the app-side dimmed variant of a custom wallpaper. */
     private const val DIMMED_WALLPAPER_NAME = "wallpaper-dim.png"
@@ -185,28 +182,8 @@ object AppearanceStore {
         )
     )
 
-    /**
-     * Pre-rename (`folio-*`) preset ids → current ids. Persisted user prefs
-     * (single preset + random set) keep working on existing installs.
-     */
-    private val LEGACY_WALLPAPER_IDS = mapOf(
-        "folio-dark" to "altaris-dark",
-        "folio-light" to "altaris-light",
-        "folio-shard" to "altaris-shard",
-        "folio-amoled" to "altaris-amoled",
-        "folio-mesh" to "altaris-mesh",
-        "folio-silk" to "altaris-silk",
-        "folio-dither" to "altaris-dither",
-        "folio-waves" to "altaris-waves",
-        "folio-beams" to "altaris-beams",
-        "folio-sakura" to "altaris-sakura"
-    )
-
-    /** Resolve a persisted preset id (legacy `folio-*` names still accepted). */
-    fun aliasPresetId(id: String?): String? {
-        val v = id ?: return null
-        return LEGACY_WALLPAPER_IDS[v] ?: v
-    }
+    /** Normalise a persisted preset id; unknown ids are returned unchanged. */
+    fun aliasPresetId(id: String?): String? = id
 
     /** Desktop accent presets — mono-first, then the requested accents. */
     val ACCENT_PRESETS: List<AccentPreset> = listOf(
@@ -397,31 +374,8 @@ object AppearanceStore {
         prefs(ctx).edit().putString(KEY_PREFIX + distroId, o.toString()).apply()
     }
 
-    /** Legacy prefs file (pre-Altaris); migrated once on first open. */
-    private const val LEGACY_PREFS = "folio_appearance"
-
-    private fun prefs(ctx: Context): android.content.SharedPreferences {
-        val app = ctx.applicationContext
-        val prefs = app.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        if (prefs.all.isEmpty()) {
-            val old = app.getSharedPreferences(LEGACY_PREFS, Context.MODE_PRIVATE).all
-            if (old.isNotEmpty()) {
-                val e = prefs.edit()
-                for ((k, v) in old) {
-                    when (v) {
-                        is String -> e.putString(k, v)
-                        is Int -> e.putInt(k, v)
-                        is Long -> e.putLong(k, v)
-                        is Boolean -> e.putBoolean(k, v)
-                        is Float -> e.putFloat(k, v)
-                        is Set<*> -> @Suppress("UNCHECKED_CAST") e.putStringSet(k, v as Set<String>)
-                    }
-                }
-                e.apply()
-            }
-        }
-        return prefs
-    }
+    private fun prefs(ctx: Context): android.content.SharedPreferences =
+        ctx.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
     /** One-line summary for the Distro Settings row. */
     fun summary(ctx: Context, distroId: String): String {
@@ -948,7 +902,6 @@ object AppearanceStore {
         try {
             File(autostartDir, GUEST_AUTOSTART_FILE).writeText(autostartEntry())
             // Pre-rename entry would double-apply the (now stale) old config.
-            File(autostartDir, GUEST_AUTOSTART_FILE_LEGACY).delete()
         } catch (e: Exception) {
             onLog("autostart entry write failed: ${e.message}")
         }
@@ -986,7 +939,6 @@ object AppearanceStore {
             append("cp -f '${envFile.absolutePath}' '$cfgDir/$GUEST_ENV_FILE' 2>/dev/null || true; ")
             append("cp -f '${scriptFile.absolutePath}' '$cfgDir/$GUEST_APPLY_SCRIPT' 2>/dev/null || true; ")
             append("cp -f '${autostartFile.absolutePath}' '$autostartDir/$GUEST_AUTOSTART_FILE' 2>/dev/null || true; ")
-            append("rm -f '$autostartDir/$GUEST_AUTOSTART_FILE_LEGACY' 2>/dev/null || true; ")
             append("chmod 644 '$cfgDir/$GUEST_ENV_FILE' '$cfgDir/$GUEST_APPLY_SCRIPT' '$autostartDir/$GUEST_AUTOSTART_FILE' 2>/dev/null || true; ")
             append("rm -f '$cfgDir/$GUEST_MARKER' 2>/dev/null || true; ")
             append("chown -R --reference='$homeDir' '$cfgDir' '$shareDir' 2>/dev/null || true; ")

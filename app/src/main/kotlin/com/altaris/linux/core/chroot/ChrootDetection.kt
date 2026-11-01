@@ -134,13 +134,7 @@ object ChrootDetection {
         val root = path
         val out = try {
             RootShell.capture(
-                // One-shot legacy rename (best-effort): pre-rename installs
-                // lived under /data/local/bliss (old app versions / user data).
-                "[ -d /data/local/bliss ] && [ ! -e /data/local/altaris ] && " +
-                    "mv /data/local/bliss /data/local/altaris 2>/dev/null; " +
-                    "[ -d /data/local/folio ] && [ ! -e /data/local/altaris ] && " +
-                    "mv /data/local/folio /data/local/altaris 2>/dev/null; " +
-                    "M=0; D=0; S=0; " +
+                "M=0; D=0; S=0; " +
                     "[ -e '$root/.altaris_configured' ] && M=1; " +
                     "[ -d '$root' ] && D=1; " +
                     // Alpine: bin/sh -> /bin/busybox (absolute); -e fails on host.

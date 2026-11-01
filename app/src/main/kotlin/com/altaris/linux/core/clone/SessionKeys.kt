@@ -36,9 +36,8 @@ object SessionKeys {
      */
     fun isCloneKey(key: String?): Boolean {
         val clean = normalize(key) ?: return false
-        return clean.startsWith(CLONE_PREFIX) || clean.startsWith(LEGACY_CLONE_PREFIX)
+        return clean.startsWith(CLONE_PREFIX)
     }
 
     private const val CLONE_PREFIX = "com.altaris.apps."
-    private const val LEGACY_CLONE_PREFIX = "com.nopiece.hclone."
 }

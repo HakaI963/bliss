@@ -11,7 +11,6 @@ do
     fi
 done
 echo "Altaris: setup_hw_accel_guest.sh not found — writing virgl"
-[ -d /etc/bliss ] && [ ! -e /etc/altaris ] && mv /etc/bliss /etc/altaris 2>/dev/null || true
 mkdir -p /etc/altaris
 printf '%s\n' virgl > /etc/altaris/gpu_mode
 exit 0

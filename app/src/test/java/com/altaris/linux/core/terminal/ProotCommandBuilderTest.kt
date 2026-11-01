@@ -124,7 +124,7 @@ class ProotCommandBuilderTest {
 
     @Test
     fun workdirForm_staysPayloadWithMkdirAndCd() {
-        val workdir = "mkdir -p /home/flux/p && cd /home/flux/p && exec zsh"
+        val workdir = "mkdir -p /home/altaris/p && cd /home/altaris/p && exec zsh"
         val args = ProotCommandBuilder.buildArgs(
             shell = "/bin/bash",
             prootDistro = "/pd",
@@ -133,8 +133,8 @@ class ProotCommandBuilderTest {
         )
         val joined = args.joinToString(" ")
         assertTrue(joined.contains("/bin/sh -c"))
-        assertTrue(joined.contains("mkdir -p /home/flux/p"))
-        assertTrue(joined.contains("cd /home/flux/p"))
+        assertTrue(joined.contains("mkdir -p /home/altaris/p"))
+        assertTrue(joined.contains("cd /home/altaris/p"))
         assertFalse(joined.contains("if [ -x /bin/zsh ]"))
     }
 
@@ -159,7 +159,7 @@ class ProotCommandBuilderTest {
         val rootfs = java.io.File(container, "rootfs")
         java.io.File(rootfs, "etc").mkdirs()
         java.io.File(rootfs, "etc/passwd").writeText(
-            "root:x:0:0:root:/root:/bin/bash\naltaris:x:1000:1000::/home/flux:/bin/zsh\n"
+            "root:x:0:0:root:/root:/bin/bash\naltaris:x:1000:1000::/home/altaris:/bin/zsh\n"
         )
         java.io.File(container, "sysdata/sys_empty").mkdirs()
         val proot = "/data/app/x/lib/arm64/libproot.so"

@@ -66,7 +66,7 @@ fi
 echo "[1/4] Kill desktop session in chroot..."
 if [ -n "$BB" ] && [ -d "$DEBIANPATH" ]; then
   $BB chroot "$DEBIANPATH" /bin/su - root -c \
-    "killall -9 xfce4-session xfwm4 xfdesktop xfce4-panel xfce4-notifyd startxfce4 plasmashell kwin_x11 startplasma-x11 startplasma plasma_session ksmserver kded6 kded5 kglobalacceld kglobalaccel5 kactivitymanagerd kscreen_backend kquitapp6 kquitapp5 polkit-kde-agent-1 dbus-launch dbus-daemon 2>/dev/null; rm -rf /home/flux/.cache/runtime 2>/dev/null; true" \
+    "killall -9 xfce4-session xfwm4 xfdesktop xfce4-panel xfce4-notifyd startxfce4 plasmashell kwin_x11 startplasma-x11 startplasma plasma_session ksmserver kded6 kded5 kglobalacceld kglobalaccel5 kactivitymanagerd kscreen_backend kquitapp6 kquitapp5 polkit-kde-agent-1 dbus-launch dbus-daemon 2>/dev/null; rm -rf /home/altaris/.cache/runtime 2>/dev/null; true" \
     >/dev/null 2>&1
 fi
 

@@ -17,11 +17,11 @@ import java.util.concurrent.locks.ReentrantLock
  * Repairs a proot rootfs that was **moved** from the legacy package id.
  *
  * Android file-based encryption wraps each file (and each symlink target) with
- * the owning app's data key. The old `LegacyDataMigration` moved the tree, so
- * symlinks kept the old package's key: the new app gets EACCES when it follows
- * them. A loader that cannot read `/usr/lib/libreadline.so.8` reports missing
- * readline symbols, and `/bin/sh`/`/usr/bin/env` (absolute symlinks) fail the
- * same way — the "all distros are broken" state after the rename.
+ * the owning app's data key. A tree that was moved between package ids keeps
+ * the old key on its symlinks, so the app gets EACCES when it follows them. A
+ * loader that cannot read `/usr/lib/libreadline.so.8` reports missing readline
+ * symbols, and `/bin/sh` / `/usr/bin/env` (absolute symlinks) fail the same way
+ * — the "all distros are broken" state.
  *
  * Regular files are copied back by root (root writes are readable by the app);
  * symlinks are recreated **by the app itself** (root-created links keep the
