@@ -49,7 +49,7 @@ class ReaChrootRootfsAndOwnershipTest {
         // The old one-of check must be gone.
         assertFalse(
             "must not accept bash alone as a complete rootfs",
-            check.contains("[ -x \"$_dest/usr/bin/bash\" ] || \\\n       [ -x \"$_dest/bin/bash\" ]"),
+            check.contains("[ -x \"\$_dest/usr/bin/bash\" ] || \\\n       [ -x \"\$_dest/bin/bash\" ]"),
         )
     }
 
@@ -63,7 +63,7 @@ class ReaChrootRootfsAndOwnershipTest {
         )
         assertTrue(
             "must remove it before extracting",
-            script.contains("rm -rf \"$_dest\""),
+            script.contains("rm -rf \"\$_dest\""),
         )
         // And the order matters: clear, then extract.
         val clear = script.indexOf("Incomplete rootfs at")
@@ -75,11 +75,11 @@ class ReaChrootRootfsAndOwnershipTest {
     @Test
     fun alreadyInstalledRequiresAUsableRootfs() {
         val script = readAsset("scripts/chroot/setup_guest_chroot.sh")
-        val guard = script.substringAfter("GUESTPATH=\"${ALTARIS_CHROOT")
-            .substringBefore("mkdir -p \"$GUESTPATH\"")
+        val guard = script.substringAfter("progress \"Using Root Busybox: \$BB\"")
+            .substringBefore("mkdir -p \"\$GUESTPATH\"")
         assertTrue(
             "the already-installed branch must check usability",
-            guard.contains("rootfs_is_usable \"$GUESTPATH\""),
+            guard.contains("rootfs_is_usable \"\$GUESTPATH\""),
         )
     }
 
@@ -94,8 +94,8 @@ class ReaChrootRootfsAndOwnershipTest {
             val mounts = script.substringAfter("progress \"Mounting filesystems...\"")
                 .substringBefore("ensure_chroot_tmp")
             assertFalse(
-                "$asset must not abort on /sdcard",
-                mounts.contains("mount --bind /sdcard \"\\$GUESTPATH/sdcard\" || goodbye"),
+                "$asset must not abort when an optional mount fails",
+                mounts.contains("/sdcard\" || goodbye"),
             )
             assertTrue(
                 "$asset must still require /proc",
@@ -140,7 +140,7 @@ class ReaChrootRootfsAndOwnershipTest {
         // The whole home is fixed, not a fixed list of three directories.
         assertTrue(
             "must chown the whole home",
-            ensure.contains("chown -R \"$_uid:${_gid:-$_uid}\" \"$_h\""),
+            ensure.contains("chown -R \"\$_uid:\${_gid:-\$_uid}\" \"\$_h\""),
         )
     }
 
