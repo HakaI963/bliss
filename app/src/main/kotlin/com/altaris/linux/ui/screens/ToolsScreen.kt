@@ -553,6 +553,7 @@ private fun AutomationCard(context: Context, accent: Color) {
 private fun ReaCard(context: Context, accent: Color) {
     val state by ReaDistro.state.collectAsState()
     var method by remember { mutableStateOf(ReaDistro.Method.PROOT) }
+    var confirmRemove by remember { mutableStateOf(false) }
 
     // Re-read the truth while an install runs (and once when it ends), so the
     // chip flips to Installed without leaving the screen. The previous version
@@ -677,12 +678,14 @@ private fun ReaCard(context: Context, accent: Color) {
                     ReaDistro.installMissingTools(context)
                 }
                 PrismSecondaryButton(
-                    text = "Remove analysis environment",
+                    text = if (state.busy.isNotBlank()) "Removing…" else "Remove analysis environment",
                     accent = MaterialTheme.colorScheme.error,
                     modifier = Modifier.fillMaxWidth(),
                     enabled = state.busy.isBlank(),
                 ) {
-                    ReaDistro.uninstall(context)
+                    // Destructive and irreversible: confirm first, and say what
+                    // goes with it.
+                    confirmRemove = true
                 }
             }
         }
@@ -701,6 +704,36 @@ private fun ReaCard(context: Context, accent: Color) {
             Spacer(Modifier.height(3.dp))
             CodeBlock(state.log.takeLast(3000))
         }
+    }
+
+    if (confirmRemove) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { confirmRemove = false },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    confirmRemove = false
+                    ReaDistro.uninstall(context)
+                }) {
+                    Text("Remove", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { confirmRemove = false }) {
+                    Text("Keep")
+                }
+            },
+            title = { Text("Remove the analysis environment?", fontSize = 14.sp) },
+            text = {
+                Text(
+                    "This deletes the REA distro and every tool installed in it, " +
+                        "including Ghidra. It cannot be undone, and reinstalling " +
+                        "downloads everything again.\n\nThe MCP server is stopped " +
+                        "first so its mounts can be released.",
+                    fontSize = 11.sp,
+                    lineHeight = 15.sp,
+                )
+            },
+        )
     }
 }
 

@@ -512,14 +512,48 @@ object ReaDistro {
     suspend fun uninstallBlocking(context: Context): State = withContext(Dispatchers.IO) {
         mutex.withLock {
             val app = context.applicationContext
-            _state.value = _state.value.copy(busy = "Removing the analysis environment", percent = -1)
+            _state.value = _state.value.copy(
+                busy = "Removing the analysis environment",
+                percent = -1,
+                error = "",
+                log = "",
+            )
+            appendLog("removing the analysis environment")
+            // Stop everything that could hold the chroot's mounts open BEFORE
+            // deleting: the MCP bridge, its guest process, and any REA session.
+            // A live process inside the chroot is what makes an unmount fail,
+            // and a failed unmount is what makes the delete walk into the host.
+            runCatching { ReaBridge.stop() }
+                .onFailure { Log.w(TAG, "bridge stop failed", it) }
+            appendLog("stopped the MCP bridge")
             runCatching { ReaManager.stop() }
+                .onFailure { Log.w(TAG, "REA stop failed", it) }
+
             val method = installedMethod(app)
+            var removed = method == null
             if (method != null) {
-                runCatching { ReaInstaller.removeContainer(app, method) }
+                appendLog("removing the " + method.label + " container")
+                removed = runCatching { ReaInstaller.removeContainer(app, method) }
+                    .onFailure { Log.w(TAG, "container removal failed", it) }
+                    .getOrDefault(false)
+                appendLog(if (removed) "container removed" else "ERROR: container could not be removed")
             }
             invalidateSize(app, null)
-            _state.value = State(chrootPossible = RootShell.isRootAvailable())
+
+            if (removed) {
+                _state.value = State(chrootPossible = RootShell.isRootAvailable())
+            } else {
+                // Never pretend it is gone: the previous code reset the state
+                // unconditionally, so a failed removal looked like a success and
+                // the distro reappeared on the next refresh.
+                _state.value = _state.value.copy(
+                    busy = "",
+                    error = "Could not remove the analysis environment. " +
+                        "Check the log below.",
+                    chrootPossible = RootShell.isRootAvailable(),
+                )
+                refresh(app)
+            }
             _state.value
         }
     }

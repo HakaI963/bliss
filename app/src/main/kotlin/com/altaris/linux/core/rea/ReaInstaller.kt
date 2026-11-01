@@ -142,23 +142,49 @@ object ReaInstaller {
         ok
     }
 
-    /** Remove the container for [method], including its rootfs. */
+    /**
+     * Remove the container for [method], including its rootfs.
+     *
+     * A chroot must be **unmounted before it is deleted**. Its /dev, /sys,
+     * /proc, /dev/pts, /dev/shm, /tmp, /mnt/host-tmp and /sdcard are bind
+     * mounts of the host, so a plain `rm -rf` walks through them and deletes the
+     * live system: that is what froze the device, forced two reboots, and left
+     * the REA distro still present. The work is done by remove-chroot.sh, which
+     * unmounts deepest-first and then deletes with -x so it cannot cross a
+     * mount even if one refused to unmount.
+     */
     fun removeContainer(context: Context, method: ReaDistro.Method): Boolean {
         val profile = DistroInstallProfile.reaProfile(method.id) ?: return false
         val rootfs = rootfsOf(context, profile) ?: return false
         Log.i(TAG, "removing REA container at ${rootfs.absolutePath}")
         return runCatching {
             if (profile.method == "chroot") {
-                // A chroot lives under /data/local and needs root to delete.
-                val result = RootShell.captureResult(
-                    "rm -rf " + quote(rootfs.absolutePath),
-                    60_000L,
-                )
-                result.exitCode == 0
+                removeChroot(context, rootfs.absolutePath)
             } else {
-                rootfs.deleteRecursively()
+                // A proot container is a plain directory under app files, with
+                // no mounts of its own, so a recursive delete is safe.
+                rootfs.deleteRecursively() && !rootfs.exists()
             }
         }.getOrDefault(false)
+    }
+
+    /** Unmount, then delete, through the bundled script. */
+    private fun removeChroot(context: Context, path: String): Boolean {
+        val staged = RootShell.stageAsset(context, "scripts/chroot/remove-chroot.sh")
+        if (staged == null) {
+            Log.w(TAG, "cannot stage remove-chroot.sh")
+            return false
+        }
+        val result = RootShell.captureResult(
+            "sh " + quote(staged) + " " + quote(path),
+            // Unmounting a busy tree plus deleting several GB can take a while.
+            10 * 60_000L,
+        ) { line -> Log.i(TAG, "remove: $line") }
+        val gone = !File(path).exists() || File(path).list()?.isEmpty() == true
+        if (!gone) {
+            Log.w(TAG, "chroot still present after removal (exit ${result.exitCode})")
+        }
+        return gone
     }
 
     /**
