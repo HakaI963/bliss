@@ -920,9 +920,16 @@ private fun ReaToolsCard(context: Context, accent: Color) {
             Spacer(Modifier.height(Prism.Tight))
             status.outcomes.forEach { outcome ->
                 val label = ReaCatalog.byId(outcome.id)?.label ?: outcome.id
-                val detail = outcome.detail.takeIf { it.isNotBlank() }?.let { " — $it" }.orEmpty()
+                // "already installed" is a success, and saying "Failed" for a
+                // tool that is present is what made a working install look
+                // broken.
+                val already = outcome.ok && outcome.detail.contains("already installed")
                 PrismNote(
-                    (if (outcome.ok) "Installed " else "Failed ") + label + detail,
+                    when {
+                        already -> "Already installed " + label
+                        outcome.ok -> "Installed " + label
+                        else -> "Failed " + label
+                    } + if (already || outcome.detail.isBlank()) "" else " — " + outcome.detail,
                     color = if (outcome.ok) altarisMutedText() else MaterialTheme.colorScheme.error,
                 )
             }

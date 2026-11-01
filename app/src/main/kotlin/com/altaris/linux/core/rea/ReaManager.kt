@@ -191,11 +191,20 @@ object ReaManager {
         withContext(Dispatchers.IO) {
             if (distroId.isBlank()) return@withContext false
             val profile = DistroInstallProfile.forId(distroId) ?: return@withContext false
-            val check = "test -x " + REA_BIN
             if (profile.method == "chroot") {
                 if (!RootShell.isRootAvailable()) return@withContext false
+                val path = profile.chrootPath ?: return@withContext false
+                // Must run INSIDE the chroot. `captureResult` runs on the host,
+                // where /opt/altaris/rea does not exist, so this always reported
+                // "REA core is not installed" for a chroot that had it.
                 return@withContext runCatching {
-                    RootShell.captureResult(check, 20_000L).exitCode == 0
+                    RootShell.captureInChroot(
+                        cmd = "test -x " + REA_BIN,
+                        user = "root",
+                        chrootPath = path,
+                        timeoutMs = 20_000L,
+                        context = ctx.applicationContext,
+                    ).exitCode == 0
                 }.getOrDefault(false)
             }
             if (profile.prootName.isBlank()) return@withContext false
@@ -500,13 +509,22 @@ object ReaManager {
                     val result = GuestExec.run(app, distroId, script, timeoutMs = 30 * 60_000L) { line(it) }
                     val detail = result.output.lines()
                         .map { it.trim() }
-                        .lastOrNull { it.startsWith("ok:") || it.startsWith("ERROR") }
+                        .lastOrNull {
+                            it.startsWith("ok:") || it.startsWith("ERROR") ||
+                                it.startsWith("already installed")
+                        }
                         .orEmpty()
                     ToolOutcome(
                         dep.id,
                         result.ok,
-                        if (result.ok) detail.removePrefix("ok:").trim()
-                        else detail.removePrefix("ERROR:").trim().ifBlank { "install failed" },
+                        if (result.ok) {
+                            when {
+                                detail.startsWith("already installed") -> "already installed"
+                                else -> detail.removePrefix("ok:").trim()
+                            }
+                        } else {
+                            detail.removePrefix("ERROR:").trim().ifBlank { "install failed" }
+                        },
                     )
                 }
             }
@@ -571,13 +589,22 @@ object ReaManager {
         val result = GuestExec.run(app, distroId, script, timeoutMs = 30 * 60_000L) { line(it) }
         val detail = result.output.lines()
             .map { it.trim() }
-            .lastOrNull { it.startsWith("ok:") || it.startsWith("ERROR") }
+            .lastOrNull {
+                it.startsWith("ok:") || it.startsWith("ERROR") ||
+                    it.startsWith("already installed")
+            }
             .orEmpty()
         return ToolOutcome(
             dep.id,
             result.ok,
-            if (result.ok) detail.removePrefix("ok:").trim()
-            else detail.removePrefix("ERROR:").trim().ifBlank { "archive install failed" },
+            if (result.ok) {
+                when {
+                    detail.startsWith("already installed") -> "already installed"
+                    else -> detail.removePrefix("ok:").trim()
+                }
+            } else {
+                detail.removePrefix("ERROR:").trim().ifBlank { "archive install failed" }
+            },
         )
     }
 

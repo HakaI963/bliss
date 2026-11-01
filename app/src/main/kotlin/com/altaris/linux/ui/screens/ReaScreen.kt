@@ -108,17 +108,19 @@ fun ReaScreen(modifier: Modifier = Modifier) {
     val bridge by ReaBridge.state.collectAsState()
     var tab by remember { mutableStateOf(ReaTab.OVERVIEW) }
 
-    // The server is meant to always be up. Refresh the truth, then ensure it,
-    // and retry while it is down so a transient failure heals itself instead of
-    // leaving a dead screen with no button to press.
-    LaunchedEffect(distro.installed, distro.ready) {
+    // The server is always running: there is no Start button. Refresh the truth,
+    // ensure the server, and keep retrying while it is down. It also keeps
+    // watching after a successful start, so an install that finishes while this
+    // screen is open brings the server up without any interaction.
+    LaunchedEffect(Unit) {
         while (true) {
             withContext(Dispatchers.IO) {
                 ReaDistro.refresh(context)
                 if (ReaDistro.state.value.ready) ReaBridge.ensureRunning(context)
             }
-            if (ReaBridge.state.value.running) break
-            kotlinx.coroutines.delay(4000L)
+            // Poll faster while waiting for an install, slower when healthy.
+            val healthy = ReaBridge.state.value.running
+            kotlinx.coroutines.delay(if (healthy) 15_000L else 4_000L)
         }
     }
 

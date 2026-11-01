@@ -172,6 +172,9 @@ object ReaBridge {
             log(message, LogLine.Level.ERROR)
             return@withContext _state.value
         }
+        // The core is there, so clear any previous "not installed" message
+        // before trying; otherwise the screen keeps showing a stale reason.
+        _state.value = _state.value.copy(error = "")
         log("starting REA MCP server", LogLine.Level.INFO)
         try {
             val stdio = Session(app, id)
@@ -219,6 +222,17 @@ object ReaBridge {
             error = "REA is not installed. Install it from Tools → Reverse engineering.",
         )
         start(context, id)
+    }
+
+    /**
+     * True when the last start attempt failed because the core is missing.
+     *
+     * The screen uses this to decide whether to keep retrying or to wait for an
+     * install, instead of hammering a check that cannot succeed yet.
+     */
+    fun waitingForCore(): Boolean {
+        val state = _state.value
+        return !state.running && state.error.contains("core is not installed", ignoreCase = true)
     }
 
     suspend fun stop(): State = withContext(Dispatchers.IO) {

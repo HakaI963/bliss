@@ -51,10 +51,13 @@ if have; then
 fi
 
 # --- downloader -------------------------------------------------------------
+# Resuming matters: a phone link drops mid-download routinely (curl 56), and
+# the previous code deleted the partial and restarted from zero, so a 23 MB
+# archive that reached 19 MB was thrown away and failed. -C - continues.
 if command -v curl >/dev/null 2>&1; then
-  dl() { curl -fL --retry 3 --retry-delay 2 -o "$2" "$1"; }
+  dl() { curl -fL --retry 3 --retry-delay 2 -C - -o "$2" "$1"; }
 elif command -v wget >/dev/null 2>&1; then
-  dl() { wget -O "$2" "$1"; }
+  dl() { wget -c -O "$2" "$1"; }
 else
   # Try to get one; some minimal rootfs images ship neither.
   if command -v apt-get >/dev/null 2>&1; then
@@ -68,7 +71,7 @@ else
     pacman -Sy --noconfirm curl ca-certificates >/dev/null 2>&1
   fi
   command -v curl >/dev/null 2>&1 || fail "no curl or wget available in the distro"
-  dl() { curl -fL --retry 3 --retry-delay 2 -o "$2" "$1"; }
+  dl() { curl -fL --retry 3 --retry-delay 2 -C - -o "$2" "$1"; }
 fi
 
 # --- unpack -----------------------------------------------------------------
@@ -77,7 +80,17 @@ TMP="$DIR/.download.$$"
 rm -f "$TMP"
 
 say "downloading $URL"
-dl "$URL" "$TMP" || { rm -f "$TMP"; fail "download failed: $URL"; }
+_attempt=1
+while [ "$_attempt" -le 5 ]; do
+  if dl "$URL" "$TMP"; then break; fi
+  _attempt=$((_attempt + 1))
+  say "download interrupted, resuming (attempt $_attempt/5)"
+  sleep 2
+done
+if [ ! -s "$TMP" ]; then
+  rm -f "$TMP"
+  fail "download failed: $URL"
+fi
 
 SIZE=$(wc -c < "$TMP" 2>/dev/null | tr -d ' ')
 case "$SIZE" in ''|*[!0-9]*) SIZE=0 ;; esac

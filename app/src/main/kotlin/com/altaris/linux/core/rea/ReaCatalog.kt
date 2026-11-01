@@ -73,8 +73,12 @@ object ReaCatalog {
             id = "jadx",
             label = "JADX",
             description = "Decompile DEX to Java for APK analysis (REA's Android decompiler).",
+            // Debian 13 (trixie) does NOT ship jadx — the package exists only in
+            // bookworm, bullseye and sid. Leaving an apt variant here made the
+            // package attempt fail and the archive fallback unreachable, which
+            // is why JADX always reported "failed".
             variants = mapOf(
-                "apt" to every(listOf("jadx")),
+                "apt" to emptyList(),
                 // Alpine keeps it in testing, which is not enabled by default.
                 "apk" to emptyList(),
                 // Fedora does not package jadx at all.
