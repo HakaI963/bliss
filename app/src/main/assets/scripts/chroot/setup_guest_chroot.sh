@@ -155,18 +155,47 @@ configure_guest_chroot() {
         || $BB mount -o remount,dev,suid /data 2>/dev/null \
         || $BB mount -o remount,dev,suid / 2>/dev/null || true
 
-    $BB mount --bind /dev "$GUESTPATH/dev" || /system/bin/mount --bind /dev "$GUESTPATH/dev" || goodbye
-    $BB mount --bind /sys "$GUESTPATH/sys" || /system/bin/mount --bind /sys "$GUESTPATH/sys" || goodbye
-    $BB mount -t proc proc "$GUESTPATH/proc" || /system/bin/mount -t proc proc "$GUESTPATH/proc" || goodbye
-    $BB mount -t devpts devpts "$GUESTPATH/dev/pts" || /system/bin/mount -t devpts devpts "$GUESTPATH/dev/pts" || goodbye
+    # Targets first: a bind to a missing directory fails with ENOENT, which
+    # used to abort the install on the very first mount.
+    mkdir -p "$GUESTPATH/dev" "$GUESTPATH/dev/pts" "$GUESTPATH/dev/shm" \
+        "$GUESTPATH/sys" "$GUESTPATH/proc" "$GUESTPATH/tmp" \
+        "$GUESTPATH/mnt/host-tmp" "$GUESTPATH/sdcard" 2>/dev/null || true
 
+    # /dev and /proc are required (the package manager needs both). Everything
+    # else is a convenience: failing /sdcard or /dev/pts must not abort a
+    # multi-gigabyte install, which is what `|| goodbye` did.
+    _try_mount() { # _try_mount <target> <args...>
+        _tgt="$1"; shift
+        $BB mount "$@" "$_tgt" 2>/dev/null && return 0
+        /system/bin/mount "$@" "$_tgt" 2>/dev/null && return 0
+        return 1
+    }
+
+    if ! _try_mount "$GUESTPATH/dev" --bind /dev; then
+        if ! _try_mount "$GUESTPATH/dev" --rbind /dev; then
+            error "cannot bind /dev — the package manager cannot run without it"
+            goodbye
+        fi
+    fi
+    _try_mount "$GUESTPATH/sys" --bind /sys || \
+        _try_mount "$GUESTPATH/sys" --rbind /sys || \
+        progress "warning: /sys not mounted"
+    if ! _try_mount "$GUESTPATH/proc" -t proc proc; then
+        error "cannot mount /proc — the package manager cannot run without it"
+        goodbye
+    fi
+    _try_mount "$GUESTPATH/dev/pts" -t devpts devpts || \
+        progress "warning: /dev/pts not mounted (no ptys in the guest)"
     mkdir -p "$GUESTPATH/dev/shm"
-    $BB mount -t tmpfs -o size=512M,mode=1777 tmpfs "$GUESTPATH/dev/shm" || /system/bin/mount -t tmpfs -o size=512M,mode=1777 tmpfs "$GUESTPATH/dev/shm" || goodbye
+    _try_mount "$GUESTPATH/dev/shm" -t tmpfs -o size=512M,mode=1777 tmpfs || \
+        progress "warning: /dev/shm not mounted"
 
     ensure_chroot_tmp
 
     mkdir -p "$GUESTPATH/sdcard"
-    $BB mount --bind /sdcard "$GUESTPATH/sdcard" || /system/bin/mount --bind /sdcard "$GUESTPATH/sdcard" || goodbye
+    _try_mount "$GUESTPATH/sdcard" --bind /sdcard || \
+        progress "warning: /sdcard not mounted"
+    progress "Mounted: $(grep -c " $GUESTPATH/" /proc/mounts 2>/dev/null || echo 0) filesystems"
 
     progress "Configuring Network and Android groups..."
     guest_sh '
@@ -189,22 +218,42 @@ configure_guest_chroot() {
     ' || goodbye
 
     progress "Creating User ($USERNAME)..."
-    guest_sh "
+    # The account is created with an explicit primary group and its existence
+    # is VERIFIED afterwards.
+    #
+    # The old version piped `useradd … 2>/dev/null` and then wrote a sudoers
+    # entry regardless. On an image whose useradd refuses (no default group,
+    # USERGROUPS_ENAB=no, or a minimal rootfs without the tool) the install
+    # still "succeeded" with a sudo rule pointing at an account that did not
+    # exist, so the guest had no usable login and the failure only surfaced
+    # much later as a terminal that would not start.
+    if ! guest_sh "
         if ! id $USERNAME >/dev/null 2>&1; then
             if command -v useradd >/dev/null 2>&1; then
-                useradd -m -s /bin/bash $USERNAME 2>/dev/null || useradd -m -s /bin/sh $USERNAME
+                (command -v groupadd >/dev/null 2>&1 && groupadd -f $USERNAME) 2>/dev/null || true
+                useradd -m -g $USERNAME -s /bin/bash $USERNAME 2>/dev/null \
+                    || useradd -m -s /bin/bash $USERNAME 2>/dev/null \
+                    || useradd -m $USERNAME 2>/dev/null
+            elif command -v adduser >/dev/null 2>&1; then
+                adduser -D -s /bin/sh $USERNAME 2>/dev/null || true
             fi
-            echo '$USERNAME:altaris' | chpasswd 2>/dev/null || true
         fi
+        id $USERNAME >/dev/null 2>&1 || exit 3
+        echo '$USERNAME:altaris' | chpasswd 2>/dev/null || true
         if command -v usermod >/dev/null 2>&1; then
-            for g in wheel audio video users aid_inet; do
+            for g in wheel audio video users aid_inet aid_net_raw aid_graphics; do
                 usermod -aG \$g $USERNAME 2>/dev/null || true
             done
         fi
         mkdir -p /etc/sudoers.d
         echo '$USERNAME ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/$USERNAME
         chmod 0440 /etc/sudoers.d/$USERNAME
-    " || goodbye
+    "; then
+        error "Could not create the guest account '$USERNAME' in $GUESTPATH"
+        error "The rootfs has no usable useradd/adduser. Reinstall, or check the image."
+        goodbye
+    fi
+    success "Guest account $USERNAME ready"
 
     touch "$GUESTPATH/.altaris_configured"
     success "$DISTRO_LABEL environment configured (rootfs + user; XFCE via family phase)!"

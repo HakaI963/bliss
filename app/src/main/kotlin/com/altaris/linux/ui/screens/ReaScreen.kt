@@ -63,6 +63,7 @@ import com.altaris.linux.core.rea.ChunkRow
 import com.altaris.linux.core.rea.ChunkState
 import com.altaris.linux.core.rea.Findings
 import com.altaris.linux.core.rea.ReaBridge
+import com.altaris.linux.core.rea.ReaDiagnosis
 import com.altaris.linux.core.rea.ReaDistro
 import com.altaris.linux.core.rea.ReaManager
 import com.altaris.linux.core.rea.ReaToolInstaller
@@ -1020,6 +1021,13 @@ private fun StatusTab(accent: Color, distro: ReaDistro.State, bridge: ReaBridge.
             DetailLine("REA", status.reaVersion.ifBlank { "—" }, accent)
             DetailLine("Node", status.nodeVersion.ifBlank { "—" }, accent)
             DetailLine("Distro", distro.method?.label ?: "—", accent)
+            if (distro.methods.size > 1) {
+                DetailLine(
+                    "Installed",
+                    distro.methods.joinToString(", ") { it.label },
+                    accent,
+                )
+            }
             Spacer(Modifier.height(4.dp))
             // No start/stop: the server is meant to always be up, so the only
             // action here is to install the tools it needs.
@@ -1057,6 +1065,41 @@ private fun StatusTab(accent: Color, distro: ReaDistro.State, bridge: ReaBridge.
             MiniFrame("Tool installs", accent, trailing = tools.summary) {
                 tools.tools.forEach { ToolBar(it, accent) }
             }
+        }
+
+        // A diagnosis, not a status line: the checks below are the ones that
+        // decide whether proot or chroot can work at all on this device. Every
+        // row is measured, never assumed, so "chroot is broken" resolves to a
+        // specific missing piece instead of a guess.
+        val diagnosis by ReaDiagnosis.state.collectAsState()
+        LaunchedEffect(tick) {
+            withContext(Dispatchers.IO) { ReaDiagnosis.run(context) }
+        }
+        MiniFrame(
+            "Diagnosis",
+            accent,
+            trailing = if (diagnosis.running) "checking" else "done",
+        ) {
+            diagnosis.checks.forEach { check ->
+                DetailLine(
+                    check.label,
+                    check.detail,
+                    if (check.ok) accent else MaterialTheme.colorScheme.error,
+                )
+            }
+            Spacer(Modifier.height(4.dp))
+            PrismSecondaryButton(
+                text = "Re-run checks",
+                accent = accent,
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !diagnosis.running,
+                onClick = {
+                    scope.launch {
+                        withContext(Dispatchers.IO) { ReaDiagnosis.run(context) }
+                        tick++
+                    }
+                },
+            )
         }
     }
 }

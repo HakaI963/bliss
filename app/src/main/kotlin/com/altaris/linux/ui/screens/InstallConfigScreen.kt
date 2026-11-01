@@ -102,7 +102,11 @@ fun InstallConfigScreen(
     val context = LocalContext.current
     val appCtx = context.applicationContext
     var selectedTheme by remember { mutableStateOf("dark") }
-    var selectedDesktops by remember(distro.id) { mutableStateOf(setOf(DesktopChoice.XFCE)) }
+    // Nothing is preselected. A desktop is hundreds of packages plus a
+    // theming download, and installing it because the screen defaulted to it
+    // is exactly the "it downloaded XFCE and I never asked" complaint. The
+    // terminal base is always installed; desktops are opt-in per install.
+    var selectedDesktops by remember(distro.id) { mutableStateOf(emptySet<DesktopChoice>()) }
     var hwAccel by remember(distro.id) { mutableStateOf(true) }
     // Named install: a label for a SECOND copy of this distro (own container).
     // Empty = install into the distro's default container (repair/reinstall).

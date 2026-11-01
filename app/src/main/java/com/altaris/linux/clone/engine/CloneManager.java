@@ -643,9 +643,20 @@ final class CloneManager {
                 // alive makes Android migrate it to the default display: the
                 // clone flashes full-screen on the phone for a frame. Wait for
                 // the process to actually die before the caller releases it.
-                for (int i = 0; i < 40; i++) {
+                //
+                // `pidof` exits non-zero when nothing matches, which is the
+                // normal "it is dead" case — but a shell that reports "not
+                // found" on stderr with exit 0 would look alive. Treat only a
+                // real numeric PID as alive, and give a force-stop a moment to
+                // take effect before probing.
+                boolean dead = false;
+                for (int i = 0; i < 60; i++) {
                     AppCatalog.CommandResult probe = AppCatalog.run("pidof " + quote(clone), 2);
-                    if (!probe.ok() || probe.output.trim().isEmpty()) break;
+                    String pids = probe.output == null ? "" : probe.output.trim();
+                    if (pids.isEmpty() || pids.contains("not found") || !pids.matches("[\\d\\s]+")) {
+                        dead = true;
+                        break;
+                    }
                     try {
                         Thread.sleep(50);
                     } catch (InterruptedException interrupted) {
@@ -653,7 +664,14 @@ final class CloneManager {
                         break;
                     }
                 }
-                engine.log("clone kill " + clonePackage);
+                if (!dead) {
+                    // Still alive after ~3 s. Force-stop again and keep going:
+                    // the caller must not keep the display up indefinitely, but
+                    // say so in the log so a flash is diagnosable.
+                    AppCatalog.run("am force-stop " + quote(clone), 30);
+                    engine.log("clone kill " + clone + ": process still alive after force-stop");
+                }
+                engine.log("clone kill " + clone);
                 return Jsons.ok("stopped " + clonePackage);
             } catch (Throwable e) {
                 return Jsons.error(e);

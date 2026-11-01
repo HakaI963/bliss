@@ -47,7 +47,8 @@ final class VirtualDisplaySession {
     private final Object captureLock = new Object();
     private final WindowManagerBridge windowManager;
     private final int previousImePolicy;
-    private final boolean localIme;
+    /** True when the system IME was pushed off this display (see constructor). */
+    private final boolean imeIsolated;
     private final String flagsLabel;
     private final boolean refreshRateApplied;
 
@@ -75,13 +76,26 @@ final class VirtualDisplaySession {
         try {
             manager = new WindowManagerBridge();
             previous = manager.getDisplayImePolicy(displayId);
-            local = manager.setDisplayImePolicy(displayId, WindowManagerBridge.DISPLAY_IME_POLICY_LOCAL);
+            // Explicitly HIDE the IME on this display.
+            //
+            // The previous version set DISPLAY_IME_POLICY_LOCAL, which moves the
+            // phone's own input method onto the virtual display. The effect on
+            // device was the opposite of helpful: typing into the viewer stole
+            // the real keyboard, and closing the viewer left the phone's IME
+            // attached to a display that no longer existed, so it collapsed or
+            // vanished mid-typing.
+            //
+            // The viewer supplies its own on-screen keyboard and injects the
+            // resulting characters as key events (InputBridge.text), which is
+            // fully isolated: the system IME is never involved, so the phone's
+            // keyboard cannot be disturbed by a clone.
+            local = manager.setDisplayImePolicy(displayId, WindowManagerBridge.DISPLAY_IME_POLICY_HIDE);
         } catch (Throwable ignored) {
             // IME policy is best-effort; the display works without it.
         }
         this.windowManager = manager;
         this.previousImePolicy = previous;
-        this.localIme = local;
+        this.imeIsolated = local;
     }
 
     static VirtualDisplaySession create(Context context, int width, int height, int dpi, int fps) {
@@ -166,8 +180,14 @@ final class VirtualDisplaySession {
         }
     }
 
-    boolean localIme() {
-        return localIme;
+    /**
+     * True when the system IME is kept off this display.
+     *
+     * The viewer draws its own keyboard and injects key events, so the phone's
+     * keyboard is never attached to a clone.
+     */
+    boolean imeIsolated() {
+        return imeIsolated;
     }
 
     String stateName() {
@@ -292,7 +312,8 @@ final class VirtualDisplaySession {
             object.put("flags", flagsLabel);
             object.put("frames", frameCount);
             object.put("last_frame_ms", lastFrameAt);
-            object.put("ime_local", localIme);
+            object.put("ime_isolated", imeIsolated);
+            object.put("ime_local", false);
             object.put("rotation", rotation());
             object.put("refresh_rate", refreshRate());
         } catch (Throwable ignored) {

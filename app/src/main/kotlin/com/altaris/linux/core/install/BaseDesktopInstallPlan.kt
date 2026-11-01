@@ -44,7 +44,7 @@ object BaseDesktopInstallPlan {
     fun phasesFor(
         method: String,
         displayName: String = "Debian",
-        desktops: Set<DesktopChoice> = setOf(DesktopChoice.XFCE)
+        desktops: Set<DesktopChoice> = emptySet()
     ): List<Phase> {
         val selected = DesktopInstallSelection.canonical(desktops)
         val xfce = DesktopChoice.XFCE in selected
@@ -102,7 +102,7 @@ object BaseDesktopInstallPlan {
         ctx: Context,
         theme: String,
         distroId: String = "debian",
-        desktops: Set<DesktopChoice> = setOf(DesktopChoice.XFCE)
+        desktops: Set<DesktopChoice> = emptySet()
     ): String {
         val profile = DistroInstallProfile.forId(distroId)
             ?: DistroInstallProfile.require("debian")
@@ -130,7 +130,7 @@ object BaseDesktopInstallPlan {
         ctx: Context,
         theme: String,
         distroId: String = "debian",
-        desktops: Set<DesktopChoice> = setOf(DesktopChoice.XFCE)
+        desktops: Set<DesktopChoice> = emptySet()
     ): String =
         Base64.encodeToString(
             familySetupPayload(ctx, theme, distroId, desktops).toByteArray(Charsets.UTF_8),

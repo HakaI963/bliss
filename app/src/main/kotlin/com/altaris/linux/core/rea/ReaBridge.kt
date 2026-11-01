@@ -216,7 +216,20 @@ object ReaBridge {
      * no-op when the server is already alive and REA is installed.
      */
     suspend fun ensureRunning(context: Context): State = withContext(Dispatchers.IO) {
-        if (session?.isAlive == true && server != null) return@withContext _state.value
+        if (session?.isAlive == true && server != null) {
+            // The user may have switched proot ⇄ chroot while the bridge was up.
+            // Serve the selected method instead of quietly keeping the old one.
+            val wanted = ReaDistro.distroId(context)
+            if (!wanted.isNullOrBlank() && wanted != _state.value.distroId) {
+                log("switching to " + wanted, LogLine.Level.INFO)
+                runCatching { server?.stop() }
+                server = null
+                runCatching { session?.stop() }
+                session = null
+            } else {
+                return@withContext _state.value
+            }
+        }
         val id = ReaDistro.distroId(context) ?: return@withContext _state.value.copy(
             running = false,
             error = "REA is not installed. Install it from Tools → Reverse engineering.",
@@ -652,4 +665,133 @@ object ReaBridge {
           }
         }
     """.trimIndent()
+
+    /**
+     * One agent client that can talk to the bridge, with the config it wants.
+     *
+     * Every entry is a client people actually run against an MCP server; the
+     * shape differs because there is no shared standard for the outer key.
+     * Showing the right one is the difference between "paste and it works" and
+     * "paste and the server is silently ignored".
+     */
+    data class ClientConfig(
+        /** Chip label, short enough for a row of them. */
+        val label: String,
+        /** Where this block goes, so the user knows which file to edit. */
+        val where: String,
+        /** The copy-paste text. */
+        val body: String,
+    )
+
+    /** The clients offered in Tools → Reverse engineering. */
+    fun clientConfigs(): List<ClientConfig> = listOf(
+        ClientConfig(
+            "OpenCode v2",
+            "opencode.jsonc",
+            configJson(),
+        ),
+        ClientConfig(
+            "Claude Code",
+            "claude mcp add --transport http rea " + liveEndpoint,
+            """
+                {
+                  "mcpServers": {
+                    "rea": {
+                      "type": "http",
+                      "url": "${liveEndpoint}"
+                    }
+                  }
+                }
+            """.trimIndent(),
+        ),
+        ClientConfig(
+            "Codex",
+            "~/.codex/config.toml",
+            """
+                [mcp_servers.rea]
+                url = "${liveEndpoint}"
+            """.trimIndent(),
+        ),
+        ClientConfig(
+            "Cursor",
+            ".cursor/mcp.json",
+            configJsonLegacy(),
+        ),
+        ClientConfig(
+            "Windsurf",
+            "~/.codeium/windsurf/mcp_config.json",
+            configJsonLegacy(),
+        ),
+        ClientConfig(
+            "Cline",
+            "cline_mcp_settings.json",
+            configJsonLegacy(),
+        ),
+        ClientConfig(
+            "Zed",
+            "settings.json → context_servers",
+            """
+                {
+                  "context_servers": {
+                    "rea": {
+                      "source": "custom",
+                      "command": "",
+                      "args": [],
+                      "env": {}
+                    }
+                  }
+                }
+            """.trimIndent(),
+        ),
+        ClientConfig(
+            "Continue",
+            "config.yaml → mcpServers",
+            """
+                mcpServers:
+                  - name: rea
+                    type: streamable-http
+                    url: "${liveEndpoint}"
+            """.trimIndent(),
+        ),
+        ClientConfig(
+            "Gemini CLI",
+            "~/.gemini/settings.json",
+            configJsonLegacy(),
+        ),
+        ClientConfig(
+            "Qwen Code",
+            "~/.qwen/settings.json",
+            configJsonLegacy(),
+        ),
+        ClientConfig(
+            "Kiro",
+            "~/.kiro/settings/mcp.json",
+            configJsonLegacy(),
+        ),
+        ClientConfig(
+            "Amp",
+            "amp mcp add rea " + liveEndpoint,
+            configJsonLegacy(),
+        ),
+        ClientConfig(
+            "Crush",
+            "crush.json → mcp",
+            configJsonLegacy(),
+        ),
+        ClientConfig(
+            "Pi",
+            "pi mcp config",
+            configJsonLegacy(),
+        ),
+        ClientConfig(
+            "Hermes",
+            "hermes mcp add",
+            configJsonLegacy(),
+        ),
+        ClientConfig(
+            "Generic JSON",
+            "any MCP client",
+            configJsonLegacy(),
+        ),
+    )
 }

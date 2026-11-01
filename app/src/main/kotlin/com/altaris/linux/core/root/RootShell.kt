@@ -4,6 +4,8 @@ import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.BufferedReader
 import java.io.File
 import java.io.FileOutputStream
@@ -103,6 +105,19 @@ object RootShell {
             mainHandler.post { onResult(ok) }
         }
     }
+
+    /**
+     * Suspending root probe.
+     *
+     * [isRootAvailable] only reads the cached answer, so a caller that needs a
+     * real result without blocking its thread needs this. [forceClearCache]
+     * re-runs the probe even when one already succeeded.
+     */
+    suspend fun probeRootAvailableSuspending(forceClearCache: Boolean = false): Boolean =
+        withContext(Dispatchers.IO) {
+            if (forceClearCache) clearSuCache()
+            runCatching { isRootAvailable() }.getOrDefault(false)
+        }
 
     /** Result of a blocking root capture (exit code + stdout). */
     data class CaptureResult(val exitCode: Int, val stdout: String)

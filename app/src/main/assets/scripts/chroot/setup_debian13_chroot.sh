@@ -236,20 +236,54 @@ configure_debian_chroot() {
     # Prefer system mount — busybox often "can't find /data" on KSU (sudo stays nosuid)
     /system/bin/mount -o remount,dev,suid /data 2>/dev/null || $BB mount -o remount,dev,suid /data 2>/dev/null || $BB mount -o remount,dev,suid / 2>/dev/null || true
 
-    $BB mount --bind /dev "$DEBIANPATH/dev" || /system/bin/mount --bind /dev "$DEBIANPATH/dev" || goodbye
-    $BB mount --bind /sys "$DEBIANPATH/sys" || /system/bin/mount --bind /sys "$DEBIANPATH/sys" || goodbye
-    $BB mount -t proc proc "$DEBIANPATH/proc" || /system/bin/mount -t proc proc "$DEBIANPATH/proc" || goodbye
-    $BB mount -t devpts devpts "$DEBIANPATH/dev/pts" || /system/bin/mount -t devpts devpts "$DEBIANPATH/dev/pts" || goodbye
+    # Mount targets must exist before mounting, or every bind fails with ENOENT.
+    mkdir -p "$DEBIANPATH/dev" "$DEBIANPATH/dev/pts" "$DEBIANPATH/dev/shm" \
+        "$DEBIANPATH/sys" "$DEBIANPATH/proc" "$DEBIANPATH/tmp" \
+        "$DEBIANPATH/mnt/host-tmp" "$DEBIANPATH/sdcard" 2>/dev/null || true
 
+    # Try busybox, then the system mount, then a lazy/rebind variant.
+    #
+    # These used to be `|| goodbye`: one optional mount failing aborted the
+    # whole install, which is a large part of "chroot is broken" — /sdcard in
+    # particular fails on ROMs where the shell user cannot bind it. Only /proc
+    # and /dev are genuinely required (apt needs both); everything else is a
+    # convenience and is reported instead of killing the run.
+    _try_mount() { # _try_mount <target> <args...>
+        _tgt="$1"; shift
+        $BB mount "$@" "$_tgt" 2>/dev/null && return 0
+        /system/bin/mount "$@" "$_tgt" 2>/dev/null && return 0
+        return 1
+    }
+
+    if ! _try_mount "$DEBIANPATH/dev" --bind /dev; then
+        if ! _try_mount "$DEBIANPATH/dev" --rbind /dev; then
+            error "cannot bind /dev — apt cannot run without it"
+            goodbye
+        fi
+    fi
+    _try_mount "$DEBIANPATH/sys" --bind /sys || \
+        _try_mount "$DEBIANPATH/sys" --rbind /sys || \
+        progress "warning: /sys not mounted (GUI may be limited)"
+    if ! _try_mount "$DEBIANPATH/proc" -t proc proc; then
+        error "cannot mount /proc — apt cannot run without it"
+        goodbye
+    fi
+    _try_mount "$DEBIANPATH/dev/pts" -t devpts devpts || \
+        progress "warning: /dev/pts not mounted (no ptys in the guest)"
     mkdir -p "$DEBIANPATH/dev/shm"
-    $BB mount -t tmpfs -o size=512M,mode=1777 tmpfs "$DEBIANPATH/dev/shm" || /system/bin/mount -t tmpfs -o size=512M,mode=1777 tmpfs "$DEBIANPATH/dev/shm" || goodbye
+    _try_mount "$DEBIANPATH/dev/shm" -t tmpfs -o size=512M,mode=1777 tmpfs || \
+        progress "warning: /dev/shm not mounted"
 
     # Debian /tmp must be sticky world-writable for apt (_apt).
     # Do NOT bind Termux files/usr/tmp here — app_data perms/SELinux break mkstemp.
     ensure_chroot_tmp
 
     mkdir -p "$DEBIANPATH/sdcard"
-    $BB mount --bind /sdcard "$DEBIANPATH/sdcard" || /system/bin/mount --bind /sdcard "$DEBIANPATH/sdcard" || goodbye
+    _try_mount "$DEBIANPATH/sdcard" --bind /sdcard || \
+        progress "warning: /sdcard not mounted (shared storage unavailable in the guest)"
+
+    # Verify what actually got mounted, so the log explains a later failure.
+    progress "Mounted: $(grep -c " $DEBIANPATH/" /proc/mounts 2>/dev/null || echo 0) filesystems"
 
     progress "Configuring Network and Groups..."
     $BB chroot "$DEBIANPATH" /bin/bash -c '
@@ -301,14 +335,25 @@ configure_debian_chroot() {
     ' || goodbye
 
     progress "Creating User ($USERNAME)..."
-    $BB chroot "$DEBIANPATH" /bin/bash -c "
+    # Verified, not assumed: the old version ignored useradd's exit status and
+    # wrote a sudoers rule for an account that might not exist.
+    if ! $BB chroot "$DEBIANPATH" /bin/bash -c "
         export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
         export TMPDIR=/tmp
         groupadd storage 2>/dev/null
         groupadd wheel 2>/dev/null
-        id -u $USERNAME >/dev/null 2>&1 || useradd -m -g users -G wheel,audio,video,storage,aid_inet -s /bin/bash $USERNAME
+        if ! id -u $USERNAME >/dev/null 2>&1; then
+            useradd -m -g users -G wheel,audio,video,storage,aid_inet -s /bin/bash $USERNAME 2>/dev/null \
+                || useradd -m -s /bin/bash $USERNAME 2>/dev/null \
+                || useradd -m $USERNAME 2>/dev/null
+        fi
+        id -u $USERNAME >/dev/null 2>&1 || exit 3
         echo '$USERNAME:altaris' | chpasswd
-    " || goodbye
+    "; then
+        error "Could not create the guest account '$USERNAME' in $DEBIANPATH"
+        goodbye
+    fi
+    success "Guest account $USERNAME ready"
 
     progress "Configuring Sudoers..."
     $BB chroot "$DEBIANPATH" /bin/bash -c "

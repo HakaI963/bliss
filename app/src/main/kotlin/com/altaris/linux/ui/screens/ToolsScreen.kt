@@ -11,6 +11,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -349,7 +350,7 @@ private fun ControlCard(
             )
             PrismRow(
                 title = "Guest CLI",
-                subtitle = "altaris · bliss alias",
+                subtitle = "altaris",
                 accent = accent
             )
         }
@@ -428,8 +429,7 @@ private fun CliCard(context: Context, accent: Color) {
     PrismSectionLabel("Commands", accent)
     PrismCard(accent = accent) {
         PrismNote(
-            "Installed as `altaris` (with a `bliss` compatibility alias) in the host and " +
-                "every proot/chroot guest."
+            "Installed as `altaris` in the host and every proot/chroot guest."
         )
         Spacer(Modifier.height(Prism.Tight))
         CodeBlock(CLI_HELP)
@@ -552,7 +552,12 @@ private fun AutomationCard(context: Context, accent: Color) {
 @Composable
 private fun ReaCard(context: Context, accent: Color) {
     val state by ReaDistro.state.collectAsState()
-    var method by remember { mutableStateOf(ReaDistro.Method.PROOT) }
+    // Seeded from what is actually installed, never a hardcoded default: the
+    // chips used to always open on proot, so a chroot install looked like it
+    // had been replaced by proot every time the screen was opened.
+    var method by remember(state.method) {
+        mutableStateOf(state.method ?: ReaDistro.Method.PROOT)
+    }
     var confirmRemove by remember { mutableStateOf(false) }
 
     // Re-read the truth while an install runs (and once when it ends), so the
@@ -563,6 +568,20 @@ private fun ReaCard(context: Context, accent: Color) {
             withContext(Dispatchers.IO) { ReaDistro.refresh(context) }
             if (state.busy.isBlank()) break
             kotlinx.coroutines.delay(1500L)
+        }
+    }
+    // Keep the local selection in step with the active method, so switching in
+    // the REA screen or finishing an install is reflected here immediately.
+    LaunchedEffect(state.method) {
+        state.method?.let { method = it }
+    }
+    // Probe root once when the card appears. Without this the cached answer is
+    // usually "no" on a cold start and the chroot row says "root required" on a
+    // device that has already granted superuser.
+    LaunchedEffect(Unit) {
+        withContext(Dispatchers.IO) {
+            com.altaris.linux.core.root.RootShell.probeRootAvailableSuspending(forceClearCache = false)
+            ReaDistro.refresh(context)
         }
     }
 
@@ -625,43 +644,87 @@ private fun ReaCard(context: Context, accent: Color) {
         PrismNote(
             "REA runs inside its own private distro that Altaris creates here, so it " +
                 "never touches your distros. Agents reach it over MCP. Every analysis " +
-                "tool is installed with it. Pick how it runs:"
+                "tool is installed with it."
         )
+
+        Spacer(Modifier.height(Prism.Stack))
+        // Which method is installed, which one the server uses, and what each
+        // chip would do. Without this the screen only showed two unlabelled
+        // chips and there was no way to tell what was being installed.
+        PrismNote("Install method", fontSize = 10.sp, color = altarisMutedText())
         Spacer(Modifier.height(Prism.Tight))
-        Row(horizontalArrangement = Arrangement.spacedBy(Prism.ControlGap)) {
-            PrismChip(
-                "proot · no root",
-                accent,
-                selected = method == ReaDistro.Method.PROOT,
-                onClick = { method = ReaDistro.Method.PROOT },
-            )
-            PrismChip(
-                "chroot · needs root",
-                accent,
-                selected = method == ReaDistro.Method.CHROOT,
-                onClick = { method = ReaDistro.Method.CHROOT },
+        ReaDistro.Method.entries.forEach { entry ->
+            val installedHere = entry in state.methods
+            val isActive = state.method == entry
+            val blocked = entry == ReaDistro.Method.CHROOT && !state.chrootPossible
+            PrismRow(
+                title = when (entry) {
+                    ReaDistro.Method.PROOT -> "proot"
+                    ReaDistro.Method.CHROOT -> "chroot"
+                } + when {
+                    isActive && installedHere -> " · in use"
+                    installedHere -> " · installed"
+                    blocked -> " · root required"
+                    else -> " · not installed"
+                },
+                subtitle = when (entry) {
+                    ReaDistro.Method.PROOT -> "Works everywhere, no root needed"
+                    ReaDistro.Method.CHROOT -> "Faster, needs superuser"
+                },
+                accent = accent,
+                leading = { PrismOrb(active = isActive && installedHere, accent = accent) },
+                trailing = {
+                    when {
+                        installedHere && !isActive -> PrismChip(
+                            "Use", accent,
+                            onClick = {
+                                ReaDistro.select(context, entry)
+                                method = entry
+                            },
+                        )
+                        installedHere -> PrismChip("Active", accent, selected = true)
+                        else -> PrismChip(
+                            if (blocked) "No root" else "Install", accent,
+                            selected = method == entry,
+                            onClick = {
+                                if (!blocked) {
+                                    method = entry
+                                    ReaDistro.install(context, entry)
+                                }
+                            },
+                        )
+                    }
+                },
             )
         }
-        if (method == ReaDistro.Method.CHROOT && !state.chrootPossible) {
-            Spacer(Modifier.height(Prism.Tight))
+        Spacer(Modifier.height(Prism.Tight))
+        PrismNote(
+            "Both can be installed. The one marked in use is what the MCP server runs, " +
+                "and that choice is remembered.",
+            fontSize = 10.sp,
+        )
+        if (!state.chrootPossible) {
             PrismNote(
-                "Root is not available, so chroot cannot be used. proot works without it.",
+                "Root is not available, so chroot cannot be installed. proot works without it.",
                 color = MaterialTheme.colorScheme.error,
             )
         }
 
         Spacer(Modifier.height(Prism.Stack))
         PrismActions {
+            // A single, explicit action for the currently selected chip, kept
+            // for the common case where the user just wants the default.
             PrismButton(
                 text = when {
                     state.busy.isNotBlank() -> "Installing…"
-                    state.installed -> "Reinstall analysis environment"
-                    else -> "Install analysis environment"
+                    method in state.methods -> "Reinstall " + method.label
+                    else -> "Install " + method.label
                 },
                 accent = accent,
                 icon = Icons.Default.PlayArrow,
                 modifier = Modifier.fillMaxWidth(),
-                enabled = state.busy.isBlank(),
+                enabled = state.busy.isBlank() &&
+                    !(method == ReaDistro.Method.CHROOT && !state.chrootPossible),
             ) {
                 // Not launched from the screen's scope: a multi-gigabyte
                 // install outlives any composition, and launching it here is
@@ -745,6 +808,7 @@ private fun ReaCard(context: Context, accent: Color) {
  * the copy-paste config are shown here; nothing is written into an agent's
  * config automatically.
  */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun ReaMcpCard(context: Context, accent: Color) {
     val scope = rememberCoroutineScope()
@@ -753,9 +817,10 @@ private fun ReaMcpCard(context: Context, accent: Color) {
     var copied by remember { mutableStateOf(false) }
     val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
     // Recomputed when the server state changes, so a fallback port is reflected.
-    val config = remember(bridge.running) { ReaBridge.configJson() }
-    val legacyConfig = remember(bridge.running) { ReaBridge.configJsonLegacy() }
-    var showLegacy by remember { mutableStateOf(false) }
+    // The client list is rebuilt for the same reason: every block embeds the
+    // live URL.
+    val clients = remember(bridge.running, bridge.toolCount) { ReaBridge.clientConfigs() }
+    var selectedClient by remember(bridge.running) { mutableStateOf(clients.first()) }
 
     // The bridge starts with the app and is kept alive here, exactly like the
     // clone control server: no button, and it recovers on its own.
@@ -804,21 +869,28 @@ private fun ReaMcpCard(context: Context, accent: Color) {
                 "schemas. Add it to the agent's config:"
         )
         Spacer(Modifier.height(Prism.Tight))
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            PrismChip(
-                "OpenCode v2",
-                accent,
-                selected = !showLegacy,
-                onClick = { showLegacy = false },
-            )
-            PrismChip(
-                "Claude / Codex",
-                accent,
-                selected = showLegacy,
-                onClick = { showLegacy = true },
-            )
+        // One chip per agent client. They differ in the outer config key, so
+        // the wrong block is silently ignored — which is worse than no block.
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            ReaBridge.clientConfigs().forEach { client ->
+                PrismChip(
+                    client.label,
+                    accent,
+                    selected = client == selectedClient,
+                    onClick = { selectedClient = client },
+                )
+            }
         }
         Spacer(Modifier.height(Prism.Tight))
+        PrismNote(
+            "Paste into " + selectedClient.where,
+            fontSize = 10.sp,
+            color = altarisMutedText(),
+        )
+        Spacer(Modifier.height(3.dp))
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -832,7 +904,7 @@ private fun ReaMcpCard(context: Context, accent: Color) {
                 .padding(Prism.Tight),
         ) {
             Text(
-                if (showLegacy) legacyConfig else config,
+                selectedClient.body,
                 fontSize = 9.5.sp,
                 lineHeight = 13.sp,
                 fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
@@ -845,11 +917,7 @@ private fun ReaMcpCard(context: Context, accent: Color) {
                 accent = accent,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                clipboard.setText(
-                    androidx.compose.ui.text.AnnotatedString(
-                        if (showLegacy) legacyConfig else config
-                    )
-                )
+                clipboard.setText(androidx.compose.ui.text.AnnotatedString(selectedClient.body))
                 copied = true
             }
             // No start/stop: the server runs for as long as REA is installed,

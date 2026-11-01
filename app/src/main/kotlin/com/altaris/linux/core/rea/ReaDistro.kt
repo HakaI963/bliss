@@ -47,6 +47,9 @@ object ReaDistro {
     /** Written into the rootfs only when the toolchain install has finished. */
     private const val READY_MARKER = ".altaris_rea_ready"
 
+    /** Preference holding the method the MCP server uses (see [select]). */
+    private const val KEY_ACTIVE_METHOD = "active_method"
+
     /** Size is cached: walking a multi-GB rootfs on every recomposition froze the UI. */
     private const val SIZE_TTL_MS = 120_000L
 
@@ -101,6 +104,16 @@ object ReaDistro {
          * no way to see why. Every line now lands here.
          */
         val log: String = "",
+        /**
+         * Every method whose container is present, in a stable order.
+         *
+         * Both can be installed at once: proot always works, chroot is faster
+         * when root is available. [method] is the one the MCP server uses; the
+         * user picks it explicitly and the choice is remembered.
+         */
+        val methods: Set<Method> = emptySet(),
+        /** True when [method] is usable right now (its container is ready). */
+        val activeReady: Boolean = false,
     ) {
         val fraction: Float
             get() = when {
@@ -157,24 +170,80 @@ object ReaDistro {
      */
     fun refresh(context: Context) {
         val app = context.applicationContext
-        val method = installedMethod(app)
-        val ready = method != null && isReady(app, method)
+        val present = presentMethods(app)
+        val active = chooseActive(app, present)
+        val ready = active != null && isReady(app, active)
         _state.value = _state.value.copy(
             // A present container opens the dashboard; [ready] drives the
             // "REA core missing" banner. Reporting a half-installed
             // environment as "not installed" was why a real chroot install
             // showed the frosted gate forever.
-            installed = method != null,
-            method = method,
+            installed = active != null,
+            method = active,
+            methods = present.toSet(),
             ready = ready,
-            sizeBytes = if (method != null) sizeOf(app, method) else 0L,
-            chrootPossible = RootShell.isRootAvailable(),
+            activeReady = ready,
+            sizeBytes = if (active != null) sizeOf(app, active) else 0L,
+            // Only a *known* answer may override the last one. isRootAvailable()
+            // reads the cached probe, so on a cold start it is false even on a
+            // device that has granted root — which used to hide the chroot
+            // option until something else happened to probe.
+            chrootPossible = if (RootShell.peekSuInvocation() != null) {
+                RootShell.isRootAvailable()
+            } else {
+                _state.value.chrootPossible
+            },
             busy = _state.value.busy,
         )
     }
 
-    /** The distro id of the installed REA distro, or null. */
-    fun distroId(context: Context): String? = installedMethod(context)?.id
+    /** The distro id of the active REA distro, or null. */
+    fun distroId(context: Context): String? = activeMethod(context)?.id
+
+    /** Every method whose container is present, in a stable order. */
+    fun installedMethods(context: Context): Set<Method> =
+        presentMethods(context.applicationContext).toSet()
+
+    /** True when [method]'s container is present. */
+    fun isMethodInstalled(context: Context, method: Method): Boolean =
+        containerPresent(context.applicationContext, method)
+
+    /**
+     * Make [method] the one the MCP server uses, and remember the choice.
+     *
+     * Both containers may exist. Rather than guessing (a previous version
+     * preferred "whichever was ready first"), the user's choice is stored and
+     * survives restarts. Returns the state after the switch.
+     */
+    fun select(context: Context, method: Method) {
+        val app = context.applicationContext
+        prefs(app).edit().putString(KEY_ACTIVE_METHOD, method.id).apply()
+        refresh(app)
+    }
+
+    /** The method the MCP server should use, or null when nothing is installed. */
+    fun activeMethod(context: Context): Method? =
+        chooseActive(context.applicationContext, presentMethods(context.applicationContext))
+
+    /**
+     * The remembered method when it is installed, else the other one.
+     *
+     * Falls back instead of failing: uninstalling the active method while the
+     * other is present must not leave REA unusable.
+     */
+    private fun chooseActive(context: Context, present: List<Method>): Method? {
+        if (present.isEmpty()) return null
+        val remembered = Method.fromId(prefs(context).getString(KEY_ACTIVE_METHOD, null))
+        if (remembered != null && remembered in present) return remembered
+        // No choice recorded yet: prefer a *ready* container, then proot, since
+        // proot needs no root and is always usable.
+        present.firstOrNull { isReady(context, it) }?.let { return it }
+        return present.firstOrNull { it == Method.PROOT } ?: present.first()
+    }
+
+    private fun prefs(context: Context) = context.getSharedPreferences(
+        "altaris_rea_settings", Context.MODE_PRIVATE,
+    )
 
     /**
      * Mark the environment installed after a successful install.
@@ -186,7 +255,9 @@ object ReaDistro {
         _state.value = _state.value.copy(
             installed = true,
             ready = true,
+            activeReady = true,
             method = method,
+            methods = _state.value.methods + method,
             busy = "",
             percent = 100,
             error = "",
@@ -194,7 +265,7 @@ object ReaDistro {
     }
 
     /**
-     * The installed method, if any.
+     * Every method whose container is present, in a stable order.
      *
      * Two bugs are fixed here:
      *
@@ -203,14 +274,11 @@ object ReaDistro {
      *     and a perfectly good chroot REA was reported as "not installed".
      *     Presence is now checked through [RootShell] for chroot.
      *  2. The first non-empty container used to win, so a half-extracted proot
-     *     container shadowed a complete chroot install. A *ready* container now
-     *     wins over a merely present one.
+     *     container shadowed a complete chroot install. Selection is now a
+     *     remembered user choice, with a readiness-aware fallback.
      */
-    private fun installedMethod(context: Context): Method? {
-        val present = Method.entries.filter { containerPresent(context, it) }
-        if (present.isEmpty()) return null
-        return present.firstOrNull { isReady(context, it) } ?: present.first()
-    }
+    private fun presentMethods(context: Context): List<Method> =
+        Method.entries.filter { containerPresent(context, it) }
 
     /**
      * True when [method]'s container exists on disk at all.
@@ -338,6 +406,9 @@ object ReaDistro {
                     chrootPossible = RootShell.isRootAvailable(),
                     steps = defaultSteps(),
                     log = "",
+                    // Keep the methods already installed: installing the second
+                    // one must not hide the first.
+                    methods = presentMethods(app).toSet(),
                 )
                 appendLog("creating the hidden REA distro (" + method.label + ")")
                 onLog("creating the hidden REA distro (" + method.label + ")")
@@ -397,6 +468,9 @@ object ReaDistro {
                 }
                 val ok = status.installed && ReaManager.isInstalledIn(app, method.id)
                 if (ok) {
+                    // A finished install becomes the one the server uses, and
+                    // that choice is remembered so it survives a restart.
+                    prefs(app).edit().putString(KEY_ACTIVE_METHOD, method.id).apply()
                     markReady(method)
                     // Only now is the environment really usable.
                     rootfsOf(app, method)?.let { runCatching { File(it, READY_MARKER).writeText("1") } }
@@ -462,7 +536,7 @@ object ReaDistro {
     ): State = withContext(Dispatchers.IO) {
         mutex.withLock {
             val app = context.applicationContext
-            val method = installedMethod(app)
+            val method = activeMethod(app)
             if (method == null) {
                 _state.value = _state.value.copy(error = "REA is not installed")
                 return@withLock _state.value
@@ -499,7 +573,13 @@ object ReaDistro {
         }
     }
 
-    /** Remove the REA distro entirely (its files and its container). */
+    /**
+     * Remove the REA environment entirely (its files and its containers).
+     *
+     * Both containers are removed when both are present, so a user who tried
+     * proot and then chroot does not leave an invisible copy behind. The
+     * removal only reports success when nothing is left.
+     */
     fun uninstall(context: Context) {
         if (isInstalling()) return
         val app = context.applicationContext
@@ -528,19 +608,34 @@ object ReaDistro {
             appendLog("stopped the MCP bridge")
             runCatching { ReaManager.stop() }
                 .onFailure { Log.w(TAG, "REA stop failed", it) }
+            appendLog("stopped the REA process")
 
-            val method = installedMethod(app)
-            var removed = method == null
-            if (method != null) {
+            // Remove every container, not just the active one: a failed switch
+            // used to leave the other behind with no way to see or delete it.
+            val targets = presentMethods(app)
+            if (targets.isEmpty()) {
+                appendLog("no container was present")
+            }
+            var allRemoved = true
+            for (method in targets) {
                 appendLog("removing the " + method.label + " container")
-                removed = runCatching { ReaInstaller.removeContainer(app, method) }
-                    .onFailure { Log.w(TAG, "container removal failed", it) }
+                val removed = runCatching { ReaInstaller.removeContainer(app, method) }
+                    .onFailure {
+                        Log.w(TAG, "container removal failed: ${method.label}", it)
+                        appendLog("ERROR: " + (it.message ?: "removal failed"))
+                    }
                     .getOrDefault(false)
-                appendLog(if (removed) "container removed" else "ERROR: container could not be removed")
+                appendLog(
+                    if (removed) method.label + " container removed"
+                    else "ERROR: the " + method.label + " container could not be removed"
+                )
+                if (!removed) allRemoved = false
             }
             invalidateSize(app, null)
 
-            if (removed) {
+            if (allRemoved) {
+                // The remembered choice must not outlive the installs.
+                prefs(app).edit().remove(KEY_ACTIVE_METHOD).apply()
                 _state.value = State(chrootPossible = RootShell.isRootAvailable())
             } else {
                 // Never pretend it is gone: the previous code reset the state
@@ -549,7 +644,7 @@ object ReaDistro {
                 _state.value = _state.value.copy(
                     busy = "",
                     error = "Could not remove the analysis environment. " +
-                        "Check the log below.",
+                        "The log below names what blocked it.",
                     chrootPossible = RootShell.isRootAvailable(),
                 )
                 refresh(app)

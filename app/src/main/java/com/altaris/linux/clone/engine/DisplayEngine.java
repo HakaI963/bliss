@@ -102,7 +102,8 @@ final class DisplayEngine {
                 object.put("display_last_frame_ms", session == null ? 0 : session.lastFrameAt());
                 object.put("display_rotation", session == null ? -1 : session.rotation());
                 object.put("display_refresh_rate", session == null ? 0 : session.refreshRate());
-                object.put("ime_local", session != null && session.localIme());
+                object.put("ime_local", false);
+                object.put("ime_isolated", session != null && session.imeIsolated());
                 object.put("input_ready", input != null && input.available());
                 object.put("input_error", input == null
                         ? "not initialised" : input.unavailableReason());
@@ -304,27 +305,76 @@ final class DisplayEngine {
         return key == null ? "" : key.trim();
     }
 
-    /** Removes every root task hosted by [displayId] before the display dies. */
+    /**
+     * Removes every root task hosted by [displayId] before the display dies.
+     *
+     * This is what stops a stopped clone from flashing full-screen on the phone
+     * for a frame: when a virtual display disappears while it still hosts the
+     * top task, Android migrates that task to the default display and renders
+     * one frame of it before the force-stop lands.
+     *
+     * Two changes make that reliable:
+     *
+     *  1. **Parse both task-list formats.** `am stack list` is gone on newer
+     *     Android builds, so the old single parse silently found nothing and
+     *     the task was left to migrate. The fallbacks below cover it.
+     *  2. **Try `am task remove` as well as `am stack remove`.** The task record
+     *     is what migrates, so deleting it is the actual fix; removing the stack
+     *     alone does not always take the task with it.
+     */
     private void removeDisplayTasks(int displayId) {
         try {
-            AppCatalog.CommandResult list = AppCatalog.run("am stack list", 10);
-            if (!list.ok()) {
-                log("stack list failed: " + oneLine(list.output));
+            String listing = taskListing();
+            if (listing.isEmpty()) {
+                log("task list unavailable; cannot remove tasks on display " + displayId);
                 return;
             }
+            // Both `RootTask id=12 … displayId=3` and
+            // `* Task{9d3f #12 … displayId=3}` shapes are matched.
             java.util.regex.Matcher matcher = java.util.regex.Pattern
-                    .compile("RootTask id=(\\d+)[^\\n]*displayId=" + displayId + "\\b")
-                    .matcher(list.output);
+                    .compile("(?:RootTask id=|#)(\\d+)[^\\n]*displayId=" + displayId + "\\b")
+                    .matcher(listing);
+            java.util.LinkedHashSet<String> ids = new java.util.LinkedHashSet<>();
             while (matcher.find()) {
-                String stackId = matcher.group(1);
-                AppCatalog.CommandResult removed =
-                        AppCatalog.run("am stack remove " + stackId, 10);
-                log("removed stack " + stackId + " on display " + displayId
-                        + " exit=" + removed.exit);
+                ids.add(matcher.group(1));
             }
+            if (ids.isEmpty()) {
+                return;
+            }
+            for (String id : ids) {
+                for (String command : new String[]{
+                        "am task remove " + id,
+                        "am stack remove " + id,
+                }) {
+                    AppCatalog.CommandResult removed = AppCatalog.run(command, 10);
+                    if (removed.ok()) {
+                        log("removed task " + id + " on display " + displayId
+                                + " via '" + command.split(" ")[1] + "'");
+                        break;
+                    }
+                }
+            }
+            // Give the window manager a moment to drop the task records, so the
+            // display is released with nothing left to migrate.
+            AppCatalog.run("sleep 0.15", 2);
         } catch (Throwable e) {
             log("remove display tasks failed: " + message(e));
         }
+    }
+
+    /** Task listing from whichever `am` subcommand this build supports. */
+    private String taskListing() {
+        for (String command : new String[]{
+                "am stack list",
+                "cmd activity task list",
+                "am task list",
+        }) {
+            AppCatalog.CommandResult result = AppCatalog.run(command, 10);
+            if (result.ok() && result.output.contains("Task")) {
+                return result.output;
+            }
+        }
+        return "";
     }
 
     /**

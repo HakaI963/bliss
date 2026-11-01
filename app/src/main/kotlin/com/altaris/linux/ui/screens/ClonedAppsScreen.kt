@@ -52,6 +52,7 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.filled.Android
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.List
@@ -1025,6 +1026,10 @@ private fun CloneViewPage(
     var live by rememberSaveable { mutableStateOf(true) }
     var showLayout by rememberSaveable { mutableStateOf(false) }
     var showElements by rememberSaveable { mutableStateOf(false) }
+    // The clone's own keyboard. It never involves the system IME: every key is
+    // injected into this clone's virtual display, so the phone's keyboard is
+    // never moved, closed or otherwise disturbed by a clone.
+    var showKeyboard by rememberSaveable { mutableStateOf(false) }
     var split by rememberSaveable { mutableStateOf(0.58f) }
     var displayScale by rememberSaveable { mutableStateOf(1f) }
     val logState = rememberLazyListState()
@@ -1242,6 +1247,9 @@ private fun CloneViewPage(
             QToolButton("Elements", Icons.Default.Widgets, active = showElements) {
                 showElements = !showElements
             }
+            QToolButton("Keys", Icons.Default.Keyboard, active = showKeyboard) {
+                showKeyboard = !showKeyboard
+            }
             Spacer(Modifier.weight(1f))
             QToolButton(
                 "Stop",
@@ -1282,6 +1290,13 @@ private fun CloneViewPage(
         }
 
         ActionStrip(actions, actionState)
+
+        if (showKeyboard) {
+            CloneKeyboard(
+                packageName = session.clone.packageName,
+                onClose = { showKeyboard = false },
+            )
+        }
 
         if (showElements) {
             ElementsPanel(
@@ -1855,6 +1870,128 @@ private fun ViewerFrame(
             contentDescription = "Live clone display",
             modifier = Modifier.fillMaxSize(),
             contentScale = ContentScale.Fit,
+        )
+    }
+}
+
+/**
+ * An on-screen keyboard that belongs to the clone, not to the phone.
+ *
+ * Why this exists: the viewer used to rely on the system IME being moved onto
+ * the virtual display (`DISPLAY_IME_POLICY_LOCAL`). On device that meant typing
+ * into a clone stole the real keyboard, and closing the clone collapsed or
+ * closed the phone's IME mid-use. There is no way to make one system IME serve
+ * two displays without that fight.
+ *
+ * So the viewer draws its own keys. Every tap is injected as key events into
+ * this clone's display through the shell engine, which is exactly what an agent
+ * does. The system IME is never shown, moved, or asked anything, so a clone
+ * cannot disturb the keyboard of the device it is running on.
+ *
+ * The layout is deliberately small: letters, digits, the punctuation that shows
+ * up in package names and URLs, plus the navigation keys an app needs.
+ */
+@Composable
+private fun CloneKeyboard(
+    packageName: String,
+    onClose: () -> Unit,
+) {
+    val scheme = MaterialTheme.colorScheme
+    var shifted by rememberSaveable { mutableStateOf(false) }
+
+    val rows = remember(shifted) {
+        val letters = if (shifted) {
+            listOf("Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P")
+        } else {
+            listOf("q", "w", "e", "r", "t", "y", "u", "i", "o", "p")
+        }
+        listOf(
+            letters,
+            listOf("a", "s", "d", "f", "g", "h", "j", "k", "l"),
+            listOf("z", "x", "c", "v", "b", "n", "m", "@", ".", "/"),
+            listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "0"),
+            listOf("-", "_", ":", ",", "!", "?", "=", "+", "*", "'"),
+        )
+    }
+
+    fun type(text: String) {
+        HeadlessCloneEngine.text(text, packageName)
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(Quartz.CardShape)
+            .background(MaterialTheme.colorScheme.surface)
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, Quartz.CardShape)
+            .padding(horizontal = 6.dp, vertical = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        rows.forEach { row ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(3.dp),
+            ) {
+                row.forEach { key ->
+                    KeyboardKey(
+                        label = key,
+                        modifier = Modifier.weight(1f),
+                    ) { type(key) }
+                }
+            }
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(3.dp),
+        ) {
+            KeyboardKey(
+                label = if (shifted) "ABC" else "123",
+                modifier = Modifier.weight(1f),
+            ) { shifted = !shifted }
+            KeyboardKey(label = "space", modifier = Modifier.weight(2.2f)) { type(" ") }
+            KeyboardKey(label = "⌫", modifier = Modifier.weight(1f)) {
+                HeadlessCloneEngine.key(android.view.KeyEvent.KEYCODE_DEL, packageName)
+            }
+            KeyboardKey(label = "⏎", modifier = Modifier.weight(1f)) {
+                HeadlessCloneEngine.key(android.view.KeyEvent.KEYCODE_ENTER, packageName)
+            }
+            KeyboardKey(label = "←", modifier = Modifier.weight(0.9f)) {
+                HeadlessCloneEngine.key(android.view.KeyEvent.KEYCODE_DPAD_LEFT, packageName)
+            }
+            KeyboardKey(label = "→", modifier = Modifier.weight(0.9f)) {
+                HeadlessCloneEngine.key(android.view.KeyEvent.KEYCODE_DPAD_RIGHT, packageName)
+            }
+            KeyboardKey(label = "hide", modifier = Modifier.weight(1.2f)) { onClose() }
+        }
+    }
+}
+
+@Composable
+private fun KeyboardKey(
+    label: String,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    val scheme = MaterialTheme.colorScheme
+    Box(
+        modifier = modifier
+            .height(34.dp)
+            .clip(Quartz.ButtonShape)
+            .background(scheme.surfaceVariant)
+            .border(1.dp, scheme.outlineVariant, Quartz.ButtonShape)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            label,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium,
+            color = scheme.onSurface,
+            maxLines = 1,
         )
     }
 }

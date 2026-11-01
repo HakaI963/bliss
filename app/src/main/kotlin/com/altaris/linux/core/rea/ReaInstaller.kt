@@ -182,11 +182,39 @@ object ReaInstaller {
             // Log each line so a refusal names the mount that blocked it.
             onLine = { line -> Log.i(TAG, "remove: $line") },
         )
-        val gone = !File(path).exists() || File(path).list()?.isEmpty() == true
+        // Verify through root, never from this process.
+        //
+        // `/data/local` is not readable by the app uid, so `File(path).exists()`
+        // was always false here — which made a *refused* removal look like a
+        // success. The script's own exit code plus a root-side check are the
+        // only truthful signals.
+        val gone = chrootGone(path)
         if (!gone) {
-            Log.w(TAG, "chroot still present after removal (exit ${result.exitCode})")
+            Log.w(
+                TAG,
+                "chroot still present after removal (exit ${result.exitCode}): " +
+                    result.stdout.lines().lastOrNull { it.isNotBlank() }.orEmpty(),
+            )
         }
-        return gone
+        return gone && result.exitCode == 0
+    }
+
+    /**
+     * True when [path] no longer exists, asked as root.
+     *
+     * Falls back to a direct read when root is unavailable, which only happens
+     * for a chroot that was never installed in the first place.
+     */
+    private fun chrootGone(path: String): Boolean {
+        if (!RootShell.isRootAvailable()) {
+            return !File(path).exists()
+        }
+        return runCatching {
+            RootShell.captureResult(
+                "if [ -e " + quote(path) + " ]; then echo PRESENT; else echo GONE; fi",
+                20_000L,
+            ).stdout.contains("GONE")
+        }.getOrDefault(false)
     }
 
     /**

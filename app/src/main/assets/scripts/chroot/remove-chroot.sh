@@ -13,12 +13,20 @@
 # rm has no -x at all, and -xdev does not prune a bind mount because it is the
 # same filesystem. The only safe rule is therefore:
 #
-#   1. unmount everything, deepest first;
-#   2. VERIFY nothing is still mounted under the path;
-#   3. only then delete, and refuse outright if step 2 found anything.
+#   1. kill every process rooted in the chroot, and VERIFY they are gone;
+#   2. unmount everything, deepest first, retrying lazy where needed;
+#   3. VERIFY nothing is still mounted under the path;
+#   4. only then delete, and refuse outright if step 3 found anything.
 #
 # Refusing is the correct outcome. A failed removal the user can retry is
 # infinitely better than a device that will not boot.
+#
+# v2: the previous version found processes by matching the chroot path in
+# `ps` output. A chrooted process has a cmdline like `/usr/bin/node …` with no
+# reference to the chroot at all, so nothing was ever killed, the mounts stayed
+# busy, and removal refused every single time ("container could not be
+# removed"). The reliable identity is /proc/PID/root, which the kernel points at
+# the chroot directory.
 set +e
 
 GUEST="$1"
@@ -27,10 +35,22 @@ if [ -z "$GUEST" ]; then
   exit 2
 fi
 
+# Trailing slashes break both the prefix match and the unmount paths.
+while [ "${GUEST%/}" != "$GUEST" ]; do GUEST="${GUEST%/}"; done
+
 say() { echo "$*"; }
 fail() { echo "ERROR: $*"; exit 1; }
 
 [ -d "$GUEST" ] || { say "already removed: $GUEST"; exit 0; }
+
+# Refuse the paths whose deletion would be catastrophic. The caller passes a
+# distro rootfs; anything shallower is a bug.
+case "$GUEST" in
+  ""|"/"|"/data"|"/data/local"|"/data/local/altaris"|"/data/local/altaris/chroots"|\
+  "/system"|"/sdcard"|"/storage"|"/mnt"|"/proc"|"/sys"|"/dev")
+    fail "refusing to remove a protected path: $GUEST"
+    ;;
+esac
 
 BB=""
 for candidate in \
@@ -65,19 +85,58 @@ umount_path() { # umount_path <path>
 }
 
 # Mount points still attached under $GUEST, deepest first.
+#
+# The prefix test is done in awk so that "/…/rea" cannot match "/…/react":
+# the mount path must be exactly $GUEST or start with "$GUEST/".
 still_mounted() {
-  grep -F " $GUEST/" /proc/mounts 2>/dev/null \
-    | awk '{print $2}' | sort -r
+  awk -v base="$GUEST" '
+    $2 == base || index($2, base "/") == 1 { print $2 }
+  ' /proc/mounts 2>/dev/null | sort -r
 }
 
-# 1. Stop anything running inside, so it cannot hold a mount open.
-for pattern in "$GUEST"; do
-  pids=$(ps -A -o PID,ARGS 2>/dev/null | grep -F "$pattern" | grep -v grep | awk '{print $1}')
-  for pid in $pids; do
-    [ "$pid" = "$$" ] && continue
-    kill -9 "$pid" 2>/dev/null || true
+# Every PID whose root directory is $GUEST (or inside it).
+#
+# readlink on /proc/PID/root is the only reliable signal: a chrooted process
+# has an ordinary-looking cmdline, and matching that string found nothing.
+rooted_pids() {
+  for _d in /proc/[0-9]*; do
+    [ -d "$_d" ] || continue
+    _pid="${_d#/proc/}"
+    [ "$_pid" = "1" ] && continue
+    [ "$_pid" = "$$" ] && continue
+    _root=$(readlink "$_d/root" 2>/dev/null) || continue
+    case "$_root" in
+      "$GUEST"|"$GUEST"/*) printf '%s ' "$_pid" ;;
+    esac
   done
+}
+
+# 1. Kill anything rooted in the chroot, twice, and verify it is gone. A live
+#    process inside the chroot is what makes an unmount fail with EBUSY.
+say "stopping processes rooted in $GUEST"
+_pass=1
+while [ "$_pass" -le 3 ]; do
+  _pids=$(rooted_pids)
+  [ -z "$_pids" ] && break
+  say "  killing: $_pids"
+  for _pid in $_pids; do
+    kill -9 "$_pid" 2>/dev/null
+  done
+  _pass=$((_pass + 1))
+  [ "$_pass" -le 3 ] && sleep 0.3 2>/dev/null || sleep 1
 done
+
+_left_pids=$(rooted_pids)
+if [ -n "$_left_pids" ]; then
+  # A process that survives SIGKILL is unkillable (D state). Unmounting would
+  # fail, so say which one it is instead of deleting blindly.
+  say "REFUSING to delete: processes still rooted in the chroot:"
+  for _pid in $_left_pids; do
+    _comm=$(tr -d '\n\r' < "/proc/$_pid/comm" 2>/dev/null)
+    say "  pid $_pid (${_comm:-?})"
+  done
+  fail "could not stop the processes inside the environment; nothing was deleted"
+fi
 
 # 2. Unmount, deepest first. Parents cannot be released while a child is busy.
 say "unmounting $GUEST"
@@ -99,6 +158,17 @@ done
 # Anything else the setup script may have added, deepest first.
 for m in $(still_mounted); do
   umount_path "$m"
+done
+
+# A second sweep, because a lazy unmount of a parent can detach a child that was
+# reported as busy on the first pass.
+for _attempt in 1 2 3; do
+  _left=$(still_mounted)
+  [ -z "$_left" ] && break
+  for m in $_left; do
+    umount_path "$m"
+  done
+  sleep 0.4 2>/dev/null || sleep 1
 done
 
 # 3. Verify. This is the guard that matters: if anything is still mounted,

@@ -11,8 +11,13 @@ import java.io.File
 
 /**
  * Installs the `altaris` helper into the host prefix and every guest rootfs.
- * `bliss` remains as a compatibility alias. The helper is a thin HTTP client
- * for [ControlServer]; it does not need root or the app's UID inside the guest.
+ *
+ * The helper is a thin HTTP client for [ControlServer]; it does not need root
+ * or the app's UID inside the guest. The old `bliss` name is **not** installed
+ * any more: the product has been Altaris for a long time and a second command
+ * named after the previous brand only confused people. An existing `bliss`
+ * symlink is removed so a guest does not keep advertising a name the app no
+ * longer uses.
  *
  * It also installs [UrlOpener]'s guest shim: a distro has no browser, so
  * `xdg-open` / `sensible-browser` / `$BROWSER` used to fail silently and the
@@ -24,8 +29,14 @@ object AltarisCliInstaller {
     private const val ASSET = "scripts/altaris-cli.sh"
     private const val OPEN_ASSET = "scripts/altaris-open.sh"
     private const val PRIMARY = "altaris"
-    /** Legacy command name kept as an alias so old scripts keep working. */
-    private const val COMPAT = "bliss"
+
+    /**
+     * The retired command name.
+     *
+     * Not installed; only referenced so an upgrade can remove what older
+     * releases left behind.
+     */
+    private const val LEGACY_ALIAS = "bliss"
 
     /**
      * Marker file name for one helper payload.
@@ -62,6 +73,7 @@ object AltarisCliInstaller {
             val cli = readAsset(ctx, ASSET) ?: return
             val open = readAsset(ctx, OPEN_ASSET) ?: return
             writeAsset(File(bin, PRIMARY), null, cli)
+            removeLegacyAlias(File(bin, LEGACY_ALIAS))
             writeOpenShim(bin, marker = null, asset = open)
         }.onFailure { Log.w(TAG, "host CLI install failed", it) }
     }
@@ -98,6 +110,7 @@ object AltarisCliInstaller {
         val cli = readAsset(ctx, ASSET) ?: return
         val open = readAsset(ctx, OPEN_ASSET) ?: return
         writeAsset(File(bin, PRIMARY), File(rootfs, markerName(cli)), cli)
+        removeLegacyAlias(File(bin, LEGACY_ALIAS))
         writeOpenShim(bin, File(rootfs, markerName(open)), open)
     }
 
@@ -117,8 +130,7 @@ object AltarisCliInstaller {
             append("if [ ! -f '$cliMarker' ]; then ")
             append("printf '%s' '$b64' | base64 -d > '$root/usr/local/bin/$PRIMARY' && ")
             append("chmod 755 '$root/usr/local/bin/$PRIMARY' && ")
-            append("cp -f '$root/usr/local/bin/$PRIMARY' '$root/usr/local/bin/$COMPAT' && ")
-            append("chmod 755 '$root/usr/local/bin/$COMPAT' && ")
+            append("rm -f '$root/usr/local/bin/$LEGACY_ALIAS'; ")
             append("touch '$cliMarker'; ")
             append("fi && ")
             append("if [ ! -f '$openMarker' ]; then ")
@@ -178,20 +190,22 @@ object AltarisCliInstaller {
         } else {
             asset
         }
-        val compat = File(target.parentFile, COMPAT)
-        if (marker != null && marker.isFile && target.isFile && compat.isFile &&
-            target.length() == script.length.toLong() && compat.length() == script.length.toLong()
+        if (marker != null && marker.isFile && target.isFile &&
+            target.length() == script.length.toLong()
         ) {
             return
         }
         target.parentFile?.mkdirs()
         target.writeText(script)
-        compat.writeText(script)
-        runCatching {
-            target.setExecutable(true, false)
-            compat.setExecutable(true, false)
-        }
-        if (marker != null) runCatching { marker.writeText("6") }
+        runCatching { target.setExecutable(true, false) }
+        if (marker != null) runCatching { marker.writeText("7") }
+    }
+
+    /** Drop the command name left behind by releases before the rename. */
+    private fun removeLegacyAlias(file: File) {
+        if (!file.exists()) return
+        runCatching { file.delete() }
+            .onFailure { Log.w(TAG, "cannot remove the legacy alias ${file.absolutePath}", it) }
     }
 
     private fun readAsset(ctx: Context, name: String): String? = runCatching {

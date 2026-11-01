@@ -39,10 +39,85 @@ data class InstallationState(
     val updatedAtMillis: Long = 0L
 )
 
+/**
+ * One install in flight, as the task panel sees it.
+ *
+ * Several can exist at once — a user is allowed to start a second distro while
+ * the first is still downloading — so every entry carries its own name,
+ * percentage and phase instead of sharing one "the install" record.
+ */
+data class ActiveInstall(
+    val distroId: String,
+    val taskName: String,
+    val phaseLabel: String = "Starting…",
+    val overallPercent: Int = -1,
+    val detail: String = "",
+    val failed: Boolean = false,
+    val done: Boolean = false,
+    val updatedAtMillis: Long = System.currentTimeMillis(),
+)
+
 object InstallationQueueManager {
     private val queue = ArrayDeque<InstallTask>()
     var currentTask: InstallTask? = null
         private set
+
+    /**
+     * Every install in flight, keyed by distro id.
+     *
+     * The old model had exactly one current install, so a second download
+     * silently replaced the first in the panel even though both were running.
+     * A map keeps them all visible with their own progress.
+     */
+    private val _active = MutableStateFlow<Map<String, ActiveInstall>>(emptyMap())
+    val active: StateFlow<Map<String, ActiveInstall>> = _active.asStateFlow()
+
+    /** Publish one install's progress. */
+    fun updateTask(
+        distroId: String,
+        taskName: String,
+        phaseLabel: String,
+        overallPercent: Int,
+        detail: String,
+        failed: Boolean = false,
+        done: Boolean = false,
+    ) {
+        val now = System.currentTimeMillis()
+        _active.value = _active.value.toMutableMap().apply {
+            if (done || failed) {
+                // Keep a terminal entry briefly so the user sees the outcome,
+                // then it is retired by the panel's dismissal.
+                put(
+                    distroId,
+                    ActiveInstall(
+                        distroId, taskName, phaseLabel, overallPercent, detail,
+                        failed, done, now,
+                    )
+                )
+            } else {
+                put(
+                    distroId,
+                    ActiveInstall(
+                        distroId, taskName, phaseLabel, overallPercent, detail,
+                        false, false, now,
+                    )
+                )
+            }
+        }
+    }
+
+    /** Drop one install from the panel (finished and acknowledged). */
+    fun dismissTask(distroId: String) {
+        _active.value = _active.value - distroId
+    }
+
+    /** Drop every terminal entry; running installs are untouched. */
+    fun dismissTerminalTasks() {
+        _active.value = _active.value.filterValues { !it.done && !it.failed }
+    }
+
+    /** True when anything is still downloading or installing. */
+    fun anyRunning(): Boolean = _active.value.values.any { !it.done && !it.failed }
 
     var activeDistroId: String? = null
         private set
@@ -83,6 +158,7 @@ object InstallationQueueManager {
         queue.clear()
         currentTask = null
         activeDistroId = null
+        _active.value = emptyMap()
         _installState.value = InstallationState()
     }
 

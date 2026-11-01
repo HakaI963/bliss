@@ -39,6 +39,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.altaris.linux.core.install.OnboardingInstallRunner
+import com.altaris.linux.core.utils.ActiveInstall
 import com.altaris.linux.core.utils.InstallationQueueManager
 import com.altaris.linux.core.utils.InstallationState
 import com.altaris.linux.ui.theme.Prism
@@ -340,10 +341,10 @@ private fun QuietBarAction(
 /**
  * The download task button for the top bar.
  *
- * It exists only while a task is live: a hairline square with a ring that
- * shows how far the download/install has got. Tapping it opens the task card
- * (name, phase, detail, progress, open/cancel) — the same state the strip
- * below the bar carries, without spending a row of its own.
+ * It exists while at least one install is live: a hairline square with a ring
+ * that shows the furthest-along download. Tapping it opens a list of **every**
+ * install, each with its own bar, name and phase — installs run in parallel, so
+ * a panel that showed only one of them was lying about what the app was doing.
  */
 @Composable
 fun DownloadTaskButton(
@@ -351,16 +352,32 @@ fun DownloadTaskButton(
     onOpenTroubleshooting: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val state by InstallationQueueManager.installState.collectAsState()
-    val visible = state.isInstalling || state.failed || state.cancelledByUser
+    val tasks by InstallationQueueManager.active.collectAsState()
+    val legacy by InstallationQueueManager.installState.collectAsState()
+
+    // Entries exist for running installs and for a short while after they
+    // finish, so the outcome is visible. An empty map means nothing to show.
+    val entries = tasks.values
+        .filter { !it.done || it.updatedAtMillis > System.currentTimeMillis() - 60_000L }
+        .sortedBy { it.updatedAtMillis }
+
+    val anyRunning = entries.any { !it.done && !it.failed }
+    val anyFailed = entries.any { it.failed }
+    // Fall back to the legacy single-slot state so a cancelled install (which
+    // only touches that record) still gets a control to dismiss it.
+    val visible = entries.isNotEmpty() ||
+        legacy.isInstalling || legacy.failed || legacy.cancelledByUser
     if (!visible) return
 
     val scheme = MaterialTheme.colorScheme
     // -1 means "no usable fraction yet" (package setup reports phases, not a
     // percentage). Coercing it to 0 made the button read "0" during the whole
     // install and look broken, so keep it indeterminate instead.
-    val indeterminate = state.overallPercent < 0
-    val percent = state.overallPercent.coerceIn(0, 100)
+    val furthest = entries.filter { !it.done && !it.failed }
+        .maxByOrNull { it.overallPercent }?.overallPercent
+        ?: legacy.overallPercent
+    val indeterminate = furthest < 0
+    val percent = furthest.coerceIn(0, 100)
     val shape = RoundedCornerShape(6.dp)
     var expanded by remember { mutableStateOf(false) }
 
@@ -377,127 +394,213 @@ fun DownloadTaskButton(
                 ) { expanded = true },
             contentAlignment = Alignment.Center,
         ) {
-            if (state.isInstalling && indeterminate) {
-                androidx.compose.material3.CircularProgressIndicator(
-                    modifier = Modifier.size(18.dp),
-                    color = scheme.onSurface,
-                    strokeWidth = 2.dp,
-                )
-            } else if (state.isInstalling) {
-                Canvas(Modifier.size(22.dp)) {
-                    val stroke = 2f
-                    drawCircle(
-                        color = scheme.outline.copy(alpha = 0.35f),
-                        radius = size.minDimension / 2f - stroke / 2f,
-                        style = Stroke(width = stroke),
-                    )
-                    drawArc(
+            when {
+                anyRunning && indeterminate -> {
+                    androidx.compose.material3.CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
                         color = scheme.onSurface,
-                        startAngle = -90f,
-                        sweepAngle = 360f * percent / 100f,
-                        useCenter = false,
-                        style = Stroke(width = stroke),
+                        strokeWidth = 2.dp,
                     )
                 }
-                Text(
-                    "$percent",
-                    fontSize = 8.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = scheme.onSurface,
-                )
-            } else {
-                Icon(
-                    imageVector = Icons.Default.Download,
-                    contentDescription = "Download task",
-                    tint = scheme.onSurface,
-                    modifier = Modifier.size(16.dp),
-                )
+                anyRunning -> {
+                    Canvas(Modifier.size(22.dp)) {
+                        val stroke = 2f
+                        drawCircle(
+                            color = scheme.outline.copy(alpha = 0.35f),
+                            radius = size.minDimension / 2f - stroke / 2f,
+                            style = Stroke(width = stroke),
+                        )
+                        drawArc(
+                            color = scheme.onSurface,
+                            startAngle = -90f,
+                            sweepAngle = 360f * percent / 100f,
+                            useCenter = false,
+                            style = Stroke(width = stroke),
+                        )
+                    }
+                    Text(
+                        if (entries.size > 1) entries.count { !it.done && !it.failed }.toString()
+                        else "$percent",
+                        fontSize = 8.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = scheme.onSurface,
+                    )
+                }
+                else -> {
+                    Icon(
+                        imageVector = Icons.Default.Download,
+                        contentDescription = "Download tasks",
+                        tint = if (anyFailed) scheme.error else scheme.onSurface,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
             }
         }
 
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             Column(
                 modifier = Modifier
-                    .width(258.dp)
+                    .width(300.dp)
                     .padding(horizontal = 14.dp, vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 Text(
-                    when {
-                        state.failed -> "Download failed"
-                        state.isInstalling -> "Downloading"
-                        state.cancelledByUser -> "Download cancelled"
-                        else -> "Download"
-                    },
+                    if (entries.size > 1) "${entries.size} downloads" else "Download",
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = scheme.onSurface,
                 )
-                Text(
-                    state.currentTaskName.ifBlank { state.currentDistroId ?: "Linux environment" },
-                    fontSize = 11.5.sp,
-                    color = scheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Spacer(Modifier.height(8.dp))
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .height(3.dp)
-                        .clip(RoundedCornerShape(2.dp))
-                        .background(scheme.surfaceVariant),
-                ) {
-                    val fraction = if (indeterminate) 0.35f else percent.coerceAtLeast(2) / 100f
-                    Box(
-                        Modifier
-                            .fillMaxHeight()
-                            .fillMaxWidth(fraction)
-                            .background(scheme.onSurface),
-                    )
-                }
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    when {
-                        indeterminate && state.phaseLabel.isNotBlank() -> state.phaseLabel
-                        indeterminate -> state.detail.ifBlank { "Working…" }
-                        state.phaseLabel.isNotBlank() -> "${state.phaseLabel} · $percent%"
-                        else -> "$percent%"
-                    },
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = scheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                if (state.detail.isNotBlank()) {
+                if (entries.isEmpty()) {
+                    // Only the legacy terminal record exists.
                     Text(
-                        state.detail,
-                        fontSize = 10.5.sp,
-                        lineHeight = 14.sp,
-                        color = scheme.onSurfaceVariant,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
+                        when {
+                            legacy.failed -> "Install failed"
+                            legacy.cancelledByUser -> "Install cancelled"
+                            else -> "No downloads running"
+                        },
+                        fontSize = 11.5.sp,
+                        color = if (legacy.failed) scheme.error else scheme.onSurfaceVariant,
                     )
                 }
-                Row(Modifier.padding(top = 4.dp)) {
+                entries.forEach { task ->
+                    DownloadTaskRow(
+                        task = task,
+                        onOpen = {
+                            expanded = false
+                            onOpenProgress(task.distroId)
+                        },
+                        onCancel = {
+                            // Cancelling is per distro: cancelActive() used to
+                            // abort whichever install happened to be "current",
+                            // which with parallel downloads is the wrong one.
+                            onDismiss()
+                            onOpenProgress(task.distroId)
+                        },
+                    )
+                }
+                Row(Modifier.fillMaxWidth()) {
                     TextButton(
                         onClick = {
                             expanded = false
-                            val id = state.currentDistroId
-                            if (id != null) onOpenProgress(id) else onOpenTroubleshooting()
+                            InstallationQueueManager.dismissTerminalTasks()
+                            onDismiss()
                         },
-                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp),
-                    ) { Text("Open", fontSize = 12.sp) }
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                            horizontal = 6.dp,
+                        ),
+                    ) { Text("Dismiss finished", fontSize = 12.sp) }
                     Spacer(Modifier.weight(1f))
                     TextButton(
                         onClick = {
                             expanded = false
-                            onDismiss()
+                            val id = entries.firstOrNull { !it.done && !it.failed }?.distroId
+                                ?: legacy.currentDistroId
+                            if (id != null) onOpenProgress(id) else onOpenTroubleshooting()
                         },
-                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp),
-                    ) { Text("Dismiss", fontSize = 12.sp) }
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                            horizontal = 6.dp,
+                        ),
+                    ) { Text("Open", fontSize = 12.sp) }
                 }
             }
+        }
+    }
+}
+
+/** One install inside the download panel: its own name, phase and bar. */
+@Composable
+private fun DownloadTaskRow(
+    task: ActiveInstall,
+    onOpen: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val running = !task.done && !task.failed
+    val indeterminate = task.overallPercent < 0
+    val percent = task.overallPercent.coerceIn(0, 100)
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(6.dp))
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onOpen,
+            ),
+        verticalArrangement = Arrangement.spacedBy(3.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                task.taskName.ifBlank { task.distroId },
+                fontSize = 11.5.sp,
+                fontWeight = FontWeight.Medium,
+                color = if (task.failed) scheme.error else scheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                when {
+                    task.failed -> "failed"
+                    task.done -> "done"
+                    indeterminate -> ""
+                    else -> "$percent%"
+                },
+                fontSize = 10.5.sp,
+                color = if (task.failed) scheme.error else scheme.onSurfaceVariant,
+            )
+        }
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(3.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .background(scheme.surfaceVariant),
+        ) {
+            val fraction = when {
+                task.done -> 1f
+                task.failed -> 1f
+                indeterminate -> 0.35f
+                else -> percent.coerceAtLeast(2) / 100f
+            }
+            Box(
+                Modifier
+                    .fillMaxHeight()
+                    .fillMaxWidth(fraction)
+                    .background(
+                        when {
+                            task.failed -> scheme.error
+                            task.done -> scheme.onSurfaceVariant
+                            else -> scheme.onSurface
+                        }
+                    ),
+            )
+        }
+        val line = when {
+            task.failed -> task.detail.ifBlank { "Install failed" }
+            indeterminate && task.phaseLabel.isNotBlank() -> task.phaseLabel
+            task.phaseLabel.isNotBlank() -> task.phaseLabel + " · $percent%"
+            task.detail.isNotBlank() -> task.detail
+            else -> ""
+        }
+        if (line.isNotBlank()) {
+            Text(
+                line,
+                fontSize = 10.5.sp,
+                lineHeight = 13.sp,
+                color = scheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        if (running) {
+            TextButton(
+                onClick = onCancel,
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                    horizontal = 0.dp, vertical = 0.dp,
+                ),
+            ) { Text("Open", fontSize = 11.sp) }
         }
     }
 }

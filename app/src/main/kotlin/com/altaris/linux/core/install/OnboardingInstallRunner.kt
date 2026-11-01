@@ -138,7 +138,7 @@ class OnboardingInstallRunner(private val ctx: Context) {
     fun start(
         distroId: String,
         theme: String = "dark",
-        desktops: Set<DesktopChoice> = setOf(DesktopChoice.XFCE),
+        desktops: Set<DesktopChoice> = emptySet(),
         extras: Set<InstallExtra> = emptySet(),
         instanceName: String? = null,
         onProgress: (Progress) -> Unit
@@ -211,9 +211,14 @@ class OnboardingInstallRunner(private val ctx: Context) {
         sessionDistroId = distroId
         sessionTaskName =
             "${targetProfile.displayName} · ${DesktopInstallSelection.summaryLabel(choiceSet)}"
-        // Supersede a session owned by another runner instance (e.g. the user
-        // kicked off a second install from a different screen while one ran).
-        activeInstance?.let { other -> if (other !== this && other.isBusy()) other.cancel() }
+        // Do NOT cancel a session owned by another runner instance.
+        //
+        // It used to, so starting a second distro killed the first one's
+        // download with no warning — which is exactly what "it only shows one
+        // download at a time" looked like from the outside. Installs are
+        // independent: each runner owns its own process and its own entry in
+        // [InstallationQueueManager.active]. Only this instance's own previous
+        // job is superseded, above.
         activeInstance = this
         busy.set(true)
         lastNotifPercent = -1
@@ -269,7 +274,11 @@ class OnboardingInstallRunner(private val ctx: Context) {
             } finally {
                 if (generation.get() == gen) {
                     busy.set(false)
-                    BaseInstallService.stop(appCtx)
+                    // Only drop the foreground service when no other install is
+                    // still running: two installs may share the process.
+                    if (!InstallationQueueManager.anyRunning()) {
+                        BaseInstallService.stop(appCtx)
+                    }
                     if (activeInstance === this) activeInstance = null
                 }
             }
@@ -1396,7 +1405,20 @@ class OnboardingInstallRunner(private val ctx: Context) {
         // shared task-bar/live state with its stale ticks. Its *terminal* tick
         // is still allowed through when it is the task the bar is showing, so
         // a completed/aborted runner cannot leave a 100% bar behind forever.
-        if (activeInstance !== this) {
+        // A superseded instance may only skip the *single-slot* legacy mirror;
+        // its own per-task entry is always updated so parallel installs both
+        // stay visible.
+        val superseded = activeInstance !== this
+        if (superseded) {
+            InstallationQueueManager.updateTask(
+                distroId = distroId,
+                taskName = sessionTaskName.ifBlank { distroId },
+                phaseLabel = progress.phaseLabel,
+                overallPercent = if (progress.indeterminate) -1 else progress.overallPercent,
+                detail = progress.detail,
+                failed = progress.failed,
+                done = progress.finished && !progress.failed,
+            )
             val shared = InstallationQueueManager.installState.value
             val sameTask = shared.currentDistroId == distroId &&
                 shared.currentTaskName == sessionTaskName
@@ -1418,6 +1440,17 @@ class OnboardingInstallRunner(private val ctx: Context) {
             distroId = distroId,
             failed = progress.failed,
             done = progress.finished && !progress.failed
+        )
+        // Per-install progress for the multi-download panel. This is what lets
+        // two installs run at the same time and both stay visible.
+        InstallationQueueManager.updateTask(
+            distroId = distroId,
+            taskName = sessionTaskName.ifBlank { distroId },
+            phaseLabel = progress.phaseLabel,
+            overallPercent = if (progress.indeterminate) -1 else progress.overallPercent,
+            detail = progress.detail,
+            failed = progress.failed,
+            done = progress.finished && !progress.failed,
         )
     }
 
