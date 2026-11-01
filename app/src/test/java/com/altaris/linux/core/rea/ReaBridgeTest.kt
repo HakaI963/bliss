@@ -212,8 +212,14 @@ class ReaToolInstallerTest {
         assertEquals(0, snapshot.failed)
     }
 
-    private fun readSource(path: String): String =
-        java.io.File(path).readText()
+    /** Tests run with `app/` as the working directory. */
+    private fun readSource(path: String): String {
+        for (candidate in listOf(path, "../$path", "../../$path")) {
+            val file = java.io.File(candidate)
+            if (file.isFile) return file.readText()
+        }
+        throw AssertionError("source not found: $path")
+    }
 
     /**
      * The install must outlive the screen that started it.
