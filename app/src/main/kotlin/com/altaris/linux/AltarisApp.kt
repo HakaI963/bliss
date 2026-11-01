@@ -60,6 +60,21 @@ class AltarisApp : Application() {
             .onFailure { Log.w("AltarisApp", "control service start failed", it) }
         runCatching { com.altaris.linux.core.control.ControlServer.start(this) }
             .onFailure { Log.w("AltarisApp", "control server start failed", it) }
+        // REA's MCP bridge runs for the same reason and the same way as the
+        // clone control server: it is a local service the agents talk to, not a
+        // screen feature. Starting it here means there is no Start button and no
+        // screen that has to be open for an agent to reach it. Off the main
+        // thread because it spawns a guest process.
+        Thread {
+            runCatching {
+                kotlinx.coroutines.runBlocking {
+                    com.altaris.linux.core.rea.ReaDistro.refresh(this@AltarisApp)
+                    if (com.altaris.linux.core.rea.ReaDistro.state.value.ready) {
+                        com.altaris.linux.core.rea.ReaBridge.ensureRunning(this@AltarisApp)
+                    }
+                }
+            }.onFailure { Log.w("AltarisApp", "REA bridge auto-start failed", it) }
+        }.start()
         // Vendored ble.sh: bash syntax coloring + inline history suggestions
         // (host shell + every installed guest distro). Version-stamped and
         // idempotent, so this is a stat-only pass after the first run; keep it

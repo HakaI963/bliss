@@ -722,15 +722,27 @@ private fun ReaMcpCard(context: Context, accent: Color) {
     // Recomputed when the server state changes, so a fallback port is reflected.
     val config = remember(bridge.running) { ReaBridge.configJson() }
 
+    // The bridge starts with the app and is kept alive here, exactly like the
+    // clone control server: no button, and it recovers on its own.
+    LaunchedEffect(distro.ready) {
+        while (true) {
+            if (distro.ready && !ReaBridge.state.value.running) {
+                withContext(Dispatchers.IO) { ReaBridge.ensureRunning(context) }
+            }
+            kotlinx.coroutines.delay(5000L)
+        }
+    }
+
     PrismSectionLabel("MCP server", accent)
     PrismCard(accent = accent) {
         PrismRow(
             title = "REA endpoint",
-            subtitle = if (bridge.running) {
-                bridge.toolCount.toString() + " tools · " + bridge.connections +
-                    " agent connections"
-            } else {
-                "Stopped. Start it to let an agent connect."
+            subtitle = when {
+                bridge.running ->
+                    bridge.toolCount.toString() + " tools · " + bridge.connections +
+                        " agent connections"
+                bridge.error.isNotBlank() -> bridge.error
+                else -> "Starting…"
             },
             accent = accent,
             leading = { PrismOrb(active = bridge.running, accent = accent) },
@@ -785,23 +797,9 @@ private fun ReaMcpCard(context: Context, accent: Color) {
                 clipboard.setText(androidx.compose.ui.text.AnnotatedString(config))
                 copied = true
             }
-            PrismButton(
-                text = if (bridge.running) "Stop server" else "Start server",
-                accent = accent,
-                icon = Icons.Default.PlayArrow,
-                modifier = Modifier.fillMaxWidth(),
-                enabled = distro.installed,
-            ) {
-                scope.launch {
-                    withContext(Dispatchers.IO) {
-                        if (bridge.running) {
-                            ReaBridge.stop()
-                        } else {
-                            ReaDistro.distroId(context)?.let { ReaBridge.start(context, it) }
-                        }
-                    }
-                }
-            }
+            // No start/stop: the server runs for as long as REA is installed,
+            // exactly like the clone control server. This row reports it and
+            // nothing else; if it is down the card says why.
         }
         if (bridge.error.isNotBlank()) {
             Spacer(Modifier.height(Prism.Tight))
