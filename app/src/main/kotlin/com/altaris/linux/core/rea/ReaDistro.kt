@@ -5,10 +5,14 @@ import android.util.Log
 import com.altaris.linux.core.install.DistroInstallProfile
 import com.altaris.linux.core.install.OnboardingInstallRunner
 import com.altaris.linux.core.root.RootShell
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -122,6 +126,23 @@ object ReaDistro {
     val state: StateFlow<State> = _state.asStateFlow()
 
     private val mutex = Mutex()
+
+    /**
+     * Scope for the install itself.
+     *
+     * The install is a multi-gigabyte, many-minute job. It used to be launched
+     * from the screen's `rememberCoroutineScope()`, so leaving the screen (or
+     * the tab, or rotating) cancelled it with "the coroutine scope left the
+     * composition" and the work died half way. It runs on an app-lifetime scope
+     * now and only publishes progress to [state], so navigating away is safe and
+     * the result is still there when you come back.
+     */
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    @Volatile private var installJob: Job? = null
+
+    /** True while an install is running in this process. */
+    fun isInstalling(): Boolean = installJob?.isActive == true
 
     @Volatile private var cachedSize = 0L
     @Volatile private var cachedSizeAt = 0L
@@ -247,7 +268,37 @@ object ReaDistro {
      * this only chooses the profile, then hands off to [ReaManager] for the
      * Node + REA + tools install.
      */
-    suspend fun install(
+    /**
+     * Start an install and return immediately.
+     *
+     * Safe to call from a click handler: the work runs on [scope], not on the
+     * caller's, so it survives the screen that started it. Calling it while an
+     * install is already running is a no-op.
+     */
+    fun install(
+        context: Context,
+        method: Method,
+        tools: List<String> = ALL_TOOLS,
+        onLog: (String) -> Unit = {},
+    ) {
+        if (isInstalling()) {
+            Log.i(TAG, "install already running, ignoring duplicate start")
+            return
+        }
+        val app = context.applicationContext
+        installJob = scope.launch {
+            runCatching { installBlocking(app, method, tools, onLog) }
+                .onFailure { Log.w(TAG, "install failed", it) }
+        }
+    }
+
+    /**
+     * The install itself. Blocking; runs on [scope].
+     *
+     * Kept public so a caller that genuinely wants to wait (tests, or a future
+     * headless entry point) can.
+     */
+    suspend fun installBlocking(
         context: Context,
         method: Method,
         tools: List<String> = ALL_TOOLS,
@@ -363,6 +414,13 @@ object ReaDistro {
                 if (ok) invalidateSize(app, method)
                 refresh(app)
                 _state.value
+            } catch (c: kotlinx.coroutines.CancellationException) {
+                // Only happens when the process is going away: the install now
+                // runs on an app-lifetime scope, so navigation cannot cancel it.
+                Log.i(TAG, "REA install cancelled")
+                appendLog("install cancelled")
+                _state.value = _state.value.copy(busy = "")
+                throw c
             } catch (t: Throwable) {
                 Log.w(TAG, "REA distro install failed", t)
                 appendLog("ERROR: " + (t.message ?: t.javaClass.simpleName))
@@ -382,7 +440,23 @@ object ReaDistro {
      * container-only install, so a half-finished environment can be repaired
      * without re-downloading the rootfs.
      */
-    suspend fun installMissingTools(
+    /**
+     * Start a tool repair and return immediately. Same lifetime rule as
+     * [install].
+     */
+    fun installMissingTools(
+        context: Context,
+        onLog: (String) -> Unit = {},
+    ) {
+        if (isInstalling()) return
+        val app = context.applicationContext
+        installJob = scope.launch {
+            runCatching { installMissingToolsBlocking(app, onLog) }
+                .onFailure { Log.w(TAG, "tool repair failed", it) }
+        }
+    }
+
+    suspend fun installMissingToolsBlocking(
         context: Context,
         onLog: (String) -> Unit = {},
     ): State = withContext(Dispatchers.IO) {
@@ -426,7 +500,16 @@ object ReaDistro {
     }
 
     /** Remove the REA distro entirely (its files and its container). */
-    suspend fun uninstall(context: Context): State = withContext(Dispatchers.IO) {
+    fun uninstall(context: Context) {
+        if (isInstalling()) return
+        val app = context.applicationContext
+        installJob = scope.launch {
+            runCatching { uninstallBlocking(app) }
+                .onFailure { Log.w(TAG, "uninstall failed", it) }
+        }
+    }
+
+    suspend fun uninstallBlocking(context: Context): State = withContext(Dispatchers.IO) {
         mutex.withLock {
             val app = context.applicationContext
             _state.value = _state.value.copy(busy = "Removing the analysis environment", percent = -1)

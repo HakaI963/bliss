@@ -551,7 +551,6 @@ private fun AutomationCard(context: Context, accent: Color) {
 
 @Composable
 private fun ReaCard(context: Context, accent: Color) {
-    val scope = rememberCoroutineScope()
     val state by ReaDistro.state.collectAsState()
     var method by remember { mutableStateOf(ReaDistro.Method.PROOT) }
 
@@ -663,7 +662,10 @@ private fun ReaCard(context: Context, accent: Color) {
                 modifier = Modifier.fillMaxWidth(),
                 enabled = state.busy.isBlank(),
             ) {
-                scope.launch { ReaDistro.install(context, method) }
+                // Not launched from the screen's scope: a multi-gigabyte
+                // install outlives any composition, and launching it here is
+                // what produced "the coroutine scope left the composition".
+                ReaDistro.install(context, method)
             }
             if (state.installed) {
                 PrismSecondaryButton(
@@ -672,7 +674,7 @@ private fun ReaCard(context: Context, accent: Color) {
                     modifier = Modifier.fillMaxWidth(),
                     enabled = state.busy.isBlank(),
                 ) {
-                    scope.launch { ReaDistro.installMissingTools(context) }
+                    ReaDistro.installMissingTools(context)
                 }
                 PrismSecondaryButton(
                     text = "Remove analysis environment",
@@ -680,7 +682,7 @@ private fun ReaCard(context: Context, accent: Color) {
                     modifier = Modifier.fillMaxWidth(),
                     enabled = state.busy.isBlank(),
                 ) {
-                    scope.launch { ReaDistro.uninstall(context) }
+                    ReaDistro.uninstall(context)
                 }
             }
         }
