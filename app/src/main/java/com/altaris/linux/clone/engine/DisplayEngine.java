@@ -362,16 +362,26 @@ final class DisplayEngine {
         }
     }
 
-    /** Task listing from whichever `am` subcommand this build supports. */
+    /**
+     * Task listing from whichever `am` subcommand this build supports.
+     *
+     * AppCatalog.run throws a checked Exception, so the probe has to swallow it
+     * per command: a ROM that has dropped `am stack list` must not stop the
+     * other two from being tried.
+     */
     private String taskListing() {
         for (String command : new String[]{
                 "am stack list",
                 "cmd activity task list",
                 "am task list",
         }) {
-            AppCatalog.CommandResult result = AppCatalog.run(command, 10);
-            if (result.ok() && result.output.contains("Task")) {
-                return result.output;
+            try {
+                AppCatalog.CommandResult result = AppCatalog.run(command, 10);
+                if (result.ok() && result.output.contains("Task")) {
+                    return result.output;
+                }
+            } catch (Throwable ignored) {
+                // Try the next listing form.
             }
         }
         return "";
