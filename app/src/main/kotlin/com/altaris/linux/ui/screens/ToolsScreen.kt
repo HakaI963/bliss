@@ -754,6 +754,8 @@ private fun ReaMcpCard(context: Context, accent: Color) {
     val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
     // Recomputed when the server state changes, so a fallback port is reflected.
     val config = remember(bridge.running) { ReaBridge.configJson() }
+    val legacyConfig = remember(bridge.running) { ReaBridge.configJsonLegacy() }
+    var showLegacy by remember { mutableStateOf(false) }
 
     // The bridge starts with the app and is kept alive here, exactly like the
     // clone control server: no button, and it recovers on its own.
@@ -797,9 +799,25 @@ private fun ReaMcpCard(context: Context, accent: Color) {
         Spacer(Modifier.height(Prism.Tight))
         PrismNote(
             "REA has no network endpoint of its own: Altaris runs it and proxies it " +
-                "here, so an agent inside any distro can reach it at this URL and the REA " +
-                "tab can show what it is doing. Add this to the agent's MCP config:"
+                "here. The bridge forwards every JSON-RPC message to REA's own process, " +
+                "so this endpoint is a real MCP server — same handshake, same tool " +
+                "schemas. Add it to the agent's config:"
         )
+        Spacer(Modifier.height(Prism.Tight))
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            PrismChip(
+                "OpenCode v2",
+                accent,
+                selected = !showLegacy,
+                onClick = { showLegacy = false },
+            )
+            PrismChip(
+                "Claude / Codex",
+                accent,
+                selected = showLegacy,
+                onClick = { showLegacy = true },
+            )
+        }
         Spacer(Modifier.height(Prism.Tight))
         Box(
             modifier = Modifier
@@ -814,7 +832,7 @@ private fun ReaMcpCard(context: Context, accent: Color) {
                 .padding(Prism.Tight),
         ) {
             Text(
-                config,
+                if (showLegacy) legacyConfig else config,
                 fontSize = 9.5.sp,
                 lineHeight = 13.sp,
                 fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
@@ -827,7 +845,11 @@ private fun ReaMcpCard(context: Context, accent: Color) {
                 accent = accent,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                clipboard.setText(androidx.compose.ui.text.AnnotatedString(config))
+                clipboard.setText(
+                    androidx.compose.ui.text.AnnotatedString(
+                        if (showLegacy) legacyConfig else config
+                    )
+                )
                 copied = true
             }
             // No start/stop: the server runs for as long as REA is installed,

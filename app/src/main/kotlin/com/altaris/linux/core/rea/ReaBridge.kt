@@ -189,7 +189,7 @@ object ReaBridge {
                 error = "",
             )
             log("REA ready · $tools tools", LogLine.Level.INFO)
-            val http = BridgeServer(app, stdio)
+            val http = BridgeServer(app) { session }
             http.start()
             server = http
             _state.value = _state.value.copy(busy = "")
@@ -234,6 +234,32 @@ object ReaBridge {
         val state = _state.value
         return !state.running && state.error.contains("core is not installed", ignoreCase = true)
     }
+
+    /**
+     * Restart the session after its guest process died.
+     *
+     * The MCP client keeps its URL; only the process behind it is replaced.
+     * `initialize` is re-sent by the client on a fresh connection, and because
+     * the bridge now forwards it, the handshake is real.
+     */
+    @Synchronized
+    suspend fun restart(context: Context): State = withContext(Dispatchers.IO) {
+        log("restarting the REA process", LogLine.Level.INFO)
+        runCatching { session?.stop() }
+        session = null
+        val id = ReaDistro.distroId(context) ?: _state.value.distroId
+        if (id.isBlank()) {
+            _state.value = _state.value.copy(
+                running = false,
+                error = "REA is not installed.",
+            )
+            return@withContext _state.value
+        }
+        start(context, id)
+    }
+
+    /** True when the guest process is gone but the bridge should still serve. */
+    fun sessionDead(): Boolean = session?.isRunning() != true
 
     suspend fun stop(): State = withContext(Dispatchers.IO) {
         runCatching { server?.stop() }
@@ -425,36 +451,34 @@ object ReaBridge {
             pending.clear()
         }
 
+        /**
+         * REA's own initialize reply, kept so the bridge can hand a real
+         * handshake to a connecting client.
+         *
+         * The bridge must initialize REA once to use it at all, but a client
+         * then sends its own `initialize` and validates the reply: it needs
+         * `protocolVersion`, `capabilities` and `serverInfo`. Forwarding a
+         * second initialize to an already-initialized REA is not allowed by the
+         * spec, so the original reply is replayed to the client instead.
+         */
+        @Volatile private var handshake: JSONObject? = null
+
+        fun handshake(): JSONObject? = handshake
+
         private fun initialize() {
             val params = JSONObject()
-                .put("protocolVersion", "2024-11-05")
-                .put("capabilities", JSONObject())
+                // Offer a current version; REA answers with the one it speaks.
+                .put("protocolVersion", "2025-06-18")
+                .put(
+                    "capabilities",
+                    JSONObject().put("roots", JSONObject()).put("sampling", JSONObject())
+                )
                 .put(
                     "clientInfo",
                     JSONObject().put("name", "altaris-bridge").put("version", "1.0.0")
                 )
-            request("initialize", params, 120_000L)
+            handshake = forward("initialize", params, 120_000L)
             notify("notifications/initialized", null)
-        }
-
-        /** The tool catalog as MCP objects, for pass-through to a client. */
-        fun listToolsJson(): List<JSONObject> {
-            val out = ArrayList<JSONObject>()
-            var cursor: String? = null
-            var guard = 0
-            do {
-                val params = cursor?.let { JSONObject().put("cursor", it) }
-                val result = runCatching { request("tools/list", params, 60_000L) }.getOrNull()
-                    ?: break
-                result.optJSONArray("tools")?.let { tools ->
-                    for (i in 0 until tools.length()) {
-                        tools.optJSONObject(i)?.let { out.add(it) }
-                    }
-                }
-                cursor = result.optString("nextCursor").takeIf { it.isNotBlank() }
-                guard += 1
-            } while (cursor != null && guard < 50)
-            return out
         }
 
         /** Number of advertised tools, following pagination. */
@@ -500,6 +524,48 @@ object ReaBridge {
             return request("tools/call", params, timeoutMs)
         }
 
+        /**
+         * Forward one JSON-RPC request and return REA's **whole reply**.
+         *
+         * This is the pass-through the HTTP bridge needs. The old bridge
+         * fabricated its own answers (initialize returned `{}`, tools/list
+         * returned an empty array), so a real MCP client rejected it:
+         *
+         *   Invalid result for initialize: protocolVersion: expected string,
+         *   received undefined
+         *
+         * Returning the reply verbatim — protocolVersion, capabilities,
+         * serverInfo, instructions and all — is the only way the bridge can be
+         * a real MCP server.
+         */
+        fun forward(method: String, params: JSONObject?, timeoutMs: Long): JSONObject =
+            synchronized(callLock) {
+                val out = writer ?: throw IllegalStateException("REA session is not running")
+                val id = ids.getAndIncrement()
+                val queue = LinkedBlockingQueue<JSONObject>()
+                pending[id] = queue
+                val message = JSONObject()
+                    .put("jsonrpc", "2.0")
+                    .put("id", id)
+                    .put("method", method)
+                if (params != null) message.put("params", params)
+                synchronized(writeLock) {
+                    out.write(message.toString())
+                    out.write("\n")
+                    out.flush()
+                }
+                val reply = queue.poll(timeoutMs, TimeUnit.MILLISECONDS)
+                    ?: throw IllegalStateException(
+                        "REA did not answer $method" +
+                            (lastError?.takeIf { it.isNotBlank() }?.let { ": " + it.take(300) } ?: "")
+                    )
+                pending.remove(id)
+                reply
+            }
+
+        /** True when the guest process is still running. */
+        fun isRunning(): Boolean = isAlive
+
         private fun request(method: String, params: JSONObject?, timeoutMs: Long): JSONObject =
             synchronized(callLock) {
                 val out = writer ?: throw IllegalStateException("REA session is not running")
@@ -531,6 +597,9 @@ object ReaBridge {
                 reply.optJSONObject("result") ?: JSONObject()
             }
 
+        /** Forward a notification: no id, no reply expected. */
+        fun notifyForward(method: String, params: JSONObject?) = notify(method, params)
+
         private fun notify(method: String, params: JSONObject?) {
             val out = writer ?: return
             val message = JSONObject().put("jsonrpc", "2.0").put("method", method)
@@ -546,8 +615,33 @@ object ReaBridge {
     /** Test seam: the endpoint an agent pastes into its config. */
     fun endpointForTest(): String = ENDPOINT
 
-    /** The config block shown in Tools, for one client flavour. */
+    /**
+     * The config block shown in Tools.
+     *
+     * Uses the current `mcp.servers` shape OpenCode v2 expects, and omits the
+     * `enabled` flag that older examples carry: v2 ignores `enabled` and opts
+     * out with `disabled: true`, so sending it only invites a silent no-op.
+     */
     fun configJson(): String = """
+        {
+          "mcp": {
+            "servers": {
+              "rea": {
+                "type": "http",
+                "url": "${liveEndpoint}"
+              }
+            }
+          }
+        }
+    """.trimIndent()
+
+    /**
+     * The same server as a Claude/Codex-style `mcpServers` block.
+     *
+     * Those clients still use the flat form, so both are shown rather than
+     * guessing which one the user needs.
+     */
+    fun configJsonLegacy(): String = """
         {
           "mcpServers": {
             "rea": {

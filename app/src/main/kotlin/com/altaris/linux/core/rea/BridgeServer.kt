@@ -26,8 +26,19 @@ import java.util.concurrent.Executors
  */
 internal class BridgeServer(
     private val context: Context,
-    private val session: ReaBridge.Session,
+    /**
+     * Resolves the live session each time it is needed.
+     *
+     * The bridge used to hold a direct reference, so after a restart it kept
+     * writing to the dead process and every call failed with "Stream closed".
+     * Resolving per request means a restart is picked up immediately.
+     */
+    private val sessionRef: () -> ReaBridge.Session?,
 ) {
+    private val session: ReaBridge.Session
+        get() = sessionRef() ?: throw IllegalStateException(
+            "REA is not running. The bridge will start it; retry in a moment."
+        )
     private val pool = Executors.newCachedThreadPool { runnable ->
         Thread(runnable, "rea-bridge").apply { isDaemon = true }
     }
@@ -150,7 +161,12 @@ internal class BridgeServer(
                     return
                 }
                 val response = handle(request)
-                respond(socket.getOutputStream(), 200, response)
+                if (response.isBlank()) {
+                    // Notification: acknowledged, no body, per JSON-RPC.
+                    respond(socket.getOutputStream(), 202, "")
+                } else {
+                    respond(socket.getOutputStream(), 200, response)
+                }
             }.onFailure { Log.w(TAG, "bridge request failed", it) }
         }
     }
@@ -168,111 +184,179 @@ internal class BridgeServer(
     }
 
     /**
-     * Forward one JSON-RPC message and record tool calls.
+     * Forward one JSON-RPC message to REA and return its reply verbatim.
      *
-     * `tools/call` is the only method that is instrumented: it is the one that
-     * represents real analysis work. Everything else passes straight through so
-     * the agent sees a normal MCP server.
+     * The bridge is a **proxy**, not a server of its own. An earlier version
+     * answered some methods itself and returned empty objects for the rest, so a
+     * real MCP client rejected the handshake:
+     *
+     *   Invalid result for initialize: protocolVersion: expected string,
+     *   received undefined
+     *
+     * Now every method — `initialize`, `tools/list`, `tools/call`, `ping`,
+     * `resources/*`, `prompts/*` — is passed to REA's stdio process and its
+     * reply is returned unchanged, including `serverInfo`, `capabilities`,
+     * `instructions` and the full tool schemas.
+     *
+     * Two additions on top of the pass-through:
+     *  - `tools/call` is recorded, which is what the REA screen renders;
+     *  - the REA guide is appended to `resources/list` and `prompts/list`, so an
+     *    agent learns the working method from the server it is already talking
+     *    to.
+     *
+     * Notifications (a message with no `id`) are forwarded without waiting for a
+     * reply, as JSON-RPC requires.
      */
     private fun handle(request: JSONObject): String {
         val id = request.opt("id")
         val method = request.optString("method")
         val params = request.optJSONObject("params")
+        val isNotification = id == null || id == JSONObject.NULL
 
+        // A session whose guest process died cannot answer anything. Say so
+        // plainly and let the caller restart, instead of failing with
+        // "Stream closed" from a writer pointing at a dead pipe.
+        if (!session.isRunning()) {
+            if (isNotification) return ""
+            return errorResponse(
+                id,
+                "REA process is not running. The bridge will restart it; retry in a moment.",
+            )
+        }
+
+        // A client's initialize is answered with REA's real handshake, replayed
+        // under the client's own id. REA has already been initialized by the
+        // bridge, and the spec forbids initializing it twice, so this is the
+        // only correct answer — and it carries protocolVersion, capabilities,
+        // serverInfo and instructions exactly as REA sent them.
         if (method == "initialize") {
             ReaBridge.noteConnection()
+            val real = session.handshake()
+            if (real != null) {
+                val replay = JSONObject(real.toString()).put("id", id ?: 0)
+                // A client may ask for a version; if REA speaks it, say so.
+                return replay.toString()
+            }
+            // No handshake cached yet: initialize the session now.
+            return try {
+                val fresh = session.forward("initialize", params, REQUEST_TIMEOUT_MS)
+                JSONObject(fresh.toString()).put("id", id ?: 0).toString()
+            } catch (t: Throwable) {
+                errorResponse(id, t.message ?: "initialize failed")
+            }
         }
+
+        // Notifications must not produce a response body.
+        if (isNotification) {
+            runCatching { session.notifyForward(method, params) }
+            return ""
+        }
+
         if (method == "tools/call") {
             val name = params?.optString("name").orEmpty()
             val arguments = params?.optJSONObject("arguments")?.toString() ?: "{}"
             val call = ReaBridge.beginCall(name, arguments)
             val started = System.currentTimeMillis()
             return try {
-                val result = session.callTool(name, JSONObject(arguments), TOOL_TIMEOUT_MS)
-                val text = result.toString()
-                ReaBridge.finishCall(call.id, text, "", System.currentTimeMillis() - started)
-                JSONObject()
-                    .put("jsonrpc", "2.0")
-                    .put("id", id)
-                    .put("result", result)
-                    .toString()
+                val reply = session.forward(method, params, TOOL_TIMEOUT_MS)
+                val result = reply.optJSONObject("result")
+                val error = reply.optJSONObject("error")
+                if (error != null) {
+                    ReaBridge.finishCall(
+                        call.id, "", error.optString("message").ifBlank { "tool failed" },
+                        System.currentTimeMillis() - started,
+                    )
+                } else {
+                    ReaBridge.finishCall(
+                        call.id,
+                        result?.toString().orEmpty(),
+                        "",
+                        System.currentTimeMillis() - started,
+                    )
+                }
+                // Return REA's reply as-is: MCP clients validate its shape.
+                reply.toString()
             } catch (t: Throwable) {
                 val message = t.message ?: t.javaClass.simpleName
                 ReaBridge.finishCall(
-                    call.id,
-                    "",
-                    message,
-                    System.currentTimeMillis() - started,
+                    call.id, "", message, System.currentTimeMillis() - started,
                 )
                 errorResponse(id, message)
             }
         }
 
-        // Pass everything else through untouched, adding the guide the agent
-        // needs to use REA well.
         return try {
-            val result = when (method) {
-                "tools/list" -> JSONObject().put("tools", JSONArray(toolList()))
-                "resources/list" -> JSONObject().put(
-                    "resources",
-                    JSONArray().put(
+            val reply = session.forward(method, params, REQUEST_TIMEOUT_MS)
+            decorate(method, reply).toString()
+        } catch (t: Throwable) {
+            errorResponse(id, t.message ?: "bridge error")
+        }
+    }
+
+    /**
+     * Add the REA guide to the list replies.
+     *
+     * Everything else in the reply is left exactly as REA sent it; this only
+     * appends one entry so an agent can discover the method document.
+     */
+    private fun decorate(method: String, reply: JSONObject): JSONObject {
+        val result = reply.optJSONObject("result") ?: return reply
+        when (method) {
+            "resources/list" -> {
+                val resources = result.optJSONArray("resources") ?: JSONArray()
+                var present = false
+                for (i in 0 until resources.length()) {
+                    if (resources.optJSONObject(i)?.optString("uri") == ReaKnowledge.URI) {
+                        present = true
+                        break
+                    }
+                }
+                if (!present) {
+                    resources.put(
                         JSONObject()
                             .put("uri", ReaKnowledge.URI)
                             .put("name", "REA guide")
                             .put("description", "How to work with REA's tools on a real artifact")
                             .put("mimeType", "text/markdown")
                     )
-                )
-                "resources/read" -> {
-                    val uri = params?.optString("uri").orEmpty()
-                    if (uri == ReaKnowledge.URI || uri.isBlank()) {
-                        JSONObject().put(
-                            "contents",
-                            JSONArray().put(
-                                JSONObject()
-                                    .put("uri", ReaKnowledge.URI)
-                                    .put("mimeType", "text/markdown")
-                                    .put("text", ReaKnowledge.GUIDE)
-                            )
+                }
+                result.put("resources", resources)
+            }
+            "resources/read" -> {
+                val contents = result.optJSONArray("contents")
+                if (contents == null) {
+                    result.put(
+                        "contents",
+                        JSONArray().put(
+                            JSONObject()
+                                .put("uri", ReaKnowledge.URI)
+                                .put("mimeType", "text/markdown")
+                                .put("text", ReaKnowledge.GUIDE)
                         )
-                    } else {
-                        throw IllegalArgumentException("unknown resource: " + uri)
+                    )
+                }
+            }
+            "prompts/list" -> {
+                val prompts = result.optJSONArray("prompts") ?: JSONArray()
+                var present = false
+                for (i in 0 until prompts.length()) {
+                    if (prompts.optJSONObject(i)?.optString("name") == "rea-method") {
+                        present = true
+                        break
                     }
                 }
-                "prompts/list" -> JSONObject().put(
-                    "prompts",
-                    JSONArray().put(
+                if (!present) {
+                    prompts.put(
                         JSONObject()
                             .put("name", "rea-method")
                             .put("description", "How to approach a reverse-engineering task with REA")
                     )
-                )
-                "prompts/get" -> JSONObject()
-                    .put("description", "REA working method")
-                    .put(
-                        "messages",
-                        JSONArray().put(
-                            JSONObject()
-                                .put("role", "user")
-                                .put(
-                                    "content",
-                                    JSONObject()
-                                        .put("type", "text")
-                                        .put("text", ReaKnowledge.PROMPT)
-                                )
-                        )
-                    )
-                "ping" -> JSONObject()
-                else -> JSONObject()
+                }
+                result.put("prompts", prompts)
             }
-            JSONObject().put("jsonrpc", "2.0").put("id", id).put("result", result).toString()
-        } catch (t: Throwable) {
-            errorResponse(id, t.message ?: "bridge error")
         }
+        return reply
     }
-
-    /** The tool catalog, in the shape MCP expects. */
-    private fun toolList(): List<JSONObject> = session.listToolsJson()
 
     private fun errorResponse(id: Any?, message: String): String =
         JSONObject()
@@ -281,6 +365,14 @@ internal class BridgeServer(
             .put("error", JSONObject().put("code", -32000).put("message", message))
             .toString()
 
+    /**
+     * Write one HTTP response.
+     *
+     * `Mcp-Session-Id` is required by the Streamable HTTP transport: a client
+     * sends it back on every later request, and its absence was one of the
+     * reasons a real client rejected this endpoint. The value is stable for the
+     * lifetime of the bridge, because the bridge itself is the session.
+     */
     private fun respond(out: OutputStream, code: Int, body: String) {
         val bytes = body.toByteArray(Charsets.UTF_8)
         val header = buildString {
@@ -288,8 +380,10 @@ internal class BridgeServer(
             append(if (code == 204) "No Content" else "OK").append("\r\n")
             append("Content-Type: application/json\r\n")
             append("Content-Length: ").append(bytes.size).append("\r\n")
+            append("Mcp-Session-Id: ").append(sessionId).append("\r\n")
             append("Access-Control-Allow-Origin: *\r\n")
             append("Access-Control-Allow-Headers: *\r\n")
+            append("Access-Control-Expose-Headers: Mcp-Session-Id\r\n")
             append("Connection: close\r\n\r\n")
         }
         runCatching {
@@ -299,8 +393,12 @@ internal class BridgeServer(
         }
     }
 
+    /** Stable id for this bridge instance, sent as `Mcp-Session-Id`. */
+    private val sessionId: String = java.util.UUID.randomUUID().toString()
+
     private companion object {
         const val TAG = "ReaBridgeServer"
         const val TOOL_TIMEOUT_MS = 30 * 60_000L
+        const val REQUEST_TIMEOUT_MS = 5 * 60_000L
     }
 }

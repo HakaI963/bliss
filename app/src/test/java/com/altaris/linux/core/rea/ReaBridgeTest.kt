@@ -109,12 +109,28 @@ class ReaBridgeTest {
         assertTrue(ReaBridge.PORT != 47831)
     }
 
+    /**
+     * OpenCode v2 reads `mcp.servers`; the old flat `mcp.{name}` form and the
+     * `enabled` flag are deprecated/ignored. The block we hand out must use the
+     * shape the client actually reads.
+     */
     @Test
-    fun theConfigBlockIsValidJsonForAnAgent() {
+    fun theConfigBlockUsesTheCurrentOpenCodeShape() {
         val json = org.json.JSONObject(ReaBridge.configJson())
+        val server = json.getJSONObject("mcp").getJSONObject("servers").getJSONObject("rea")
+        assertEquals("http", server.getString("type"))
+        assertTrue(server.getString("url").endsWith("/mcp"))
+        // `enabled` is silently ignored by v2; opting out is `disabled: true`.
+        assertFalse("must not send the ignored enabled flag", server.has("enabled"))
+    }
+
+    /** Clients that still use the flat form get it too. */
+    @Test
+    fun theLegacyConfigBlockIsStillAvailable() {
+        val json = org.json.JSONObject(ReaBridge.configJsonLegacy())
         val server = json.getJSONObject("mcpServers").getJSONObject("rea")
         assertEquals("http", server.getString("type"))
-        assertEquals(ReaBridge.ENDPOINT, server.getString("url"))
+        assertTrue(server.getString("url").endsWith("/mcp"))
     }
 
     @Test
