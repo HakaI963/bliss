@@ -450,6 +450,97 @@ object ReaManager {
         }
     }
 
+    /**
+     * Install exactly one tool, without taking the whole-install lock.
+     *
+     * [ReaToolInstaller] runs several tools at once — archive downloads are
+     * independent and the requirement is that they overlap. Routing each one
+     * through [install] serialised them on its `mutex`, so "three downloads in
+     * parallel" actually ran one at a time and the queue looked frozen while
+     * seventeen tools waited their turn.
+     *
+     * Callers own the sequencing that matters: the package lane is serialised
+     * because apt/dnf/pacman take a real database lock, and the archive lane is
+     * not. Helpers and the core are staged once by [prepare] before this runs.
+     */
+    suspend fun installTool(
+        ctx: Context,
+        distroId: String,
+        id: String,
+        manager: String,
+        onLog: (String) -> Unit = {},
+    ): ToolOutcome = withContext(Dispatchers.IO) {
+        val dep = ReaCatalog.byId(id)
+            ?: return@withContext ToolOutcome(id, false, "unknown tool: $id")
+        installDependency(ctx.applicationContext, distroId, dep, manager, onLog)
+    }
+
+    /**
+     * Stage everything the per-tool installs share: helper scripts, the package
+     * manager name, and the REA core.
+     *
+     * Serialised on [mutex], because two of these at once would race on the
+     * script directory and on Node.
+     */
+    suspend fun prepare(
+        ctx: Context,
+        distroId: String,
+        onLog: (String) -> Unit = {},
+    ): Status = withContext(Dispatchers.IO) {
+        mutex.withLock {
+            val app = ctx.applicationContext
+            if (distroId.isBlank()) {
+                update { it.copy(busy = "", error = "Install a distro first") }
+                return@withLock _status.value
+            }
+            val alreadyInstalled = _status.value.distroId == distroId && _status.value.installed
+            update {
+                it.copy(
+                    distroId = distroId,
+                    method = GuestExec.methodOf(distroId),
+                    busy = "Preparing REA",
+                    log = "",
+                    error = "",
+                    outcomes = emptyList(),
+                )
+            }
+            val logBuffer = StringBuilder()
+            fun line(text: String) {
+                synchronized(logBuffer) {
+                    logBuffer.append(text).append('\n')
+                    if (logBuffer.length > 24_000) logBuffer.delete(0, logBuffer.length - 20_000)
+                }
+                onLog(text)
+                update { it.copy(log = synchronized(logBuffer) { logBuffer.toString() }) }
+            }
+
+            update { it.copy(busy = "Staging helpers") }
+            if (!stageHelpers(app, distroId) { line(it) }) {
+                line("warning: helper scripts could not be staged; installs may fail")
+            }
+            val manager = detectPackageManager(app, distroId)
+            update { it.copy(packageManager = manager) }
+            line("distro " + distroId + " · package manager: " + manager.ifBlank { "unknown" })
+
+            if (alreadyInstalled) {
+                line("REA core already installed in " + distroId)
+            } else {
+                update { it.copy(busy = "Installing REA core") }
+                line("installing Node " + NODE_VERSION + " + rea-agents " + REA_VERSION)
+                val core = GuestExec.run(app, distroId, coreScript(), timeoutMs = 45 * 60_000L) { line(it) }
+                if (core.ok) {
+                    line("REA core ready")
+                } else {
+                    val coreError = core.tail(8).ifBlank { "REA core install failed" }
+                    line("ERROR: REA core install failed (tools below are still attempted)")
+                    update { it.copy(error = coreError) }
+                }
+            }
+            update { it.copy(busy = "") }
+            probe(app, distroId)
+        }
+    }
+
     private suspend fun installDependency(
         app: Context,
         distroId: String,

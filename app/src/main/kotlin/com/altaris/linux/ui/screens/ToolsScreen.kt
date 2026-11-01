@@ -954,6 +954,18 @@ private fun ReaToolsCard(context: Context, accent: Color) {
         dep.kind != "license" && dep.id !in status.available
     }
 
+    // `available` is filled by a probe, and a probe only ran after an install.
+    // Nothing probed when this card opened, so after an app update — a fresh
+    // process with no probe behind it — every installed tool still read
+    // "Install". Probe once when the card appears so the list states the truth.
+    // Keyed on the distro so switching containers re-probes.
+    LaunchedEffect(reaDistro.method, reaDistro.ready) {
+        val target = reaDistro.method?.id ?: status.distroId
+        if (target.isNotBlank() && reaDistro.installed) {
+            withContext(Dispatchers.IO) { ReaManager.probe(context, target) }
+        }
+    }
+
     PrismSectionLabel("Analysis tools", accent)
     PrismCard(accent = accent) {
         PrismNote(
@@ -1024,13 +1036,13 @@ private fun ReaToolsCard(context: Context, accent: Color) {
                 modifier = Modifier.fillMaxWidth(),
                 enabled = !toolInstall.running && reaDistro.installed,
             ) {
-                scope.launch {
-                    val ids = installable
-                        .filter { manager.isBlank() || it.kind != "package" || ReaCatalog.packagedFor(it, manager) }
-                        .map { it.id }
-                    val target = reaDistro.method?.id ?: status.distroId
-                    if (ids.isNotEmpty()) ReaToolInstaller.install(context, target, ids)
-                }
+                // Not the composition scope: a ~450 MB download must survive
+                // leaving this screen.
+                val ids = installable
+                    .filter { manager.isBlank() || it.kind != "package" || ReaCatalog.packagedFor(it, manager) }
+                    .map { it.id }
+                val target = reaDistro.method?.id ?: status.distroId
+                if (ids.isNotEmpty()) ReaToolInstaller.installAsync(context, target, ids)
             }
         }
 

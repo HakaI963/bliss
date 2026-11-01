@@ -299,8 +299,14 @@ internal class BridgeServer(
                         System.currentTimeMillis() - started,
                     )
                 }
-                // Return REA's reply as-is: MCP clients validate its shape.
-                reply.toString()
+                // Return REA's reply, but under the *client's* id. REA's
+                // reply carries the bridge's own correlation id, and a client
+                // matches replies by id: handing back a foreign one makes it
+                // log "Received a response for an unknown message ID" and wait
+                // forever for the real answer. This was why every spec-
+                // compliant client failed to connect while the endpoint itself
+                // answered in milliseconds.
+                withClientId(reply, id).toString()
             } catch (t: Throwable) {
                 val message = t.message ?: t.javaClass.simpleName
                 ReaBridge.finishCall(
@@ -312,7 +318,7 @@ internal class BridgeServer(
 
         return try {
             val reply = session.forward(method, params, REQUEST_TIMEOUT_MS)
-            decorate(method, reply).toString()
+            withClientId(decorate(method, reply), id).toString()
         } catch (t: Throwable) {
             errorResponse(id, t.message ?: "bridge error")
         }
@@ -380,6 +386,23 @@ internal class BridgeServer(
                 result.put("prompts", prompts)
             }
         }
+        return reply
+    }
+
+    /**
+     * Put the client's request id on a reply that REA answered.
+     *
+     * The session correlates replies with its own counter, because several
+     * bridge requests can be in flight and REA only knows about the id it was
+     * given. That counter must never reach the client: JSON-RPC matches a
+     * response to a request by id, and a client that sees `id: 11` for the
+     * request it sent as `id: 999` discards the response and blocks until its
+     * own timeout. The transport then reports "Request timed out" even though
+     * the server answered correctly and immediately.
+     */
+    private fun withClientId(reply: JSONObject, id: Any?): JSONObject {
+        if (id == null || id == JSONObject.NULL) return reply
+        reply.put("id", id)
         return reply
     }
 

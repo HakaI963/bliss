@@ -1,13 +1,17 @@
 package com.altaris.linux.core.rea
 
 import android.content.Context
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
@@ -96,40 +100,96 @@ object ReaToolInstaller {
         onLog("package manager: " + manager.ifBlank { "none" })
 
         // Core first: every tool depends on the distro being usable, and Node is
-        // installed into a shared directory.
+        // installed into a shared directory. This is the serialised part.
         _state.value = _state.value.copy(running = true)
-        val status = ReaManager.install(context, distroId, emptyList()) { onLog(it) }
-        if (status.error.isNotBlank()) {
-            onLog("core: " + status.error)
-        }
-
-        val packageLane = deps.filter { isPackage(dep = it, manager = manager) }
-        val archiveLane = deps.filterNot { isPackage(dep = it, manager = manager) }
-
-        coroutineScope {
-            // One worker for the package manager: its lock is real.
-            val packageJob = async(Dispatchers.IO) {
-                for (dep in packageLane) {
-                    runOne(context, distroId, dep, manager, onLog)
-                }
+        // `finally` matters: a throw (or a cancel from a scope that went away)
+        // used to skip the reset below, leaving `running` true and every tool
+        // stuck at "queued" with no way to start another install.
+        try {
+            val status = ReaManager.prepare(context, distroId) { onLog(it) }
+            if (status.error.isNotBlank()) {
+                onLog("core: " + status.error)
             }
-            // Archives are independent downloads into their own directories.
-            val gate = Semaphore(ARCHIVE_WORKERS)
-            val archiveJobs = archiveLane.map { dep ->
-                async(Dispatchers.IO) {
-                    gate.withPermit { runOne(context, distroId, dep, manager, onLog) }
-                }
-            }
-            packageJob.await()
-            archiveJobs.awaitAll()
-        }
 
-        _state.value = _state.value.copy(running = false)
-        ReaManager.probe(context, distroId)
+            val packageLane = deps.filter { isPackage(dep = it, manager = manager) }
+            val archiveLane = deps.filterNot { isPackage(dep = it, manager = manager) }
+
+            coroutineScope {
+                // One worker for the package manager: its lock is real.
+                val packageJob = async(Dispatchers.IO) {
+                    for (dep in packageLane) {
+                        runOne(context, distroId, dep, manager, onLog)
+                    }
+                }
+                // Archives are independent downloads into their own directories.
+                val gate = Semaphore(ARCHIVE_WORKERS)
+                val archiveJobs = archiveLane.map { dep ->
+                    async(Dispatchers.IO) {
+                        gate.withPermit { runOne(context, distroId, dep, manager, onLog) }
+                    }
+                }
+                packageJob.await()
+                archiveJobs.awaitAll()
+            }
+        } finally {
+            // Anything still QUEUED never got its turn; say so instead of
+            // leaving a bar that looks like it is waiting for something.
+            updates.values
+                .filter { it.status == ToolState.Status.QUEUED }
+                .forEach { stale ->
+                    updates[stale.id] = stale.copy(
+                        status = ToolState.Status.SKIPPED,
+                        detail = "not installed",
+                    )
+                }
+            publish(updates.values.toList())
+            _state.value = _state.value.copy(running = false)
+            ReaManager.probe(context, distroId)
+        }
+        ReaManager.status.value
+    }
+
+    /**
+     * Scope for the install itself.
+     *
+     * The tools are a multi-gigabyte job: package installs plus a ~450 MB
+     * Ghidra download. It used to run on the *screen's*
+     * `rememberCoroutineScope()`, so closing Tools, switching tabs or rotating
+     * cancelled it mid-way. The cancel skipped the line that clears
+     * `running`, so every remaining tool stayed `queued` with the progress bar
+     * frozen — "all queued and the queue never ends". The work now owns its
+     * own lifetime, exactly like [ReaDistro.install].
+     */
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    @Volatile private var installJob: Job? = null
+
+    /** True while a tool install is running in this process. */
+    fun isInstalling(): Boolean = installJob?.isActive == true || _state.value.running
+
+    /**
+     * Start a tool install and return immediately.
+     *
+     * Callers must use this rather than launching [install] in a composition
+     * scope: navigating away would otherwise cancel the download.
+     */
+    fun installAsync(
+        context: Context,
+        distroId: String,
+        ids: List<String>,
+        onLog: (String) -> Unit = {},
+    ) {
+        if (isInstalling()) return
+        val app = context.applicationContext
+        installJob = scope.launch {
+            runCatching { install(app, distroId, ids, onLog) }
+                .onFailure { android.util.Log.w("ReaToolInstaller", "tool install failed", it) }
+        }
     }
 
     /** Cancel is not supported mid-install; the caller restarts instead. */
     fun reset() {
+        installJob = null
         updates.clear()
         _state.value = Snapshot()
     }
@@ -140,13 +200,16 @@ object ReaToolInstaller {
         context: Context,
         distroId: String,
         dep: ReaDependency,
-        @Suppress("UNUSED_PARAMETER") manager: String,
+        manager: String,
         onLog: (String) -> Unit,
     ) {
         setStatus(dep, ToolState.Status.RUNNING, "starting")
         onLog("installing " + dep.label)
-        val result = runCatching {
-            ReaManager.install(context, distroId, listOf(dep.id)) { line ->
+        // One tool, no global lock: the archive lane is meant to download
+        // several at once, and routing each through the whole-install entry
+        // point serialised them on its mutex.
+        val outcome = runCatching {
+            ReaManager.installTool(context, distroId, dep.id, manager) { line ->
                 // The manager's own line is the most precise progress there is;
                 // it names the archive being fetched or the package being set up.
                 update(dep.id) {
@@ -161,14 +224,13 @@ object ReaToolInstaller {
             }
         }.getOrNull()
 
-        val outcome = result?.outcomes?.firstOrNull { it.id == dep.id }
-        val ok = outcome?.ok ?: result?.error.isNullOrBlank()
+        val ok = outcome?.ok == true
         if (ok) {
             update(dep.id) {
                 it.copy(
                     status = ToolState.Status.DONE,
                     percent = 100,
-                    detail = outcome?.detail?.take(80).orEmpty().ifBlank { "installed" },
+                    detail = outcome.detail.take(80).ifBlank { "installed" },
                     error = "",
                 )
             }
@@ -178,7 +240,7 @@ object ReaToolInstaller {
                     status = ToolState.Status.FAILED,
                     detail = "",
                     error = outcome?.detail?.take(160).orEmpty()
-                        .ifBlank { result?.error?.take(160) ?: "install failed" },
+                        .ifBlank { "install failed" },
                 )
             }
         }

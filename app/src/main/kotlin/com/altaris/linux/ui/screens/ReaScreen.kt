@@ -1054,13 +1054,9 @@ private fun StatusTab(accent: Color, distro: ReaDistro.State, bridge: ReaBridge.
                 modifier = Modifier.fillMaxWidth(),
                 enabled = !tools.running,
                 onClick = {
-                    scope.launch {
-                        withContext(Dispatchers.IO) {
-                            val id = ReaDistro.distroId(context) ?: return@withContext
-                            ReaToolInstaller.install(context, id, ReaDistro.ALL_TOOLS)
-                        }
-                        tick++
-                    }
+                    // App-lifetime: closing the tab must not cancel the install.
+                    val id = ReaDistro.distroId(context)
+                    if (id != null) ReaToolInstaller.installAsync(context, id, ReaDistro.ALL_TOOLS)
                 },
             )
         }
