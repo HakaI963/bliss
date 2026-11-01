@@ -211,4 +211,92 @@ class ReaToolInstallerTest {
         assertEquals(0f, snapshot.fraction, 0.001f)
         assertEquals(0, snapshot.failed)
     }
+
+    private fun readSource(path: String): String =
+        java.io.File(path).readText()
+
+    /**
+     * The install must outlive the screen that started it.
+     *
+     * It used to run on `rememberCoroutineScope()`, so closing Tools, switching
+     * tabs or rotating cancelled it mid-download. The cancel skipped the line
+     * that cleared `running`, so every remaining tool stayed "queued" with the
+     * bars frozen — "all queued and the queue never ends".
+     */
+    @Test
+    fun theInstallOutlivesTheScreen() {
+        val source = readSource(
+            "app/src/main/kotlin/com/altaris/linux/core/rea/ReaToolInstaller.kt"
+        )
+        assertTrue(
+            "must own an app-lifetime scope",
+            source.contains("private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)"),
+        )
+        assertTrue(
+            "must launch off the caller's scope",
+            source.contains("fun installAsync("),
+        )
+        // The reset must survive a throw or a cancel, or the state sticks.
+        assertTrue("must clear the state in finally", source.contains("} finally {"))
+        assertTrue(
+            "must clear running",
+            source.contains("_state.value = _state.value.copy(running = false)"),
+        )
+        // A row that never ran must not read "queued" forever.
+        assertTrue(
+            "unstarted tools must become skipped",
+            source.contains("ToolState.Status.SKIPPED"),
+        )
+    }
+
+    /**
+     * The archive lane must actually overlap.
+     *
+     * Every tool went through `ReaManager.install`, which holds one global
+     * mutex, so three "parallel" downloads ran one at a time and seventeen
+     * tools looked frozen.
+     */
+    @Test
+    fun theArchiveLaneIsNotSerialisedByAGlobalLock() {
+        val installer = readSource(
+            "app/src/main/kotlin/com/altaris/linux/core/rea/ReaToolInstaller.kt"
+        )
+        assertFalse(
+            "a per-tool install must not take the whole-install lock",
+            installer.contains("ReaManager.install(context, distroId, listOf(dep.id))"),
+        )
+        assertTrue(
+            "it must use the lock-free per-tool entry point",
+            installer.contains("ReaManager.installTool("),
+        )
+        assertTrue(
+            "core staging is still serialised",
+            installer.contains("ReaManager.prepare("),
+        )
+        val manager = readSource(
+            "app/src/main/kotlin/com/altaris/linux/core/rea/ReaManager.kt"
+        )
+        assertTrue(
+            "installTool must not take the mutex",
+            manager.contains("suspend fun installTool("),
+        )
+    }
+
+    /**
+     * The tools list must state the truth on a cold start.
+     *
+     * `available` is only filled by a probe, and a probe only ran after an
+     * install. After an app update — a fresh process with no probe behind it —
+     * every installed tool read "Install".
+     */
+    @Test
+    fun theToolsListProbesWhenItOpens() {
+        val source = readSource(
+            "app/src/main/kotlin/com/altaris/linux/ui/screens/ToolsScreen.kt"
+        )
+        assertTrue(
+            "the card must probe on open",
+            source.contains("ReaManager.probe(context, target)"),
+        )
+    }
 }

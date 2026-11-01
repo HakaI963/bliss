@@ -1054,9 +1054,15 @@ private fun StatusTab(accent: Color, distro: ReaDistro.State, bridge: ReaBridge.
                 modifier = Modifier.fillMaxWidth(),
                 enabled = !tools.running,
                 onClick = {
+                    // Only what is actually missing: re-running the whole list
+                    // queued seventeen no-ops that each re-checked and exited,
+                    // which is what made the queue look endless.
+                    val missing = ReaDistro.ALL_TOOLS.filterNot { it in status.available }
                     // App-lifetime: closing the tab must not cancel the install.
                     val id = ReaDistro.distroId(context)
-                    if (id != null) ReaToolInstaller.installAsync(context, id, ReaDistro.ALL_TOOLS)
+                    if (id != null && missing.isNotEmpty()) {
+                        ReaToolInstaller.installAsync(context, id, missing)
+                    }
                 },
             )
         }

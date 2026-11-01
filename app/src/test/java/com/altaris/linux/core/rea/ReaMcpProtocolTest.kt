@@ -118,7 +118,47 @@ class ReaMcpProtocolTest {
             source.contains("session.forward(method, params, TOOL_TIMEOUT_MS)"),
         )
         assertTrue(
-            "must return the reply as-is",
+            "must return REA's reply body",
+            source.contains("withClientId(reply, id)"),
+        )
+    }
+
+    /**
+     * The reply must carry the *client's* id.
+     *
+     * The session correlates REA's replies with its own counter, because
+     * several bridge requests can be in flight. Returning that counter to the
+     * client is fatal: JSON-RPC matches a response to a request by id, so a
+     * client that sent `id: 999` and received `id: 11` discards the response
+     * and blocks until its own timeout. That is exactly the reported
+     * "Received a response for an unknown message ID" followed by
+     * "Request timed out", while the endpoint itself answered in milliseconds.
+     */
+    @Test
+    fun repliesCarryTheClientsRequestId() {
+        val source = readSource(
+            "app/src/main/kotlin/com/altaris/linux/core/rea/BridgeServer.kt"
+        )
+        assertTrue(
+            "must rewrite the id on the reply",
+            source.contains("private fun withClientId("),
+        )
+        assertTrue(
+            "must set the caller's id",
+            source.contains("reply.put(\"id\", id)"),
+        )
+        // Both forwarded paths must go through it: the generic pass-through
+        // and tools/call.
+        assertTrue(
+            "the generic pass-through must echo the client id",
+            source.contains("withClientId(decorate(method, reply), id)"),
+        )
+        assertTrue(
+            "tools/call must echo the client id",
+            source.contains("withClientId(reply, id)"),
+        )
+        assertFalse(
+            "must not hand back the session's own id",
             source.contains("// Return REA's reply as-is"),
         )
     }
