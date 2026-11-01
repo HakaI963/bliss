@@ -62,7 +62,10 @@ internal class BridgeServer(
      */
     fun start() {
         if (running) return
-        val server = try {
+        // Explicit type: the catch branch ends in `throw`, which makes the
+        // try-expression's type Nothing, and the lambda below then cannot infer
+        // the type of `server` (which is what broke the build).
+        val server: ServerSocket = try {
             val s = ServerSocket()
             s.reuseAddress = true
             s.bind(
