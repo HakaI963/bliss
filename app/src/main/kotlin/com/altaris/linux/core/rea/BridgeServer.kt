@@ -196,8 +196,8 @@ internal class BridgeServer(
      *   Invalid result for initialize: protocolVersion: expected string,
      *   received undefined
      *
-     * Now every method — `initialize`, `tools/list`, `tools/call`, `ping`,
-     * `resources/*`, `prompts/*` — is passed to REA's stdio process and its
+     * Now every method — initialize, tools/list, tools/call, ping, the resource
+     * methods and the prompt methods — is passed to REA's stdio process and its
      * reply is returned unchanged, including `serverInfo`, `capabilities`,
      * `instructions` and the full tool schemas.
      *
