@@ -14,7 +14,6 @@ import kotlinx.coroutines.withTimeoutOrNull
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -762,7 +761,12 @@ private fun TerminalKey(
     onHoldEnd: (() -> Unit)? = null,
 ) {
     val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
+    val pressedByClick by interaction.collectIsPressedAsState()
+    // The press-and-hold branch cannot emit into the interaction source (that
+    // is a suspending call, and the gesture scope is restricted), so it tracks
+    // the pressed look itself. Both feed the same highlight.
+    var pressedByHold by remember { mutableStateOf(false) }
+    val pressed = pressedByClick || pressedByHold
     val emphasized = active || pressed
     val scheme = MaterialTheme.colorScheme
     // The keys are always dark: the terminal never follows the app theme.
@@ -793,7 +797,7 @@ private fun TerminalKey(
                         awaitEachGesture {
                             val down = awaitFirstDown(requireUnconsumed = false)
                             down.consume()
-                            interaction.emit(PressInteraction.Press(down.position))
+                            pressedByHold = true
                             onHoldStart()
                             var held = true
                             // Repeat until the finger lifts.
@@ -818,7 +822,7 @@ private fun TerminalKey(
                                     change?.consume()
                                 }
                             }
-                            interaction.emit(PressInteraction.Release(down.position))
+                            pressedByHold = false
                             onHoldEnd?.invoke()
                         }
                     }
