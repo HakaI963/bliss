@@ -98,16 +98,32 @@ class ReaRemoveSafetyTest {
         val installer = readSource(
             "app/src/main/kotlin/com/altaris/linux/core/rea/ReaInstaller.kt"
         )
-        val chrootBranch = installer.substringAfter("if (profile.method == \"chroot\") {")
-            .substringBefore("} else {")
+        // Anchor on removeContainer: there is another `method == "chroot"` check
+        // in ensureContainer, and searching from the first one read the wrong
+        // function entirely.
+        val removeFn = installer.substringAfter("fun removeContainer(")
+            .substringBefore("/** Unmount, then delete")
         assertTrue(
             "chroot removal must call the script",
-            chrootBranch.contains("removeChroot(context, rootfs.absolutePath)"),
+            removeFn.contains("removeChroot(context, rootfs.absolutePath)"),
         )
         assertFalse(
             "chroot removal must not run rm -rf",
-            chrootBranch.contains("rm -rf"),
+            removeFn.substringAfter("if (profile.method == \"chroot\") {")
+                .substringBefore("} else {")
+                .contains("rm -rf"),
         )
+        // The proot branch is allowed a recursive delete: no mounts there.
+        assertTrue(
+            "proot keeps the recursive delete",
+            removeFn.contains("deleteRecursively()"),
+        )
+        // And the script itself must never issue a blind recursive delete
+        // without the mount guard having passed first.
+        val script = readAsset("scripts/chroot/remove-chroot.sh")
+        val guard = script.indexOf("REFUSING to delete")
+        val del = script.indexOf('deleting \$GUEST')
+        assertTrue("the guard must come first", guard in 0..del)
     }
 
     /**
