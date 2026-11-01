@@ -258,10 +258,20 @@ class ReaChrootRootfsAndOwnershipTest {
             .substringBefore("Column(")
         assertTrue(
             "the REA poll must refresh",
-            poll.contains("ReaDistro.refresh(context)"),
+            poll.contains("ReaDistro.refresh(context, deep = first)"),
+        )
+        // Exactly one deep read, on open; every later tick must be shallow or
+        // the poll walks the rootfs and forks su again.
+        assertTrue(
+            "the first read is deep",
+            poll.contains("var first = true"),
+        )
+        assertTrue(
+            "the deep read is switched off after the first tick",
+            poll.contains("first = false"),
         )
         assertFalse(
-            "the REA poll must not ask for the expensive deep read",
+            "a tick must never re-request the deep read unconditionally",
             poll.contains("deep = true"),
         )
     }
