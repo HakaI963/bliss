@@ -176,10 +176,12 @@ object ReaInstaller {
             return false
         }
         val result = RootShell.captureResult(
-            "sh " + quote(staged) + " " + quote(path),
+            cmd = "sh " + quote(staged) + " " + quote(path),
             // Unmounting a busy tree plus deleting several GB can take a while.
-            10 * 60_000L,
-        ) { line -> Log.i(TAG, "remove: $line") }
+            timeoutMs = 10 * 60_000L,
+            // Log each line so a refusal names the mount that blocked it.
+            onLine = { line -> Log.i(TAG, "remove: $line") },
+        )
         val gone = !File(path).exists() || File(path).list()?.isEmpty() == true
         if (!gone) {
             Log.w(TAG, "chroot still present after removal (exit ${result.exitCode})")
