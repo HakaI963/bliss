@@ -35,10 +35,35 @@ object ReaInstaller {
 
     private const val TAG = "AltarisReaInstaller"
 
-    /** True when the container already exists and looks usable. */
+    /**
+     * True when the container already exists and looks usable.
+     *
+     * A chroot rootfs lives under `/data/local/altaris/chroots/…`, which this
+     * process cannot read (SELinux `shell_data_file`). Checking it with
+     * `File.isDirectory` therefore always returned false, so a chroot that the
+     * installer had just created and verified was reported as "the container
+     * was not created" — which is exactly what happened on device. Chroot is
+     * checked through root instead.
+     */
     fun containerExists(context: Context, profile: DistroInstallProfile): Boolean {
         val rootfs = rootfsOf(context, profile) ?: return false
-        return rootfs.isDirectory && rootfs.list()?.isNotEmpty() == true
+        if (rootfs.isDirectory && rootfs.list()?.isNotEmpty() == true) return true
+        if (profile.method != "chroot") return false
+        if (!RootShell.isRootAvailable()) {
+            // Without root, fall back to the cached chroot probe the settings
+            // screen already keeps, so a granted-but-not-yet-probed state does
+            // not read as absent.
+            return com.altaris.linux.core.chroot.ChrootInfoStore
+                .cachedInstalled(context, profile.distroId)
+        }
+        val path = rootfs.absolutePath
+        return runCatching {
+            RootShell.captureResult(
+                "test -d " + quote(path) +
+                    " && [ -n \"\$(ls -A " + quote(path) + " 2>/dev/null | head -n1)\" ]",
+                20_000L,
+            ).exitCode == 0
+        }.getOrDefault(false)
     }
 
     /**

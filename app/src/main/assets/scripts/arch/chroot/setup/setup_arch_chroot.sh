@@ -263,12 +263,16 @@ fi
         echo "Creating user $USERNAME..."
         groupadd storage
         groupadd wheel
-        id -u altaris >/dev/null 2>&1 || useradd -m -g users -G wheel,audio,video,storage,aid_inet -s /bin/bash flux
-        echo "flux:flux" | chpasswd
-        
-        # Sudoers
-        echo "altaris ALL=(ALL:ALL) NOPASSWD:ALL" > /etc/sudoers.d/flux
-        chmod 0440 /etc/sudoers.d/flux
+        # The guest account is `altaris`. Creating `flux` here and then granting
+        # sudo to `altaris` left the account that exists without sudo, and made
+        # a re-run print "user 'flux' already exists".
+        id -u altaris >/dev/null 2>&1 || useradd -m -g users -G wheel,audio,video,storage,aid_inet -s /bin/bash altaris
+        echo "altaris:altaris" | chpasswd
+
+        # Sudoers for the account that exists.
+        rm -f /etc/sudoers.d/flux
+        echo "altaris ALL=(ALL:ALL) NOPASSWD:ALL" > /etc/sudoers.d/altaris
+        chmod 0440 /etc/sudoers.d/altaris
         
         # Locales
         echo "en_US.UTF-8 UTF-8" > /etc/locale.gen

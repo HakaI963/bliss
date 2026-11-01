@@ -237,7 +237,8 @@ if [ -z "${DESKTOPS##*xfce*}" ]; then
     _altaris_require_startxfce4
 fi
 _altaris_ensure_user
-echo "flux:flux" | chpasswd 2>/dev/null || true
+# The guest account is altaris; setting a flux password here did nothing.
+echo "altaris:altaris" | chpasswd 2>/dev/null || true
 if command -v usermod >/dev/null 2>&1; then
     usermod -aG wheel,audio,video,input,users altaris 2>/dev/null || true
 fi

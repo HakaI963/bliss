@@ -90,31 +90,42 @@ mkdir -p /etc/altaris
 printf '%s\n' virgl > /etc/altaris/gpu_mode
 echo "Altaris: gpu_mode=virgl (first-paint; hw-accel may upgrade)"
 
-# 2. Create User 'altaris'
-if ! id "altaris" &>/dev/null; then
-    useradd -m -s /bin/bash flux
-    echo "flux:flux" | chpasswd
-    usermod -aG sudo altaris
+# 2. Create the guest user.
+#
+# The account is `altaris`. Earlier builds created `flux` (the old product
+# name) and then tried to add a user that did not exist, which produced
+# "user 'flux' already exists" on the second run and left the sudoers file
+# pointing at the wrong account.
+GUEST_USER="altaris"
+if ! id "$GUEST_USER" >/dev/null 2>&1; then
+    useradd -m -s /bin/bash "$GUEST_USER"
+    echo "$GUEST_USER:$GUEST_USER" | chpasswd
+fi
+# A stale `flux` account from an earlier image must not keep sudo rights.
+if id flux >/dev/null 2>&1 && [ "$GUEST_USER" != "flux" ]; then
+    deluser flux sudo >/dev/null 2>&1 || true
+    rm -f /etc/sudoers.d/flux
 fi
 
-# 3. Configure Sudo
-echo "flux ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/flux
+# 3. Configure Sudo for the account that actually exists.
+echo "$GUEST_USER ALL=(ALL) NOPASSWD:ALL" > "/etc/sudoers.d/$GUEST_USER"
+chmod 0440 "/etc/sudoers.d/$GUEST_USER" 2>/dev/null || true
 
-# 4. Configure VNC for User (session command follows ALTARIS_DESKTOPS)
-mkdir -p /home/flux/.vnc
+# 4. Configure VNC for that user (session command follows ALTARIS_DESKTOPS)
+mkdir -p "/home/$GUEST_USER/.vnc"
 _xs_de="startxfce4"
 if [ -z "${DESKTOPS##*kde*}" ] && [ -n "${DESKTOPS##*xfce*}" ]; then
     _xs_de="startplasma-x11"
 fi
-cat > /home/flux/.vnc/xstartup <<EOF
+cat > "/home/$GUEST_USER/.vnc/xstartup" <<EOF
 #!/bin/bash
 export PULSE_SERVER=tcp:127.0.0.1
 xrdb \$HOME/.Xresources
 exec $_xs_de
 EOF
 unset _xs_de
-chmod +x /home/flux/.vnc/xstartup
-chown -R flux:flux /home/flux/.vnc
+chmod +x "/home/$GUEST_USER/.vnc/xstartup"
+chown -R "$GUEST_USER:$GUEST_USER" "/home/$GUEST_USER/.vnc"
 
 if command -v _altaris_write_pulse_client >/dev/null 2>&1; then
     _altaris_write_pulse_client

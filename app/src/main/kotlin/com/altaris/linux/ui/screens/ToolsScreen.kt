@@ -717,7 +717,8 @@ private fun ReaMcpCard(context: Context, accent: Color) {
     val distro by ReaDistro.state.collectAsState()
     var copied by remember { mutableStateOf(false) }
     val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
-    val config = remember { ReaBridge.configJson() }
+    // Recomputed when the server state changes, so a fallback port is reflected.
+    val config = remember(bridge.running) { ReaBridge.configJson() }
 
     PrismSectionLabel("MCP server", accent)
     PrismCard(accent = accent) {
@@ -741,7 +742,7 @@ private fun ReaMcpCard(context: Context, accent: Color) {
         )
         Spacer(Modifier.height(Prism.Tight))
         Text(
-            ReaBridge.ENDPOINT,
+            if (bridge.running) ReaBridge.liveEndpoint else ReaBridge.ENDPOINT,
             fontSize = 10.5.sp,
             fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
             color = accent,

@@ -54,8 +54,21 @@ object ReaBridge {
     /** Loopback port of the bridge. Distinct from the clone-control port. */
     const val PORT = 47832
 
-    /** The URL an agent configures. */
+    /** The URL an agent configures, on the default port. */
     const val ENDPOINT = "http://127.0.0.1:$PORT/mcp"
+
+    /**
+     * The URL actually listening.
+     *
+     * If the default port was taken, the server binds the next free one; an
+     * agent configured with [ENDPOINT] would then connect to nothing, so the
+     * config shown in Tools uses this instead.
+     */
+    val liveEndpoint: String
+        get() {
+            val bound = server?.boundPort ?: PORT
+            return "http://127.0.0.1:" + bound + "/mcp"
+        }
 
     /** One recorded tool call. */
     data class Call(
@@ -525,7 +538,7 @@ object ReaBridge {
           "mcpServers": {
             "rea": {
               "type": "http",
-              "url": "$ENDPOINT"
+              "url": "${liveEndpoint}"
             }
           }
         }

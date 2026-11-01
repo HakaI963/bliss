@@ -199,12 +199,14 @@ echo "[3/7] Installing KDE extras..."
 apt install -y --no-install-recommends "${EXTRA_PKGS[@]}" 2>/dev/null || true
 
 # 3. Create user 'altaris' (idempotent — setup_debian_family.sh may have made it)
-echo "[4/7] Creating user flux..."
+# Creating `flux` here and then adding `altaris` to sudo left the real account
+# without sudo and produced "user 'flux' already exists" on a re-run.
+echo "[4/7] Creating user altaris..."
 if ! id "altaris" &>/dev/null; then
-    useradd -m -s /bin/bash flux || handle_error "Create user flux"
-    echo "flux:flux" | chpasswd
-    usermod -aG sudo altaris 2>/dev/null || true
+    useradd -m -s /bin/bash altaris || handle_error "Create user altaris"
+    echo "altaris:altaris" | chpasswd
 fi
+usermod -aG sudo altaris 2>/dev/null || true
 
 # 4. Configure Sudo NOPASSWD (mkdir first — /etc/sudoers.d needs the sudo pkg,
 #    and a KDE-only install may not have created it yet). rm -f keeps re-runs of

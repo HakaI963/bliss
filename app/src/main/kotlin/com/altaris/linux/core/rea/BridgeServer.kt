@@ -34,10 +34,63 @@ internal class BridgeServer(
     @Volatile private var socket: ServerSocket? = null
     @Volatile private var running = false
 
+    /** The port actually bound; may differ from [ReaBridge.PORT] after a fallback. */
+    @Volatile var boundPort: Int = ReaBridge.PORT
+        private set
+
+    /**
+     * Bind the loopback port.
+     *
+     * A previous process that was killed without closing its socket leaves the
+     * port in TIME_WAIT, and a plain `ServerSocket(...)` then throws
+     * `EADDRINUSE` — which surfaced as "bind failed: EADDRINUSE" and stopped the
+     * server from ever starting. The socket is opened with SO_REUSEADDR (the
+     * Android default is off) and, if the port is genuinely held by a live
+     * socket, the failure is reported as a readable message rather than a raw
+     * bind exception.
+     */
     fun start() {
         if (running) return
-        val server = ServerSocket(ReaBridge.PORT, 16, InetAddress.getByName("127.0.0.1"))
+        val server = try {
+            val s = ServerSocket()
+            s.reuseAddress = true
+            s.bind(
+                java.net.InetSocketAddress(
+                    InetAddress.getByName("127.0.0.1"),
+                    ReaBridge.PORT,
+                ),
+                16,
+            )
+            s
+        } catch (t: java.net.BindException) {
+            // Port genuinely in use by something else: try the next few ports
+            // rather than dying, and report which one won.
+            var fallback: ServerSocket? = null
+            for (offset in 1..8) {
+                fallback = runCatching {
+                    val s = ServerSocket()
+                    s.reuseAddress = true
+                    s.bind(
+                        java.net.InetSocketAddress(
+                            InetAddress.getByName("127.0.0.1"),
+                            ReaBridge.PORT + offset,
+                        ),
+                        16,
+                    )
+                    s
+                }.getOrNull()
+                if (fallback != null) {
+                    Log.w(TAG, "port ${ReaBridge.PORT} busy, using ${ReaBridge.PORT + offset}")
+                    break
+                }
+            }
+            fallback ?: throw IllegalStateException(
+                "cannot bind an MCP port on 127.0.0.1: " + (t.message ?: "address in use"),
+                t,
+            )
+        }
         socket = server
+        boundPort = server.localPort
         running = true
         pool.execute {
             while (running) {
