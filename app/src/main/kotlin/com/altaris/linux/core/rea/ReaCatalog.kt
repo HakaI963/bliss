@@ -324,7 +324,10 @@ object ReaCatalog {
                 url = "https://github.com/radareorg/radare2/releases/download/6.2.4/radare2-6.2.4-android-aarch64.tar.gz",
                 fileName = "radare2-6.2.4-android-aarch64.tar.gz",
                 dir = "$ARCHIVE_ROOT/radare2",
-                launcher = "bin/r2",
+                // `radare2` is the real binary in the release; `r2` is a
+                // symlink to r2blob. Both are probed, and the installer finds
+                // the launcher anywhere in the tree.
+                launcher = "bin/radare2",
                 minBytes = 10_000_000L,
             ),
             note = "Debian 13 does not package radare2; installed from the official arm64 release.",

@@ -117,17 +117,6 @@ case "$FILE" in
     }
     command -v unzip >/dev/null 2>&1 || fail "unzip is required to extract $FILE"
     unzip -oq "$TMP" -d "$DIR" || { rm -f "$TMP"; fail "cannot extract $FILE"; }
-    # Releases usually wrap everything in one top-level directory
-    # (jadx-1.5.6/bin/jadx). Flatten it so the launcher path is stable.
-    set -- "$DIR"/*
-    if [ "$#" -eq 1 ] && [ -d "$1" ]; then
-      TOP="$1"
-      for item in "$TOP"/* "$TOP"/.[!.]*; do
-        [ -e "$item" ] || continue
-        mv -f "$item" "$DIR/" 2>/dev/null
-      done
-      rmdir "$TOP" 2>/dev/null
-    fi
     ;;
   *.tar.gz|*.tgz)
     tar -xzf "$TMP" -C "$DIR" || { rm -f "$TMP"; fail "cannot extract $FILE"; }
@@ -148,13 +137,39 @@ BIN="$DIR/../bin"
 mkdir -p "$BIN" || fail "cannot create $BIN"
 
 if [ -n "$LAUNCHER" ]; then
-  TARGET="$DIR/$LAUNCHER"
-  [ -x "$TARGET" ] || chmod +x "$TARGET" 2>/dev/null
-  [ -f "$TARGET" ] || fail "launcher $LAUNCHER is missing from $FILE"
-  chmod +x "$TARGET" 2>/dev/null
+  # Find the launcher by its base name anywhere in the extracted tree.
+  #
+  # Release tarballs nest arbitrarily and inconsistently: jadx keeps
+  # jadx-1.5.6/bin/jadx, radare2 unpacks to
+  # data/data/org.radare.radare2installer/radare2/bin/r2, and rizin to
+  # data/data/org.rizinorg.rizininstaller/bin/rizin. A fixed "bin/x" path only
+  # ever worked for jadx. Flattening cannot fix this either, because every level
+  # of those trees is a single directory literally named "data", so the move
+  # collides and the loop cannot make progress.
+  LAUNCH_BASE=$(basename "$LAUNCHER")
+  TARGET=""
+  if [ -f "$DIR/$LAUNCHER" ]; then
+    TARGET="$DIR/$LAUNCHER"
+  else
+    # Prefer a real file over a symlink, and prefer a bin/ directory, so a
+    # script that happens to share the name does not win.
+    for candidate in \
+      $(find "$DIR" -type f -name "$LAUNCH_BASE" 2>/dev/null) \
+      $(find "$DIR" -type l -name "$LAUNCH_BASE" 2>/dev/null); do
+      case "$candidate" in
+        */bin/*) TARGET="$candidate"; break ;;
+        *) [ -z "$TARGET" ] && TARGET="$candidate" ;;
+      esac
+    done
+  fi
+  [ -n "$TARGET" ] || fail "launcher $LAUNCHER is missing from $FILE"
+  [ -f "$TARGET" ] || [ -L "$TARGET" ] || fail "launcher $LAUNCHER is not a file in $FILE"
+  chmod +x "$TARGET" 2>/dev/null || true
   for p in $(probe_list); do
+    # Link to the absolute path inside the unpacked tree, so a relative symlink
+    # in the release (r2 -> r2blob) still resolves from the bin directory.
     ln -sf "$TARGET" "$BIN/$p" 2>/dev/null || cp -f "$TARGET" "$BIN/$p" 2>/dev/null
-    chmod +x "$BIN/$p" 2>/dev/null
+    chmod +x "$BIN/$p" 2>/dev/null || true
   done
 else
   # No launcher in the archive (a bare jar): the caller generated a wrapper
