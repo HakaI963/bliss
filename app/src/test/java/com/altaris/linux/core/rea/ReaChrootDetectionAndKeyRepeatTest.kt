@@ -138,20 +138,40 @@ class ReaChrootDetectionAndKeyRepeatTest {
         )
     }
 
-    /** The edit menu must still be reachable, since long-press is now hold. */
+    /**
+     * The bar must not carry its own editor button.
+     *
+     * Terminal → Tools already opens the shortcut editor, which is where keys
+     * are added, edited, reordered and removed. A second entry point on the bar
+     * itself just took a row of keys for something the menu already does.
+     */
     @Test
-    fun theBarStillOffersAnExplicitEditEntryPoint() {
+    fun theBarDoesNotDuplicateTheToolsMenuEditor() {
         val source = readSource(
             "app/src/main/kotlin/com/altaris/linux/ui/terminal/TerminalExtraKeys.kt"
         )
-        assertTrue(
-            "the bar must show an edit control",
-            source.contains("\"Edit keys\""),
+        assertFalse(
+            "the bar must not add its own edit control",
+            source.contains("text = \"Edit keys\""),
         )
+        // The empty-bar hint stays: with no keys there is nothing else to tap.
         assertTrue(
-            "it must open the editor",
-            source.contains(".clickable { actions.onEditBar() }"),
+            "an empty bar still points at the editor",
+            source.contains("No keys — tap to edit"),
         )
+    }
+
+    /** The editor the tools menu opens must still cover the per-key actions. */
+    @Test
+    fun theToolsMenuEditorCoversEditing() {
+        val editor = readSource(
+            "app/src/main/kotlin/com/altaris/linux/ui/terminal/ShortcutBarEditorSheet.kt"
+        )
+        assertTrue("must edit a key", editor.contains("\"Edit key\""))
+        assertTrue("must remove a key", editor.contains("\"Remove key\""))
+        assertTrue("must add a key", editor.contains("\"Add key\""))
+        assertTrue("must reorder keys", editor.contains("fun moveKey("))
+        assertTrue("must reset the bar", editor.contains("\"Reset\""))
     }
 
     private fun readSource(path: String): String {

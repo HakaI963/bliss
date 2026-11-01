@@ -255,6 +255,28 @@ internal class BridgeServer(
             return ""
         }
 
+        // `server/discover` is part of the newer MCP revision, and REA speaks
+        // the classic handshake only. A client probing for the new revision
+        // (OpenCode's `protocol: "auto"`) must get a clean "not supported"
+        // rather than a forwarded request REA cannot answer — that would hang
+        // until the timeout and look like a dead server.
+        if (method == "server/discover") {
+            return errorResponse(
+                id,
+                "This server speaks the classic MCP handshake; use protocol 'legacy'.",
+            )
+        }
+
+        // `ping` is a transport health check. Answering it here keeps a client
+        // from holding the guest process open just to prove it is alive.
+        if (method == "ping") {
+            return JSONObject()
+                .put("jsonrpc", "2.0")
+                .put("id", id)
+                .put("result", JSONObject())
+                .toString()
+        }
+
         if (method == "tools/call") {
             val name = params?.optString("name").orEmpty()
             val arguments = params?.optJSONObject("arguments")?.toString() ?: "{}"

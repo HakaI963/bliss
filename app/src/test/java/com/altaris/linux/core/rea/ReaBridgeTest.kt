@@ -118,8 +118,13 @@ class ReaBridgeTest {
     fun theConfigBlockUsesTheCurrentOpenCodeShape() {
         val json = org.json.JSONObject(ReaBridge.configJson())
         val server = json.getJSONObject("mcp").getJSONObject("servers").getJSONObject("rea")
-        assertEquals("http", server.getString("type"))
+        // V2 accepts exactly two type values. A URL server is "remote"; "http"
+        // is not a value it recognises, so the entry was rejected outright.
+        assertEquals("remote", server.getString("type"))
         assertTrue(server.getString("url").endsWith("/mcp"))
+        // Remote servers default to OAuth. Without this, V2 tries to discover
+        // an authorization server, finds none, and reports "needs auth".
+        assertFalse("must disable the OAuth discovery", server.getBoolean("oauth"))
         // `enabled` is silently ignored by v2; opting out is `disabled: true`.
         assertFalse("must not send the ignored enabled flag", server.has("enabled"))
     }

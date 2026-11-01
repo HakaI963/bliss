@@ -31,13 +31,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Build
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -52,7 +45,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.Painter
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -304,7 +296,6 @@ fun TerminalExtraKeys(
     actions: ShortcutBarActions = ShortcutBarActions()
 ) {
     var fnVisible by remember { mutableStateOf(false) }
-    var menuKeyId by remember { mutableStateOf<String?>(null) }
     // The keys are always dark; the user may still pick their own shades.
     val context = androidx.compose.ui.platform.LocalContext.current
     val lookRevision by TerminalPreferences.lookRevision.collectAsState()
@@ -391,7 +382,6 @@ fun TerminalExtraKeys(
                 }
             }
         }
-        menuKeyId = key.id
     }
 
     Column(
@@ -425,10 +415,8 @@ fun TerminalExtraKeys(
                     textColor = textColor,
                     modState = modState,
                     fnVisible = fnVisible,
-                    menuKeyId = menuKeyId,
                     onTapKey = { activate(it) },
                     onLongPressKey = { onLongPress(it) },
-                    onCloseMenu = { menuKeyId = null },
                     actions = actions,
                     onHoldStart = onHoldStart,
                     onHoldRepeat = onHoldRepeat,
@@ -450,12 +438,10 @@ fun TerminalExtraKeys(
                             locked = isKeyLocked(key, modState),
                             buttonColor = buttonColor,
                             textColor = textColor,
-                            menuOpen = menuKeyId == key.id,
                             labelSize = labelSize,
                             modifier = Modifier.width(fnKeyWidth).height(keyHeight),
                             onTap = { activate(key) },
                             onLongPress = { onLongPress(key) },
-                            onMenuDismiss = { menuKeyId = null },
                             actions = actions,
                             onHoldStart = onHoldStart,
                             onHoldRepeat = onHoldRepeat,
@@ -479,33 +465,6 @@ fun TerminalExtraKeys(
                         text = "No keys — tap to edit",
                         fontSize = 11.sp,
                         color = TextSecondary
-                    )
-                }
-            }
-
-            // The bar's own edit affordance.
-            //
-            // Long-press used to open the per-key menu, but it is now the
-            // press-and-hold gesture (an arrow must scroll while held). Without
-            // this row the only way into the editor would be a hidden gesture,
-            // so the bar carries an explicit, always-visible entry point.
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
-            ) {
-                Box(
-                    modifier = Modifier
-                        .height(keyHeight * 0.72f)
-                        .clip(KeyShape)
-                        .border(1.dp, FrostHairline, KeyShape)
-                        .clickable { actions.onEditBar() }
-                        .padding(horizontal = 8.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = "Edit keys",
-                        fontSize = 9.5.sp,
-                        color = TextSecondary,
                     )
                 }
             }
@@ -538,10 +497,8 @@ private fun ShortcutBarRow(
     textColor: Int,
     modState: TerminalModifierState,
     fnVisible: Boolean,
-    menuKeyId: String?,
     onTapKey: (TerminalShortcutKey) -> Unit,
     onLongPressKey: (TerminalShortcutKey) -> Unit,
-    onCloseMenu: () -> Unit,
     actions: ShortcutBarActions,
     onHoldStart: (TerminalShortcutKey) -> Unit,
     onHoldRepeat: (TerminalShortcutKey) -> Unit,
@@ -571,14 +528,12 @@ private fun ShortcutBarRow(
                     locked = isKeyLocked(key, modState),
                     buttonColor = buttonColor,
                     textColor = textColor,
-                    menuOpen = menuKeyId == key.id,
                     labelSize = labelSize,
                     modifier = Modifier
                         .width(if (scrolling) MinKeyWidth else widthFor(key))
                         .height(keyHeight),
                     onTap = { onTapKey(key) },
                     onLongPress = { onLongPressKey(key) },
-                    onMenuDismiss = onCloseMenu,
                     actions = actions,
                     onHoldStart = onHoldStart,
                     onHoldRepeat = onHoldRepeat,
@@ -596,13 +551,10 @@ private fun ShortcutBarKeyItem(
     locked: Boolean,
     buttonColor: Int,
     textColor: Int,
-    menuOpen: Boolean,
     labelSize: TextUnit,
     modifier: Modifier = Modifier,
     onTap: () -> Unit,
     onLongPress: () -> Unit,
-    onMenuDismiss: () -> Unit,
-    actions: ShortcutBarActions,
     onHoldStart: (TerminalShortcutKey) -> Unit,
     onHoldRepeat: (TerminalShortcutKey) -> Unit,
     onHoldEnd: (TerminalShortcutKey) -> Unit,
@@ -630,54 +582,7 @@ private fun ShortcutBarKeyItem(
             onHoldEnd = if (repeatable) ({ onHoldEnd(key) }) else null,
             modifier = Modifier.fillMaxSize()
         )
-        DropdownMenu(
-            expanded = menuOpen,
-            onDismissRequest = onMenuDismiss,
-            containerColor = androidx.compose.ui.graphics.Color(0xFF15181C),
-            tonalElevation = 0.dp,
-            shadowElevation = 0.dp,
-        ) {
-            ShortcutMenuEntry("Edit key", Icons.Default.Edit) {
-                onMenuDismiss()
-                actions.onEditKey(key)
-            }
-            ShortcutMenuEntry("Duplicate", Icons.Default.ContentCopy) {
-                onMenuDismiss()
-                actions.onDuplicateKey(key)
-            }
-            ShortcutMenuEntry("Remove", Icons.Default.Delete) {
-                onMenuDismiss()
-                actions.onRemoveKey(key)
-            }
-            ShortcutMenuEntry("Edit keys", Icons.Default.Build) {
-                onMenuDismiss()
-                actions.onEditBar()
-            }
-        }
     }
-}
-
-@Composable
-private fun ShortcutMenuEntry(label: String, icon: ImageVector, onClick: () -> Unit) {
-    DropdownMenuItem(
-        text = {
-            Text(
-                text = label,
-                fontSize = 13.sp,
-                color = androidx.compose.ui.graphics.Color(0xFFECECE7),
-                maxLines = 1,
-            )
-        },
-        leadingIcon = {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = androidx.compose.ui.graphics.Color(0xFF9AA0A6),
-                modifier = Modifier.size(16.dp)
-            )
-        },
-        onClick = onClick
-    )
 }
 
 /** Default rows show the original arrow/backspace art when the label is empty. */

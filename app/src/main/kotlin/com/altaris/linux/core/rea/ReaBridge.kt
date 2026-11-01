@@ -630,19 +630,30 @@ object ReaBridge {
     fun endpointForTest(): String = ENDPOINT
 
     /**
-     * The config block shown in Tools.
+     * The config block shown in Tools, in the shape OpenCode v2 reads.
      *
-     * Uses the current `mcp.servers` shape OpenCode v2 expects, and omits the
-     * `enabled` flag that older examples carry: v2 ignores `enabled` and opts
-     * out with `disabled: true`, so sending it only invites a silent no-op.
+     * Three details decide whether this works, and all three were wrong before:
+     *
+     *  - the key is `mcp.servers` (V2 does not place names directly under
+     *    `mcp`), which was already right;
+     *  - `type` must be **`remote`** for a URL server. `http` is not a value V2
+     *    accepts, so the entry was rejected instead of connected;
+     *  - `oauth` must be `false`. Remote servers default to OAuth, so V2 would
+     *    try to discover an authorization server on our bridge, get nothing,
+     *    and report the server as needing authentication.
+     *
+     * `enabled` is still omitted: V2 ignores it and opts out with
+     * `disabled: true`.
      */
     fun configJson(): String = """
         {
+          "$schema": "https://opencode.ai/config.json",
           "mcp": {
             "servers": {
               "rea": {
-                "type": "http",
-                "url": "${liveEndpoint}"
+                "type": "remote",
+                "url": "${liveEndpoint}",
+                "oauth": false
               }
             }
           }
@@ -735,9 +746,10 @@ object ReaBridge {
                   "context_servers": {
                     "rea": {
                       "source": "custom",
-                      "command": "",
-                      "args": [],
-                      "env": {}
+                      "command": {
+                        "path": "npx",
+                        "args": ["-y", "mcp-remote", "${liveEndpoint}"]
+                      }
                     }
                   }
                 }

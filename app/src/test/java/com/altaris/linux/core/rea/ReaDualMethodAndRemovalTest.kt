@@ -222,6 +222,30 @@ class ReaDualMethodAndRemovalTest {
         val body = ReaBridge.configJson()
         assertFalse(body.contains("\"enabled\""))
         assertTrue(body.contains("\"servers\""))
+        // The two fields that made V2 reject the entry.
+        assertTrue("a URL server is type remote", body.contains("\"type\": \"remote\""))
+        assertTrue("OAuth must be off", body.contains("\"oauth\": false"))
+    }
+
+    /**
+     * A client probing for the newer MCP revision must get a clean refusal, not
+     * a forwarded request REA cannot answer (which hangs until the timeout and
+     * looks like a dead server).
+     */
+    @Test
+    fun theBridgeAnswersRevisionProbesWithoutHanging() {
+        val source = readSource(
+            "app/src/main/kotlin/com/altaris/linux/core/rea/BridgeServer.kt"
+        )
+        assertTrue(
+            "must answer server/discover itself",
+            source.contains("if (method == \"server/discover\")"),
+        )
+        assertTrue(
+            "the refusal must name the working protocol",
+            source.contains("use protocol 'legacy'"),
+        )
+        assertTrue("must answer ping", source.contains("if (method == \"ping\")"))
     }
 
     // ---------------------------------------------------------------- keyboard
