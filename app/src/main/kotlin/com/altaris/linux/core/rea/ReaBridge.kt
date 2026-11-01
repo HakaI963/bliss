@@ -242,7 +242,8 @@ object ReaBridge {
      * `initialize` is re-sent by the client on a fresh connection, and because
      * the bridge now forwards it, the handshake is real.
      */
-    @Synchronized
+    // No @Synchronized: it cannot annotate a suspend function. A restart is
+    // idempotent anyway — starting an already-running session returns early.
     suspend fun restart(context: Context): State = withContext(Dispatchers.IO) {
         log("restarting the REA process", LogLine.Level.INFO)
         runCatching { session?.stop() }
