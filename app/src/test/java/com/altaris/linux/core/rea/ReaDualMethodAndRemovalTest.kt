@@ -34,7 +34,7 @@ class ReaDualMethodAndRemovalTest {
         val script = readAsset("scripts/chroot/remove-chroot.sh")
         assertTrue(
             "must identify chrooted processes by /proc/PID/root",
-            script.contains("readlink \"\${_d}/root\""),
+            script.contains("readlink \"\$_d/root\""),
         )
         assertFalse(
             "matching the path in ps output never matched a chrooted process",

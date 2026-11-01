@@ -616,24 +616,27 @@ object ReaDistro {
             if (targets.isEmpty()) {
                 appendLog("no container was present")
             }
-            var allRemoved = true
+            // Answers the only question the caller asks: is the environment
+            // gone? One container failing makes it false, so a partial removal
+            // is never reported as done.
+            var removed = true
             for (method in targets) {
                 appendLog("removing the " + method.label + " container")
-                val removed = runCatching { ReaInstaller.removeContainer(app, method) }
+                val gone = runCatching { ReaInstaller.removeContainer(app, method) }
                     .onFailure {
                         Log.w(TAG, "container removal failed: ${method.label}", it)
                         appendLog("ERROR: " + (it.message ?: "removal failed"))
                     }
                     .getOrDefault(false)
                 appendLog(
-                    if (removed) method.label + " container removed"
+                    if (gone) method.label + " container removed"
                     else "ERROR: the " + method.label + " container could not be removed"
                 )
-                if (!removed) allRemoved = false
+                if (!gone) removed = false
             }
             invalidateSize(app, null)
 
-            if (allRemoved) {
+            if (removed) {
                 // The remembered choice must not outlive the installs.
                 prefs(app).edit().remove(KEY_ACTIVE_METHOD).apply()
                 _state.value = State(chrootPossible = RootShell.isRootAvailable())
