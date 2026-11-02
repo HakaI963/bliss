@@ -61,7 +61,9 @@ enum class BottomTab(val title: String, val icon: ImageVector) {
     HOME("Home", Icons.Default.Home),
     REA("REA", Icons.Default.Build),
     DISTROS("Distros", Icons.Default.List),
-    APPS("Apps", Icons.Default.Android),
+    // Apps and Files are both "reach for it while working" tools, so they are
+    // sub-tabs of one destination instead of two dock slots.
+    UTILITY("Utility", Icons.Default.Apps),
     TOOLS("Tools", Icons.Default.Build),
     TERMINAL("Terminal", Icons.Default.Terminal),
     SETTINGS("Settings", Icons.Default.Settings),
@@ -72,14 +74,14 @@ enum class DockDestination(val title: String, val icon: ImageVector) {
     HOME("Home", Icons.Default.Home),
     REA("REA", Icons.Default.Build),
     DISTROS("Distros", Icons.Default.Layers),
-    APPS("Apps", Icons.Default.Apps),
+    UTILITY("Utility", Icons.Default.Apps),
 }
 
 private val DockSlots = listOf(
     DockDestination.HOME,
     DockDestination.REA,
     DockDestination.DISTROS,
-    DockDestination.APPS,
+    DockDestination.UTILITY,
 )
 
 /**

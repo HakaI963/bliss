@@ -62,7 +62,9 @@ import com.altaris.linux.core.rea.BinaryChunks
 import com.altaris.linux.core.rea.ChunkRow
 import com.altaris.linux.core.rea.ChunkState
 import com.altaris.linux.core.rea.Findings
+import com.altaris.linux.core.rea.ReaAssetTools
 import com.altaris.linux.core.rea.ReaBridge
+import com.altaris.linux.core.rea.ReaDebugger
 import com.altaris.linux.core.rea.ReaDiagnosis
 import com.altaris.linux.core.rea.ReaDistro
 import com.altaris.linux.core.rea.ReaManager

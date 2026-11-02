@@ -284,6 +284,16 @@ _altaris_ensure_home() {
     mkdir -p "$_h/.config" "$_h/.cache" "$_h/.local/share" "$_h/.vnc" \
         "$_h/.local/state" "$_h/.local/bin" 2>/dev/null || true
 
+    # The phone's Downloads folder, inside the guest home.
+    #
+    # /sdcard is already bind-mounted, but people look in ~/Downloads first, and
+    # a symlink is the only thing that works in both proot and chroot: a bind of
+    # a directory that does not exist yet fails the whole login. -n keeps an
+    # existing real directory intact.
+    if [ -d /sdcard/Download ] && [ ! -e "$_h/Downloads" ]; then
+        ln -sfn /sdcard/Download "$_h/Downloads" 2>/dev/null || true
+    fi
+
     if [ -n "${_uid:-}" ] && [ "$_u" != "root" ]; then
         # The whole home, not a fixed list of three directories: a tool that
         # creates ~/.npm, ~/.bun, ~/.config/opencode or ~/.local/share/opencode

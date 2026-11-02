@@ -869,8 +869,10 @@ class MainActivity : ComponentActivity() {
                                     onNavigateToInstall = onNavigateToInstall
                                 )
                             }
-                            BottomTab.APPS -> {
-                                com.altaris.linux.ui.screens.ClonedAppsScreen()
+                            BottomTab.UTILITY -> {
+                                com.altaris.linux.ui.screens.UtilityScreen(
+                                    embeddedInBottomNav = true,
+                                )
                             }
                             BottomTab.TOOLS -> {
                                 com.altaris.linux.ui.screens.ToolsScreen()
@@ -1049,7 +1051,7 @@ class MainActivity : ComponentActivity() {
                                             selected = when (currentTab) {
                                                 BottomTab.REA -> DockDestination.REA
                                                 BottomTab.DISTROS -> DockDestination.DISTROS
-                                                BottomTab.APPS -> DockDestination.APPS
+                                                BottomTab.UTILITY -> DockDestination.UTILITY
                                                 else -> DockDestination.HOME
                                             },
                                             onSelect = { destination ->
@@ -1057,7 +1059,7 @@ class MainActivity : ComponentActivity() {
                                                     DockDestination.HOME -> BottomTab.HOME
                                                     DockDestination.REA -> BottomTab.REA
                                                     DockDestination.DISTROS -> BottomTab.DISTROS
-                                                    DockDestination.APPS -> BottomTab.APPS
+                                                    DockDestination.UTILITY -> BottomTab.UTILITY
                                                 }
                                             },
                                         )
@@ -1391,12 +1393,12 @@ class MainActivity : ComponentActivity() {
                             )
                             add(
                                 PaletteAction(
-                                    id = "apps",
-                                    title = "Apps",
-                                    subtitle = "Clone and run Android apps",
+                                    id = "utility",
+                                    title = "Utility",
+                                    subtitle = "Cloned apps and the file manager",
                                     icon = Icons.Default.Apps,
                                     accent = MaterialTheme.colorScheme.tertiary,
-                                    onSelect = { currentTab = BottomTab.APPS },
+                                    onSelect = { currentTab = BottomTab.UTILITY },
                                 )
                             )
                             add(

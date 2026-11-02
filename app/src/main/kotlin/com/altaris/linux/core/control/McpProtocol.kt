@@ -41,6 +41,9 @@ object McpProtocol {
                         "serverInfo",
                         JSONObject().put("name", "altaris-clone-control").put("version", "1.0.0")
                     )
+                    // The rules that make the difference between an agent that
+                    // works here and one that spends its budget on screenshots.
+                    .put("instructions", INSTRUCTIONS)
             )
             "ping" -> result(id, JSONObject())
             "tools/list" -> result(id, JSONObject().put("tools", tools()))
@@ -694,6 +697,34 @@ object McpProtocol {
      * run REA against a distro that does not have it. The remembered target is
      * the only correct default.
      */
+    /**
+     * What an agent needs to know before it calls anything.
+     *
+     * Two facts it cannot learn from the tool list: there is no physical
+     * device here, and the screen-based tools are the slow path.
+     */
+    private val INSTRUCTIONS = """
+        This server drives Android apps running in a clone on the same device.
+        There is no separate physical device: every app you can reach is the
+        clone, and `altaris_apps` / `altaris_clones` are the whole world.
+
+        Work headless first. `altaris_ui_tree` gives you the real view
+        hierarchy — text, resource ids, bounds and clickability — in one call,
+        and `altaris_ui_click` / `altaris_ui_type` / `altaris_ui_scroll` act on
+        nodes from it. That is fast and precise. `altaris_ocr` and
+        `altaris_screenshot` are the fallback, for a canvas, a game, or a view
+        that exposes no nodes; they cost a capture plus recognition per step, so
+        never use them to find a button that the tree already names.
+
+        `altaris_tap` / `altaris_swipe` / `altaris_key` take raw coordinates and
+        are the last resort. If a step fails, re-read the tree rather than
+        guessing another coordinate.
+
+        For binary, APK, game-asset or runtime work, REA is the other server:
+        open the artifact with its tools instead of trying to infer structure
+        from the UI.
+    """.trimIndent()
+
     private fun reaTargetDistro(ctx: android.content.Context): String? =
         com.altaris.linux.core.rea.ReaDistro.activeTarget(ctx)?.id
 
