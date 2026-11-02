@@ -616,6 +616,55 @@ class ReaTabsAndFilesTest {
         )
     }
 
+    /**
+     * The frida CLI must be installable on a minimal rootfs.
+     *
+     * "No module named pip" is normal: python3 ships without pip on many
+     * images. The first version called `python3 -m pip` directly and reported
+     * the whole install as failed without ever asking the distro for pip.
+     */
+    @Test
+    fun theFridaCliInstallsPipWhenItIsMissing() {
+        val frida = readSource(
+            "app/src/main/kotlin/com/altaris/linux/core/rea/ReaFrida.kt"
+        )
+        val client = frida.substringAfter("suspend fun installClient(")
+            .substringBefore("suspend fun state(")
+        assertTrue(
+            "must detect a missing pip",
+            client.contains("python3 -m pip --version"),
+        )
+        assertTrue(
+            "must install pip from the distro's package manager",
+            client.contains("python3-pip") || client.contains("py3-pip"),
+        )
+        assertTrue(
+            "must use the distro package manager",
+            client.contains("ReaManager.packageInstallScript("),
+        )
+        // And it must have a fallback when pip cannot be made to work.
+        assertTrue(
+            "must fall back to the distro's own package",
+            client.contains("frida-tools"),
+        )
+        // The failure must name what was tried, not just "missing".
+        assertTrue(
+            "must report what was tried",
+            client.contains("tried:"),
+        )
+        val manager = readSource(
+            "app/src/main/kotlin/com/altaris/linux/core/rea/ReaManager.kt"
+        )
+        assertTrue(
+            "must offer a one-shot package install",
+            manager.contains("fun packageInstallScript("),
+        )
+        // Each manager needs its own invocation; a generic one installs nothing.
+        for (hint in listOf("apt-get install", "apk add", "dnf install", "pacman -Sy")) {
+            assertTrue("must handle $hint", manager.contains(hint))
+        }
+    }
+
     /** The clone MCP server must tell an agent there is no real device. */
     @Test
     fun theCloneServerSaysThereIsNoRealDevice() {

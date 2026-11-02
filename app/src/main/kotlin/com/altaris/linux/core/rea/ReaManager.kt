@@ -754,6 +754,32 @@ object ReaManager {
         }
     }
 
+    /**
+     * A one-shot install command for [packages] on [manager].
+     *
+     * Deliberately simpler than [installPackages]: that path stages helper
+     * scripts and drives the full progress model, which is right for the tool
+     * catalog but wrong for "make sure pip exists" — a single call, inside
+     * another install, where a second progress reporter would fight the first.
+     *
+     * `--no-install-recommends` and the quiet flags keep the output small, and
+     * every branch updates the index first because a fresh rootfs has none.
+     */
+    fun packageInstallScript(manager: String, packages: List<String>): String {
+        if (packages.isEmpty()) return "true"
+        val list = packages.joinToString(" ")
+        return when (manager) {
+            "apt" -> "set +e\nexport DEBIAN_FRONTEND=noninteractive\n" +
+                "apt-get update -qq >/dev/null 2>&1\n" +
+                "apt-get install -y -qq --no-install-recommends $list 2>&1 | tail -20\n"
+            "apk" -> "set +e\napk update >/dev/null 2>&1\n" +
+                "apk add --no-cache $list 2>&1 | tail -20\n"
+            "dnf" -> "set +e\ndnf install -y -q $list 2>&1 | tail -20\n"
+            "pacman" -> "set +e\npacman -Sy --noconfirm --needed $list 2>&1 | tail -20\n"
+            else -> "echo \"no supported package manager\""
+        }
+    }
+
     // ------------------------------------------------------------ debugger
 
     /** What the debugger backend can do here. */

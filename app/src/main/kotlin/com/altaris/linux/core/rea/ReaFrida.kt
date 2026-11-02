@@ -178,16 +178,80 @@ object ReaFrida {
      */
     suspend fun installClient(context: Context, distroId: String): State =
         withContext(Dispatchers.IO) {
-            val script = "set +e\n" +
-                "python3 -m pip install --break-system-packages -q frida-tools 2>&1 | tail -5\n" +
-                "command -v frida >/dev/null 2>&1 && echo CLIENT_OK || echo CLIENT_MISSING\n"
-            val result = runCatching {
-                GuestExec.run(context.applicationContext, distroId, script, timeoutMs = 20 * 60_000L)
-            }.getOrNull()
-            val ok = result?.output?.contains("CLIENT_OK") == true
+            val app = context.applicationContext
+            val manager = ReaManager.detectPackageManager(app, distroId)
+            val log = StringBuilder()
+
+            fun run(script: String, timeoutMs: Long = 20 * 60_000L): GuestExec.Result? =
+                runCatching { GuestExec.run(app, distroId, script, timeoutMs = timeoutMs) }
+                    .getOrNull()
+                    .also { log.append(it?.output.orEmpty()) }
+
+            fun present(): Boolean =
+                run("command -v frida >/dev/null 2>&1 && echo CLIENT_OK || echo CLIENT_MISSING",
+                    60_000L)?.output?.contains("CLIENT_OK") == true
+
+            // 1. pip, installing it first if the distro ships python3 without it.
+            //
+            // "No module named pip" is normal on a minimal rootfs: python3 is
+            // there, pip is a separate package. The first version called
+            // `python3 -m pip` and reported the whole thing as a failure
+            // without ever asking the distro to provide pip.
+            val hasPip = run("python3 -m pip --version >/dev/null 2>&1 && echo PIP || echo NOPIP",
+                60_000L)?.output?.contains("PIP") == true
+            if (!hasPip && manager.isNotBlank() && manager != "none") {
+                val pkg = when (manager) {
+                    "apt" -> "python3-pip"
+                    "apk" -> "py3-pip"
+                    "dnf" -> "python3-pip"
+                    "pacman" -> "python-pip"
+                    else -> ""
+                }
+                if (pkg.isNotBlank()) {
+                    log.append("installing $pkg via $manager\n")
+                    run(ReaManager.packageInstallScript(manager, listOf(pkg)), 15 * 60_000L)
+                }
+            }
+            if (present()) {
+                return@withContext State(clientInstalled = true)
+            }
+            run("python3 -m pip install --break-system-packages -q frida-tools 2>&1 | tail -8")
+            if (present()) {
+                return@withContext State(clientInstalled = true)
+            }
+
+            // 2. The distro's own package, when pip cannot be made to work.
+            //    Alpine and Fedora ship frida-tools; Debian does not, so this is
+            //    a fallback rather than the first choice.
+            val distroPackage = when (manager) {
+                "apk" -> "frida-tools"
+                "dnf" -> "frida-tools"
+                "pacman" -> "frida"
+                else -> ""
+            }
+            if (distroPackage.isNotBlank()) {
+                log.append("trying $distroPackage from $manager\n")
+                run(ReaManager.packageInstallScript(manager, listOf(distroPackage)), 15 * 60_000L)
+                if (present()) {
+                    return@withContext State(clientInstalled = true)
+                }
+            }
+
+            // Name what was tried. "CLIENT MISSING" alone says nothing about
+            // whether pip was absent, the network failed, or the distro simply
+            // has no frida package.
+            val tried = buildList {
+                add("pip")
+                if (distroPackage.isNotBlank()) add(distroPackage)
+            }.joinToString(" or ")
             State(
-                clientInstalled = ok,
-                error = if (ok) "" else result?.tail(4).orEmpty().ifBlank { "pip install failed" },
+                clientInstalled = false,
+                error = "could not install the frida CLI in " + distroId +
+                    " (tried: " + tried + "). Last line: " +
+                    log.toString().trim().lines()
+                        .lastOrNull { it.isNotBlank() }
+                        .orEmpty()
+                        .ifBlank { "no output" },
             )
         }
 
@@ -200,6 +264,14 @@ object ReaFrida {
             serverRunning = isServerRunning(),
             clientInstalled = client,
             version = VERSION,
+            // A missing CLI is the usual reason an attach does nothing, so the
+            // reason travels with the state instead of only into the log.
+            error = if (target != null && !client) {
+                "the frida CLI is not installed in " + target.label +
+                    " — tap Install on the Frida row to add it"
+            } else {
+                ""
+            },
         )
     }
 
