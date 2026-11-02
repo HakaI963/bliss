@@ -1172,6 +1172,35 @@ private fun DebuggerTab(accent: Color) {
                 )
             },
         )
+        // Gadget: the no-root path, and it only applies to clones built after
+        // it is downloaded.
+        PrismRow(
+            title = "Frida Gadget (no root)",
+            subtitle = when {
+                session.gadgetReady ->
+                    "Ready · new clones are built debuggable without root"
+                else ->
+                    "Not downloaded · without it, clones can only be debugged with root"
+            },
+            accent = accent,
+            leading = { PrismOrb(active = session.gadgetReady, accent = accent) },
+            trailing = {
+                PrismChip(
+                    if (session.gadgetReady) "Ready" else "Download",
+                    accent,
+                    selected = session.gadgetReady,
+                    onClick = if (session.gadgetReady || session.fridaBusy.isNotBlank()) {
+                        null
+                    } else {
+                        ({
+                            scope.launch {
+                                withContext(Dispatchers.IO) { ReaDebugger.prepareGadget(context) }
+                            }
+                        })
+                    },
+                )
+            },
+        )
         Spacer(Modifier.height(4.dp))
 
         if (!session.available) {

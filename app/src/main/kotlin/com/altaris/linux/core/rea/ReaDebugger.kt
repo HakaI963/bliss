@@ -56,6 +56,8 @@ object ReaDebugger {
         val fridaClient: Boolean = false,
         /** True while frida-server is being downloaded or started. */
         val fridaBusy: String = "",
+        /** Gadget is downloaded and ready to bake into new clones. */
+        val gadgetReady: Boolean = false,
     )
 
     private val _state = MutableStateFlow(State())
@@ -90,6 +92,7 @@ object ReaDebugger {
             fridaInstalled = frida.serverInstalled,
             fridaRunning = frida.serverRunning,
             fridaClient = frida.clientInstalled,
+            gadgetReady = FridaGadget.isCached(context),
         )
     }
 
@@ -206,6 +209,24 @@ object ReaDebugger {
         }
         _state.value = _state.value.copy(fridaBusy = "")
         refresh(context)
+    }
+
+    /**
+     * Download the Gadget library so new clones can be built debuggable.
+     *
+     * Separate from frida-server on purpose: the server is for root, Gadget is
+     * for the no-root case, and a device may only ever need one of them.
+     */
+    suspend fun prepareGadget(context: Context) = withContext(Dispatchers.IO) {
+        _state.value = _state.value.copy(fridaBusy = "Downloading Frida Gadget")
+        val result = FridaGadget.ensure(context)
+        if (result.error.isNotBlank()) {
+            _state.value = _state.value.copy(fridaBusy = "", error = result.error)
+            append("gadget: " + result.error)
+            return@withContext
+        }
+        append("gadget ready: new clones are debuggable without root")
+        _state.value = _state.value.copy(fridaBusy = "", gadgetReady = result.cached)
     }
 
     /** Stop frida-server. */

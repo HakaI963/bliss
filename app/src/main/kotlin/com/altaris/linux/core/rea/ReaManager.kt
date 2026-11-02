@@ -895,6 +895,23 @@ object ReaManager {
                         "Start it in the clone first.",
                 )
             }
+            // Gadget first when it is the only option: with no root there is
+            // no server, and a clone built with the gadget listens on its own
+            // port. `frida -H` reaches it exactly like a server.
+            if (!ReaFrida.isServerRunning() && FridaGadget.isCached(ctx)) {
+                val viaGadget = runCatching {
+                    RootShell.captureResult(
+                        "frida -H 127.0.0.1:" + GADGET_PORT + " -p " + pid +
+                            " -q -e 'console.log(Process.arch)' 2>&1 | head -20",
+                        60_000L,
+                    )
+                }.getOrNull()
+                if (viaGadget != null && viaGadget.exitCode == 0 &&
+                    viaGadget.stdout.isNotBlank()
+                ) {
+                    return@withContext Attach(pid = pid, output = viaGadget.stdout)
+                }
+            }
             // Preferred: frida on the host. It survives detaching cleanly and
             // gives scripting, not just a one-shot read.
             if (ReaFrida.isServerRunning()) {
@@ -930,6 +947,9 @@ object ReaManager {
                 output = result.tail(40),
             )
         }
+
+    /** The port a Gadget-instrumented clone listens on (see [FridaGadget]). */
+    private const val GADGET_PORT = 27043
 
     /** Detach whatever the debugger holds. */
     suspend fun detachDebugger(ctx: Context, distroId: String): String =

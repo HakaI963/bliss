@@ -545,6 +545,12 @@ final class CloneManager {
                 File signedFile = new File(signedDir, name);
                 patchApk(staged, unsigned, clonePackage, label, base, originalPackage,
                         authorityPatches);
+                // Root attaches from outside, so the gadget is only needed when
+                // there is no root. It is baked into the base APK before signing:
+                // once signed, the archive cannot be changed again.
+                if (base) {
+                    injectGadgetIfNeeded(unsigned);
+                }
                 signApk(unsigned, signedFile);
                 deleteFile(unsigned);
                 signed.add(signedFile);
@@ -758,6 +764,41 @@ final class CloneManager {
         }
         if (!output.isFile() || output.length() == 0) {
             throw new IllegalStateException("repackaged APK is empty");
+        }
+    }
+
+    /**
+     * Bake Frida Gadget into the clone when root is not available.
+     *
+     * Root is the default because it can attach to any process, including
+     * clones that already exist. Without root, ptrace across UIDs is refused by
+     * the kernel, and the only place instrumentation can run is inside the
+     * clone's own process — which means the library has to be part of the APK.
+     *
+     * A failure here is logged and the clone is still built: an undebuggable
+     * clone is better than no clone, and the caller is told which it got.
+     */
+    private void injectGadgetIfNeeded(File apk) {
+        if (com.altaris.linux.core.root.RootShell.isRootAvailable()) {
+            return;
+        }
+        try {
+            File gadget = com.altaris.linux.core.rea.FridaGadget.INSTANCE.cacheFile(context);
+            if (!gadget.isFile() || gadget.length() < 1000000L) {
+                engine.log("gadget: not downloaded yet, clone will not be debuggable "
+                        + "without root");
+                return;
+            }
+            boolean ok = com.altaris.linux.core.rea.FridaGadgetInjector.INSTANCE
+                    .inject(apk, gadget);
+            if (ok) {
+                engine.log("gadget injected: this clone is debuggable without root");
+            } else {
+                engine.log("gadget injection failed: this clone needs root to debug");
+            }
+        } catch (Throwable e) {
+            Log.w(TAG, "gadget injection failed", e);
+            engine.log("gadget injection failed: " + e.getMessage());
         }
     }
 
