@@ -61,6 +61,10 @@ class AltarisApp : Application() {
         // thread because it spawns a guest process.
         Thread {
             runCatching {
+                // Delete the containers REA used to own before anything reads
+                // the state: they are invisible, several hundred MB each, and
+                // nothing can reach them once the code that made them is gone.
+                com.altaris.linux.core.rea.ReaDistro.removeLegacyContainers(this@AltarisApp)
                 kotlinx.coroutines.runBlocking {
                     com.altaris.linux.core.rea.ReaDistro.refresh(this@AltarisApp)
                     if (com.altaris.linux.core.rea.ReaDistro.state.value.ready) {

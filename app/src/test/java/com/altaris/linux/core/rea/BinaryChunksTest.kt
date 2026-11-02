@@ -179,15 +179,6 @@ class ReaKnowledgeTest {
 class ReaInstallerRootTest {
 
     @Test
-    fun theDownloadDetailParserStillWorks() {
-        val parsed = ReaInstaller.parseDownload("12.3 / 780.1 MB · 3.2 MB/s")
-        assertTrue(parsed != null)
-        assertEquals(12.3 * 1_048_576.0, parsed!!.first.toDouble(), 1024.0)
-        // A phase line is not a byte counter.
-        assertTrue(ReaInstaller.parseDownload("Extracting chroot rootfs") == null)
-    }
-
-    @Test
     fun theEndpointAndPortAreStable() {
         assertEquals(47832, ReaBridge.PORT)
         assertTrue(ReaBridge.ENDPOINT.contains(":" + ReaBridge.PORT))

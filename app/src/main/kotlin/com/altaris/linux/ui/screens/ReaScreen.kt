@@ -209,7 +209,7 @@ private fun StatusStrip(accent: Color, distro: ReaDistro.State, bridge: ReaBridg
             Spacer(Modifier.width(5.dp))
             Text(
                 "· " + bridge.toolCount + " tools · " + bridge.connections + " agents · " +
-                    (distro.method?.label ?: "proot"),
+                    (distro.target?.label ?: "no distro"),
                 fontSize = 9.sp,
                 color = altarisMutedText(),
                 maxLines = 1,
@@ -1037,11 +1037,11 @@ private fun StatusTab(accent: Color, distro: ReaDistro.State, bridge: ReaBridge.
             DetailLine("Calls", calls.size.toString() + " recorded", accent)
             DetailLine("REA", status.reaVersion.ifBlank { "—" }, accent)
             DetailLine("Node", status.nodeVersion.ifBlank { "—" }, accent)
-            DetailLine("Distro", distro.method?.label ?: "—", accent)
-            if (distro.methods.size > 1) {
+            DetailLine("Distro", distro.target?.label ?: "—", accent)
+            if (distro.targets.size > 1) {
                 DetailLine(
-                    "Installed",
-                    distro.methods.joinToString(", ") { it.label },
+                    "Available",
+                    distro.targets.joinToString(", ") { it.label },
                     accent,
                 )
             }

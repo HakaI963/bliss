@@ -2,38 +2,67 @@ package com.altaris.linux.core.rea
 
 import android.content.Context
 import android.util.Log
-import com.altaris.linux.core.install.DesktopChoice
 import com.altaris.linux.core.install.DistroInstallProfile
-import com.altaris.linux.core.install.OnboardingInstallRunner
 import com.altaris.linux.core.root.RootShell
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
-import java.util.concurrent.atomic.AtomicReference
 
 /** Progress callback: (what is happening, overall percent, detail line). */
 typealias ReaInstallProgress = (line: String, percent: Int, detail: String) -> Unit
 
 /**
- * Creates and removes the container that hosts the hidden REA distro.
+ * Removes the REA toolchain from a distro.
  *
- * The heavy lifting (rootfs download and verification, proot extraction,
- * chroot staging, family setup) already exists in [OnboardingInstallRunner].
- * This adapter exists so the REA install does not fork that logic — it just
- * picks the hidden profile, asks for no desktop, and forwards real progress.
+ * REA installs *into* a distro the user already has, so there is no container
+ * to create here any more — the distro's own install path owns that. What this
+ * owns is the reverse: taking REA out again without touching the distro.
  *
- * Progress is forwarded on three levels, because "installing" alone told the
- * user nothing:
- *  - [onLog] gets the installer's own line (what is happening now);
- *  - the percentage is the runner's overall phase percentage;
- *  - the download counters are parsed from the detail line and published to
- *    [ReaDistro], so the dashboard can show done / left / total.
+ * The toolchain lives entirely under `/opt/altaris/rea` inside the guest, so
+ * removal is a scoped delete of that one directory. A chroot needs no unmount
+ * for that path — it is inside the rootfs, not one of the bind mounts — but the
+ * delete still runs through `su` for a chroot, because the app uid cannot read
+ * `/data/local`.
  */
 object ReaInstaller {
 
     private const val TAG = "AltarisReaInstaller"
+
+    /**
+     * Remove REA's toolchain from [distroId], leaving the distro itself alone.
+     *
+     * Returns true only when the directory is really gone, verified from inside
+     * the guest: reporting success while the tree survived is what made a
+     * "removed" environment reappear on the next refresh.
+     */
+    suspend fun removeToolchain(context: Context, distroId: String): Boolean =
+        withContext(Dispatchers.IO) {
+            val app = context.applicationContext
+            if (distroId.isBlank()) return@withContext false
+            val profile = DistroInstallProfile.forId(distroId) ?: return@withContext false
+            val root = ReaManager.ROOT
+
+            // `rm -rf` of the toolchain root, then prove it is gone. `-x` keeps
+            // the walk on one filesystem so a bind mount inside the tree can
+            // never be followed out into the host.
+            val script = buildString {
+                append("set +e\n")
+                append("rm -rf ").append(root).append(" 2>/dev/null\n")
+                append("if [ -e ").append(root).append(" ]; then echo STILL_PRESENT; else echo GONE; fi\n")
+            }
+            val result = runCatching {
+                GuestExec.run(app, distroId, script, timeoutMs = 5 * 60_000L, asRoot = true)
+            }.getOrNull()
+            val gone = result?.output?.contains("GONE") == true
+            if (!gone) {
+                Log.w(
+                    TAG,
+                    "toolchain still present in $distroId (${profile.method}): " +
+                        (result?.tail(3) ?: "no output"),
+                )
+            }
+            gone
+        }
 
     /**
      * True when the container already exists and looks usable.
@@ -66,191 +95,17 @@ object ReaInstaller {
         }.getOrDefault(false)
     }
 
-    /**
-     * Install the container if it is missing. Returns true when it is usable
-     * afterwards (already present counts as success).
-     */
-    suspend fun ensureContainer(
-        context: Context,
-        profile: DistroInstallProfile,
-        onProgress: ReaInstallProgress = { _, _, _ -> },
-    ): Boolean = withContext(Dispatchers.IO) {
-        if (containerExists(context, profile)) {
-            onProgress("Analysis environment already exists", 62, "")
-            return@withContext true
-        }
+    /** The rootfs directory of a distro profile, or null when it has none. */
+    private fun rootfsOf(context: Context, profile: DistroInstallProfile): File? {
         if (profile.method == "chroot") {
-            // Same cold-cache trap as ReaDistro.install: isRootAvailable() only
-            // reads the cached probe, so on a fresh start it returned false and
-            // the install aborted before downloading anything. Force one real
-            // probe, and report the failure as a real log line.
-            val root = runCatching {
-                RootShell.isRootAvailable() || run {
-                    RootShell.clearSuCache()
-                    RootShell.isRootAvailable()
-                }
-            }.getOrDefault(false)
-            if (!root) {
-                onProgress(
-                    "chroot needs root",
-                    0,
-                    "Root was denied. Grant superuser to Altaris in the root manager, " +
-                        "then retry. proot needs no root.",
-                )
-                return@withContext false
-            }
+            return profile.chrootPath?.let { File(it) }
         }
-        onProgress("Downloading and unpacking the base system", 0, "starting")
-        val done = CompletableDeferred<Boolean>()
-        val runner = OnboardingInstallRunner(context.applicationContext)
-        val lastDetail = AtomicReference("")
-        // Terminal-only: the analysis environment never needs a desktop, and
-        // skipping XFCE/KDE removes hundreds of packages and their downloads.
-        runner.start(
-            distroId = profile.distroId,
-            desktops = setOf(DesktopChoice.NONE),
-        ) { progress: OnboardingInstallRunner.Progress ->
-            val detail = progress.detail.orEmpty()
-            if (detail.isNotBlank() && detail != lastDetail.get()) {
-                lastDetail.set(detail)
-                // The runner's DL phase reports "12.3 / 780.1 MB"; publish the
-                // numbers so the dashboard can show what is left.
-                parseDownload(detail)?.let { (done2, total) ->
-                    ReaDistro.publishDownload(done2, total, detail)
-                }
-                onProgress(progress.phaseLabel, progress.overallPercent, detail)
-            } else if (progress.logLine != null && progress.logLine!!.isNotBlank()) {
-                onProgress(progress.phaseLabel, progress.overallPercent, progress.logLine!!)
-            }
-            if (progress.failed) {
-                progress.errorMessage?.let { onProgress("Install failed", progress.overallPercent, it) }
-                done.complete(false)
-            } else if (progress.finished) {
-                done.complete(true)
-            }
-        }
-        // The rootfs is a few hundred MB; give the download a generous bound
-        // instead of hanging the install screen forever on a dead network.
-        val finished = withTimeoutOrNull(INSTALL_TIMEOUT_MS) { done.await() } ?: false
-        if (!finished) {
-            onProgress("The analysis environment did not finish installing", 0, "timed out")
-            runCatching { OnboardingInstallRunner.cancelActive() }
-            return@withContext false
-        }
-        val ok = containerExists(context, profile)
-        if (!ok) onProgress("The container was not created", 0, "")
-        ok
-    }
-
-    /**
-     * Remove the container for [method], including its rootfs.
-     *
-     * A chroot must be **unmounted before it is deleted**. Its /dev, /sys,
-     * /proc, /dev/pts, /dev/shm, /tmp, /mnt/host-tmp and /sdcard are bind
-     * mounts of the host, so a plain `rm -rf` walks through them and deletes the
-     * live system: that is what froze the device, forced two reboots, and left
-     * the REA distro still present. The work is done by remove-chroot.sh, which
-     * unmounts deepest-first and then deletes with -x so it cannot cross a
-     * mount even if one refused to unmount.
-     */
-    fun removeContainer(context: Context, method: ReaDistro.Method): Boolean {
-        val profile = DistroInstallProfile.reaProfile(method.id) ?: return false
-        val rootfs = rootfsOf(context, profile) ?: return false
-        Log.i(TAG, "removing REA container at ${rootfs.absolutePath}")
-        return runCatching {
-            if (profile.method == "chroot") {
-                removeChroot(context, rootfs.absolutePath)
-            } else {
-                // A proot container is a plain directory under app files, with
-                // no mounts of its own, so a recursive delete is safe.
-                rootfs.deleteRecursively() && !rootfs.exists()
-            }
-        }.getOrDefault(false)
-    }
-
-    /** Unmount, then delete, through the bundled script. */
-    private fun removeChroot(context: Context, path: String): Boolean {
-        val staged = RootShell.stageAsset(context, "scripts/chroot/remove-chroot.sh")
-        if (staged == null) {
-            Log.w(TAG, "cannot stage remove-chroot.sh")
-            return false
-        }
-        val result = RootShell.captureResult(
-            cmd = "sh " + quote(staged) + " " + quote(path),
-            // Unmounting a busy tree plus deleting several GB can take a while.
-            timeoutMs = 10 * 60_000L,
-            // Log each line so a refusal names the mount that blocked it.
-            onLine = { line -> Log.i(TAG, "remove: $line") },
+        if (profile.prootName.isBlank()) return null
+        return File(
+            context.filesDir,
+            "usr/var/lib/proot-distro/containers/${profile.prootName}/rootfs",
         )
-        // Verify through root, never from this process.
-        //
-        // `/data/local` is not readable by the app uid, so `File(path).exists()`
-        // was always false here — which made a *refused* removal look like a
-        // success. The script's own exit code plus a root-side check are the
-        // only truthful signals.
-        val gone = chrootGone(path)
-        if (!gone) {
-            Log.w(
-                TAG,
-                "chroot still present after removal (exit ${result.exitCode}): " +
-                    result.stdout.lines().lastOrNull { it.isNotBlank() }.orEmpty(),
-            )
-        }
-        return gone && result.exitCode == 0
     }
-
-    /**
-     * True when [path] no longer exists, asked as root.
-     *
-     * Falls back to a direct read when root is unavailable, which only happens
-     * for a chroot that was never installed in the first place.
-     */
-    private fun chrootGone(path: String): Boolean {
-        if (!RootShell.isRootAvailable()) {
-            return !File(path).exists()
-        }
-        return runCatching {
-            RootShell.captureResult(
-                "if [ -e " + quote(path) + " ]; then echo PRESENT; else echo GONE; fi",
-                20_000L,
-            ).stdout.contains("GONE")
-        }.getOrDefault(false)
-    }
-
-    /**
-     * Parse the runner's download detail.
-     *
-     * The runner formats it as `"12.3 / 780.1 MB · 3.2 MB/s"` (see
-     * `OnboardingInstallRunner.fmtMb`). Returns null when the line is not a
-     * byte counter, so non-download phases are left alone.
-     */
-    internal fun parseDownload(detail: String): Pair<Long, Long>? {
-        val match = MB_RE.find(detail) ?: return null
-        val downloaded = match.groupValues[1].toDoubleOrNull() ?: return null
-        val total = match.groupValues[2].toDoubleOrNull() ?: return null
-        if (total <= 0.0) return null
-        return (downloaded * MB).toLong() to (total * MB).toLong()
-    }
-
-    private fun rootfsOf(context: Context, profile: DistroInstallProfile): File? =
-        when (profile.method) {
-            "chroot" -> profile.chrootPath?.let { File(it) }
-            else -> {
-                if (profile.prootName.isBlank()) null
-                else File(
-                    context.filesDir,
-                    "usr/var/lib/proot-distro/containers/${profile.prootName}/rootfs"
-                )
-            }
-        }
 
     private fun quote(value: String): String = "'" + value.replace("'", "'\\''") + "'"
-
-    private const val MB = 1_048_576.0
-
-    /** `12.3 / 780.1 MB` — the runner's own download format. */
-    private val MB_RE = Regex("""([\d.]+)\s*/\s*([\d.]+)\s*MB""")
-
-    /** Rootfs downloads are large; 45 minutes covers a slow phone connection. */
-    private const val INSTALL_TIMEOUT_MS = 45 * 60_000L
 }

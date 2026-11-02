@@ -88,38 +88,45 @@ class ReaRemoveSafetyTest {
         assertTrue("must stop the REA manager", uninstall.contains("ReaManager.stop()"))
         // Both stops must happen before the container is removed.
         val bridgeStop = uninstall.indexOf("ReaBridge.stop()")
-        val remove = uninstall.indexOf("ReaInstaller.removeContainer")
+        val remove = uninstall.indexOf("ReaInstaller.removeToolchain")
         assertTrue("the bridge must stop before removal", bridgeStop in 0..remove)
     }
 
-    /** The chroot path must go through the script, never a bare rm -rf. */
+    /**
+     * Removing REA must delete its toolchain and nothing else.
+     *
+     * REA no longer owns a container: it lives inside a distro the user
+     * installed. So removal is scoped to `/opt/altaris/rea` and the distro
+     * itself must survive.
+     */
     @Test
-    fun chrootRemovalNeverRunsABareRmRf() {
+    fun removalIsScopedToTheToolchainOnly() {
         val installer = readSource(
             "app/src/main/kotlin/com/altaris/linux/core/rea/ReaInstaller.kt"
         )
-        // Anchor on removeContainer: there is another `method == "chroot"` check
-        // in ensureContainer, and searching from the first one read the wrong
-        // function entirely.
-        val removeFn = installer.substringAfter("fun removeContainer(")
-            .substringBefore("/** Unmount, then delete")
+        val removeFn = installer.substringAfter("suspend fun removeToolchain(")
+            .substringBefore("fun containerExists(")
         assertTrue(
-            "chroot removal must call the script",
-            removeFn.contains("removeChroot(context, rootfs.absolutePath)"),
+            "must delete the toolchain root",
+            removeFn.contains("ReaManager.ROOT"),
+        )
+        assertTrue(
+            "must verify it is really gone",
+            removeFn.contains("STILL_PRESENT"),
         )
         assertFalse(
-            "chroot removal must not run rm -rf",
-            removeFn.substringAfter("if (profile.method == \"chroot\") {")
-                .substringBefore("} else {")
-                .contains("rm -rf"),
-        )
-        // The proot branch is allowed a recursive delete: no mounts there.
-        assertTrue(
-            "proot keeps the recursive delete",
+            "must never delete the distro's rootfs",
             removeFn.contains("deleteRecursively()"),
         )
-        // And the script itself must never issue a blind recursive delete
-        // without the mount guard having passed first.
+        // The legacy chroot cleanup still uses the unmounting script, because a
+        // plain delete walks through /dev and /proc into the host.
+        val distro = readSource("app/src/main/kotlin/com/altaris/linux/core/rea/ReaDistro.kt")
+        val legacy = distro.substringAfter("fun removeLegacyContainers(")
+            .substringBefore("// ------------------------------------------------------------------ target")
+        assertTrue(
+            "the legacy chroot must be unmounted first",
+            legacy.contains("remove-chroot.sh"),
+        )
         val script = readAsset("scripts/chroot/remove-chroot.sh")
         val guard = script.indexOf("REFUSING to delete")
         val del = script.indexOf("deleting \$GUEST")
@@ -140,7 +147,7 @@ class ReaRemoveSafetyTest {
         assertTrue("must track whether it was removed", uninstall.contains("var removed"))
         assertTrue(
             "must report a failure",
-            uninstall.contains("Could not remove the analysis environment"),
+            uninstall.contains("Could not remove the REA toolchain"),
         )
         assertTrue(
             "must re-read the real state after a failure",
@@ -157,7 +164,7 @@ class ReaRemoveSafetyTest {
         assertTrue("must ask for confirmation", screen.contains("confirmRemove"))
         assertTrue(
             "the dialog must name what is lost",
-            screen.contains("Remove the analysis environment?"),
+            screen.contains("Remove the REA toolchain?"),
         )
         assertTrue(
             "the dialog must say it cannot be undone",

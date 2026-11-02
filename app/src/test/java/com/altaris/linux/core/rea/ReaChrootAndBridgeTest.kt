@@ -68,7 +68,7 @@ class ReaChrootAndBridgeTest {
             "app/src/main/kotlin/com/altaris/linux/core/rea/ReaInstaller.kt"
         )
         val exists = source.substringAfter("fun containerExists")
-            .substringBefore("suspend fun ensureContainer")
+            .substringBefore("private fun rootfsOf")
         assertTrue(
             "chroot presence must not rely on a direct directory read",
             exists.contains("profile.method != \"chroot\""),

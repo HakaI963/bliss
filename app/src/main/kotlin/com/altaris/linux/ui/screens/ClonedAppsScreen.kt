@@ -44,6 +44,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -1228,32 +1229,49 @@ private fun CloneViewPage(
             )
         }
 
+        // The controls scroll and Stop is pinned.
+        //
+        // Seven fixed buttons in one Row overflowed on a normal phone: the
+        // Row has no wrapping, so "Keys" was the last thing that fitted and
+        // Stop — the one control that must always be reachable — was pushed
+        // past the right edge and could not be tapped at all.
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            QToolButton(
-                "Leave",
-                Icons.Default.Home,
-            ) { onLeave() }
-            QToolButton(
-                if (live) "Live" else "Paused",
-                if (live) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                active = live,
-            ) { live = !live }
-            QToolButton("PiP", Icons.Default.PictureInPictureAlt) { onPip() }
-            QToolButton("Layout", Icons.Default.Tune, active = showLayout) { showLayout = !showLayout }
-            QToolButton("Elements", Icons.Default.Widgets, active = showElements) {
-                showElements = !showElements
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                QToolButton(
+                    "Leave",
+                    Icons.Default.Home,
+                ) { onLeave() }
+                QToolButton(
+                    if (live) "Live" else "Paused",
+                    if (live) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                    active = live,
+                ) { live = !live }
+                QToolButton("PiP", Icons.Default.PictureInPictureAlt) { onPip() }
+                QToolButton("Layout", Icons.Default.Tune, active = showLayout) {
+                    showLayout = !showLayout
+                }
+                QToolButton("Elements", Icons.Default.Widgets, active = showElements) {
+                    showElements = !showElements
+                }
+                QToolButton("Keys", Icons.Default.Keyboard, active = showKeyboard) {
+                    showKeyboard = !showKeyboard
+                }
             }
-            QToolButton("Keys", Icons.Default.Keyboard, active = showKeyboard) {
-                showKeyboard = !showKeyboard
-            }
-            Spacer(Modifier.weight(1f))
+            // Stop never scrolls away.
             QToolButton(
                 "Stop",
                 Icons.Default.Stop,
+                destructive = true,
             ) { onStop() }
         }
 

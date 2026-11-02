@@ -19,64 +19,50 @@ class ReaChrootDetectionAndKeyRepeatTest {
     // ------------------------------------------------------- chroot detected
 
     /**
-     * A deep read must record what it proved, so the cheap polls that follow
-     * can answer without forking `su`.
+     * A shallow poll must never fork `su` to learn whether a chroot distro has
+     * REA. The first read on a screen is deep and fills the cache; every later
+     * poll reads it.
      */
-    @Test
-    fun aDeepRefreshRecordsTheChrootItFound() {
-        val distro = readSource(
-            "app/src/main/kotlin/com/altaris/linux/core/rea/ReaDistro.kt"
-        )
-        val refresh = distro.substringAfter("fun refresh(context: Context, deep: Boolean = false) {")
-            .substringBefore("/** The distro id of the active REA distro")
-        assertTrue(
-            "a deep refresh must cache what it found",
-            refresh.contains("ChrootInfoStore.saveInstallInfo"),
-        )
-        assertTrue(
-            "it must cache for each present method",
-            refresh.contains("for (method in present)"),
-        )
-        // And only a deep, root-backed read may write the cache.
-        assertTrue("must be gated on a deep read", refresh.contains("if (deep && rootKnown)"))
-    }
-
-    /**
-     * The cache is keyed by distro id, and the REA chroot can be written under
-     * its label or its id depending on the caller. Reading only one of them is
-     * what reported an installed chroot as missing.
-     */
-    @Test
-    fun theCachedChrootIsLookedUpUnderEveryKeyItMayUse() {
-        val distro = readSource(
-            "app/src/main/kotlin/com/altaris/linux/core/rea/ReaDistro.kt"
-        )
-        val cached = distro.substringAfter("private fun cachedChrootPresent(")
-            .substringBefore("/**\n     * True when REA's core is really installed.")
-        assertTrue("must try the method id", cached.contains("cachedInstalled(context, method.id)"))
-        assertTrue("must try the label", cached.contains("cachedInstalled(context, method.label)"))
-        assertTrue(
-            "must try the explicit REA chroot id",
-            cached.contains("cachedInstalled(context, DistroInstallProfile.REA_CHROOT_ID)"),
-        )
-    }
-
-    /** A shallow poll must read the readiness cache, never fork `su`. */
     @Test
     fun aShallowPollDoesNotForkSuForReadiness() {
         val distro = readSource(
             "app/src/main/kotlin/com/altaris/linux/core/rea/ReaDistro.kt"
         )
         val ready = distro.substringAfter("private fun isReady(")
-            .substringBefore("private fun quote(")
+            .substringBefore("private fun rootfsOf(")
         assertTrue(
             "a proot check stays a plain file test",
-            ready.contains("if (method != Method.CHROOT) return ReaManager.isInstalledIn"),
+            ready.contains("if (!target.isChroot) return ReaManager.isInstalledIn"),
         )
-        assertTrue("must consult the cache", ready.contains("readyCache[method.id]"))
+        assertTrue("must consult the cache", ready.contains("readyCache[target.id]"))
         assertTrue(
             "must only probe root on a deep read",
             ready.contains("if (!probeRoot || !RootShell.isRootAvailable())"),
+        )
+    }
+
+    /**
+     * A chroot distro's presence cannot be read from this process, so a shallow
+     * poll uses the cached probe instead of reporting it absent.
+     */
+    @Test
+    fun chrootPresenceFallsBackToTheCachedProbe() {
+        val distro = readSource(
+            "app/src/main/kotlin/com/altaris/linux/core/rea/ReaDistro.kt"
+        )
+        val present = distro.substringAfter("private fun containerPresent(")
+            .substringBefore("private fun quote(")
+        assertTrue(
+            "must not rely on a direct read for a chroot",
+            present.contains("if (!target.isChroot) return false"),
+        )
+        assertTrue(
+            "must fall back to the cached probe without root",
+            present.contains("cachedInstalled(context, target.id)"),
+        )
+        assertTrue(
+            "must ask root for the truth when it can",
+            present.contains("RootShell.captureResult"),
         )
     }
 

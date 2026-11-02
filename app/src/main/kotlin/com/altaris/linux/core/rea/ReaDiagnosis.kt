@@ -58,32 +58,26 @@ object ReaDiagnosis {
             root,
         )
 
-        // 2. Each method: is the container there, and is REA inside it?
-        for (method in ReaDistro.Method.entries) {
-            val profile = DistroInstallProfile.reaProfile(method.id)
-            if (profile == null) {
-                checks += Check(method.label, "profile missing", false)
-                continue
-            }
-            val present = ReaDistro.isMethodInstalled(app, method)
-            if (!present) {
-                checks += Check(method.label, "not installed", true)
-                continue
-            }
-            val core = runCatching { ReaManager.isInstalledIn(app, method.id) }
+        // 2. The distro REA is installed in: is it there, and is REA inside it?
+        val target = ReaDistro.activeTarget(app)
+        if (target == null) {
+            checks += Check("Target distro", "no installed distro to host REA", false)
+        } else {
+            val profile = DistroInstallProfile.forId(target.id)
+            val core = runCatching { ReaManager.isInstalledIn(app, target.id) }
                 .getOrDefault(false)
             checks += Check(
-                method.label + " rootfs",
-                if (present) rootfsDetail(app, method) else "missing",
-                present,
+                target.label + " (" + target.method + ")",
+                if (profile == null) "unknown profile" else rootfsDetail(app, profile),
+                profile != null,
             )
             checks += Check(
-                method.label + " REA core",
+                target.label + " REA core",
                 if (core) ReaManager.REA_BIN + " present"
-                else "missing — reinstall from Tools",
+                else "missing — install it from Tools",
                 core,
             )
-            if (method == ReaDistro.Method.CHROOT && present) {
+            if (target.isChroot && profile != null) {
                 checks += chrootMountCheck(app, profile)
             }
         }
@@ -103,13 +97,16 @@ object ReaDiagnosis {
     }
 
     /** Size and presence of a rootfs, measured through root for chroot. */
-    private fun rootfsDetail(context: Context, method: ReaDistro.Method): String {
-        val path = when (method) {
-            ReaDistro.Method.PROOT -> File(
+    private fun rootfsDetail(context: Context, profile: DistroInstallProfile): String {
+        val path = if (profile.method == "chroot") {
+            profile.chrootPath.orEmpty()
+        } else if (profile.prootName.isBlank()) {
+            ""
+        } else {
+            File(
                 context.filesDir,
-                "usr/var/lib/proot-distro/containers/${DistroInstallProfile.REA_PROOT_ID}/rootfs",
+                "usr/var/lib/proot-distro/containers/${profile.prootName}/rootfs",
             ).absolutePath
-            ReaDistro.Method.CHROOT -> DistroInstallProfile.REA_CHROOT.chrootPath.orEmpty()
         }
         if (path.isBlank()) return "path unknown"
         val probe = runCatching {

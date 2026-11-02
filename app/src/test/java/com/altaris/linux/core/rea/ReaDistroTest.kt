@@ -1,6 +1,5 @@
 package com.altaris.linux.core.rea
 
-import com.altaris.linux.core.install.DistroInstallProfile
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -10,92 +9,21 @@ import org.junit.Test
 import java.io.File
 
 /**
- * The hidden REA distro.
+ * Where REA lives.
  *
- * The requirement is strict: Altaris creates the analysis environment itself
- * and it must never appear in the app. A leak here would show a distro the user
- * cannot manage, delete or understand.
+ * REA installs into a distro the user already has. The requirement is strict:
+ * no private distro of its own, no second base-system download, and the chosen
+ * distro is remembered across restarts.
  */
 class ReaDistroTest {
 
-    @Test
-    fun theReaProfilesExistAndAreHidden() {
-        val proot = DistroInstallProfile.reaProfile("proot")
-        val chroot = DistroInstallProfile.reaProfile("chroot")
-        assertNotNull(proot)
-        assertNotNull(chroot)
-        assertTrue("REA proot must be hidden", proot!!.hidden)
-        assertTrue("REA chroot must be hidden", chroot!!.hidden)
-        assertEquals("proot", proot.method)
-        assertEquals("chroot", chroot.method)
-    }
-
-    /**
-     * The bug this locks down: the profile was looked up by comparing a method
-     * name against a distro id, so choosing chroot silently installed proot.
-     */
-    @Test
-    fun choosingChrootResolvesTheChrootProfile() {
-        val byMethod = DistroInstallProfile.reaProfile("chroot")
-        val byId = DistroInstallProfile.reaProfile(DistroInstallProfile.REA_CHROOT_ID)
-        assertEquals("chroot", byMethod?.method)
-        assertEquals("chroot", byId?.method)
-        assertEquals(DistroInstallProfile.REA_CHROOT_ID, byMethod?.distroId)
-        // And the proot side still resolves to proot, by either form.
-        assertEquals("proot", DistroInstallProfile.reaProfile("proot")?.method)
-        assertEquals(
-            "proot",
-            DistroInstallProfile.reaProfile(DistroInstallProfile.REA_PROOT_ID)?.method,
-        )
-        assertNull(DistroInstallProfile.reaProfile("debian"))
-    }
-
-    @Test
-    fun bothMethodsAreResolvableById() {
-        assertEquals(
-            DistroInstallProfile.REA_PROOT_ID,
-            DistroInstallProfile.forId(DistroInstallProfile.REA_PROOT_ID)?.distroId,
-        )
-        assertEquals(
-            DistroInstallProfile.REA_CHROOT_ID,
-            DistroInstallProfile.forId(DistroInstallProfile.REA_CHROOT_ID)?.distroId,
-        )
-    }
-
-    @Test
-    fun hiddenIdsAreRecognised() {
-        assertTrue(DistroInstallProfile.isReaDistro(DistroInstallProfile.REA_PROOT_ID))
-        assertTrue(DistroInstallProfile.isReaDistro(DistroInstallProfile.REA_CHROOT_ID))
-        assertFalse(DistroInstallProfile.isReaDistro("debian"))
-        assertFalse(DistroInstallProfile.isReaDistro(null))
-        assertTrue(DistroInstallProfile.isHidden(DistroInstallProfile.REA_PROOT_ID))
-        assertFalse(DistroInstallProfile.isHidden("debian"))
-    }
-
-    @Test
-    fun reaNeverAppearsInTheUserFacingLists() {
-        val installable = DistroInstallProfile.allInstallable()
-        assertTrue(
-            "the hidden REA distro must not be an install card",
-            installable.none { it.hidden || DistroInstallProfile.isReaDistro(it.distroId) },
-        )
-        val rootfs = DistroInstallProfile.allRootfsProfiles()
-        assertTrue(
-            "the hidden REA distro must not be offered for rootfs download",
-            rootfs.none { it.hidden || DistroInstallProfile.isReaDistro(it.distroId) },
-        )
-    }
-
-    @Test
-    fun theChrootPathIsNotNamedAfterAUserDistro() {
-        val chroot = DistroInstallProfile.reaProfile("chroot")!!
-        val path = chroot.chrootPath.orEmpty()
-        assertTrue(path.isNotBlank())
-        // It must not collide with a real distro's chroot.
-        assertFalse(path.endsWith("/debian"))
-        assertFalse(path.endsWith("/fedora"))
-        assertFalse(path.endsWith("/alpine"))
-        assertTrue(path.endsWith("/rea"))
+    /** Tests run with `app/` as the working directory. */
+    private fun readSource(path: String): String {
+        for (candidate in listOf(path, "../$path", "../../$path")) {
+            val file = File(candidate)
+            if (file.isFile) return file.readText()
+        }
+        throw AssertionError("source not found: $path")
     }
 
     @Test
@@ -137,25 +65,70 @@ class ReaDistroTest {
         )
     }
 
+    /**
+     * REA installs into a distro the user already has, so there is no private
+     * REA distro id any more. The old hidden containers are cleaned up instead.
+     */
     @Test
-    fun methodsMapToTheirDistroIds() {
-        assertEquals(DistroInstallProfile.REA_PROOT_ID, ReaDistro.Method.PROOT.id)
-        assertEquals(DistroInstallProfile.REA_CHROOT_ID, ReaDistro.Method.CHROOT.id)
-        assertEquals(ReaDistro.Method.PROOT, ReaDistro.Method.fromId(DistroInstallProfile.REA_PROOT_ID))
-        assertEquals(null, ReaDistro.Method.fromId("debian"))
+    fun reaNoLongerOwnsAHiddenDistro() {
+        val source = readSource(
+            "app/src/main/kotlin/com/altaris/linux/core/install/DistroInstallProfile.kt"
+        )
+        assertFalse(
+            "the hidden REA profile ids must be gone",
+            source.contains("altaris_rea"),
+        )
+        assertFalse("the hidden REA profile must be gone", source.contains("REA_PROOT"))
+        assertFalse("reaProfile must be gone", source.contains("fun reaProfile("))
+
+        // The targets come from the distros that are actually installed.
+        val rea = readSource("app/src/main/kotlin/com/altaris/linux/core/rea/ReaDistro.kt")
+        assertTrue(
+            "targets must come from the installed catalog",
+            rea.contains("DistroFsCache.get(app).installed"),
+        )
+        assertTrue("must expose a Target", rea.contains("data class Target("))
+        assertTrue("must remember the choice", rea.contains("KEY_ACTIVE_TARGET"))
+        // REA must never download a base system of its own.
+        assertFalse(
+            "must not create a container",
+            rea.contains("ensureContainer("),
+        )
+    }
+
+    /** The containers REA used to own are deleted once, on upgrade. */
+    @Test
+    fun legacyReaContainersAreRemovedOnce() {
+        val rea = readSource("app/src/main/kotlin/com/altaris/linux/core/rea/ReaDistro.kt")
+        assertTrue(
+            "must delete the old proot container",
+            rea.contains("LEGACY_PROOT_NAME = \"altaris_rea\""),
+        )
+        assertTrue(
+            "must delete the old chroot",
+            rea.contains("LEGACY_CHROOT_PATH"),
+        )
+        // A chroot must be unmounted before it is deleted, or the delete walks
+        // into the host through /dev and /proc.
+        assertTrue(
+            "must use the unmounting script for the chroot",
+            rea.contains("remove-chroot.sh"),
+        )
+        // A failed cleanup must retry, not be remembered as done.
+        assertTrue(
+            "must only mark it cleared when it really finished",
+            rea.contains("if (allGone)"),
+        )
     }
 
     @Test
     fun reaIsNotInstalledOnAFreshApp() {
-        val dir = java.nio.file.Files.createTempDirectory("rea-fresh").toFile()
-        try {
-            // No container on disk: the dashboard must render the "not installed"
-            // state.
-            val container = File(dir, "usr/var/lib/proot-distro/containers/${DistroInstallProfile.REA_PROOT_ID}/rootfs")
-            assertFalse(container.exists())
-        } finally {
-            dir.deleteRecursively()
-        }
+        // No distro and no toolchain: the dashboard must render the "not
+        // installed" state and the picker must be empty, not invent an entry.
+        val absent = ReaDistro.State()
+        assertFalse(absent.installed)
+        assertTrue("no target may be invented", absent.targets.isEmpty())
+        assertNull(absent.target)
     }
 
     /**
@@ -200,15 +173,5 @@ class ReaDistroTest {
         assertFalse(absent.ready)
     }
 
-    @Test
-    fun downloadDetailParsingReadsTheRunnerFormat() {
-        // The runner formats "12.3 / 780.1 MB · 3.2 MB/s".
-        val parsed = ReaInstaller.parseDownload("12.3 / 780.1 MB · 3.2 MB/s")
-        assertNotNull(parsed)
-        assertEquals(12.3 * 1_048_576.0, parsed!!.first.toDouble(), 1024.0)
-        assertEquals(780.1 * 1_048_576.0, parsed.second.toDouble(), 1024.0)
-        // A phase label is not a byte counter.
-        assertNull(ReaInstaller.parseDownload("Extracting chroot rootfs"))
-        assertNull(ReaInstaller.parseDownload("0 / 0 MB"))
-    }
+
 }

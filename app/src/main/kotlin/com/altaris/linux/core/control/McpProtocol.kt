@@ -557,9 +557,8 @@ object McpProtocol {
         }
         "altaris_rea_status" -> {
             val ctx = ControlServer.context() ?: throw IllegalStateException("App context unavailable")
-            val ids = runBlocking { ReaManager.installedDistros(ctx) }
             val distro = args.optString("distro").takeIf { it.isNotBlank() }
-                ?: ReaManager.defaultDistro(ids)
+                ?: reaTargetDistro(ctx)
             if (distro == null) {
                 textResult(JSONObject().put("ok", false).put("error", "no installed distro"))
             } else {
@@ -568,9 +567,8 @@ object McpProtocol {
         }
         "altaris_rea_install" -> {
             val ctx = ControlServer.context() ?: throw IllegalStateException("App context unavailable")
-            val ids = runBlocking { ReaManager.installedDistros(ctx) }
             val distro = args.optString("distro").takeIf { it.isNotBlank() }
-                ?: ReaManager.defaultDistro(ids)
+                ?: reaTargetDistro(ctx)
                 ?: throw IllegalStateException("no installed distro")
             val requested = args.optJSONArray("tools")
             val deps = if (requested == null) emptyList<String>() else
@@ -581,9 +579,8 @@ object McpProtocol {
         }
         "altaris_rea_start" -> {
             val ctx = ControlServer.context() ?: throw IllegalStateException("App context unavailable")
-            val ids = runBlocking { ReaManager.installedDistros(ctx) }
             val distro = args.optString("distro").takeIf { it.isNotBlank() }
-                ?: ReaManager.defaultDistro(ids)
+                ?: reaTargetDistro(ctx)
                 ?: throw IllegalStateException("no installed distro")
             textResult(reaStatusJson(runBlocking { ReaManager.start(ctx, distro) }))
         }
@@ -602,9 +599,8 @@ object McpProtocol {
         }
         "altaris_rea_agents" -> {
             val ctx = ControlServer.context() ?: throw IllegalStateException("App context unavailable")
-            val ids = runBlocking { ReaManager.installedDistros(ctx) }
             val distro = args.optString("distro").takeIf { it.isNotBlank() }
-                ?: ReaManager.defaultDistro(ids)
+                ?: reaTargetDistro(ctx)
                 ?: throw IllegalStateException("no installed distro")
             textResult(reaStatusJson(runBlocking { ReaManager.registerAgents(ctx, distro) }))
         }
@@ -624,9 +620,8 @@ object McpProtocol {
         }
         "altaris_ghidra_analyze" -> {
             val ctx = ControlServer.context() ?: throw IllegalStateException("App context unavailable")
-            val ids = runBlocking { ReaManager.installedDistros(ctx) }
             val distro = args.optString("distro").takeIf { it.isNotBlank() }
-                ?: ReaManager.defaultDistro(ids)
+                ?: reaTargetDistro(ctx)
                 ?: throw IllegalStateException("no installed distro")
             val target = args.optString("target").takeIf { it.isNotBlank() }
                 ?: throw IllegalArgumentException("target path is required")
@@ -690,6 +685,17 @@ object McpProtocol {
             else -> null
         }
     }
+
+    /**
+     * The distro REA is installed in, as the user chose it.
+     *
+     * Every REA control tool used to fall back to `defaultDistro()`, which is
+     * "debian, else the first installed distro" — so an agent could silently
+     * run REA against a distro that does not have it. The remembered target is
+     * the only correct default.
+     */
+    private fun reaTargetDistro(ctx: android.content.Context): String? =
+        com.altaris.linux.core.rea.ReaDistro.activeTarget(ctx)?.id
 
     private fun reaStatusJson(status: ReaManager.Status): JSONObject {
         val available = JSONArray()

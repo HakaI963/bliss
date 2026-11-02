@@ -69,16 +69,8 @@ data class DistroInstallProfile(
         const val ROOTFS_RELEASE_BASE =
             "https://github.com/abhay-byte/fluxlinux/releases/download/rootfs"
 
-        /** Distro id of the hidden REA analysis distro (proot). */
-        const val REA_PROOT_ID = "altaris_rea"
-
-        /** Distro id of the hidden REA analysis distro (chroot, needs root). */
-        const val REA_CHROOT_ID = "altaris_rea_chroot"
 
         /** True for any distro id that belongs to the REA analysis surface. */
-        fun isReaDistro(distroId: String?): Boolean =
-            distroId == REA_PROOT_ID || distroId == REA_CHROOT_ID
-
         // Debian 13 pinned rootfs (existing)
         const val DEBIAN_ROOTFS_NAME = "debian_13_rootfs.tar.xz"
         const val DEBIAN_ROOTFS_SHA256 =
@@ -207,52 +199,6 @@ data class DistroInstallProfile(
             customizationScript = "debian/common/setup/setup_customization_debian.sh",
             hwAccelScript = HW_ACCEL_GUEST,
             displayName = "Debian",
-        )
-
-        /**
-         * The REA analysis distro (proot).
-         *
-         * Debian 13 because every tool REA drives is packaged there (jadx,
-         * apktool, rizin, binwalk, android build-tools), so the analysis
-         * surface works without archive fallbacks. Hidden: it is not a user
-         * distro and must not appear in any list.
-         */
-        val REA_PROOT = DistroInstallProfile(
-            distroId = REA_PROOT_ID,
-            prootName = REA_PROOT_ID,
-            method = "proot",
-            rootfsAsset = "rootfs/$DEBIAN_ROOTFS_NAME",
-            rootfsFileName = DEBIAN_ROOTFS_NAME,
-            rootfsSha256 = DEBIAN_ROOTFS_SHA256,
-            rootfsMinBytes = DEBIAN_ROOTFS_MIN_BYTES,
-            rootfsUrl = DEBIAN_ROOTFS_URL,
-            familyScript = "debian/common/setup/setup_debian_family.sh",
-            customizationScript = "debian/common/setup/setup_customization_debian.sh",
-            hwAccelScript = HW_ACCEL_GUEST,
-            displayName = "REA",
-            hidden = true,
-        )
-
-        /** The REA analysis distro (chroot). Same rootfs, root required. */
-        val REA_CHROOT = DistroInstallProfile(
-            distroId = REA_CHROOT_ID,
-            prootName = "",
-            method = "chroot",
-            rootfsAsset = "rootfs/$DEBIAN_ROOTFS_NAME",
-            rootfsFileName = DEBIAN_ROOTFS_NAME,
-            rootfsSha256 = DEBIAN_ROOTFS_SHA256,
-            rootfsMinBytes = DEBIAN_ROOTFS_MIN_BYTES,
-            rootfsUrl = DEBIAN_ROOTFS_URL,
-            familyScript = "debian/common/setup/setup_debian_family.sh",
-            customizationScript = "debian/common/setup/setup_customization_debian.sh",
-            hwAccelScript = HW_ACCEL_GUEST,
-            chrootSetupAsset = GUEST_CHROOT_SETUP,
-            chrootUninstallAsset = GUEST_CHROOT_UNINSTALL,
-            chrootPath = ChrootPaths.REA_CHROOT_PATH,
-            chrootStartGuiScript = "start_guest_gui.sh",
-            chrootStopGuiScript = "stop_guest_gui.sh",
-            displayName = "REA",
-            hidden = true,
         )
 
         private val DEBIAN_CHROOT = DistroInstallProfile(
@@ -719,8 +665,6 @@ data class DistroInstallProfile(
             "rocky" to ROCKY_PROOT,
             "centos_stream" to CENTOS_STREAM_PROOT,
             // Hidden analysis distro; never listed, only resolved by id.
-            REA_PROOT_ID to REA_PROOT,
-            REA_CHROOT_ID to REA_CHROOT,
         )
 
         /**
@@ -748,24 +692,9 @@ data class DistroInstallProfile(
         fun forId(distroId: String): DistroInstallProfile? =
             BY_ID[distroId] ?: DistroInstances.profileFor(distroId)
 
-        /**
-         * The hidden REA analysis profile, by install method *or* distro id.
-         *
-         * Both forms are accepted because callers hold different things: the
-         * Tools screen has a method ("proot"/"chroot"), the rest of the app has
-         * a distro id ("altaris_rea"/"altaris_rea_chroot"). Comparing a method
-         * name against an id silently returned the proot profile for a chroot
-         * install, which is why choosing chroot used to download proot.
-         */
-        fun reaProfile(methodOrId: String): DistroInstallProfile? = when (methodOrId) {
-            "chroot", REA_CHROOT_ID -> REA_CHROOT
-            "proot", REA_PROOT_ID -> REA_PROOT
-            else -> null
-        }
-
         /** True when [distroId] is a profile the UI must never list. */
         fun isHidden(distroId: String?): Boolean =
-            isReaDistro(distroId) || forId(distroId.orEmpty())?.hidden == true
+            forId(distroId.orEmpty())?.hidden == true
 
         /** The stock (base) profile only — no instance resolution. */
         fun baseProfile(distroId: String): DistroInstallProfile? = BY_ID[distroId]

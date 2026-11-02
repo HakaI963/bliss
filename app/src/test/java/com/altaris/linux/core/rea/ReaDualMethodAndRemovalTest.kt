@@ -60,88 +60,101 @@ class ReaDualMethodAndRemovalTest {
         )
     }
 
-    /** Deletion must be verified as root, not from a process that cannot see it. */
+    /**
+     * Removal must be verified from inside the guest.
+     *
+     * `/data/local` is not readable by the app uid, so a host-side
+     * `File.exists()` is always false for a chroot — which made a *refused*
+     * removal look like a success.
+     */
     @Test
-    fun removalVerifiesThroughRoot() {
+    fun removalIsVerifiedFromInsideTheGuest() {
         val installer = readSource(
             "app/src/main/kotlin/com/altaris/linux/core/rea/ReaInstaller.kt"
         )
-        val remove = installer.substringAfter("private fun removeChroot(")
-            .substringBefore("fun parseDownload")
+        val remove = installer.substringAfter("suspend fun removeToolchain(")
+            .substringBefore("fun containerExists(")
         assertTrue(
-            "must verify the deletion as root",
-            remove.contains("chrootGone("),
+            "must prove the tree is gone from the guest",
+            remove.contains("STILL_PRESENT"),
+        )
+        assertTrue(
+            "must delete through the guest, not the host",
+            remove.contains("GuestExec.run("),
         )
         assertFalse(
-            "File.exists() is always false for /data/local from the app uid",
+            "a host-side File.exists() cannot see /data/local",
             remove.contains("!File(path).exists() ||"),
-        )
-        // The script's exit code matters too: a refusal must not read as success.
-        assertTrue(
-            "must require the script to succeed",
-            remove.contains("gone && result.exitCode == 0"),
         )
     }
 
-    /** Every container is removed, not just the active one. */
+    /**
+     * Uninstall removes REA from the chosen distro and forgets the choice.
+     *
+     * It must never touch the distro itself: that belongs to the user.
+     */
     @Test
-    fun removalCoversBothMethods() {
+    fun uninstallForgetsTheChosenTarget() {
         val distro = readSource(
             "app/src/main/kotlin/com/altaris/linux/core/rea/ReaDistro.kt"
         )
         val uninstall = distro.substringAfter("suspend fun uninstallBlocking(")
-            .substringBefore("private fun appendLog(")
+            .substringBefore("private fun containerPresent(")
         assertTrue(
-            "must enumerate every installed method",
-            uninstall.contains("val targets = presentMethods(app, probeRoot = true)"),
+            "must remove the toolchain, not a container",
+            uninstall.contains("ReaInstaller.removeToolchain("),
         )
-        assertTrue("must loop over them", uninstall.contains("for (method in targets)"))
         assertTrue(
-            "must clear the remembered choice when everything is gone",
-            uninstall.contains("remove(KEY_ACTIVE_METHOD)"),
+            "must clear the remembered choice when it is gone",
+            uninstall.contains("remove(KEY_ACTIVE_TARGET)"),
+        )
+        assertFalse(
+            "must never delete the distro itself",
+            uninstall.contains("removeContainer("),
         )
     }
 
     // ------------------------------------------------------------ dual method
 
     /**
-     * Both containers can exist. The choice is explicit and remembered, rather
-     * than "whichever happened to be ready first".
+     * Several distros can host REA. The choice is explicit and remembered,
+     * rather than "whichever happened to be ready first".
      */
     @Test
-    fun theActiveMethodIsRemembered() {
+    fun theActiveTargetIsRemembered() {
         val distro = readSource(
             "app/src/main/kotlin/com/altaris/linux/core/rea/ReaDistro.kt"
         )
-        assertTrue("must persist the choice", distro.contains("KEY_ACTIVE_METHOD"))
+        assertTrue("must persist the choice", distro.contains("KEY_ACTIVE_TARGET"))
         assertTrue(
             "must offer a switch",
-            distro.contains("fun select(context: Context, method: Method)"),
+            distro.contains("fun select(context: Context, target: Target)"),
         )
-        val choose = distro.substringAfter("private fun chooseActive(")
-            .substringBefore("private fun prefs(")
-        assertTrue("must honour the remembered method", choose.contains("remembered in present"))
+        val choose = distro.substringAfter("private fun chooseTarget(")
+            .substringBefore("private fun isReady(")
         assertTrue(
-            "must fall back rather than fail when it was uninstalled",
-            choose.contains("present.firstOrNull { it == Method.PROOT }"),
+            "must honour the remembered distro",
+            choose.contains("firstOrNull { it.id == remembered }"),
+        )
+        assertTrue(
+            "must fall back rather than fail when it was removed",
+            choose.contains("it.method == \"proot\""),
         )
     }
 
-    /** The state must carry every installed method, not only the active one. */
+    /** The state must carry every distro that can host REA. */
     @Test
-    fun theStateListsEveryInstalledMethod() {
+    fun theStateListsEveryAvailableTarget() {
         val distro = readSource(
             "app/src/main/kotlin/com/altaris/linux/core/rea/ReaDistro.kt"
         )
-        assertTrue("must expose the set", distro.contains("val methods: Set<Method>"))
         assertTrue(
-            "must populate it from the filesystem",
-            distro.contains("methods = present.toSet()"),
+            "must expose the list",
+            distro.contains("val targets: List<Target> = emptyList()"),
         )
-        // Installing the second method must not forget the first.
         assertTrue(
-            "installing must preserve the other method",
-            distro.contains("methods = presentMethods(app, probeRoot = true).toSet()"),
+            "must populate it from the installed catalog",
+            distro.contains("targets = all,"),
         )
     }
 
@@ -160,36 +173,33 @@ class ReaDualMethodAndRemovalTest {
         assertTrue("must stop the old session", ensure.contains("session?.stop()"))
     }
 
-    /** Tools must not open on a hardcoded proot selection. */
+    /** The Tools card must open on the real target, never a hardcoded one. */
     @Test
-    fun theToolsChipsReflectWhatIsInstalled() {
+    fun theToolsPickerReflectsTheRealTarget() {
         val screen = readSource(
             "app/src/main/kotlin/com/altaris/linux/ui/screens/ToolsScreen.kt"
         )
         assertFalse(
-            "must not hardcode proot as the opening selection",
-            screen.contains("var method by remember { mutableStateOf(ReaDistro.Method.PROOT) }"),
+            "must not hardcode a default selection",
+            screen.contains("mutableStateOf(ReaDistro.Method.PROOT)"),
         )
         assertTrue(
-            "must seed from the active method",
-            screen.contains("mutableStateOf(state.method ?: ReaDistro.Method.PROOT)"),
+            "must seed from the real target",
+            screen.contains("mutableStateOf(state.target)"),
         )
+        assertTrue("must show which one is in use", screen.contains("\"In use\""))
         assertTrue(
-            "must show which method is in use",
-            screen.contains("\"In use\""),
-        )
-        assertTrue(
-            "must offer installing the selected method",
-            screen.contains("ReaDistro.install(context, method)"),
+            "must offer installing into the chosen distro",
+            screen.contains("ReaDistro.install(context, chosen)"),
         )
         assertTrue(
             "must offer switching without reinstalling",
-            screen.contains("ReaDistro.select(context, method)"),
+            screen.contains("ReaDistro.select(context, chosen)"),
         )
         // Switching must never fall through to an install.
-        val switch = screen.substringAfter("if (selectedInstalled && !selectedActive) {")
+        val switch = screen.substringAfter("if (chosenInstalled && !chosenActive) {")
             .substringBefore("} else {")
-        assertTrue("switching uses select", switch.contains("ReaDistro.select(context, method)"))
+        assertTrue("switching uses select", switch.contains("ReaDistro.select(context, chosen)"))
         assertFalse("switching must not install", switch.contains("ReaDistro.install("))
     }
 

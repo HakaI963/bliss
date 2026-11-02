@@ -552,17 +552,16 @@ private fun AutomationCard(context: Context, accent: Color) {
 @Composable
 private fun ReaCard(context: Context, accent: Color) {
     val state by ReaDistro.state.collectAsState()
-    // Seeded from what is actually installed, never a hardcoded default: the
-    // chips used to always open on proot, so a chroot install looked like it
-    // had been replaced by proot every time the screen was opened.
-    var method by remember(state.method) {
-        mutableStateOf(state.method ?: ReaDistro.Method.PROOT)
+    // Seeded from the distro that is actually the target, never a hardcoded
+    // default: the picker used to always open on the first entry, so a REA
+    // installed in another distro looked like it had been replaced.
+    var target by remember(state.target) {
+        mutableStateOf(state.target)
     }
     var confirmRemove by remember { mutableStateOf(false) }
 
     // Re-read the truth while an install runs (and once when it ends), so the
-    // chip flips to Installed without leaving the screen. The previous version
-    // read the state once and stayed on "Install" after a successful install.
+    // chip flips to Installed without leaving the screen.
     LaunchedEffect(state.busy.isNotBlank()) {
         while (true) {
             withContext(Dispatchers.IO) { ReaDistro.refresh(context) }
@@ -570,19 +569,17 @@ private fun ReaCard(context: Context, accent: Color) {
             kotlinx.coroutines.delay(1500L)
         }
     }
-    // Keep the local selection in step with the active method, so switching in
-    // the REA screen or finishing an install is reflected here immediately.
-    LaunchedEffect(state.method) {
-        state.method?.let { method = it }
+    // Keep the local selection in step with the real target, so switching
+    // elsewhere is reflected here immediately.
+    LaunchedEffect(state.target) {
+        state.target?.let { target = it }
     }
-    // Probe root once when the card appears. Without this the cached answer is
-    // usually "no" on a cold start and the chroot row says "root required" on a
-    // device that has already granted superuser.
+    // Probe root and the installed distros once when the card appears. Without
+    // this the cached root answer is usually "no" on a cold start and a chroot
+    // distro would be missing from the picker on a device that has root.
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
             com.altaris.linux.core.root.RootShell.probeRootAvailableSuspending(forceClearCache = false)
-            // Deep: this is a one-off when the card opens, so paying for the
-            // size and the real chroot check here is what the user expects.
             ReaDistro.refresh(context, deep = true)
         }
     }
@@ -594,8 +591,8 @@ private fun ReaCard(context: Context, accent: Color) {
             subtitle = when {
                 state.busy.isNotBlank() -> state.busy
                 state.installed && state.ready ->
-                    "Installed (" + (state.method?.label ?: "proot") + ") · served over MCP"
-                state.installed -> "Container present · REA core missing, tap Reinstall"
+                    "Installed in " + (state.target?.label ?: "a distro") + " · served over MCP"
+                state.targets.isEmpty() -> "Install a distro first"
                 else -> "Not installed"
             },
             accent = accent,
@@ -614,7 +611,7 @@ private fun ReaCard(context: Context, accent: Color) {
             },
         )
 
-        // Live progress: the install is a multi-GB download, so it must never
+        // Live progress: the toolchain is a multi-GB install, so it must never
         // look stuck.
         if (state.busy.isNotBlank()) {
             Spacer(Modifier.height(Prism.Tight))
@@ -644,99 +641,101 @@ private fun ReaCard(context: Context, accent: Color) {
 
         Spacer(Modifier.height(Prism.Tight))
         PrismNote(
-            "REA runs inside its own private distro that Altaris creates here, so it " +
-                "never touches your distros. Agents reach it over MCP. Every analysis " +
-                "tool is installed with it."
+            "REA installs into a distro you already have. Nothing new is downloaded " +
+                "for the base system, and the distro itself is never modified outside " +
+                ReaManager.ROOT + "."
         )
 
         Spacer(Modifier.height(Prism.Stack))
-        // One decision, stated plainly: how should REA run?
+        // One decision, stated plainly: which distro hosts REA?
         //
         // The previous version put two rows of chips here that both installed
         // and switched, so it was impossible to tell whether a tap would start
         // a multi-GB download or just change which container the server used.
         // Now the rows only *select*; one button installs or switches, and it
         // says which of the two it is about to do.
-        PrismNote("Run REA with", fontSize = 10.sp, color = altarisMutedText())
-        Spacer(Modifier.height(Prism.Tight))
-        ReaDistro.Method.entries.forEach { entry ->
-            val installedHere = entry in state.methods
-            val isActive = state.method == entry
-            val blocked = entry == ReaDistro.Method.CHROOT && !state.chrootPossible
-            val selected = method == entry
-            PrismRow(
-                title = when (entry) {
-                    ReaDistro.Method.PROOT -> "proot"
-                    ReaDistro.Method.CHROOT -> "chroot"
-                },
-                subtitle = when {
-                    blocked -> "Needs root, which is not granted"
-                    isActive && installedHere -> "Installed and serving MCP"
-                    installedHere -> "Installed · not in use"
-                    else -> when (entry) {
-                        ReaDistro.Method.PROOT -> "No root needed · works everywhere"
-                        ReaDistro.Method.CHROOT -> "Faster · needs superuser"
-                    }
+        if (state.targets.isEmpty()) {
+            PrismNote(
+                "No distro is installed yet. Install one from Distros, then come back " +
+                    "and choose it here.",
+                color = MaterialTheme.colorScheme.error,
+            )
+        } else {
+            PrismNote("Install REA into", fontSize = 10.sp, color = altarisMutedText())
+            Spacer(Modifier.height(Prism.Tight))
+            state.targets.forEach { entry ->
+                val installedHere = state.target?.id == entry.id && state.ready
+                val isActive = state.target?.id == entry.id
+                val selected = target?.id == entry.id
+                PrismRow(
+                    title = entry.label,
+                    subtitle = when {
+                        installedHere && isActive -> "Installed and serving MCP"
+                        installedHere -> "Installed · not in use"
+                        else -> entry.method + " · " +
+                            if (entry.isChroot) "needs root" else "no root needed"
+                    },
+                    accent = accent,
+                    leading = { PrismOrb(active = installedHere, accent = accent) },
+                    trailing = {
+                        PrismChip(
+                            when {
+                                installedHere && isActive -> "In use"
+                                installedHere -> "Installed"
+                                else -> "Select"
+                            },
+                            accent,
+                            selected = selected,
+                            onClick = { target = entry },
+                        )
+                    },
+                    onClick = { target = entry },
+                )
+            }
+            Spacer(Modifier.height(Prism.Tight))
+            // The one action, labelled with exactly what it will do.
+            val chosen = target
+            val chosenInstalled = chosen != null &&
+                state.target?.id == chosen.id && state.ready
+            val chosenActive = chosen != null && state.target?.id == chosen.id
+            PrismButton(
+                text = when {
+                    state.busy.isNotBlank() -> "Working…"
+                    chosen == null -> "Choose a distro"
+                    !chosenInstalled -> "Install REA into " + chosen.label
+                    chosenActive -> "Reinstall in " + chosen.label
+                    else -> "Use " + chosen.label
                 },
                 accent = accent,
-                leading = { PrismOrb(active = isActive && installedHere, accent = accent) },
-                trailing = {
-                    PrismChip(
-                        when {
-                            isActive && installedHere -> "In use"
-                            installedHere -> "Installed"
-                            blocked -> "No root"
-                            else -> "Install"
-                        },
-                        accent,
-                        selected = selected,
-                        onClick = {
-                            if (!blocked) method = entry
-                        },
-                    )
-                },
-                onClick = { if (!blocked) method = entry },
-            )
-        }
-        Spacer(Modifier.height(Prism.Tight))
-        // The one action, labelled with exactly what it will do.
-        val selectedInstalled = method in state.methods
-        val selectedActive = state.method == method
-        PrismButton(
-            text = when {
-                state.busy.isNotBlank() -> "Working…"
-                !selectedInstalled -> "Install " + method.label
-                selectedActive -> "Reinstall " + method.label
-                else -> "Switch to " + method.label
-            },
-            accent = accent,
-            icon = Icons.Default.PlayArrow,
-            modifier = Modifier.fillMaxWidth(),
-            enabled = state.busy.isBlank() &&
-                !(method == ReaDistro.Method.CHROOT && !state.chrootPossible),
-        ) {
-            if (selectedInstalled && !selectedActive) {
-                // Already there: switching must never re-download anything.
-                ReaDistro.select(context, method)
-            } else {
-                // Not launched from the screen's scope: a multi-gigabyte
-                // install outlives any composition, and launching it here is
-                // what produced "the coroutine scope left the composition".
-                ReaDistro.install(context, method)
+                icon = Icons.Default.PlayArrow,
+                modifier = Modifier.fillMaxWidth(),
+                enabled = state.busy.isBlank() && chosen != null,
+            ) {
+                if (chosen == null) return@PrismButton
+                if (chosenInstalled && !chosenActive) {
+                    // Already there: switching must never re-download anything.
+                    ReaDistro.select(context, chosen)
+                } else {
+                    // Not launched from the screen's scope: a multi-gigabyte
+                    // install outlives any composition, and launching it here is
+                    // what produced "the coroutine scope left the composition".
+                    ReaDistro.install(context, chosen)
+                }
             }
-        }
-        if (selectedInstalled && !selectedActive) {
-            Spacer(Modifier.height(Prism.Tight))
-            PrismNote(
-                "Both are installed. Switching only changes which container the MCP " +
-                    "server runs — nothing is downloaded.",
-                fontSize = 10.sp,
-            )
+            if (chosenInstalled && !chosenActive) {
+                Spacer(Modifier.height(Prism.Tight))
+                PrismNote(
+                    "REA is already installed there. Switching only changes which " +
+                        "distro the MCP server runs in — nothing is downloaded.",
+                    fontSize = 10.sp,
+                )
+            }
         }
         if (!state.chrootPossible) {
             Spacer(Modifier.height(Prism.Tight))
             PrismNote(
-                "Root is not granted, so chroot is unavailable. proot works without it.",
+                "Root is not granted, so chroot distros are hidden from this list. " +
+                    "proot works without it.",
                 color = MaterialTheme.colorScheme.error,
             )
         }
@@ -751,7 +750,7 @@ private fun ReaCard(context: Context, accent: Color) {
                 ReaDistro.installMissingTools(context)
             }
             PrismSecondaryButton(
-                text = if (state.busy.isNotBlank()) "Removing…" else "Remove analysis environment",
+                text = if (state.busy.isNotBlank()) "Removing…" else "Remove REA toolchain",
                 accent = MaterialTheme.colorScheme.error,
                 modifier = Modifier.fillMaxWidth(),
                 enabled = state.busy.isBlank(),
@@ -794,13 +793,14 @@ private fun ReaCard(context: Context, accent: Color) {
                     Text("Keep")
                 }
             },
-            title = { Text("Remove the analysis environment?", fontSize = 14.sp) },
+            title = { Text("Remove the REA toolchain?", fontSize = 14.sp) },
             text = {
                 Text(
-                    "This deletes the REA distro and every tool installed in it, " +
-                        "including Ghidra. It cannot be undone, and reinstalling " +
-                        "downloads everything again.\n\nThe MCP server is stopped " +
-                        "first so its mounts can be released.",
+                    "This deletes " + ReaManager.ROOT + " and every tool installed in " +
+                        "it, including Ghidra. It cannot be undone, and reinstalling " +
+                        "downloads everything again.\n\nYour distro and everything " +
+                        "else in it are left untouched. The MCP server is stopped " +
+                        "first so its files are released.",
                     fontSize = 11.sp,
                     lineHeight = 15.sp,
                 )
@@ -959,8 +959,8 @@ private fun ReaToolsCard(context: Context, accent: Color) {
     // process with no probe behind it — every installed tool still read
     // "Install". Probe once when the card appears so the list states the truth.
     // Keyed on the distro so switching containers re-probes.
-    LaunchedEffect(reaDistro.method, reaDistro.ready) {
-        val target = reaDistro.method?.id ?: status.distroId
+    LaunchedEffect(reaDistro.target, reaDistro.ready) {
+        val target = reaDistro.target?.id ?: status.distroId
         if (target.isNotBlank() && reaDistro.installed) {
             withContext(Dispatchers.IO) { ReaManager.probe(context, target) }
         }
@@ -1017,7 +1017,7 @@ private fun ReaToolsCard(context: Context, accent: Color) {
                         onClick = when {
                             license || installed || busy || !supported -> null
                             else -> ({
-                                val target = reaDistro.method?.id ?: status.distroId
+                                val target = reaDistro.target?.id ?: status.distroId
                                 scope.launch {
                                     ReaManager.install(context, target, listOf(dep.id))
                                 }
@@ -1041,7 +1041,7 @@ private fun ReaToolsCard(context: Context, accent: Color) {
                 val ids = installable
                     .filter { manager.isBlank() || it.kind != "package" || ReaCatalog.packagedFor(it, manager) }
                     .map { it.id }
-                val target = reaDistro.method?.id ?: status.distroId
+                val target = reaDistro.target?.id ?: status.distroId
                 if (ids.isNotEmpty()) ReaToolInstaller.installAsync(context, target, ids)
             }
         }
@@ -1192,7 +1192,7 @@ private fun ReaGhidraCard(context: Context, accent: Color) {
             output = ""
             scope.launch {
                 try {
-                    val distro = reaDistro.method?.id ?: status.distroId
+                    val distro = reaDistro.target?.id ?: status.distroId
                     val res = ReaManager.analyzeGhidra(context, distro, target, 300)
                     output = (res.optString("output").ifBlank { res.optString("error") })
                         .ifBlank { "No output." }
