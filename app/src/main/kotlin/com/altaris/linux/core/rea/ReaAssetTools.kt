@@ -597,8 +597,9 @@ object ReaAssetTools {
         if (tool.build.isNotBlank()) {
             tried.add("source build")
             append("building " + tool.name + " from source (no arm64 binary is published)")
-            val script = "set +e\ncd " + ReaManager.ARCHIVE_ROOT + " 2>/dev/null || mkdir -p " +
-                ReaManager.ARCHIVE_ROOT + " && cd " + ReaManager.ARCHIVE_ROOT + "\n" +
+            // Build inside the archive root, beside the other unpacked tools.
+            val root = ReaCatalog.ARCHIVE_ROOT
+            val script = "set +e\nmkdir -p " + root + " && cd " + root + " || exit 1\n" +
                 tool.build + " 2>&1 | tail -30\n"
             val result = runCatching {
                 GuestExec.run(context.applicationContext, id, script, timeoutMs = 60 * 60_000L) { append(it) }
