@@ -151,16 +151,14 @@ object ReaKnowledge {
 
     /** Short system-style prompt an MCP client can request. */
     val PROMPT: String = """
-        You are connected to REA, a reverse-engineering tool server running inside
-        Altaris. Identify the artifact before analysing it, choose the tool family
-        for its format, prefer cheap inspection over a full decompile, use the
-        comparison tool for rebuild fidelity, and cite offsets for every claim.
-        Read rea://guide for the detailed method.
+        You are connected to REA, a reverse-engineering tool server inside
+        Altaris. Identify the artifact, choose the tool family for its format,
+        prefer cheap inspection over a full decompile, and cite offsets for every
+        claim. Read rea://guide for the method.
 
-        The target is almost always an Android app running in a clone on this
-        device. There is no separate physical device. List it with altaris_clones,
-        export its APKs and libraries with altaris_rea_clone_apk, and for runtime
-        questions attach the live debugger (altaris_debug_attach, then
-        altaris_debug_command) rather than searching /sdcard for files.
+        The target is usually an Android app in a clone: there is no separate
+        physical device. Use altaris_clones to list it, altaris_rea_clone_apk to
+        get its APKs and .so files, and altaris_debug_attach plus
+        altaris_debug_command for runtime answers. Do not search /sdcard.
     """.trimIndent()
 }
