@@ -6,6 +6,8 @@ import com.reandroid.archive.ByteInputSource
 import com.reandroid.dex.data.InstructionList
 import com.reandroid.dex.ins.Opcode
 import com.reandroid.dex.key.MethodKey
+import com.reandroid.dex.key.ProtoKey
+import com.reandroid.dex.key.StringKey
 import com.reandroid.dex.key.TypeKey
 import com.reandroid.dex.model.DexClass
 import com.reandroid.dex.model.DexClassModule
@@ -123,7 +125,14 @@ object FridaGadgetInjector {
         val manifest = runCatching { module.androidManifest }.getOrNull() ?: return null
         val root = runCatching { manifest.documentElement }.getOrNull() ?: return null
         val app = runCatching { root.getElement("application") }.getOrNull() ?: return null
-        val name = runCatching { app.getAttributeValue("name") }.getOrNull().orEmpty()
+        // ResXmlElement has no getAttributeValue; attributes are an iterator,
+        // exactly as the Java clone engine reads them.
+        val name = runCatching {
+            app.attributes.asSequence()
+                .firstOrNull { it.getName() == "name" }
+                ?.getValueString()
+                .orEmpty()
+        }.getOrDefault("")
         if (name.isBlank()) return null
         return if (name.startsWith("L")) name else "L" + name.replace('.', '/') + ";"
     }
@@ -136,15 +145,18 @@ object FridaGadgetInjector {
      */
     private fun addLoader(dex: DexFile, application: String): Boolean {
         return try {
-            val repository: DexClassModule = dex
+            // A new class is created through a layout: DexFile is a repository,
+            // and DexLayout is the DexClassModule that owns class creation.
+            val layout: DexClassModule = dex.getOrCreateFirst()
             val loaderType = TypeKey(FridaGadget.LOADER_CLASS)
-
-            // --- the loader class -------------------------------------------
-            val loader: DexClass = repository.getOrCreateClass(loaderType)
+            val loader: DexClass = layout.getOrCreateClass(loaderType)
             loader.setSuperClass(TypeKey("Ljava/lang/Object;"))
-            val loadKey = MethodKey(loaderType, LOADER_METHOD, "V", null)
+            // MethodKey takes (type, name, ProtoKey); a ProtoKey is the return
+            // type plus the parameter types, not a "V" string.
+            val voidProto = ProtoKey.emptyParameters(TypeKey("V"))
+            val loadKey = MethodKey(loaderType, StringKey(LOADER_METHOD), voidProto)
             val load = loader.getOrCreateStaticMethod(loadKey)
-            val loadCode = load.methodDef.getOrCreateCodeItem()
+            val loadCode = load.definition.getOrCreateCodeItem()
             val loadList: InstructionList = loadCode.instructionList
             // System.loadLibrary("frida-gadget")
             //
@@ -157,19 +169,18 @@ object FridaGadgetInjector {
             DexInstruction(load, invoke).setKey(
                 MethodKey(
                     TypeKey("Ljava/lang/System;"),
-                    "loadLibrary",
-                    "V",
-                    listOf("Ljava/lang/String;"),
+                    StringKey("loadLibrary"),
+                    ProtoKey.create(TypeKey("V"), TypeKey("Ljava/lang/String;")),
                 )
             )
             loadList.createAt(2, Opcode.RETURN_VOID)
 
             // --- the call from <clinit> -------------------------------------
             val appType = TypeKey(application)
-            val appClass = repository.getDexClass(appType) ?: return false
-            val clinitKey = MethodKey(appType, "<clinit>", "V", null)
+            val appClass = dex.getDexClass(appType) ?: return false
+            val clinitKey = MethodKey(appType, StringKey("<clinit>"), voidProto)
             val clinit = appClass.getOrCreateStaticMethod(clinitKey)
-            val clinitCode = clinit.methodDef.getOrCreateCodeItem()
+            val clinitCode = clinit.definition.getOrCreateCodeItem()
             val clinitList: InstructionList = clinitCode.instructionList
             val call = clinitList.createAt(0, Opcode.INVOKE_STATIC)
             DexInstruction(clinit, call).setKey(loadKey)
