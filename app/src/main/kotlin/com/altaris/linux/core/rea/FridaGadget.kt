@@ -133,32 +133,12 @@ object FridaGadget {
     }
 
     /**
-     * Unpack the .xz.
+     * Unpack the gadget.
      *
-     * Android has no public XZ API. `xz` on the host is tried first, then
-     * Python's `lzma`, which every distro ships — the app itself cannot rely on
-     * either, so a failure is reported rather than guessed at.
+     * Delegates to [XzArchive] for the same reason as the server: no `xz` and
+     * no `python3` exist on an Android host, so the in-app decoder is the only
+     * route that works.
      */
-    private fun decompress(source: File, target: File): Boolean {
-        runCatching {
-            val p = ProcessBuilder("xz", "-dc", source.absolutePath).start()
-            p.inputStream.use { input ->
-                target.outputStream().use { output -> input.copyTo(output, 64 * 1024) }
-            }
-            p.waitFor()
-        }
-        if (target.isFile && target.length() > 1_000_000) return true
-        return runCatching {
-            val p = ProcessBuilder(
-                "sh", "-c",
-                "python3 -c 'import lzma,sys; " +
-                    "open(sys.argv[2],\"wb\").write(lzma.open(sys.argv[1],\"rb\").read())' " +
-                    quote(source.absolutePath) + " " + quote(target.absolutePath),
-            ).start()
-            p.waitFor()
-            target.isFile && target.length() > 1_000_000
-        }.getOrDefault(false)
-    }
-
-    private fun quote(value: String): String = "'" + value.replace("'", "'\\''") + "'"
+    private fun decompress(source: File, target: File): Boolean =
+        XzArchive.decompress(source, target)
 }

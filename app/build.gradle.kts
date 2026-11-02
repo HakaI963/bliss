@@ -266,6 +266,9 @@ dependencies {
     
     // Networking
     implementation(libs.okhttp)
+    // Release archives are .xz; Android has no xz binary and no host python3,
+    // so the decoder has to be in the app.
+    implementation(libs.xz)
     // On-device OCR for virtual-display automation (bundled Latin recogniser).
     implementation("com.google.mlkit:text-recognition:16.0.1")
     // Shizuku shell user-service for the virtual display + clone engine.

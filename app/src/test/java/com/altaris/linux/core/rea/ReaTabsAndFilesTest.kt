@@ -535,6 +535,87 @@ class ReaTabsAndFilesTest {
         )
     }
 
+    /**
+     * Decompression must not depend on host binaries.
+     *
+     * The first version shelled out to `xz`, then to `python3`. Android ships
+     * neither — no xz binary, and python3 lives inside a distro, not on the
+     * device — so both branches failed on every device and reported "cannot
+     * decompress", which read as a corrupt download.
+     */
+    @Test
+    fun decompressionUsesAnInAppDecoder() {
+        val xz = readSource(
+            "app/src/main/kotlin/com/altaris/linux/core/rea/XzArchive.kt"
+        )
+        assertTrue(
+            "must use the bundled pure-Java decoder",
+            xz.contains("XZInputStream"),
+        )
+        assertFalse(
+            "must not shell out to xz",
+            xz.contains("ProcessBuilder(\"xz\""),
+        )
+        assertFalse(
+            "must not shell out to python3",
+            xz.contains("python3 -c"),
+        )
+        // A partial file must never be left behind looking installed.
+        assertTrue("must write via a temp file", xz.contains(".part"))
+        assertTrue("must check the decoded size", xz.contains("minBytes"))
+
+        for (path in listOf(
+            "app/src/main/kotlin/com/altaris/linux/core/rea/ReaFrida.kt",
+            "app/src/main/kotlin/com/altaris/linux/core/rea/FridaGadget.kt",
+        )) {
+            val source = readSource(path)
+            assertTrue(
+                "$path must delegate to the shared decoder",
+                source.contains("XzArchive.decompress("),
+            )
+            assertFalse(
+                "$path must not run xz itself",
+                source.contains("ProcessBuilder(\"xz\""),
+            )
+        }
+        // And the dependency must actually be declared.
+        val gradle = readSource("app/build.gradle.kts")
+        assertTrue("must depend on the xz library", gradle.contains("libs.xz"))
+    }
+
+    /**
+     * The debugger must offer clones, not every process on the device.
+     *
+     * It listed whatever /proc showed, which on a Xiaomi phone is a wall of
+     * system services — com.miui.aod, com.xiaomi.aicr, webview sandboxes — and
+     * the clone was lost in it.
+     */
+    @Test
+    fun theDebuggerListsClonesNotSystemProcesses() {
+        val manager = readSource(
+            "app/src/main/kotlin/com/altaris/linux/core/rea/ReaManager.kt"
+        )
+        val running = manager.substringAfter("private fun runningPackages(")
+            .substringBefore("private fun clonePackages(")
+        assertTrue(
+            "must source the list from clones",
+            running.contains("clonePackages()"),
+        )
+        assertFalse(
+            "must not return every process",
+            running.contains(".filter { isPackageName(it) }"),
+        )
+        assertTrue(
+            "must read the clone registry",
+            manager.contains("clones.json"),
+        )
+        // Only clones with a live process can be attached to.
+        assertTrue(
+            "must intersect with live processes",
+            running.contains("processTable()"),
+        )
+    }
+
     /** The clone MCP server must tell an agent there is no real device. */
     @Test
     fun theCloneServerSaysThereIsNoRealDevice() {

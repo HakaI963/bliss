@@ -799,10 +799,26 @@ object ReaManager {
         }
 
     /** Packages with a live process, newest first. Best effort. */
-    private fun runningPackages(): List<String> = processTable().map { it.second }
-        .filter { isPackageName(it) }
-        .distinct()
-        .take(12)
+    /**
+     * The **clones** that are running right now.
+     *
+     * Not every process on the device. The first version listed whatever /proc
+     * showed, which on a Xiaomi phone is a wall of system services —
+     * `com.miui.aod`, `com.xiaomi.aicr`, `com.google.android.webview` — and the
+     * clone was lost in it. The registry of clones is the only correct source:
+     * an app you did not clone is not something this debugger should offer.
+     */
+    private fun runningPackages(): List<String> {
+        // Read the clone registry directly rather than the engine's StateFlow:
+        // the flow is only filled once the engine is connected, and the
+        // debugger must be able to list clones before anything is launched.
+        val clones = runCatching { clonePackages() }.getOrDefault(emptyList())
+        if (clones.isEmpty()) return emptyList()
+        // Only the ones with a live process; a clone that is installed but not
+        // running cannot be attached to.
+        val live = processTable().map { it.second }.toSet()
+        return clones.filter { it in live }.distinct()
+    }
 
     /**
      * Every process as (pid, argv0).
@@ -872,6 +888,34 @@ object ReaManager {
     private fun isPackageName(name: String): Boolean =
         name.contains('.') && !name.contains(' ') && !name.startsWith("/") &&
             !name.contains('\t')
+
+    /**
+     * Package names from the clone registry.
+     *
+     * `/data/local/tmp/altaris/clones.json` is root-owned, so it is read
+     * through root when possible and falls back to the engine's cached list.
+     */
+    private fun clonePackages(): List<String> {
+        val fromEngine = runCatching {
+            com.altaris.linux.core.clone.HeadlessCloneEngine.clones.value.map { it.packageName }
+        }.getOrDefault(emptyList())
+        if (fromEngine.isNotEmpty()) return fromEngine
+        if (!RootShell.isRootAvailable()) return emptyList()
+        val raw = runCatching {
+            RootShell.captureResult(
+                "cat /data/local/tmp/altaris/clones.json 2>/dev/null",
+                20_000L,
+            ).stdout
+        }.getOrNull().orEmpty()
+        if (raw.isBlank()) return emptyList()
+        return runCatching {
+            val array = org.json.JSONArray(raw)
+            (0 until array.length()).mapNotNull { index ->
+                array.optJSONObject(index)?.optString("package")
+                    ?.takeIf { it.isNotBlank() }
+            }
+        }.getOrDefault(emptyList())
+    }
 
     /**
      * Attach to [target], a package name or a host PID.

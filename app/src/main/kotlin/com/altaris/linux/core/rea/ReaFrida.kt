@@ -103,7 +103,15 @@ object ReaFrida {
                 // distro, and the host always has the app's own code to do it.
                 val ok = decompressXz(cache, binary)
                 if (!ok) {
-                    return@withContext State(error = "cannot decompress frida-server")
+                    // Say what actually happened: a failed *download* and a
+                    // failed *decode* used to produce the same message, which
+                    // sent the diagnosis in the wrong direction.
+                    return@withContext State(
+                        error = "frida-server: downloaded " + cache.length() +
+                            " bytes, decompressed " +
+                            (if (binary.isFile) binary.length().toString() else "0") +
+                            " — the archive is not a valid xz stream",
+                    )
                 }
             }
             // Copy in, then fix ownership and mode through root.
@@ -228,38 +236,14 @@ object ReaFrida {
     }
 
     /**
-     * Decompress an .xz file.
+     * Decompress the server binary.
      *
-     * Android has no public XZ API, so this shells out to `xz` on the host when
-     * it exists and falls back to Python's `lzma`, which is in every distro and
-     * needs no package. Doing it here rather than in the guest keeps the
-     * install independent of what the distro ships.
+     * Delegates to [XzArchive]: the previous version shelled out to `xz` and
+     * then `python3`, neither of which exists on an Android host, so it failed
+     * on every device and reported it as "cannot decompress".
      */
-    private fun decompressXz(source: File, target: File): Boolean {
-        // 1. xz on the host, if the ROM has it.
-        runCatching {
-            val p = ProcessBuilder("xz", "-dc", source.absolutePath)
-                .redirectErrorStream(false)
-                .start()
-            p.inputStream.use { input ->
-                target.outputStream().use { output -> input.copyTo(output, 64 * 1024) }
-            }
-            p.waitFor()
-        }.onFailure { Log.i(TAG, "host xz unavailable: ${it.message}") }
-        if (target.isFile && target.length() > 1_000_000) return true
-
-        // 2. Python's lzma, which is always present where the app can run it.
-        return runCatching {
-            val p = ProcessBuilder(
-                "sh", "-c",
-                "python3 -c 'import lzma,sys; " +
-                    "open(sys.argv[2],\"wb\").write(lzma.open(sys.argv[1],\"rb\").read())' " +
-                    quote(source.absolutePath) + " " + quote(target.absolutePath),
-            ).start()
-            p.waitFor()
-            target.isFile && target.length() > 1_000_000
-        }.getOrDefault(false)
-    }
+    private fun decompressXz(source: File, target: File): Boolean =
+        XzArchive.decompress(source, target)
 
     private fun quote(value: String): String = "'" + value.replace("'", "'\\''") + "'"
 }
