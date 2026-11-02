@@ -86,8 +86,8 @@ private enum class ReaTab(val label: String) {
     FUNCTIONS("Functions"),
     OBJDUMP("Objdump"),
     FIDELITY("Fidelity"),
-    STATUS("Status"),
-    FILES("Files"),
+    DEBUGGER("Debugger"),
+    OTHER("Other"),
 }
 
 /**
@@ -160,12 +160,12 @@ fun ReaScreen(modifier: Modifier = Modifier) {
 
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             when (tab) {
-                ReaTab.OVERVIEW -> OverviewTab(accent)
+                ReaTab.OVERVIEW -> OverviewTab(accent, distro, bridge)
                 ReaTab.FUNCTIONS -> FunctionsTab(accent)
                 ReaTab.OBJDUMP -> OutputTab(accent, "Objdump", objdumpKinds)
                 ReaTab.FIDELITY -> FidelityTab(accent)
-                ReaTab.STATUS -> StatusTab(accent, distro, bridge)
-                ReaTab.FILES -> ReaFilesTab(accent)
+                ReaTab.DEBUGGER -> DebuggerTab(accent)
+                ReaTab.OTHER -> OtherTab(accent)
             }
         }
     }
@@ -367,7 +367,11 @@ private fun MiniFrame(
  * the bottom — which is what the previous layout did.
  */
 @Composable
-private fun OverviewTab(accent: Color) {
+private fun OverviewTab(
+    accent: Color,
+    distro: ReaDistro.State,
+    bridge: ReaBridge.State,
+) {
     val calls by ReaBridge.calls.collectAsState()
     val logs by ReaBridge.logs.collectAsState()
     val chunks = remember(calls) { BinaryChunks.build(calls) }
@@ -424,8 +428,18 @@ private fun OverviewTab(accent: Color) {
             }
         }
 
-        // Agents, side by side, like the reference's category row.
-        AgentsCard(accent, calls, Modifier.weight(0.75f).fillMaxWidth())
+        // Agents on the left, the server's status on the right, split evenly.
+        //
+        // Status used to be its own tab, which meant the two things you check
+        // together — who is connected and what the server is doing — were a tab
+        // apart. Both fit here, so the tab is gone and its slot is the debugger.
+        Row(
+            modifier = Modifier.fillMaxWidth().weight(0.75f),
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
+        ) {
+            AgentsCard(accent, calls, Modifier.weight(1f).fillMaxSize())
+            ServerStatusCard(accent, distro, bridge, calls, Modifier.weight(1f).fillMaxSize())
+        }
 
         // Recent activity.
         PrismCard(accent = accent, modifier = Modifier.weight(1f).fillMaxWidth()) {
@@ -1022,114 +1036,321 @@ private fun FidelityTab(accent: Color) {
 
 // ------------------------------------------------------------------- status
 
+/**
+ * The server's state, beside the agent list.
+ *
+ * This was its own tab. It is now the right half of the Agents row in
+ * Overview, because "who is connected" and "what is the server doing" are one
+ * question, and a tab between them was pure navigation cost.
+ */
 @Composable
-private fun StatusTab(accent: Color, distro: ReaDistro.State, bridge: ReaBridge.State) {
+private fun ServerStatusCard(
+    accent: Color,
+    distro: ReaDistro.State,
+    bridge: ReaBridge.State,
+    calls: List<ReaBridge.Call>,
+    modifier: Modifier = Modifier,
+) {
+    val status by ReaManager.status.collectAsState()
+    PrismCard(accent = accent, modifier = modifier) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Status", fontSize = 9.sp, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.weight(1f))
+            Text(
+                if (bridge.running) "live" else "stopped",
+                fontSize = 8.sp,
+                color = if (bridge.running) accent else MaterialTheme.colorScheme.error,
+            )
+        }
+        Spacer(Modifier.height(3.dp))
+        Column(
+            modifier = Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(1.dp),
+        ) {
+            DetailLine("Endpoint", ReaBridge.ENDPOINT, accent)
+            DetailLine("Tools", bridge.toolCount.toString(), accent)
+            DetailLine("Agents", bridge.connections.toString(), accent)
+            DetailLine("Calls", calls.size.toString(), accent)
+            DetailLine("REA", status.reaVersion.ifBlank { "—" }, accent)
+            DetailLine("Node", status.nodeVersion.ifBlank { "—" }, accent)
+            DetailLine("Distro", distro.target?.label ?: "—", accent)
+        }
+    }
+}
+
+// ------------------------------------------------------------------ debugger
+
+/**
+ * Live inspection of the app running in the clone.
+ *
+ * Not x64dbg: that is a Windows/x86 program and cannot run here. What this is
+ * is the same job done natively — a console attached to the clone's process
+ * through gdb (and Frida when it is available), inside the distro REA lives
+ * in. Registers, memory, disassembly at an address, breakpoints, and module
+ * bases are all real reads from the running process.
+ */
+@Composable
+private fun DebuggerTab(accent: Color) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val tools by ReaToolInstaller.state.collectAsState()
-    val status by ReaManager.status.collectAsState()
-    val calls by ReaBridge.calls.collectAsState()
-    var tick by remember { mutableIntStateOf(0) }
+    val session by ReaDebugger.state.collectAsState()
+    var command by remember { mutableStateOf("") }
+    var target by remember { mutableStateOf("") }
 
-    // The Status tab is opened on purpose and already runs the diagnosis, so a
-    // deep read here is what the user is asking for — not a background poll.
-    LaunchedEffect(tick) {
-        withContext(Dispatchers.IO) { ReaDistro.refresh(context, deep = true) }
+    LaunchedEffect(Unit) {
+        withContext(Dispatchers.IO) { ReaDebugger.refresh(context) }
+    }
+
+    PrismCard(accent = accent, modifier = Modifier.fillMaxSize()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Live debugger", fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.weight(1f))
+            Text(
+                session.attachedPid?.let { "pid " + it } ?: "not attached",
+                fontSize = 8.sp,
+                fontFamily = FontFamily.Monospace,
+                color = if (session.attachedPid != null) accent else altarisMutedText(),
+            )
+        }
+        Spacer(Modifier.height(4.dp))
+        PrismNote(
+            "Attaches to the app running in the clone. Memory, registers and " +
+                "disassembly are read from the live process; nothing is simulated. " +
+                "Attaching needs root.",
+            fontSize = 9.sp,
+        )
+        Spacer(Modifier.height(4.dp))
+
+        if (!session.available) {
+            PrismNote(
+                session.reason.ifBlank {
+                    "No debugger backend. Install gdb or rizin into the REA distro " +
+                        "from Tools → Reverse engineering."
+                },
+                color = MaterialTheme.colorScheme.error,
+                fontSize = 9.sp,
+            )
+            return@PrismCard
+        }
+
+        // Attach target: the cloned apps that are running right now.
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            androidx.compose.material3.OutlinedTextField(
+                value = target,
+                onValueChange = { target = it },
+                modifier = Modifier.weight(1f).height(40.dp),
+                placeholder = { Text("package or pid", fontSize = 9.sp) },
+                textStyle = MaterialTheme.typography.bodySmall,
+                singleLine = true,
+            )
+            PrismChip(
+                if (session.attachedPid != null) "Detach" else "Attach",
+                accent,
+                selected = session.attachedPid != null,
+                onClick = {
+                    val value = target.trim()
+                    scope.launch {
+                        withContext(Dispatchers.IO) {
+                            if (session.attachedPid != null) {
+                                ReaDebugger.detach(context)
+                            } else if (value.isNotBlank()) {
+                                ReaDebugger.attach(context, value)
+                            }
+                        }
+                    }
+                },
+            )
+        }
+        if (session.runningApps.isNotEmpty()) {
+            Spacer(Modifier.height(3.dp))
+            PrismNote("Running: " + session.runningApps.joinToString(", "), fontSize = 8.sp)
+        }
+
+        Spacer(Modifier.height(4.dp))
+        // Quick actions: the reads that need a specific command syntax.
+        Row(
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            listOf(
+                "regs" to "info registers",
+                "maps" to "info proc mappings",
+                "bt" to "bt",
+                "threads" to "info threads",
+            ).forEach { (label, cmd) ->
+                PrismChip(label, accent) {
+                    scope.launch {
+                        withContext(Dispatchers.IO) { ReaDebugger.run(context, cmd) }
+                    }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(4.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            androidx.compose.material3.OutlinedTextField(
+                value = command,
+                onValueChange = { command = it },
+                modifier = Modifier.weight(1f).height(40.dp),
+                placeholder = { Text("gdb command, e.g. x/16gx $sp", fontSize = 9.sp) },
+                textStyle = MaterialTheme.typography.bodySmall,
+                singleLine = true,
+            )
+            PrismChip("Run", accent, selected = true) {
+                val cmd = command.trim()
+                if (cmd.isNotEmpty()) {
+                    scope.launch {
+                        withContext(Dispatchers.IO) { ReaDebugger.run(context, cmd) }
+                    }
+                    command = ""
+                }
+            }
+        }
+
+        if (session.error.isNotBlank()) {
+            Spacer(Modifier.height(3.dp))
+            PrismNote(session.error, color = MaterialTheme.colorScheme.error, fontSize = 9.sp)
+        }
+        Spacer(Modifier.height(4.dp))
+        if (session.transcript.isBlank()) {
+            PrismNote("No output yet. Attach, then run a command.", fontSize = 9.sp)
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState()),
+            ) {
+                Text(
+                    session.transcript.takeLast(6000),
+                    fontSize = 8.5.sp,
+                    lineHeight = 11.sp,
+                    fontFamily = FontFamily.Monospace,
+                )
+            }
+        }
+    }
+}
+
+// --------------------------------------------------------------------- other
+
+/**
+ * Everything else an app or game can be reverse-engineered with.
+ *
+ * The main toolchain covers binaries and APKs. Games and apps ship their real
+ * content in engine containers — Unity `.assets`/`.bundle`, Unreal `.pak`,
+ * Godot `.pck` — and none of that is readable with objdump. This tab is the
+ * second half: asset extractors, engine unpackers and format converters, each
+ * with the command that actually works on it.
+ */
+@Composable
+private fun OtherTab(accent: Color) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val state by ReaAssetTools.state.collectAsState()
+
+    LaunchedEffect(Unit) {
+        withContext(Dispatchers.IO) { ReaAssetTools.refresh(context) }
     }
 
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(5.dp),
     ) {
-        MiniFrame("Server", accent, trailing = if (bridge.running) "live" else "stopped") {
-            DetailLine("Endpoint", ReaBridge.ENDPOINT, accent)
-            DetailLine("Tools", bridge.toolCount.toString() + " advertised", accent)
-            DetailLine("Agents", bridge.connections.toString() + " connected", accent)
-            DetailLine("Calls", calls.size.toString() + " recorded", accent)
-            DetailLine("REA", status.reaVersion.ifBlank { "—" }, accent)
-            DetailLine("Node", status.nodeVersion.ifBlank { "—" }, accent)
-            DetailLine("Distro", distro.target?.label ?: "—", accent)
-            if (distro.targets.size > 1) {
-                DetailLine(
-                    "Available",
-                    distro.targets.joinToString(", ") { it.label },
-                    accent,
-                )
-            }
-            Spacer(Modifier.height(4.dp))
-            // No start/stop: the server is meant to always be up, so the only
-            // action here is to install the tools it needs.
-            PrismSecondaryButton(
-                text = if (tools.running) "Installing…" else "Install missing tools",
-                accent = accent,
-                modifier = Modifier.fillMaxWidth(),
-                enabled = !tools.running,
-                onClick = {
-                    // Only what is actually missing: re-running the whole list
-                    // queued seventeen no-ops that each re-checked and exited,
-                    // which is what made the queue look endless.
-                    val missing = ReaDistro.ALL_TOOLS.filterNot { it in status.available }
-                    // App-lifetime: closing the tab must not cancel the install.
-                    val id = ReaDistro.distroId(context)
-                    if (id != null && missing.isNotEmpty()) {
-                        ReaToolInstaller.installAsync(context, id, missing)
-                    }
-                },
+        PrismCard(accent = accent) {
+            Text("Asset & engine tools", fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(3.dp))
+            PrismNote(
+                "Installed into the same distro as REA. Each row shows the command " +
+                    "that works on that format, so the agent — or you — has the " +
+                    "right invocation without guessing.",
+                fontSize = 9.sp,
             )
-        }
-
-        MiniFrame("Run", accent, trailing = if (calls.any { it.running }) "live" else "idle") {
-            val active = calls.firstOrNull { it.running }
-            DetailLine("Tool", active?.tool ?: "—", accent)
-            DetailLine("Started", active?.let { formatClock(it.at) } ?: "—", accent)
-            DetailLine("Elapsed", formatDuration(calls.sumOf { it.ms }), accent)
-            DetailLine(
-                "Work",
-                calls.count { !it.running }.toString() + " / " + calls.size + " finished",
-                accent,
-            )
-            DetailLine("Received", ReaBridge.formatBytes(calls.sumOf { it.bytes }), accent)
-        }
-
-        if (tools.tools.isNotEmpty()) {
-            MiniFrame("Tool installs", accent, trailing = tools.summary) {
-                tools.tools.forEach { ToolBar(it, accent) }
-            }
-        }
-
-        // A diagnosis, not a status line: the checks below are the ones that
-        // decide whether proot or chroot can work at all on this device. Every
-        // row is measured, never assumed, so "chroot is broken" resolves to a
-        // specific missing piece instead of a guess.
-        val diagnosis by ReaDiagnosis.state.collectAsState()
-        LaunchedEffect(tick) {
-            withContext(Dispatchers.IO) { ReaDiagnosis.run(context) }
-        }
-        MiniFrame(
-            "Diagnosis",
-            accent,
-            trailing = if (diagnosis.running) "checking" else "done",
-        ) {
-            diagnosis.checks.forEach { check ->
-                DetailLine(
-                    check.label,
-                    check.detail,
-                    if (check.ok) accent else MaterialTheme.colorScheme.error,
-                )
-            }
             Spacer(Modifier.height(4.dp))
             PrismSecondaryButton(
-                text = "Re-run checks",
+                text = if (state.running) "Installing…" else "Install all missing",
                 accent = accent,
                 modifier = Modifier.fillMaxWidth(),
-                enabled = !diagnosis.running,
-                onClick = {
-                    scope.launch {
-                        withContext(Dispatchers.IO) { ReaDiagnosis.run(context) }
-                        tick++
-                    }
-                },
-            )
+                enabled = !state.running && ReaAssetTools.ALL.any { it.installable },
+            ) {
+                scope.launch {
+                    withContext(Dispatchers.IO) { ReaAssetTools.installAll(context) }
+                }
+            }
+        }
+
+        ReaAssetTools.GROUPS.forEach { (group, tools) ->
+            PrismCard(accent = accent) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(group, fontSize = 9.5.sp, fontWeight = FontWeight.SemiBold)
+                    Spacer(Modifier.weight(1f))
+                    val done = tools.count { it.id in state.installed }
+                    Text("$done / ${tools.size}", fontSize = 8.sp, color = altarisMutedText())
+                }
+                Spacer(Modifier.height(3.dp))
+                tools.forEach { tool ->
+                    val installed = tool.id in state.installed
+                    val busy = state.busyId == tool.id
+                    PrismRow(
+                        title = tool.name,
+                        subtitle = when {
+                            installed -> tool.use + "\n" + tool.command
+                            tool.installable -> tool.use + " · " + tool.size
+                            // No package on any supported distro: say where it
+                            // comes from instead of offering a button that
+                            // cannot work.
+                            else -> tool.use + " · not packaged — " + tool.upstream
+                        },
+                        accent = accent,
+                        divider = true,
+                        leading = { PrismOrb(active = installed, accent = accent) },
+                        trailing = {
+                            PrismChip(
+                                when {
+                                    busy -> "…"
+                                    installed -> "Ready"
+                                    !tool.installable -> "Manual"
+                                    else -> "Install"
+                                },
+                                accent,
+                                selected = installed,
+                                onClick = if (busy || installed || !tool.installable) {
+                                    null
+                                } else {
+                                    ({
+                                        scope.launch {
+                                            withContext(Dispatchers.IO) {
+                                                ReaAssetTools.install(context, tool)
+                                            }
+                                        }
+                                    })
+                                },
+                            )
+                        },
+                    )
+                }
+            }
+        }
+
+        if (state.log.isNotBlank()) {
+            PrismCard(accent = accent) {
+                Text("Log", fontSize = 9.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(3.dp))
+                Text(
+                    state.log.takeLast(3000),
+                    fontSize = 8.sp,
+                    lineHeight = 10.sp,
+                    fontFamily = FontFamily.Monospace,
+                )
+            }
         }
     }
 }
@@ -1192,189 +1413,6 @@ private fun ToolBar(tool: ReaToolInstaller.ToolState, accent: Color) {
             modifier = Modifier.width(34.dp),
         )
     }
-}
-
-// -------------------------------------------------------------------- files
-
-@Composable
-private fun ReaFilesTab(accent: Color) {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    var path by remember { mutableStateOf(com.altaris.linux.core.rea.ReaFiles.DEFAULT_PATH) }
-    var entries by remember {
-        mutableStateOf<List<com.altaris.linux.core.rea.ReaFiles.Entry>>(emptyList())
-    }
-    var note by remember { mutableStateOf<String?>(null) }
-    var editing by remember { mutableStateOf<Pair<String, String>?>(null) }
-    var pendingDelete by remember {
-        mutableStateOf<com.altaris.linux.core.rea.ReaFiles.Entry?>(null)
-    }
-
-    fun load(target: String) {
-        scope.launch {
-            val result = withContext(Dispatchers.IO) {
-                com.altaris.linux.core.rea.ReaFiles.list(context, target)
-            }
-            result.onSuccess {
-                entries = it
-                path = target
-                note = null
-            }.onFailure { note = it.message }
-        }
-    }
-
-    LaunchedEffect(Unit) { load(path) }
-
-    PrismCard(accent = accent, modifier = Modifier.fillMaxSize()) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Row(
-                modifier = Modifier.weight(1f).horizontalScroll(rememberScrollState()),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                val segments = path.trim('/').split('/').filter { it.isNotBlank() }
-                Crumb("/", accent) { load("/") }
-                segments.forEachIndexed { index, segment ->
-                    Text("/", fontSize = 8.sp, color = altarisMutedText())
-                    val target = "/" + segments.take(index + 1).joinToString("/")
-                    Crumb(segment, accent) { load(target) }
-                }
-            }
-            PrismChip("New", accent, onClick = {
-                val target = "$path/untitled.txt"
-                scope.launch {
-                    withContext(Dispatchers.IO) {
-                        com.altaris.linux.core.rea.ReaFiles.createFile(context, target)
-                    }
-                    editing = target to ""
-                    load(path)
-                }
-            })
-        }
-        Spacer(Modifier.height(3.dp))
-        LazyColumn(
-            modifier = Modifier.fillMaxWidth().weight(1f),
-            verticalArrangement = Arrangement.spacedBy(1.dp),
-        ) {
-            items(entries.take(400)) { entry ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            if (entry.dir) load(entry.path) else scope.launch {
-                                val read = withContext(Dispatchers.IO) {
-                                    com.altaris.linux.core.rea.ReaFiles.read(context, entry.path)
-                                }
-                                read.onSuccess { editing = entry.path to it }
-                                    .onFailure { note = it.message }
-                            }
-                        }
-                        .padding(vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        entry.name,
-                        fontSize = 9.sp,
-                        fontFamily = FontFamily.Monospace,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Text(
-                        if (entry.dir) "dir" else ReaDistro.formatBytes(entry.size),
-                        fontSize = 8.sp,
-                        color = altarisMutedText(),
-                    )
-                    Spacer(Modifier.width(5.dp))
-                    PrismChip("Del", MaterialTheme.colorScheme.error, onClick = {
-                        pendingDelete = entry
-                    })
-                }
-            }
-        }
-        if (note != null) {
-            Spacer(Modifier.height(3.dp))
-            PrismNote(note!!, color = MaterialTheme.colorScheme.error)
-        }
-    }
-
-    editing?.let { (filePath, content) ->
-        var draft by remember(filePath) { mutableStateOf(content) }
-        androidx.compose.material3.AlertDialog(
-            onDismissRequest = { editing = null },
-            confirmButton = {
-                androidx.compose.material3.TextButton(onClick = {
-                    scope.launch {
-                        withContext(Dispatchers.IO) {
-                            com.altaris.linux.core.rea.ReaFiles.write(context, filePath, draft)
-                        }
-                        editing = null
-                        load(path)
-                    }
-                }) { Text("Save", color = accent) }
-            },
-            dismissButton = {
-                androidx.compose.material3.TextButton(onClick = { editing = null }) {
-                    Text("Close")
-                }
-            },
-            title = { Text(filePath, fontSize = 10.sp, fontFamily = FontFamily.Monospace) },
-            text = {
-                androidx.compose.material3.OutlinedTextField(
-                    value = draft,
-                    onValueChange = { draft = it },
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 200.dp),
-                    textStyle = MaterialTheme.typography.bodySmall.copy(
-                        fontFamily = FontFamily.Monospace
-                    ),
-                )
-            },
-        )
-    }
-
-    pendingDelete?.let { entry ->
-        androidx.compose.material3.AlertDialog(
-            onDismissRequest = { pendingDelete = null },
-            confirmButton = {
-                androidx.compose.material3.TextButton(onClick = {
-                    scope.launch {
-                        withContext(Dispatchers.IO) {
-                            com.altaris.linux.core.rea.ReaFiles.delete(context, entry.path)
-                        }
-                        pendingDelete = null
-                        load(path)
-                    }
-                }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
-            },
-            dismissButton = {
-                androidx.compose.material3.TextButton(onClick = { pendingDelete = null }) {
-                    Text("Keep")
-                }
-            },
-            title = { Text("Delete this?", fontSize = 12.sp) },
-            text = {
-                Text(
-                    entry.path + if (entry.dir) " (and everything in it)" else "",
-                    fontSize = 9.sp,
-                    fontFamily = FontFamily.Monospace,
-                )
-            },
-        )
-    }
-}
-
-@Composable
-private fun Crumb(text: String, accent: Color, onClick: () -> Unit) {
-    Text(
-        text,
-        fontSize = 8.sp,
-        fontFamily = FontFamily.Monospace,
-        color = accent,
-        maxLines = 1,
-        modifier = Modifier
-            .clip(RoundedCornerShape(3.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 2.dp),
-    )
 }
 
 // ------------------------------------------------------------------- states

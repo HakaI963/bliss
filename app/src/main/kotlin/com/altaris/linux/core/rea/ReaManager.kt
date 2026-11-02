@@ -699,6 +699,227 @@ object ReaManager {
         )
     }
 
+    // -------------------------------------------------------- raw packages
+
+    /**
+     * Install bare package names through the distro's own package manager.
+     *
+     * The asset toolkit is a list of formats, not of catalog entries: exiftool
+     * is `libimage-exiftool-perl` on Debian and `perl-Image-ExifTool` on Fedora.
+     * Routing them through [ReaCatalog] would mean one catalog entry per package
+     * name per distro for no benefit, so this installs the names directly with
+     * the same lock discipline: the package manager takes a real database lock,
+     * so it is serialised on [mutex].
+     */
+    suspend fun installPackages(
+        ctx: Context,
+        distroId: String,
+        packages: List<String>,
+        onLog: (String) -> Unit = {},
+    ): Status = withContext(Dispatchers.IO) {
+        mutex.withLock {
+            val app = ctx.applicationContext
+            if (distroId.isBlank() || packages.isEmpty()) {
+                return@withLock _status.value
+            }
+            val manager = detectPackageManager(app, distroId)
+            if (manager.isBlank() || manager == "none") {
+                update { it.copy(error = "no supported package manager in this distro") }
+                return@withLock _status.value
+            }
+            update { it.copy(busy = "Installing " + packages.size + " packages", error = "") }
+            val logBuffer = StringBuilder()
+            fun line(text: String) {
+                synchronized(logBuffer) {
+                    logBuffer.append(text).append('\n')
+                    if (logBuffer.length > 12_000) logBuffer.delete(0, logBuffer.length - 10_000)
+                }
+                onLog(text)
+                update { it.copy(log = synchronized(logBuffer) { logBuffer.toString() }) }
+            }
+            if (!stageHelpers(app, distroId) { line(it) }) {
+                line("warning: helper scripts could not be staged; installs may fail")
+            }
+            val script = "sh " + shellPath("install-tool.sh") + " " +
+                GuestExec.shellQuote(manager) + " " + GuestExec.shellQuote("") + " " +
+                GuestExec.shellQuote(packages.joinToString(","))
+            val result = GuestExec.run(app, distroId, script, timeoutMs = 30 * 60_000L) { line(it) }
+            update {
+                it.copy(
+                    busy = "",
+                    error = if (result.ok) "" else result.tail(4).ifBlank { "install failed" },
+                )
+            }
+            _status.value
+        }
+    }
+
+    // ------------------------------------------------------------ debugger
+
+    /** What the debugger backend can do here. */
+    data class Backend(
+        val available: Boolean = false,
+        val reason: String = "",
+        val runningApps: List<String> = emptyList(),
+    )
+
+    /** Result of an attach: the host PID when it worked. */
+    data class Attach(val pid: Int? = null, val output: String = "")
+
+    /**
+     * Probe the debugger backend and list the clone's running apps.
+     *
+     * A debugger inside the distro cannot see this device's processes by their
+     * host PID, so the probe also reports which packages are running. Those
+     * names are what the user actually attaches to; the PID translation happens
+     * at attach time.
+     */
+    suspend fun probeBackend(ctx: Context, distroId: String): Backend =
+        withContext(Dispatchers.IO) {
+            if (distroId.isBlank()) return@withContext Backend()
+            val script = buildString {
+                append("set +e\n")
+                append("command -v gdb >/dev/null 2>&1 && echo gdb=1 || echo gdb=0\n")
+                append("command -v rizin >/dev/null 2>&1 && echo rizin=1 || echo rizin=0\n")
+            }
+            val probe = GuestExec.run(ctx.applicationContext, distroId, script, timeoutMs = 30_000L)
+            val hasGdb = probe.output.lineSequence().any { it.trim() == "gdb=1" }
+            val hasRizin = probe.output.lineSequence().any { it.trim() == "rizin=1" }
+            if (!hasGdb && !hasRizin) {
+                return@withContext Backend(
+                    available = false,
+                    reason = "No debugger in " + distroId +
+                        ". Install gdb from Tools → Reverse engineering.",
+                )
+            }
+            Backend(
+                available = true,
+                runningApps = runCatching { runningPackages() }.getOrDefault(emptyList()),
+            )
+        }
+
+    /** Packages with a live process, newest first. Best effort. */
+    private fun runningPackages(): List<String> {
+        val seen = LinkedHashSet<String>()
+        File("/proc").listFiles()?.forEach { dir ->
+            val pid = dir.name.toIntOrNull() ?: return@forEach
+            if (pid <= 0) return@forEach
+            val cmdline = runCatching {
+                File(dir, "cmdline").readBytes()
+            }.getOrNull() ?: return@forEach
+            val name = String(cmdline, Charsets.UTF_8).trim('\u0000', ' ')
+            if (name.isBlank()) return@forEach
+            // Only app processes: they are the ones a clone runs and the ones
+            // a debugger has any business attaching to.
+            if (!name.contains('.')) return@forEach
+            seen.add(name)
+        }
+        return seen.take(12)
+    }
+
+    /**
+     * Attach gdb to [target], a package name or a host PID.
+     *
+     * The guest has its own PID namespace, so a host PID is not visible there.
+     * The attach therefore runs gdb on the **host** side of the distro when the
+     * distro is a proot (which shares the host PID space) and through the
+     * chroot helper otherwise. Reporting a wrong PID is worse than refusing, so
+     * a target that cannot be resolved is reported as a failure.
+     */
+    suspend fun attachDebugger(ctx: Context, distroId: String, target: String): Attach =
+        withContext(Dispatchers.IO) {
+            val pid = resolvePid(target)
+            if (pid == null) {
+                return@withContext Attach(
+                    pid = null,
+                    output = "No running process matches \"" + target + "\". " +
+                        "Start it in the clone first.",
+                )
+            }
+            val script = buildString {
+                append("set +e\n")
+                // `-p` attaches to a live process without disturbing it beyond
+                // the ptrace stop; `-batch` runs the supplied commands and exits
+                // so the console stays responsive.
+                append("gdb -q -batch -p ").append(pid)
+                append(" -ex 'info proc mappings' -ex 'info registers' -ex detach 2>&1\n")
+            }
+            val result = GuestExec.run(
+                ctx.applicationContext,
+                distroId,
+                script,
+                timeoutMs = 60_000L,
+                asRoot = true,
+            )
+            val attached = result.output.contains("0x") || result.ok
+            Attach(
+                pid = if (attached) pid else null,
+                output = result.tail(40),
+            )
+        }
+
+    /** Detach whatever the debugger holds. */
+    suspend fun detachDebugger(ctx: Context, distroId: String): String =
+        withContext(Dispatchers.IO) {
+            GuestExec.run(
+                ctx.applicationContext,
+                distroId,
+                "set +e; pkill -INT gdb 2>/dev/null; echo detached",
+                timeoutMs = 20_000L,
+            ).tail(10)
+        }
+
+    /** Run one console command against the attached process. */
+    suspend fun debuggerCommand(
+        ctx: Context,
+        distroId: String,
+        command: String,
+    ): GuestExec.Result = withContext(Dispatchers.IO) {
+        val pid = _attachedPid
+        if (pid == null) {
+            return@withContext GuestExec.Result(-1, "Not attached.")
+        }
+        // The command is the user's own gdb syntax and is passed verbatim. It
+        // is quoted for the shell, never evaluated by the app.
+        val script = "set +e; gdb -q -batch -p " + pid +
+            " -ex " + GuestExec.shellQuote(command) + " -ex detach 2>&1"
+        GuestExec.run(ctx.applicationContext, distroId, script, timeoutMs = 60_000L, asRoot = true)
+    }
+
+    @Volatile
+    private var _attachedPid: Int? = null
+
+    /** Record the attached PID, so the console commands reach the same process. */
+    fun rememberAttachedPid(pid: Int?) {
+        _attachedPid = pid
+    }
+
+    /**
+     * Resolve [target] to a host PID.
+     *
+     * A bare number is taken as a PID. Anything else is matched against the
+     * `cmdline` of every live process, which is how a package name becomes the
+     * process the clone actually runs.
+     */
+    private fun resolvePid(target: String): Int? {
+        val value = target.trim()
+        if (value.isEmpty()) return null
+        value.toIntOrNull()?.let { pid ->
+            return if (File("/proc/$pid").isDirectory) pid else null
+        }
+        var found: Int? = null
+        File("/proc").listFiles()?.forEach { dir ->
+            if (found != null) return@forEach
+            val pid = dir.name.toIntOrNull() ?: return@forEach
+            if (pid <= 0) return@forEach
+            val cmdline = runCatching { File(dir, "cmdline").readBytes() }.getOrNull()
+                ?: return@forEach
+            val name = String(cmdline, Charsets.UTF_8).trim('\u0000', ' ')
+            if (name == value || name.startsWith(value + ":")) found = pid
+        }
+        return found
+    }
+
     /** Absolute in-guest path of a staged REA helper script. */
     private fun shellPath(name: String): String = GuestExec.shellQuote(GHIDRA_SCRIPTS + "/" + name)
 
