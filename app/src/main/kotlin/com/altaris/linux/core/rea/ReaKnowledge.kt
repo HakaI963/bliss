@@ -103,8 +103,8 @@ object ReaKnowledge {
              altaris_debug_command  { "command": "info proc mappings" }
              altaris_debug_command  { "command": "bt" }
              altaris_debug_command  { "command": "x/16gx <address>" }
-             altaris_debug_command  { "command": "$Process.enumerateModules()" }
-             altaris_debug_command  { "command": "$Interceptor.attach(...)" }
+             altaris_debug_command  { "command": "${'$'}Process.enumerateModules()" }
+             altaris_debug_command  { "command": "${'$'}Interceptor.attach(...)" }
              altaris_debug_detach
 
            A command starting with `$` is JavaScript evaluated in the target by

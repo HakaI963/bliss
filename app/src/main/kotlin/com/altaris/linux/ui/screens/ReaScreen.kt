@@ -1095,6 +1095,7 @@ private fun ServerStatusCard(
 @Composable
 private fun DebuggerTab(accent: Color) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val session by ReaDebugger.state.collectAsState()
 
     LaunchedEffect(Unit) {
@@ -1155,11 +1156,17 @@ private fun DebuggerTab(accent: Color) {
                     accent,
                     selected = session.fridaRunning,
                     onClick = {
-                        if (session.fridaBusy.isNotBlank()) return@PrismRow
-                        if (session.fridaRunning) {
-                            ReaDebugger.stopFrida(context)
-                        } else {
-                            ReaDebugger.installFrida(context)
+                        if (session.fridaBusy.isNotBlank()) return@PrismChip
+                        // These are long (a download, a pip install), so they
+                        // run on a scope rather than blocking the click.
+                        scope.launch {
+                            withContext(Dispatchers.IO) {
+                                if (session.fridaRunning) {
+                                    ReaDebugger.stopFrida(context)
+                                } else {
+                                    ReaDebugger.installFrida(context)
+                                }
+                            }
                         }
                     },
                 )
