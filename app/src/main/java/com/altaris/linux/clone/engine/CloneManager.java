@@ -779,7 +779,8 @@ final class CloneManager {
      * clone is better than no clone, and the caller is told which it got.
      */
     private void injectGadgetIfNeeded(File apk) {
-        if (com.altaris.linux.core.root.RootShell.isRootAvailable()) {
+        // Kotlin objects expose their members through INSTANCE, not statically.
+        if (com.altaris.linux.core.root.RootShell.INSTANCE.isRootAvailable()) {
             return;
         }
         try {
