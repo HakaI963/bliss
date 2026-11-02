@@ -356,7 +356,7 @@ object FileBrowser {
     /** Copy [from] to [to]. */
     suspend fun copy(context: Context, from: String, to: String): Result<Unit> =
         withContext(Dispatchers.IO) {
-            runCatching {
+            runCatching<Unit> {
                 val source = File(from)
                 val target = File(to)
                 if (source.isDirectory) {
@@ -365,6 +365,7 @@ object FileBrowser {
                     target.parentFile?.mkdirs()
                     source.copyTo(target, overwrite = false)
                 }
+                Unit
             }
         }
 

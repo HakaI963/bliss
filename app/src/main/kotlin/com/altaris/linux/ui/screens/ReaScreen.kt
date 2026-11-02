@@ -73,6 +73,7 @@ import com.altaris.linux.ui.components.PrismCard
 import com.altaris.linux.ui.components.PrismChip
 import com.altaris.linux.ui.components.PrismNote
 import com.altaris.linux.ui.components.PrismOrb
+import com.altaris.linux.ui.components.PrismRow
 import com.altaris.linux.ui.components.PrismSecondaryButton
 import com.altaris.linux.ui.theme.AltarisSection
 import com.altaris.linux.ui.theme.Prism
@@ -1202,7 +1203,7 @@ private fun DebuggerTab(accent: Color) {
                 value = command,
                 onValueChange = { command = it },
                 modifier = Modifier.weight(1f).height(40.dp),
-                placeholder = { Text("gdb command, e.g. x/16gx $sp", fontSize = 9.sp) },
+                placeholder = { Text("gdb command, e.g. x/16gx \$sp", fontSize = 9.sp) },
                 textStyle = MaterialTheme.typography.bodySmall,
                 singleLine = true,
             )
