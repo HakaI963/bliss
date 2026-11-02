@@ -52,6 +52,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import com.altaris.linux.ui.theme.Prism
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.rememberPermissionState
 import com.altaris.linux.ui.components.BottomTab
@@ -1018,6 +1019,10 @@ class MainActivity : ComponentActivity() {
 
                             GlassScaffold(
                                 hazeState = hazeState,
+                                // The dock floats over the content, so the content
+                                // has to reserve its height. Without this the last
+                                // row of every scrolling tab sat underneath it.
+                                bottomBarInset = Prism.NavBarHeight + 14.dp,
                                 // No per-tab blur toggle: the haze source must stay
                                 // mounted while the TopBar/dock hazeChild nodes are up
                                 // (see GlassScaffold) — leaving HOME used to unmount it

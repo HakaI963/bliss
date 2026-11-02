@@ -10,12 +10,21 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.chrisbanes.haze.HazeState
 
 /**
  * The Altaris shell: layered backdrop, transparent scaffold and a floating
  * dock. The backdrop reacts to touches through [spotlight].
+ *
+ * [bottomBarInset] is how much vertical room the floating dock occupies. The
+ * dock is drawn *over* the content rather than in the scaffold's bottomBar
+ * slot, so without this the content has no idea it is there and the last row
+ * of any scrolling tab — the final card in REA → Other, a file at the end of
+ * a list — sits underneath it and cannot be reached. Callers that draw a dock
+ * must pass its height; callers that draw none leave it at 0 and nothing
+ * changes.
  */
 @Composable
 fun GlassScaffold(
@@ -23,6 +32,7 @@ fun GlassScaffold(
     blurContent: Boolean = true,
     topBar: @Composable () -> Unit = {},
     bottomBar: @Composable () -> Unit = {},
+    bottomBarInset: Dp = 0.dp,
     content: @Composable () -> Unit
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
@@ -36,6 +46,9 @@ fun GlassScaffold(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(top = paddingValues.calculateTopPadding())
+                        // Keep the content clear of the floating dock, so the
+                        // end of every list is actually reachable.
+                        .padding(bottom = bottomBarInset)
                 ) {
                     content()
                 }

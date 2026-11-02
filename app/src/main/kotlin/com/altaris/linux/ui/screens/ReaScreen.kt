@@ -1117,10 +1117,19 @@ private fun DebuggerTab(accent: Color) {
         }
         Spacer(Modifier.height(4.dp))
         PrismNote(
-            "Attaches to the app running in the clone. Memory, registers and " +
-                "disassembly are read from the live process; nothing is simulated. " +
-                "Attaching needs root.",
+            "The agent drives this. It attaches to the app running in the clone and " +
+                "reads registers, memory, mappings and backtraces from the live " +
+                "process — so it answers runtime questions instead of guessing from " +
+                "screenshots. The console below is the same session, if you want to " +
+                "look or step in yourself. Attaching needs root.",
             fontSize = 9.sp,
+        )
+        Spacer(Modifier.height(3.dp))
+        PrismNote(
+            "Agent tools: altaris_debug_attach · altaris_debug_command · " +
+                "altaris_debug_state · altaris_debug_detach",
+            fontSize = 8.sp,
+            color = altarisMutedText(),
         )
         Spacer(Modifier.height(4.dp))
 

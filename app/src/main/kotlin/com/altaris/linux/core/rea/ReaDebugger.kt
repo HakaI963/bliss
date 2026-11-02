@@ -87,7 +87,15 @@ object ReaDebugger {
      * because "attach did nothing" is the hardest state to diagnose.
      */
     suspend fun attach(context: Context, target: String) = withContext(Dispatchers.IO) {
-        val id = distro(context) ?: return@withContext
+        val id = distro(context) ?: run {
+            _state.value = _state.value.copy(
+                error = "REA is not installed. Install it from Tools → Reverse engineering.",
+            )
+            return@withContext
+        }
+        // Populate availability and the running-app list first, so a failed
+        // attach names the real reason instead of reporting nothing.
+        if (_state.value.runningApps.isEmpty()) refresh(context)
         append("$ attach " + target)
         val result = runCatching { ReaManager.attachDebugger(context, id, target) }
             .onFailure { Log.w(TAG, "attach failed", it) }

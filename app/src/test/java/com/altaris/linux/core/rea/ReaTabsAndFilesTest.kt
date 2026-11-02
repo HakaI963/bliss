@@ -249,6 +249,80 @@ class ReaTabsAndFilesTest {
         )
     }
 
+    /**
+     * The debugger belongs to the agent.
+     *
+     * It was app-only: a console a person had to open and drive. An agent had
+     * no way to attach, so runtime questions were answered by looking at
+     * screenshots. Every operation must be reachable over MCP.
+     */
+    @Test
+    fun theAgentCanDriveTheDebugger() {
+        val mcp = readSource(
+            "app/src/main/kotlin/com/altaris/linux/core/control/McpProtocol.kt"
+        )
+        for (tool in listOf(
+            "altaris_debug_attach",
+            "altaris_debug_command",
+            "altaris_debug_state",
+            "altaris_debug_detach",
+        )) {
+            assertTrue("$tool must be registered", mcp.contains("\"" + tool + "\""))
+            // Registered and dispatched are two different lists; a tool that is
+            // only listed fails at call time.
+            assertTrue(
+                "$tool must be dispatched",
+                mcp.contains("\"" + tool + "\" ->"),
+            )
+        }
+        // And the result must carry the transcript, or the agent sees nothing.
+        assertTrue("must return the transcript", mcp.contains("put(\"transcript\""))
+        assertTrue("must report the attached pid", mcp.contains("put(\"attachedPid\""))
+    }
+
+    /** The tab must present itself as the agent's tool, not a manual console. */
+    @Test
+    fun theDebuggerTabSaysTheAgentDrivesIt() {
+        val screen = readSource(
+            "app/src/main/kotlin/com/altaris/linux/ui/screens/ReaScreen.kt"
+        )
+        assertTrue(
+            "must say the agent drives it",
+            screen.contains("The agent drives this"),
+        )
+        assertTrue(
+            "must name the agent tools",
+            screen.contains("altaris_debug_attach"),
+        )
+    }
+
+    /**
+     * The floating dock must not cover the end of a scrolling tab.
+     *
+     * The dock is drawn over the content, and the scaffold only reserved the
+     * top bar's height — so the last card in REA → Other (Unknown containers)
+     * sat underneath it and could not be reached.
+     */
+    @Test
+    fun theDockReservesItsHeightInTheContent() {
+        val scaffold = readSource(
+            "app/src/main/kotlin/com/altaris/linux/ui/components/GlassScaffold.kt"
+        )
+        assertTrue(
+            "must accept the dock height",
+            scaffold.contains("bottomBarInset: Dp = 0.dp"),
+        )
+        assertTrue(
+            "must reserve it in the content",
+            scaffold.contains(".padding(bottom = bottomBarInset)"),
+        )
+        val main = readSource("app/src/main/kotlin/com/altaris/linux/MainActivity.kt")
+        assertTrue(
+            "the docked shell must pass the dock height",
+            main.contains("bottomBarInset = Prism.NavBarHeight"),
+        )
+    }
+
     /** The clone MCP server must tell an agent there is no real device. */
     @Test
     fun theCloneServerSaysThereIsNoRealDevice() {

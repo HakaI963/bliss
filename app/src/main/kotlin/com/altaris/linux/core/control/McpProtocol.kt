@@ -332,6 +332,31 @@ object McpProtocol {
         )
         put(
             tool(
+                "altaris_debug_attach",
+                "Attach gdb inside the REA distro to the app running in the clone. " +
+                    "Accepts a package name or a host pid. This is the live debugger: " +
+                    "registers, memory, mappings and backtraces read from the running " +
+                    "process. Use it for runtime questions instead of screenshots.",
+                schema(
+                    "target" to "string: clone package name or host pid",
+                )
+            )
+        )
+        put(
+            tool(
+                "altaris_debug_command",
+                "Run one gdb command against the attached process and return its output. " +
+                    "Examples: 'info registers', 'info proc mappings', 'bt', " +
+                    "'x/16gx 0x7f12340000', 'break *0x...'. Attach first.",
+                schema(
+                    "command" to "string: gdb command, passed verbatim",
+                )
+            )
+        )
+        put(tool("altaris_debug_state", "Show the debugger state: attached pid, target, backend availability, and the console transcript.", JSONObject()))
+        put(tool("altaris_debug_detach", "Detach the debugger and leave the cloned app running.", JSONObject()))
+        put(
+            tool(
                 "altaris_ghidra_analyze",
                 "Run Ghidra's headless analyzer on a file inside the distro and return its function list.",
                 schema(
@@ -621,6 +646,26 @@ object McpProtocol {
                     .put("error", if (exit == 0) "" else out.takeLast(400))
             )
         }
+        "altaris_debug_attach" -> {
+            val ctx = ControlServer.context() ?: throw IllegalStateException("App context unavailable")
+            val target = args.optString("target").takeIf { it.isNotBlank() }
+                ?: throw IllegalArgumentException("target is required")
+            runBlocking { com.altaris.linux.core.rea.ReaDebugger.attach(ctx, target) }
+            textResult(debugStateJson())
+        }
+        "altaris_debug_command" -> {
+            val ctx = ControlServer.context() ?: throw IllegalStateException("App context unavailable")
+            val command = args.optString("command").takeIf { it.isNotBlank() }
+                ?: throw IllegalArgumentException("command is required")
+            runBlocking { com.altaris.linux.core.rea.ReaDebugger.run(ctx, command) }
+            textResult(debugStateJson())
+        }
+        "altaris_debug_state" -> textResult(debugStateJson())
+        "altaris_debug_detach" -> {
+            val ctx = ControlServer.context() ?: throw IllegalStateException("App context unavailable")
+            runBlocking { com.altaris.linux.core.rea.ReaDebugger.detach(ctx) }
+            textResult(debugStateJson())
+        }
         "altaris_ghidra_analyze" -> {
             val ctx = ControlServer.context() ?: throw IllegalStateException("App context unavailable")
             val distro = args.optString("distro").takeIf { it.isNotBlank() }
@@ -724,6 +769,19 @@ object McpProtocol {
         open the artifact with its tools instead of trying to infer structure
         from the UI.
     """.trimIndent()
+
+    /** The debugger state as an agent can read it. */
+    private fun debugStateJson(): JSONObject {
+        val state = com.altaris.linux.core.rea.ReaDebugger.state.value
+        return JSONObject()
+            .put("ok", state.attachedPid != null)
+            .put("available", state.available)
+            .put("attachedPid", state.attachedPid ?: JSONObject.NULL)
+            .put("target", state.target)
+            .put("runningApps", JSONArray().apply { state.runningApps.forEach { put(it) } })
+            .put("error", state.error)
+            .put("transcript", state.transcript.takeLast(8000))
+    }
 
     private fun reaTargetDistro(ctx: android.content.Context): String? =
         com.altaris.linux.core.rea.ReaDistro.activeTarget(ctx)?.id
