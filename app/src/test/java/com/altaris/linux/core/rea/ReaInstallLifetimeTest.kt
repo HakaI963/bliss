@@ -110,7 +110,7 @@ class ReaInstallLifetimeTest {
         )
         assertTrue(
             "the install is called directly",
-            screen.contains("ReaDistro.install(context, method)"),
+            screen.contains("ReaDistro.install(context, chosen)"),
         )
     }
 

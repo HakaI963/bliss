@@ -240,11 +240,11 @@ class ReaChrootRootfsAndOwnershipTest {
             .substringBefore("/** The distro id of the active REA distro")
         assertTrue(
             "must only walk the rootfs on a deep refresh",
-            refresh.contains("if (active != null && deep) sizeOf(app, active)"),
+            refresh.contains("if (target != null && deep) sizeOf(app, target)"),
         )
         assertTrue(
-            "must not fork su unless root is already known",
-            refresh.contains("probeRoot = deep && rootKnown"),
+            "must only probe root on a deep refresh",
+            refresh.contains("isReady(app, target, deep && rootKnown)"),
         )
     }
 

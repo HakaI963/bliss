@@ -724,11 +724,17 @@ private fun FunctionsTab(accent: Color) {
     val calls by ReaBridge.calls.collectAsState()
     var selected by remember { mutableStateOf<Findings.Row?>(null) }
     var filter by remember { mutableStateOf("") }
+    // Only real rows from real tool results.
+    //
+    // Every row here is a function, symbol or section REA actually returned
+    // from the binary. Nothing is synthesised: when no tool has reported
+    // anything, the tab says so instead of inventing plausible-looking rows.
     val rows = remember(calls) {
         calls.flatMap { call -> call.findings.map { call.tool to it } }
     }
     val shown = if (filter.isBlank()) rows else rows.filter {
-        it.second.name.contains(filter, ignoreCase = true)
+        it.second.name.contains(filter, ignoreCase = true) ||
+            it.second.offset.contains(filter, ignoreCase = true)
     }
 
     PrismCard(accent = accent, modifier = Modifier.fillMaxSize()) {
@@ -750,7 +756,9 @@ private fun FunctionsTab(accent: Color) {
         Spacer(Modifier.height(4.dp))
         if (shown.isEmpty()) {
             PrismNote(
-                "No functions yet. They appear as the agent's REA tools return them.",
+                "No functions yet. Ask the agent to open a binary — the name and " +
+                    "address of every function REA finds in the file appear here. " +
+                    "Nothing is shown until a tool has read the binary.",
             )
             return@PrismCard
         }
@@ -758,7 +766,7 @@ private fun FunctionsTab(accent: Color) {
             modifier = Modifier.fillMaxWidth().weight(1f),
             verticalArrangement = Arrangement.spacedBy(1.dp),
         ) {
-            items(shown.take(500)) { (tool, row) ->
+            items(shown.take(500)) { (_, row) ->
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -790,8 +798,11 @@ private fun FunctionsTab(accent: Color) {
                             overflow = TextOverflow.Ellipsis,
                         )
                     }
+                    // The offset column shows an address or nothing. It used
+                    // to fall back to the tool name, which read as an address
+                    // and was not one.
                     Text(
-                        row.offset.ifBlank { tool.take(12) },
+                        row.offset,
                         fontSize = 7.5.sp,
                         fontFamily = FontFamily.Monospace,
                         color = altarisMutedText(),

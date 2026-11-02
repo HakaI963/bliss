@@ -142,7 +142,11 @@ object Findings {
             k.contains("class") || k.contains("type") -> Row.Kind.CLASS
             k.contains("diff") || k.contains("differ") -> Row.Kind.DIFF
             k.contains("file") || k.contains("artifact") || k.contains("path") -> Row.Kind.FILE
-            else -> if (name.contains('(')) Row.Kind.FUNCTION else Row.Kind.OTHER
+            // Never guess a function from the *shape* of a name. A row is a
+            // function only when the key REA returned says so; anything else is
+            // "info". Inferring from a "(" in the string invented functions that
+            // do not exist in the binary.
+            else -> Row.Kind.OTHER
         }
     }
 

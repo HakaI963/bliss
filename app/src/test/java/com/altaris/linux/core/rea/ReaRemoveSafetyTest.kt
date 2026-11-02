@@ -83,7 +83,7 @@ class ReaRemoveSafetyTest {
             "app/src/main/kotlin/com/altaris/linux/core/rea/ReaDistro.kt"
         )
         val uninstall = distro.substringAfter("suspend fun uninstallBlocking(")
-            .substringBefore("private fun appendLog(")
+            .substringBefore("private fun containerPresent(")
         assertTrue("must stop the MCP bridge", uninstall.contains("ReaBridge.stop()"))
         assertTrue("must stop the REA manager", uninstall.contains("ReaManager.stop()"))
         // Both stops must happen before the container is removed.
@@ -143,15 +143,18 @@ class ReaRemoveSafetyTest {
             "app/src/main/kotlin/com/altaris/linux/core/rea/ReaDistro.kt"
         )
         val uninstall = distro.substringAfter("suspend fun uninstallBlocking(")
-            .substringBefore("private fun appendLog(")
-        assertTrue("must track whether it was removed", uninstall.contains("var removed"))
+            .substringBefore("private fun containerPresent(")
+        assertTrue(
+            "must track whether it was removed",
+            uninstall.contains("val removed = runCatching"),
+        )
         assertTrue(
             "must report a failure",
             uninstall.contains("Could not remove the REA toolchain"),
         )
         assertTrue(
             "must re-read the real state after a failure",
-            uninstall.contains("refresh(app)"),
+            uninstall.contains("refresh(app"),
         )
     }
 
