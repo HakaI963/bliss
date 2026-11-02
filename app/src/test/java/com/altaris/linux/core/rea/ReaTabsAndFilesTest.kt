@@ -437,6 +437,104 @@ class ReaTabsAndFilesTest {
         )
     }
 
+    /**
+     * Finding the clone's PID must go through root.
+     *
+     * Android hides other apps' /proc entries from the app uid. The first
+     * version read /proc directly, so it listed only this app and its own
+     * service — and then failed to attach to a clone that was running the whole
+     * time, reporting "no running process matches".
+     */
+    @Test
+    fun theProcessTableIsReadThroughRoot() {
+        val manager = readSource(
+            "app/src/main/kotlin/com/altaris/linux/core/rea/ReaManager.kt"
+        )
+        assertTrue("must have a root reader", manager.contains("procTableThroughRoot("))
+        assertTrue(
+            "must prefer the root table",
+            manager.contains("if (viaRoot.isNotEmpty()) return viaRoot"),
+        )
+        // The NUL bytes in /proc/<pid>/cmdline separate arguments; trimming them
+        // from the ends left the whole command line as the process name.
+        assertTrue(
+            "must take argv[0], not the whole command line",
+            manager.contains("substringBefore('\\u0000')"),
+        )
+        assertTrue(
+            "must reject shell commands and paths as package names",
+            manager.contains("private fun isPackageName("),
+        )
+    }
+
+    /**
+     * The attach must run where the PID is visible.
+     *
+     * A debugger inside the distro has its own PID namespace, so the host PID
+     * does not exist there. That is why the first attach did nothing.
+     */
+    @Test
+    fun theAttachRunsOnTheHostSide() {
+        val manager = readSource(
+            "app/src/main/kotlin/com/altaris/linux/core/rea/ReaManager.kt"
+        )
+        val attach = manager.substringAfter("suspend fun attachDebugger(")
+            .substringBefore("suspend fun detachDebugger(")
+        assertTrue(
+            "must try frida on the host first",
+            attach.contains("ReaFrida.isServerRunning()"),
+        )
+        assertTrue(
+            "must reach the server over loopback",
+            attach.contains("127.0.0.1:"),
+        )
+    }
+
+    /** Frida is a real feature: server on the host, CLI in the distro. */
+    @Test
+    fun fridaIsInstalledOnBothSides() {
+        val frida = readSource(
+            "app/src/main/kotlin/com/altaris/linux/core/rea/ReaFrida.kt"
+        )
+        assertTrue(
+            "must install the server on the host",
+            frida.contains("HOST_DIR = \"/data/local/altaris/frida\""),
+        )
+        assertTrue(
+            "must pin the release",
+            frida.contains("const val VERSION = \"17.25.1\""),
+        )
+        assertTrue(
+            "must bind to loopback only",
+            frida.contains("-l 127.0.0.1:"),
+        )
+        assertTrue(
+            "must install the CLI in the distro",
+            frida.contains("frida-tools"),
+        )
+        // Both halves are exposed to the agent.
+        val mcp = readSource(
+            "app/src/main/kotlin/com/altaris/linux/core/control/McpProtocol.kt"
+        )
+        assertTrue("must expose install", mcp.contains("\"altaris_frida_install\""))
+        assertTrue("must expose stop", mcp.contains("\"altaris_frida_stop\""))
+    }
+
+    /** The guide must say how to make runtime changes, not just read state. */
+    @Test
+    fun theGuideExplainsFridaForRuntimeChanges() {
+        val guide = ReaKnowledge.GUIDE
+        assertTrue("must name the install tool", guide.contains("altaris_frida_install"))
+        assertTrue(
+            "must explain the $ prefix",
+            guide.contains("starting with `$` is JavaScript"),
+        )
+        assertTrue(
+            "must say it enables changes, not only reads",
+            guide.contains("runtime"),
+        )
+    }
+
     /** The clone MCP server must tell an agent there is no real device. */
     @Test
     fun theCloneServerSaysThereIsNoRealDevice() {

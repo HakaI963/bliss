@@ -353,6 +353,8 @@ object McpProtocol {
                 )
             )
         )
+        put(tool("altaris_frida_install", "Install and start frida-server on the host and the frida CLI in the REA distro. Needed once, before runtime instrumentation. Requires root.", JSONObject()))
+        put(tool("altaris_frida_stop", "Stop frida-server.", JSONObject()))
         put(tool("altaris_debug_state", "Show the debugger state: attached pid, target, backend availability, and the console transcript.", JSONObject()))
         put(tool("altaris_debug_detach", "Detach the debugger and leave the cloned app running.", JSONObject()))
         put(
@@ -660,6 +662,16 @@ object McpProtocol {
             runBlocking { com.altaris.linux.core.rea.ReaDebugger.run(ctx, command) }
             textResult(debugStateJson())
         }
+        "altaris_frida_install" -> {
+            val ctx = ControlServer.context() ?: throw IllegalStateException("App context unavailable")
+            runBlocking { com.altaris.linux.core.rea.ReaDebugger.installFrida(ctx) }
+            textResult(debugStateJson())
+        }
+        "altaris_frida_stop" -> {
+            val ctx = ControlServer.context() ?: throw IllegalStateException("App context unavailable")
+            runBlocking { com.altaris.linux.core.rea.ReaDebugger.stopFrida(ctx) }
+            textResult(debugStateJson())
+        }
         "altaris_debug_state" -> textResult(debugStateJson())
         "altaris_debug_detach" -> {
             val ctx = ControlServer.context() ?: throw IllegalStateException("App context unavailable")
@@ -780,6 +792,9 @@ object McpProtocol {
             .put("target", state.target)
             .put("runningApps", JSONArray().apply { state.runningApps.forEach { put(it) } })
             .put("error", state.error)
+            .put("fridaInstalled", state.fridaInstalled)
+            .put("fridaRunning", state.fridaRunning)
+            .put("fridaClient", state.fridaClient)
             .put("transcript", state.transcript.takeLast(8000))
     }
 

@@ -1130,11 +1130,48 @@ private fun DebuggerTab(accent: Color) {
         )
         Spacer(Modifier.height(4.dp))
 
+        // Frida: the backend that can actually see and patch the clone.
+        PrismRow(
+            title = "Frida runtime",
+            subtitle = when {
+                session.fridaBusy.isNotBlank() -> session.fridaBusy
+                session.fridaRunning && session.fridaClient ->
+                    "Server on 127.0.0.1:" + com.altaris.linux.core.rea.ReaFrida.PORT +
+                        " · CLI ready · injection and patching available"
+                session.fridaRunning ->
+                    "Server running · the CLI is missing in the distro"
+                session.fridaInstalled -> "Installed, not running"
+                else -> "Not installed · needed for runtime changes and injection"
+            },
+            accent = accent,
+            leading = { PrismOrb(active = session.fridaRunning, accent = accent) },
+            trailing = {
+                PrismChip(
+                    when {
+                        session.fridaBusy.isNotBlank() -> "…"
+                        session.fridaRunning -> "Stop"
+                        else -> "Install"
+                    },
+                    accent,
+                    selected = session.fridaRunning,
+                    onClick = {
+                        if (session.fridaBusy.isNotBlank()) return@PrismRow
+                        if (session.fridaRunning) {
+                            ReaDebugger.stopFrida(context)
+                        } else {
+                            ReaDebugger.installFrida(context)
+                        }
+                    },
+                )
+            },
+        )
+        Spacer(Modifier.height(4.dp))
+
         if (!session.available) {
             PrismNote(
                 session.reason.ifBlank {
-                    "No debugger backend. Install gdb or rizin into the REA distro " +
-                        "from Tools → Reverse engineering."
+                    "No debugger backend yet. Install Frida above, or gdb from " +
+                        "Tools → Reverse engineering."
                 },
                 color = MaterialTheme.colorScheme.error,
                 fontSize = 9.sp,

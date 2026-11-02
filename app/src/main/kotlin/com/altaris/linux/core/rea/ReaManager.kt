@@ -799,32 +799,91 @@ object ReaManager {
         }
 
     /** Packages with a live process, newest first. Best effort. */
-    private fun runningPackages(): List<String> {
-        val seen = LinkedHashSet<String>()
+    private fun runningPackages(): List<String> = processTable().map { it.second }
+        .filter { isPackageName(it) }
+        .distinct()
+        .take(12)
+
+    /**
+     * Every process as (pid, argv0).
+     *
+     * Read through **root**, not directly. Android hides other apps' `/proc`
+     * entries from the app uid, so a direct read sees only this app and its
+     * own service — which is exactly what the first version reported: it
+     * listed `com.altaris.linux` and nothing else, and then failed to attach to
+     * the clone that was running the whole time. Root is required to attach
+     * anyway, so using it to find the PID is not an extra privilege.
+     */
+    private fun processTable(): List<Pair<Int, String>> {
+        // `ps -A -o PID,NAME` is the cheapest portable form, but the NAME column
+        // is truncated on some toolbox builds, so argv[0] from /proc is used
+        // when it is readable.
+        val fromProc = procTableDirect()
+        if (fromProc.isNotEmpty() && RootShell.isRootAvailable()) {
+            val viaRoot = procTableThroughRoot()
+            if (viaRoot.isNotEmpty()) return viaRoot
+        }
+        return fromProc
+    }
+
+    /** Direct /proc read: only sees processes this uid may inspect. */
+    private fun procTableDirect(): List<Pair<Int, String>> {
+        val out = ArrayList<Pair<Int, String>>()
         File("/proc").listFiles()?.forEach { dir ->
             val pid = dir.name.toIntOrNull() ?: return@forEach
             if (pid <= 0) return@forEach
-            val cmdline = runCatching {
-                File(dir, "cmdline").readBytes()
-            }.getOrNull() ?: return@forEach
-            val name = String(cmdline, Charsets.UTF_8).trim('\u0000', ' ')
-            if (name.isBlank()) return@forEach
-            // Only app processes: they are the ones a clone runs and the ones
-            // a debugger has any business attaching to.
-            if (!name.contains('.')) return@forEach
-            seen.add(name)
+            val argv0 = runCatching { File(dir, "cmdline").readBytes() }.getOrNull()
+                ?.let { firstArg(it) }
+                .orEmpty()
+            if (argv0.isNotBlank()) out.add(pid to argv0)
         }
-        return seen.take(12)
+        return out
+    }
+
+    /** The same, through `su`, which can see every process. */
+    private fun procTableThroughRoot(): List<Pair<Int, String>> {
+        val result = runCatching {
+            RootShell.captureResult(
+                "for d in /proc/[0-9]*; do " +
+                    "a=\$(tr '\\0' '\\n' < \"\$d/cmdline\" 2>/dev/null | head -n1); " +
+                    "[ -n \"\$a\" ] && echo \"\${d##*/}\t\$a\"; done",
+                30_000L,
+            )
+        }.getOrNull() ?: return emptyList()
+        return result.stdout.lines().mapNotNull { line ->
+            val pid = line.substringBefore('\t').toIntOrNull() ?: return@mapNotNull null
+            val name = line.substringAfter('\t', "").trim()
+            if (name.isBlank()) null else pid to name
+        }
     }
 
     /**
-     * Attach gdb to [target], a package name or a host PID.
+     * argv[0] from a raw cmdline.
      *
-     * The guest has its own PID namespace, so a host PID is not visible there.
-     * The attach therefore runs gdb on the **host** side of the distro when the
-     * distro is a proot (which shares the host PID space) and through the
-     * chroot helper otherwise. Reporting a wrong PID is worse than refusing, so
-     * a target that cannot be resolved is reported as a failure.
+     * The NUL bytes are separators between arguments, not padding. Trimming
+     * them from the ends only left the whole command line — arguments included
+     * — as the "name", which is why the app list showed a shell command and a
+     * `su` invocation as if they were apps.
+     */
+    private fun firstArg(raw: ByteArray): String =
+        String(raw, Charsets.UTF_8).substringBefore('\u0000').trim()
+
+    /** A package name, not a shell command or a path. */
+    private fun isPackageName(name: String): Boolean =
+        name.contains('.') && !name.contains(' ') && !name.startsWith("/") &&
+            !name.contains('\t')
+
+    /**
+     * Attach to [target], a package name or a host PID.
+     *
+     * The attach runs **on the host**, through frida-server, because a
+     * debugger inside the distro has its own PID namespace: the host PID the
+     * clone reports does not exist there. That is why an attach that looked
+     * correct did nothing at all.
+     *
+     * gdb is still offered as a fallback for the case where frida-server is not
+     * installed, but it is invoked the same way — on the host side — so it can
+     * see the process.
      */
     suspend fun attachDebugger(ctx: Context, distroId: String, target: String): Attach =
         withContext(Dispatchers.IO) {
@@ -836,11 +895,26 @@ object ReaManager {
                         "Start it in the clone first.",
                 )
             }
+            // Preferred: frida on the host. It survives detaching cleanly and
+            // gives scripting, not just a one-shot read.
+            if (ReaFrida.isServerRunning()) {
+                val result = runCatching {
+                    RootShell.captureResult(
+                        "frida -H 127.0.0.1:" + ReaFrida.PORT + " -p " + pid +
+                            " -q -e 'console.log(Process.arch); " +
+                            "console.log(JSON.stringify(Process.enumerateModules().slice(0,8).map(m=>m.name)))' " +
+                            "2>&1 | head -40",
+                        90_000L,
+                    )
+                }.getOrNull()
+                val out = result?.stdout.orEmpty()
+                if (result != null && result.exitCode == 0 && out.isNotBlank()) {
+                    return@withContext Attach(pid = pid, output = out)
+                }
+                // Fall through to gdb rather than reporting a bare failure.
+            }
             val script = buildString {
                 append("set +e\n")
-                // `-p` attaches to a live process without disturbing it beyond
-                // the ptrace stop; `-batch` runs the supplied commands and exits
-                // so the console stays responsive.
                 append("gdb -q -batch -p ").append(pid)
                 append(" -ex 'info proc mappings' -ex 'info registers' -ex detach 2>&1\n")
             }
@@ -851,9 +925,8 @@ object ReaManager {
                 timeoutMs = 60_000L,
                 asRoot = true,
             )
-            val attached = result.output.contains("0x") || result.ok
             Attach(
-                pid = if (attached) pid else null,
+                pid = if (result.output.contains("0x")) pid else null,
                 output = result.tail(40),
             )
         }
@@ -869,7 +942,14 @@ object ReaManager {
             ).tail(10)
         }
 
-    /** Run one console command against the attached process. */
+    /**
+     * Run one console command against the attached process.
+     *
+     * Frida first: a script is evaluated in the target's own JS runtime, which
+     * is what makes runtime reads and patching possible. When only gdb is
+     * available the command is passed to it on the host, so it can see the
+     * process — a gdb inside the distro cannot.
+     */
     suspend fun debuggerCommand(
         ctx: Context,
         distroId: String,
@@ -879,8 +959,24 @@ object ReaManager {
         if (pid == null) {
             return@withContext GuestExec.Result(-1, "Not attached.")
         }
-        // The command is the user's own gdb syntax and is passed verbatim. It
-        // is quoted for the shell, never evaluated by the app.
+        if (ReaFrida.isServerRunning()) {
+            // A `$` prefix means "this is JavaScript"; anything else is a gdb
+            // command, so the console can speak both without a mode switch.
+            if (command.startsWith("$")) {
+                val js = command.removePrefix("$").trim()
+                val result = runCatching {
+                    RootShell.captureResult(
+                        "frida -H 127.0.0.1:" + ReaFrida.PORT + " -p " + pid +
+                            " -q -e " + GuestExec.shellQuote(js) + " 2>&1 | head -200",
+                        90_000L,
+                    )
+                }.getOrNull()
+                return@withContext GuestExec.Result(
+                    result?.exitCode ?: -1,
+                    result?.stdout.orEmpty(),
+                )
+            }
+        }
         val script = "set +e; gdb -q -batch -p " + pid +
             " -ex " + GuestExec.shellQuote(command) + " -ex detach 2>&1"
         GuestExec.run(ctx.applicationContext, distroId, script, timeoutMs = 60_000L, asRoot = true)
@@ -907,17 +1003,14 @@ object ReaManager {
         value.toIntOrNull()?.let { pid ->
             return if (File("/proc/$pid").isDirectory) pid else null
         }
-        var found: Int? = null
-        File("/proc").listFiles()?.forEach { dir ->
-            if (found != null) return@forEach
-            val pid = dir.name.toIntOrNull() ?: return@forEach
-            if (pid <= 0) return@forEach
-            val cmdline = runCatching { File(dir, "cmdline").readBytes() }.getOrNull()
-                ?: return@forEach
-            val name = String(cmdline, Charsets.UTF_8).trim('\u0000', ' ')
-            if (name == value || name.startsWith(value + ":")) found = pid
-        }
-        return found
+        // Match argv[0] exactly, then a sub-process of the same package
+        // (`pkg:remote`). The previous version compared the whole command line,
+        // arguments included, so an app whose argv[0] was the package name
+        // never matched.
+        val table = processTable()
+        table.firstOrNull { it.second == value }?.let { return it.first }
+        table.firstOrNull { it.second.startsWith(value + ":") }?.let { return it.first }
+        return null
     }
 
     /** Absolute in-guest path of a staged REA helper script. */

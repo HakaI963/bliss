@@ -98,16 +98,20 @@ object ReaKnowledge {
            a value is at an address, which library is loaded, what the process
            maps — attach the live debugger instead of decompiling and guessing:
 
+             altaris_frida_install                       (once, needs root)
              altaris_debug_attach   { "target": "<clone package>" }
              altaris_debug_command  { "command": "info proc mappings" }
-             altaris_debug_command  { "command": "info sharedlibrary" }
              altaris_debug_command  { "command": "bt" }
              altaris_debug_command  { "command": "x/16gx <address>" }
+             altaris_debug_command  { "command": "$Process.enumerateModules()" }
+             altaris_debug_command  { "command": "$Interceptor.attach(...)" }
              altaris_debug_detach
 
-           The debugger runs gdb inside this distro against the clone's live
-           process. Registers, memory and mappings are real reads. Attaching
-           needs root.
+           A command starting with `$` is JavaScript evaluated in the target by
+           Frida; anything else is a gdb command. Frida is what makes runtime
+           *changes* possible — hooking a method, replacing a return value,
+           dumping a decrypted buffer — not just reading state. Registers,
+           memory and mappings are real reads either way. Attaching needs root.
 
         Searching /sdcard for a package name finds nothing useful: an installed
         app's code is in its own directory, and the clone's copy is what

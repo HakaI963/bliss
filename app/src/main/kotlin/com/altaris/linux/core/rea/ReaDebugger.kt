@@ -36,7 +36,7 @@ object ReaDebugger {
     private const val MAX_TRANSCRIPT = 40_000
 
     data class State(
-        /** True when a debugger binary exists in the REA distro. */
+        /** True when a debugger backend exists (frida-server or gdb). */
         val available: Boolean = false,
         /** Why it is not available, when it is not. */
         val reason: String = "",
@@ -49,6 +49,13 @@ object ReaDebugger {
         /** Everything the console has printed, newest last. */
         val transcript: String = "",
         val error: String = "",
+        /** frida-server state on the host. */
+        val fridaInstalled: Boolean = false,
+        val fridaRunning: Boolean = false,
+        /** The frida CLI inside the distro. */
+        val fridaClient: Boolean = false,
+        /** True while frida-server is being downloaded or started. */
+        val fridaBusy: String = "",
     )
 
     private val _state = MutableStateFlow(State())
@@ -73,10 +80,16 @@ object ReaDebugger {
             return@withContext
         }
         val probe = ReaManager.probeBackend(context, id)
+        val frida = ReaFrida.state(context)
         _state.value = _state.value.copy(
-            available = probe.available,
-            reason = probe.reason,
+            // frida-server on the host is the real backend: it can see and
+            // ptrace the clone. gdb is the fallback.
+            available = probe.available || frida.serverRunning,
+            reason = if (probe.available || frida.serverRunning) "" else probe.reason,
             runningApps = probe.runningApps,
+            fridaInstalled = frida.serverInstalled,
+            fridaRunning = frida.serverRunning,
+            fridaClient = frida.clientInstalled,
         )
     }
 
@@ -153,6 +166,53 @@ object ReaDebugger {
                     .ifBlank { "command failed" },
             )
         }
+    }
+
+    /**
+     * Install and start frida-server, then the CLI in the distro.
+     *
+     * Both halves are needed: the server does the attaching, the CLI is what
+     * the console talks to. Done in one action because a half-installed frida
+     * looks like a broken debugger.
+     */
+    suspend fun installFrida(context: Context) = withContext(Dispatchers.IO) {
+        _state.value = _state.value.copy(fridaBusy = "Downloading frida-server")
+        val server = ReaFrida.installServer(context)
+        if (server.error.isNotBlank()) {
+            _state.value = _state.value.copy(
+                fridaBusy = "",
+                error = server.error,
+            )
+            append("frida-server: " + server.error)
+            return@withContext
+        }
+        _state.value = _state.value.copy(fridaBusy = "Starting frida-server")
+        val started = ReaFrida.startServer()
+        if (started.error.isNotBlank()) {
+            _state.value = _state.value.copy(fridaBusy = "", error = started.error)
+            append("frida-server: " + started.error)
+            return@withContext
+        }
+        append("frida-server " + ReaFrida.VERSION + " running on 127.0.0.1:" + ReaFrida.PORT)
+        val id = distro(context)
+        if (id != null) {
+            _state.value = _state.value.copy(fridaBusy = "Installing the frida CLI")
+            val client = ReaFrida.installClient(context, id)
+            if (client.error.isNotBlank()) {
+                append("frida CLI: " + client.error)
+            } else {
+                append("frida CLI installed in " + id)
+            }
+        }
+        _state.value = _state.value.copy(fridaBusy = "")
+        refresh(context)
+    }
+
+    /** Stop frida-server. */
+    suspend fun stopFrida(context: Context) = withContext(Dispatchers.IO) {
+        val state = ReaFrida.stopServer()
+        append("frida-server stopped")
+        _state.value = _state.value.copy(fridaRunning = state.serverRunning)
     }
 
     /** Clear the console. */
