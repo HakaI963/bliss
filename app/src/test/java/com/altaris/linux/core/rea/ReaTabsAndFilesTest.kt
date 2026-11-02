@@ -110,22 +110,65 @@ class ReaTabsAndFilesTest {
     fun everyAssetToolCarriesItsCommand() {
         val tools = ReaAssetTools.ALL
         assertTrue("must cover Unity", tools.any { it.id == "assetripper" })
-        assertTrue("must cover Unreal", tools.any { it.id == "umodel" })
+        assertTrue("must cover Unreal", tools.any { it.id == "quickbms" })
         assertTrue("must cover Android assets", tools.any { it.id == "obb" })
         assertTrue("must cover Godot", tools.any { it.id == "godot" })
         assertTrue("must cover audio", tools.any { it.id == "vgmstream" })
         for (tool in tools) {
             assertTrue("${tool.id} must show a command", tool.command.isNotBlank())
             assertTrue("${tool.id} must name a probe", tool.probe.isNotBlank())
-            // An install button that cannot work is worse than none: it
-            // produces an empty directory and the agent reports "not found".
-            if (!tool.installable) {
-                assertTrue(
-                    "${tool.id} is not installable, so it must name an upstream",
-                    tool.upstream.isNotBlank(),
-                )
-            }
         }
+    }
+
+    /**
+     * Every tool must be installable with no manual step.
+     *
+     * Three were wrongly marked manual: vgmstream-cli and astcenc are packaged
+     * for arm64 even though their GitHub releases are x86_64 only, and unshield
+     * was simply missing. A dead "Manual" chip is a tool the agent never gets.
+     */
+    @Test
+    fun everyAssetToolInstallsWithoutHelp() {
+        for (tool in ReaAssetTools.ALL) {
+            assertTrue(
+                "${tool.id} must have an install route: package, archive, pip or build",
+                tool.installable,
+            )
+            val hasRoute = tool.packages.values.any { it.isNotEmpty() } ||
+                tool.archive != null || tool.pip.isNotBlank() || tool.build.isNotBlank()
+            assertTrue("${tool.id} must resolve to a route", hasRoute)
+        }
+        // The specific three that were wrong.
+        assertTrue(
+            "vgmstream must come from a package",
+            ReaAssetTools.ALL.first { it.id == "vgmstream" }.packages["apt"]
+                ?.contains("vgmstream-cli") == true,
+        )
+        assertTrue(
+            "astcenc must come from a package",
+            ReaAssetTools.ALL.first { it.id == "texturetools" }.packages["apt"]
+                ?.contains("astcenc") == true,
+        )
+        assertTrue(
+            "unshield must be listed",
+            ReaAssetTools.ALL.any { it.probe == "unshield" },
+        )
+    }
+
+    /** The Other tab must not offer a Manual chip any more. */
+    @Test
+    fun theOtherTabHasNoManualState() {
+        val screen = readSource(
+            "app/src/main/kotlin/com/altaris/linux/ui/screens/ReaScreen.kt"
+        )
+        assertFalse(
+            "no Manual chip",
+            screen.contains("!tool.installable -> \"Manual\""),
+        )
+        assertTrue(
+            "the install chip is always available",
+            screen.contains("else -> \"Install\""),
+        )
     }
 
     /** Package names are per manager, not the tool id. */
@@ -320,6 +363,77 @@ class ReaTabsAndFilesTest {
         assertTrue(
             "the docked shell must pass the dock height",
             main.contains("bottomBarInset = Prism.NavBarHeight"),
+        )
+    }
+
+    /**
+     * The guide must send the agent to the clone, not to /sdcard.
+     *
+     * An agent asked to "attach to <app> and see what it does" searched the
+     * filesystem instead, because the REA guide described artifact analysis and
+     * never mentioned clones, the debugger, or how to get a clone's files. It
+     * read as a tool for files you already have.
+     */
+    @Test
+    fun theGuidePointsAtTheCloneAndTheDebugger() {
+        val guide = ReaKnowledge.GUIDE
+        assertTrue(
+            "must say the target is a clone",
+            guide.contains("The target is usually a clone"),
+        )
+        assertTrue(
+            "must name the clone listing tool",
+            guide.contains("altaris_clones"),
+        )
+        assertTrue(
+            "must name the export tool",
+            guide.contains("altaris_rea_clone_apk"),
+        )
+        assertTrue(
+            "must name the debugger",
+            guide.contains("altaris_debug_attach"),
+        )
+        assertTrue(
+            "must say searching /sdcard is wrong",
+            guide.contains("Searching /sdcard"),
+        )
+        // The short prompt an MCP client may request must carry it too, since
+        // that is all some clients ever read.
+        assertTrue(
+            "the prompt must mention the clone",
+            ReaKnowledge.PROMPT.contains("clone"),
+        )
+        assertTrue(
+            "the prompt must name the debugger",
+            ReaKnowledge.PROMPT.contains("altaris_debug_attach"),
+        )
+    }
+
+    /**
+     * Exporting a clone must hand over its native libraries too.
+     *
+     * The guide now promises them, and an app's real logic is often in
+     * libil2cpp.so. Copying only the APKs left an agent that wanted native code
+     * with nothing to open.
+     */
+    @Test
+    fun exportingACloneIncludesItsNativeLibraries() {
+        val manager = readSource(
+            "app/src/main/kotlin/com/altaris/linux/core/rea/ReaManager.kt"
+        )
+        val export = manager.substringAfter("suspend fun exportCloneApk(")
+            .substringBefore("// ------------------------------------------------------------- helpers")
+        assertTrue(
+            "must read the native library dir from the package manager",
+            export.contains("nativeLibraryDir"),
+        )
+        assertTrue(
+            "must copy the .so files",
+            export.contains("*.so"),
+        )
+        assertTrue(
+            "must print the copied paths",
+            export.contains("-libs"),
         )
     }
 

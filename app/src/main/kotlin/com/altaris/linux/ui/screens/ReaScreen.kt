@@ -1095,10 +1095,7 @@ private fun ServerStatusCard(
 @Composable
 private fun DebuggerTab(accent: Color) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
     val session by ReaDebugger.state.collectAsState()
-    var command by remember { mutableStateOf("") }
-    var target by remember { mutableStateOf("") }
 
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) { ReaDebugger.refresh(context) }
@@ -1145,95 +1142,56 @@ private fun DebuggerTab(accent: Color) {
             return@PrismCard
         }
 
-        // Attach target: the cloned apps that are running right now.
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            androidx.compose.material3.OutlinedTextField(
-                value = target,
-                onValueChange = { target = it },
-                modifier = Modifier.weight(1f).height(40.dp),
-                placeholder = { Text("package or pid", fontSize = 9.sp) },
-                textStyle = MaterialTheme.typography.bodySmall,
-                singleLine = true,
-            )
-            PrismChip(
-                if (session.attachedPid != null) "Detach" else "Attach",
-                accent,
-                selected = session.attachedPid != null,
-                onClick = {
-                    val value = target.trim()
-                    scope.launch {
-                        withContext(Dispatchers.IO) {
-                            if (session.attachedPid != null) {
-                                ReaDebugger.detach(context)
-                            } else if (value.isNotBlank()) {
-                                ReaDebugger.attach(context, value)
-                            }
-                        }
-                    }
-                },
-            )
-        }
+        // No attach control: the agent owns the session. This tab shows what
+        // it is attached to and what it has read, so a person can follow along
+        // without a second way to start a session the agent is not driving.
+        PrismRow(
+            title = if (session.attachedPid != null) "Attached" else "Waiting for the agent",
+            subtitle = session.attachedPid?.let { "pid " + it } ?: "",
+            accent = accent,
+            leading = { PrismOrb(active = session.attachedPid != null, accent = accent) },
+            trailing = {
+                PrismChip(
+                    if (session.attachedPid != null) "Live" else "Idle",
+                    accent,
+                    selected = session.attachedPid != null,
+                )
+            },
+        )
         if (session.runningApps.isNotEmpty()) {
             Spacer(Modifier.height(3.dp))
-            PrismNote("Running: " + session.runningApps.joinToString(", "), fontSize = 8.sp)
+            PrismNote("Running in the clone: " + session.runningApps.joinToString(", "), fontSize = 8.sp)
         }
 
         Spacer(Modifier.height(4.dp))
         // Quick actions: the reads that need a specific command syntax.
-        Row(
-            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            listOf(
-                "regs" to "info registers",
-                "maps" to "info proc mappings",
-                "bt" to "bt",
-                "threads" to "info threads",
-            ).forEach { (label, cmd) ->
-                PrismChip(label, accent) {
-                    scope.launch {
-                        withContext(Dispatchers.IO) { ReaDebugger.run(context, cmd) }
-                    }
-                }
-            }
-        }
-
         Spacer(Modifier.height(4.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            androidx.compose.material3.OutlinedTextField(
-                value = command,
-                onValueChange = { command = it },
-                modifier = Modifier.weight(1f).height(40.dp),
-                placeholder = { Text("gdb command, e.g. x/16gx \$sp", fontSize = 9.sp) },
-                textStyle = MaterialTheme.typography.bodySmall,
-                singleLine = true,
-            )
-            PrismChip("Run", accent, selected = true) {
-                val cmd = command.trim()
-                if (cmd.isNotEmpty()) {
-                    scope.launch {
-                        withContext(Dispatchers.IO) { ReaDebugger.run(context, cmd) }
-                    }
-                    command = ""
-                }
+        // Read-only transcript.
+        //
+        // This tab used to send gdb commands itself. That is wrong once the
+        // agent owns the session: each command spawned a second `gdb -p` on
+        // the same process, which is a different session with different state
+        // and, at worst, a second ptrace attach. The transcript is the agent's
+        // session, shown as it happens.
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Transcript", fontSize = 9.sp, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.weight(1f))
+            if (session.transcript.isNotBlank()) {
+                PrismChip("Clear", accent) { ReaDebugger.clear() }
             }
         }
-
+        Spacer(Modifier.height(2.dp))
         if (session.error.isNotBlank()) {
             Spacer(Modifier.height(3.dp))
             PrismNote(session.error, color = MaterialTheme.colorScheme.error, fontSize = 9.sp)
         }
         Spacer(Modifier.height(4.dp))
         if (session.transcript.isBlank()) {
-            PrismNote("No output yet. Attach, then run a command.", fontSize = 9.sp)
+            PrismNote(
+                "Nothing yet. The agent attaches when it needs a runtime answer; " +
+                    "everything it runs appears here.",
+                fontSize = 9.sp,
+            )
         } else {
             Column(
                 modifier = Modifier
@@ -1291,7 +1249,7 @@ private fun OtherTab(accent: Color) {
                 text = if (state.running) "Installing…" else "Install all missing",
                 accent = accent,
                 modifier = Modifier.fillMaxWidth(),
-                enabled = !state.running && ReaAssetTools.ALL.any { it.installable },
+                enabled = !state.running,
             ) {
                 scope.launch {
                     withContext(Dispatchers.IO) { ReaAssetTools.installAll(context) }
@@ -1313,13 +1271,10 @@ private fun OtherTab(accent: Color) {
                     val busy = state.busyId == tool.id
                     PrismRow(
                         title = tool.name,
-                        subtitle = when {
-                            installed -> tool.use + "\n" + tool.command
-                            tool.installable -> tool.use + " · " + tool.size
-                            // No package on any supported distro: say where it
-                            // comes from instead of offering a button that
-                            // cannot work.
-                            else -> tool.use + " · not packaged — " + tool.upstream
+                        subtitle = if (installed) {
+                            tool.use + "\n" + tool.command
+                        } else {
+                            tool.use + " · " + tool.size
                         },
                         accent = accent,
                         divider = true,
@@ -1329,12 +1284,11 @@ private fun OtherTab(accent: Color) {
                                 when {
                                     busy -> "…"
                                     installed -> "Ready"
-                                    !tool.installable -> "Manual"
                                     else -> "Install"
                                 },
                                 accent,
                                 selected = installed,
-                                onClick = if (busy || installed || !tool.installable) {
+                                onClick = if (busy || installed) {
                                     null
                                 } else {
                                     ({

@@ -923,6 +923,14 @@ object ReaManager {
     /** Absolute in-guest path of a staged REA helper script. */
     private fun shellPath(name: String): String = GuestExec.shellQuote(GHIDRA_SCRIPTS + "/" + name)
 
+    /**
+     * The same, for callers outside this object.
+     *
+     * The asset toolkit installs through the same staged helper scripts, and
+     * duplicating the path here would drift the moment either side moves.
+     */
+    internal fun shellPathForAsset(name: String): String = shellPath(name)
+
     private fun coreScript(): String = "sh " + shellPath("rea-core-install.sh") + " " +
         GuestExec.shellQuote(ROOT) + " " + GuestExec.shellQuote(NODE_VERSION) + " " +
         GuestExec.shellQuote(REA_VERSION)
@@ -1138,21 +1146,50 @@ object ReaManager {
     // ------------------------------------------------------------- clones
 
     /** Copy every APK of [packageName] to shared storage so the guest can read it. */
+    /**
+     * Copy a clone's APKs **and its native libraries** to shared storage.
+     *
+     * The libraries matter as much as the APKs: an app's real logic is often in
+     * `lib/arm64-v8a/libil2cpp.so`, and a runtime question ("what does this
+     * function return") cannot be answered from the DEX alone. Leaving them out
+     * meant an agent that wanted to inspect native code had nothing to open and
+     * went looking around the filesystem instead.
+     *
+     * The library directory is resolved through PackageManager, which knows it
+     * exactly; guessing `/data/app/.../lib` from the APK path is not reliable
+     * across split installs and app updates.
+     */
     suspend fun exportCloneApk(ctx: Context, packageName: String): Pair<Int, String> =
         withContext(Dispatchers.IO) {
             val safe = packageName.replace(Regex("[^A-Za-z0-9._-]"), "_")
-            val script = listOf(
-                "dir=/sdcard/Download/Altaris/rea",
-                "mkdir -p \"\$dir\" || exit 3",
-                "i=0",
-                "for p in \$(pm path " + GuestExec.shellQuote(packageName) + " | sed 's/^package://'); do",
-                "  i=\$((i+1))",
-                "  out=\"\$dir/" + safe + "-\$i.apk\"",
-                "  cp -f \"\$p\" \"\$out\" || exit 4",
-                "  echo \"\$out\"",
-                "done",
-                "[ \"\$i\" -gt 0 ] || { echo 'package not installed'; exit 5; }",
-            ).joinToString("\n")
+            val nativeDir = runCatching {
+                ctx.applicationContext.packageManager
+                    .getApplicationInfo(packageName, 0)
+                    .nativeLibraryDir
+                    .orEmpty()
+            }.getOrDefault("")
+            val script = buildString {
+                append("dir=/sdcard/Download/Altaris/rea\n")
+                append("mkdir -p \"\$dir\" || exit 3\n")
+                append("i=0\n")
+                append("for p in \$(pm path ").append(GuestExec.shellQuote(packageName))
+                append(" | sed 's/^package://'); do\n")
+                append("  i=\$((i+1))\n")
+                append("  out=\"\$dir/").append(safe).append("-\$i.apk\"\n")
+                append("  cp -f \"\$p\" \"\$out\" || exit 4\n")
+                append("  echo \"\$out\"\n")
+                append("done\n")
+                append("[ \"\$i\" -gt 0 ] || { echo 'package not installed'; exit 5; }\n")
+                if (nativeDir.isNotBlank()) {
+                    append("libs=\"\$dir/").append(safe).append("-libs\"\n")
+                    append("mkdir -p \"\$libs\" || exit 6\n")
+                    append("cp -f ").append(GuestExec.shellQuote(nativeDir))
+                    append("/*.so \"\$libs/\" 2>/dev/null\n")
+                    // Print what was copied, so the agent gets paths rather than
+                    // having to list the directory again.
+                    append("for f in \"\$libs\"/*.so; do [ -f \"\$f\" ] && echo \"\$f\"; done\n")
+                }
+            }
             val app = ctx.applicationContext
             val env = HostCommandBuilder.envMap(app, includeTerm = false)
             val (exit, out) = ShellCommandRunner.runCaptureExit(

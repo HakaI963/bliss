@@ -121,6 +121,11 @@ case "$FILE" in
   *.tar.gz|*.tgz)
     tar -xzf "$TMP" -C "$DIR" || { rm -f "$TMP"; fail "cannot extract $FILE"; }
     ;;
+  *.tar.xz|*.txz)
+    # AssetRipper publishes .tar.xz for linux arm64; tar handles it on its own
+    # in every distro that ships xz support, but say so plainly if it does not.
+    tar -xJf "$TMP" -C "$DIR" || { rm -f "$TMP"; fail "cannot extract $FILE (is xz installed?)"; }
+    ;;
   *.jar)
     # A jar is the program; keep it under its own name.
     mv -f "$TMP" "$DIR/$FILE" || fail "cannot place $FILE"

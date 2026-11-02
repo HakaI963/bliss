@@ -82,6 +82,37 @@ object ReaKnowledge {
         4. full decompile of the specific function
         5. whole-binary decompile (last resort)
 
+        ## 3b. The target is usually a clone, not a file on /sdcard
+
+        Altaris runs Android apps in clones. When the task is about an app on
+        this device — "attach to animetchiron and see what it does" — do not
+        search the filesystem for it. There is one correct path:
+
+        1. `altaris_clones` (or `altaris_apps`) on the **clone server** lists
+           what is installed. That is the whole world: there is no separate
+           physical device here.
+        2. `altaris_rea_clone_apk` exports the clone's APKs and its native
+           libraries to a known directory and returns the paths. Those are the
+           artifacts you analyse — not whatever happens to be in /sdcard.
+        3. For anything about *runtime* behaviour — what a method returns, what
+           a value is at an address, which library is loaded, what the process
+           maps — attach the live debugger instead of decompiling and guessing:
+
+             altaris_debug_attach   { "target": "<clone package>" }
+             altaris_debug_command  { "command": "info proc mappings" }
+             altaris_debug_command  { "command": "info sharedlibrary" }
+             altaris_debug_command  { "command": "bt" }
+             altaris_debug_command  { "command": "x/16gx <address>" }
+             altaris_debug_detach
+
+           The debugger runs gdb inside this distro against the clone's live
+           process. Registers, memory and mappings are real reads. Attaching
+           needs root.
+
+        Searching /sdcard for a package name finds nothing useful: an installed
+        app's code is in its own directory, and the clone's copy is what
+        `altaris_rea_clone_apk` gives you.
+
         ## 4. Compare instead of eyeballing
 
         When the task is "is this a faithful rebuild", use `compare-artifacts`:
@@ -125,5 +156,11 @@ object ReaKnowledge {
         for its format, prefer cheap inspection over a full decompile, use the
         comparison tool for rebuild fidelity, and cite offsets for every claim.
         Read rea://guide for the detailed method.
+
+        The target is almost always an Android app running in a clone on this
+        device. There is no separate physical device. List it with altaris_clones,
+        export its APKs and libraries with altaris_rea_clone_apk, and for runtime
+        questions attach the live debugger (altaris_debug_attach, then
+        altaris_debug_command) rather than searching /sdcard for files.
     """.trimIndent()
 }
