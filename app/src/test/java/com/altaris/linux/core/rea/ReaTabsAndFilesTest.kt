@@ -391,7 +391,7 @@ class ReaTabsAndFilesTest {
         )
         assertTrue(
             "must say searching /sdcard is wrong",
-            guide.contains("Searching /sdcard"),
+            guide.contains("Do not search the filesystem"),
         )
         // The short prompt an MCP client may request must carry it too, since
         // that is all some clients ever read.
@@ -799,7 +799,7 @@ class ReaTabsAndFilesTest {
         )
         assertTrue(
             "must prefer the node tree",
-            source.contains("Work headless first"),
+            source.contains("That is the fast path"),
         )
         assertTrue(
             "must mark OCR as the fallback",
