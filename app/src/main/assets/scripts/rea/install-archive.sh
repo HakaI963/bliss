@@ -18,9 +18,14 @@ FILE="$2"
 DIR="$3"
 PROBES="$4"
 LAUNCHER="$5"
+# Smallest download that can be the real release. Tools range from a few
+# hundred KB (a Python zipapp) to hundreds of MB; a single floor either waves a
+# captive-portal page through or rejects a real zipapp.
+MIN_BYTES="$6"
+case "$MIN_BYTES" in ''|*[!0-9]*) MIN_BYTES=100000 ;; esac
 
 if [ -z "$URL" ] || [ -z "$FILE" ] || [ -z "$DIR" ]; then
-  echo "usage: install-archive.sh <url> <file> <dir> <probes> [launcher]"
+  echo "usage: install-archive.sh <url> <file> <dir> <probes> [launcher] [min-bytes]"
   exit 2
 fi
 
@@ -115,9 +120,9 @@ fi
 
 SIZE=$(wc -c < "$TMP" 2>/dev/null | tr -d ' ')
 case "$SIZE" in ''|*[!0-9]*) SIZE=0 ;; esac
-# An HTML error page is a few KB; a real release is megabytes. Refuse both a
-# failed transfer and a captive-portal page.
-if [ "$SIZE" -lt 100000 ]; then
+# An HTML error page is a few KB; a real release is at least MIN_BYTES. Refuse
+# both a failed transfer and a captive-portal page.
+if [ "$SIZE" -lt "$MIN_BYTES" ]; then
   head -c 200 "$TMP" 2>/dev/null
   rm -f "$TMP"
   fail "download is only ${SIZE} bytes — not a release archive"
@@ -149,6 +154,12 @@ case "$FILE" in
     ;;
   *.jar)
     # A jar is the program; keep it under its own name.
+    mv -f "$TMP" "$DIR/$FILE" || fail "cannot place $FILE"
+    ;;
+  *.pyz)
+    # A Python zipapp is the program too, and it must stay intact — unpacking
+    # it would destroy it. It carries no shebang, so the caller's shim runs it
+    # through python3 rather than exec'ing it directly.
     mv -f "$TMP" "$DIR/$FILE" || fail "cannot place $FILE"
     ;;
   *)

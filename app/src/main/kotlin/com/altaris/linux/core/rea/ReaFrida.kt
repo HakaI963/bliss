@@ -274,7 +274,7 @@ object ReaFrida {
             if (present()) {
                 return@withContext State(clientInstalled = true)
             }
-            run("python3 -m pip install --break-system-packages -q frida-tools 2>&1 | tail -8")
+            run("python3 -m pip install --break-system-packages --root-user-action=ignore -q frida-tools 2>&1 | tail -8")
             if (present()) {
                 return@withContext State(clientInstalled = true)
             }

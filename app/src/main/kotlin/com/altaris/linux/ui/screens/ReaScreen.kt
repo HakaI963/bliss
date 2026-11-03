@@ -1323,6 +1323,38 @@ private fun OtherTab(accent: Color) {
                     withContext(Dispatchers.IO) { ReaAssetTools.installAll(context) }
                 }
             }
+            // Live progress: which tool, and how far through the batch. Without
+            // it a long install looks frozen — the report was that nothing
+            // showed any indicator at all.
+            if (state.running) {
+                Spacer(Modifier.height(4.dp))
+                val done = state.percent.coerceIn(0, 100)
+                Text(
+                    buildString {
+                        append(done.toString()).append("%")
+                        if (state.phase.isNotBlank()) append(" · ").append(state.phase)
+                    },
+                    fontSize = 8.5.sp,
+                    fontFamily = FontFamily.Monospace,
+                    color = altarisMutedText(),
+                )
+                Spacer(Modifier.height(2.dp))
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(2.dp)
+                        .clip(RoundedCornerShape(1.dp))
+                        .background(accent.copy(alpha = 0.25f))
+                ) {
+                    Box(
+                        Modifier
+                            .fillMaxWidth(done / 100f)
+                            .height(2.dp)
+                            .clip(RoundedCornerShape(1.dp))
+                            .background(accent)
+                    )
+                }
+            }
         }
 
         ReaAssetTools.GROUPS.forEach { (group, tools) ->

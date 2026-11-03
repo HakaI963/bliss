@@ -35,8 +35,17 @@ object ReaAssetTools {
         val dir: String,
         /** Launcher to link into PATH. */
         val launcher: String = "",
-        /** "dotnet" or "mono" when the launcher is IL, not a native binary. */
+        /** "dotnet" or "mono" when the launcher is IL, "python" for a .py/.pyz. */
         val runtime: String = "",
+        /**
+         * Smallest download that can be the real release, in bytes.
+         *
+         * The installer refuses anything smaller as a captive-portal page. The
+         * default suits a multi-megabyte tool; a zipapp like wwiser is a few
+         * hundred kilobytes and must say so, or the floor rejects the real
+         * download.
+         */
+        val minBytes: Long = 100_000L,
     )
 
     /**
@@ -92,6 +101,10 @@ object ReaAssetTools {
         val running: Boolean = false,
         val busyId: String = "",
         val log: String = "",
+        /** 0–100 while an install runs, for the progress line. */
+        val percent: Int = 0,
+        /** What the running install is doing right now, in the user's terms. */
+        val phase: String = "",
     )
 
     private val _state = MutableStateFlow(State())
@@ -210,7 +223,7 @@ object ReaAssetTools {
                     ),
                     // Alpine/Fedora ship nothing: build the binary from source
                     // rather than leave a dead button.
-                    build = "git clone --depth 1 https://github.com/Little-Byte/QuickBMS.git && cd QuickBMS/src && make",
+                    build = "rm -rf QuickBMS && git clone --depth 1 https://github.com/Little-Byte/QuickBMS.git && cd QuickBMS/src && make",
                 ),
                 Tool(
                     id = "ue4ss",
@@ -225,24 +238,14 @@ object ReaAssetTools {
                         "dnf" to listOf("git", "cmake", "gcc", "gcc-c++", "make"),
                         "pacman" to listOf("git", "cmake", "base-devel"),
                     ),
-                    build = "git clone --depth 1 https://github.com/UE4SS-RE/RE-UE4SS.git && cmake -S RE-UE4SS -B RE-UE4SS/build -DCMAKE_BUILD_TYPE=Release",
+                    build = "rm -rf RE-UE4SS && git clone --depth 1 https://github.com/UE4SS-RE/RE-UE4SS.git && cmake -S RE-UE4SS -B RE-UE4SS/build -DCMAKE_BUILD_TYPE=Release",
                 ),
-                Tool(
-                    id = "unrealpak",
-                    name = "Unreal .pak extractor",
-                    use = "List and unpack a .pak without the engine, including AES-keyed ones",
-                    size = "~3 MB",
-                    command = "unrealpak <game.pak> -extract <out>",
-                    probe = "unrealpak",
-                    // Python, so it runs anywhere; no ARM64 build to wait for.
-                    pip = "unpak",
-                    packages = mapOf(
-                        "apt" to listOf("python3-pip"),
-                        "apk" to listOf("py3-pip"),
-                        "dnf" to listOf("python3-pip"),
-                        "pacman" to listOf("python-pip"),
-                    ),
-                ),
+                // The Unreal .pak extractor is gone on purpose: repak (the
+                // maintained CLI) publishes x86_64 Linux only, building Rust on
+                // a phone is not a reasonable route, and the pip package this
+                // entry pointed at does not exist on PyPI. A tool with no
+                // working route is not listed — a dead button that always
+                // errors is worse than the honest gap.
             ),
         ),
         Group(
@@ -309,7 +312,7 @@ object ReaAssetTools {
                         "pacman" to listOf("git", "cmake", "gcc", "make"),
                     ),
                     // The published linux binary is x86_64 only, so build it.
-                    build = "git clone --depth 1 https://github.com/hhyyrylainen/GodotPckTool.git && cd GodotPckTool && make",
+                    build = "rm -rf GodotPckTool && git clone --depth 1 https://github.com/hhyyrylainen/GodotPckTool.git && cd GodotPckTool && make",
                 ),
                 Tool(
                     id = "gamemaker",
@@ -336,17 +339,21 @@ object ReaAssetTools {
                     id = "rpgmaker",
                     name = "RPG Maker archive",
                     use = "Open .rgss archive and extract the game data",
-                    size = "~1 MB",
-                    command = "rgssad-extract <Game.rgss3a> <out>",
+                    size = "~100 KB",
+                    command = "rgssad-extract unpack <Game.rgss3a> <out>",
                     probe = "rgssad-extract",
-                    // The published CLI is x86_64 only; the pure-Python
-                    // extractor does the same job on any architecture.
-                    pip = "rgssad",
-                    packages = mapOf(
-                        "apt" to listOf("python3-pip"),
-                        "apk" to listOf("py3-pip"),
-                        "dnf" to listOf("python3-pip"),
-                        "pacman" to listOf("python-pip"),
+                    // The pip package this used (`rgssad`) does not exist on
+                    // PyPI, so the route always failed. rgss3a-unpack is a
+                    // single-file Python CLI (list / unpack / pack) that runs
+                    // on any architecture; the shim wraps it as the command
+                    // above.
+                    archive = Archive(
+                        url = "https://github.com/TheRainbowPhoenix/rgss3a-unpack/archive/refs/heads/main.tar.gz",
+                        fileName = "rgss3a-unpack-main.tar.gz",
+                        dir = ReaCatalog.ARCHIVE_ROOT + "/rpgmaker",
+                        launcher = "dec.py",
+                        runtime = "python",
+                        minBytes = 10_000L,
                     ),
                 ),
             ),
@@ -383,7 +390,7 @@ object ReaAssetTools {
                         "dnf" to emptyList(),
                         "pacman" to emptyList(),
                     ),
-                    build = "git clone --depth 1 https://github.com/ARM-software/astc-encoder.git && cd astc-encoder/Source && cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build",
+                    build = "rm -rf astc-encoder && git clone --depth 1 https://github.com/ARM-software/astc-encoder.git && cd astc-encoder/Source && cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build",
                 ),
                 Tool(
                     id = "vgmstream",
@@ -392,30 +399,53 @@ object ReaAssetTools {
                     size = "~2 MB",
                     command = "vgmstream-cli -o <out.wav> <in.fsb|bnk>",
                     probe = "vgmstream-cli",
-                    // Packaged for arm64 on Debian and Fedora; the linux zip on
-                    // GitHub is x86_64 only.
-                    packages = mapOf(
-                        "apt" to listOf("vgmstream-cli"),
-                        "apk" to emptyList(),
-                        "dnf" to listOf("vgmstream"),
-                        "pacman" to emptyList(),
-                    ),
-                    build = "git clone --depth 1 https://github.com/vgmstream/vgmstream.git && cd vgmstream && cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_CLI=ON && cmake --build build",
+                    // Debian ships no vgmstream package at all (checked against
+                    // trixie), and the linux zip on GitHub is x86_64 only — so
+                    // the source build is the real route everywhere. The build
+                    // clears its directory first: a retry after a failed clone
+                    // used to die on "destination path already exists".
+                    build = "rm -rf vgmstream && git clone --depth 1 https://github.com/vgmstream/vgmstream.git && cd vgmstream && cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_CLI=ON && cmake --build build",
                 ),
                 Tool(
                     id = "fmod",
-                    name = "FMOD / Wwise bank tools",
-                    use = "List and extract events and samples from .bank/.fsb",
+                    name = "FMOD bank tools (.fsb)",
+                    use = "List and extract the samples inside an FMOD sound bank",
                     size = "~1 MB",
-                    command = "fsbext <in.fsb> <outdir>",
+                    command = "fsbext -o <outdir> <in.fsb>",
                     probe = "fsbext",
-                    // Pure Python reader for FSB5 banks.
-                    pip = "pyfmodex",
-                    packages = mapOf(
-                        "apt" to listOf("python3-pip"),
-                        "apk" to listOf("py3-pip"),
-                        "dnf" to listOf("python3-pip"),
-                        "pacman" to listOf("python-pip"),
+                    // fsb5 is the maintained FSB5 reader (HearthSim), and its
+                    // repo ships `extract.py`, a real CLI. The old entry pointed
+                    // at pyfmodex — bindings for the FMOD *engine*, which needs
+                    // a native library and cannot extract anything. The archive
+                    // is preferred because it brings the CLI with it; pip is
+                    // the fallback for the library alone.
+                    archive = Archive(
+                        url = "https://github.com/HearthSim/python-fsb5/archive/refs/heads/master.tar.gz",
+                        fileName = "python-fsb5-master.tar.gz",
+                        dir = ReaCatalog.ARCHIVE_ROOT + "/fsb5",
+                        launcher = "extract.py",
+                        runtime = "python",
+                        minBytes = 100_000L,
+                    ),
+                    pip = "fsb5",
+                ),
+                Tool(
+                    id = "wwise",
+                    name = "Wwise bank tools (.bnk)",
+                    use = "List a Wwise bank's events and dump its .wem audio",
+                    size = "~400 KB",
+                    command = "wwiser -b <in.bnk>",
+                    probe = "wwiser",
+                    // wwiser is distributed as a Python zipapp, not a PyPI
+                    // package. The zipapp carries no shebang, so the shim runs
+                    // it through python3 rather than exec'ing it directly.
+                    archive = Archive(
+                        url = "https://github.com/bnnm/wwiser/releases/download/v20260808/wwiser.pyz",
+                        fileName = "wwiser.pyz",
+                        dir = ReaCatalog.ARCHIVE_ROOT + "/wwiser",
+                        launcher = "wwiser.pyz",
+                        runtime = "python",
+                        minBytes = 300_000L,
                     ),
                 ),
             ),
@@ -485,10 +515,19 @@ object ReaAssetTools {
             return@withContext
         }
         val names = ALL.joinToString(" ") { it.probe }
+        // A pip package proves itself by importing, not by a binary name: a
+        // module like UnityPy never appears on PATH, so a successful install
+        // still read as missing and the row never turned "Ready".
+        val modules = ALL.filter { it.pip.isNotBlank() }
+            .joinToString(" ") { GuestExec.shellQuote(probeModule(it)) + ":" + it.probe }
         val script = "set +e\n" +
             "PATH=" + ReaManager.ARCHIVE_BIN + ":" + ReaManager.ROOT + "/node/bin:\$PATH; export PATH\n" +
-            "for b in $names; do if command -v \$b >/dev/null 2>&1; then echo bin:\$b=1; fi; done\n"
-        val result = runCatching { GuestExec.run(context.applicationContext, id, script, timeoutMs = 60_000L) }
+            "for b in $names; do if command -v \$b >/dev/null 2>&1; then echo bin:\$b=1; fi; done\n" +
+            "for m in $modules; do " +
+            "mod=\${m%%:*}; probe=\${m##*:}; " +
+            "python3 -c \"import importlib; importlib.import_module('\$mod')\" >/dev/null 2>&1 " +
+            "&& echo bin:\$probe=1; done\n"
+        val result = runCatching { GuestExec.run(context.applicationContext, id, script, timeoutMs = 90_000L) }
             .getOrNull()
         val found = result?.output?.lines().orEmpty()
             .mapNotNull { line ->
@@ -508,10 +547,30 @@ object ReaAssetTools {
      * Tries the distro's package first (fast, correct, arch-native), then the
      * upstream ARM64 archive, then pip, then a source build. Every failure is
      * reported with what was tried, so "it did nothing" cannot happen.
+     *
+     * Nothing here may escape: [installAll] runs several of these in a row, and
+     * one throw used to leave `running` stuck true — every button disabled and
+     * no way to retry, which is what "install all stops on any error" was.
      */
-    suspend fun install(context: Context, tool: Tool) = withContext(Dispatchers.IO) {
-        val id = ReaDistro.distroId(context) ?: return@withContext
-        _state.value = _state.value.copy(busyId = tool.id, running = true)
+    suspend fun install(context: Context, tool: Tool, ownsRun: Boolean = true) =
+        withContext(Dispatchers.IO) {
+            val id = ReaDistro.distroId(context) ?: return@withContext
+            if (ownsRun) _state.value = _state.value.copy(busyId = tool.id, running = true)
+            else _state.value = _state.value.copy(busyId = tool.id)
+            try {
+                installRoutes(context, id, tool)
+            } catch (t: Throwable) {
+                append(
+                    "ERROR: could not install " + tool.name + ": " +
+                        (t.message ?: t.javaClass.simpleName)
+                )
+            } finally {
+                _state.value = _state.value.copy(busyId = "")
+                if (ownsRun) _state.value = _state.value.copy(running = false)
+            }
+        }
+
+    private suspend fun installRoutes(context: Context, id: String, tool: Tool) {
         val manager = ReaManager.detectPackageManager(context, id)
         val tried = ArrayList<String>()
 
@@ -519,6 +578,7 @@ object ReaAssetTools {
         val packages = tool.packages[manager].orEmpty()
         if (packages.isNotEmpty()) {
             tried.add(manager)
+            phase(20, "via " + manager)
             append("installing " + tool.name + " via " + manager + ": " + packages.joinToString(" "))
             val result = runCatching {
                 ReaManager.installPackages(context, id, packages) { line -> append(line) }
@@ -526,7 +586,7 @@ object ReaAssetTools {
             if (result?.error?.isNotBlank() == true) append(manager + ": " + result.error)
             if (isPresent(context, id, tool.probe)) {
                 finish(context, tool)
-                return@withContext
+                return
             }
             append(tool.name + " is not provided by " + manager + " here; trying the next route")
         }
@@ -551,6 +611,9 @@ object ReaAssetTools {
                 // Pass the launcher only for a native binary: symlinking a DLL
                 // into PATH makes `command -v` succeed and the exec fail.
                 append(' ').append(GuestExec.shellQuote(if (il) "" else archive.launcher))
+                // The too-small gate is per tool: a zipapp is a few hundred KB
+                // and a Ghidra-class archive is hundreds of MB.
+                append(' ').append(archive.minBytes.toString())
                 append('\n')
             }
             val result = runCatching {
@@ -559,7 +622,7 @@ object ReaAssetTools {
             if (result?.output?.contains("ERROR") == true) append(result.tail(6))
             if (isPresent(context, id, tool.probe)) {
                 finish(context, tool)
-                return@withContext
+                return
             }
             append("the release archive did not provide " + tool.probe)
         }
@@ -567,9 +630,13 @@ object ReaAssetTools {
         // 3. pip, for the pure-Python tools.
         if (tool.pip.isNotBlank()) {
             tried.add("pip")
+            phase(70, "via pip")
             append("installing " + tool.name + " with pip")
+            // --root-user-action silences the "running as root may break your
+            // system" essay: this is a throwaway analysis distro running as
+            // root by design, and the warning drowned the actual result.
             val script = "set +e\n" +
-                "python3 -m pip install --break-system-packages -q " +
+                "python3 -m pip install --break-system-packages --root-user-action=ignore -q " +
                 GuestExec.shellQuote(tool.pip) + " 2>&1 | tail -20\n"
             val result = runCatching {
                 GuestExec.run(context.applicationContext, id, script, timeoutMs = 20 * 60_000L) { append(it) }
@@ -584,11 +651,11 @@ object ReaAssetTools {
             }.getOrNull()?.output?.contains("PIPOK") == true
             if (ok) {
                 finish(context, tool)
-                return@withContext
+                return
             }
             if (isPresent(context, id, tool.probe)) {
                 finish(context, tool)
-                return@withContext
+                return
             }
             append("pip did not provide " + tool.name)
         }
@@ -597,6 +664,25 @@ object ReaAssetTools {
         if (tool.build.isNotBlank()) {
             tried.add("source build")
             append("building " + tool.name + " from source (no arm64 binary is published)")
+            // A source build needs git, a compiler and cmake, and a minimal
+            // rootfs has none of them. Best-effort: the build may still work
+            // with what is installed, and a missing dep is reported by the
+            // build itself rather than assumed here.
+            val deps = when (manager) {
+                "apt" -> listOf("git", "cmake", "build-essential")
+                "apk" -> listOf("git", "cmake", "g++", "make")
+                "dnf" -> listOf("git", "cmake", "gcc-c++", "make")
+                "pacman" -> listOf("git", "cmake", "base-devel")
+                else -> emptyList()
+            }
+            if (deps.isNotEmpty() && manager != "none") {
+                phase(60, "installing build tools")
+                append("installing build tools: " + deps.joinToString(" "))
+                runCatching {
+                    ReaManager.installPackages(context, id, deps) { line -> append(line) }
+                }
+            }
+            phase(80, "compiling")
             // Build inside the archive root, beside the other unpacked tools.
             val root = ReaCatalog.ARCHIVE_ROOT
             val script = "set +e\nmkdir -p " + root + " && cd " + root + " || exit 1\n" +
@@ -605,24 +691,62 @@ object ReaAssetTools {
                 GuestExec.run(context.applicationContext, id, script, timeoutMs = 60 * 60_000L) { append(it) }
             }.getOrNull()
             if (result?.output?.isNotBlank() == true) append(result.tail(10))
-            if (isPresent(context, id, tool.probe)) {
-                finish(context, tool)
-                return@withContext
+            // The binary is built somewhere inside the tree, not on PATH —
+            // vgmstream's lands in vgmstream/build/, astcenc's in
+            // astc-encoder/Source/build/ under an ISA-suffixed name. Without
+            // this the build succeeded and the tool still read as missing.
+            if (linkBuilt(context, id, tool.probe)) {
+                if (isPresent(context, id, tool.probe)) {
+                    finish(context, tool)
+                    return
+                }
             }
             append("the source build did not produce " + tool.probe)
         }
 
         append("ERROR: could not install " + tool.name +
             (if (tried.isEmpty()) "" else " (tried: " + tried.joinToString(", ") + ")"))
-        _state.value = _state.value.copy(busyId = "", running = false)
         refresh(context)
+    }
+
+    /**
+     * Put a freshly built binary on PATH.
+     *
+     * A source build drops its output inside the tree it cloned. The probe
+     * looks the name up on PATH, so the build's work was invisible. Finds the
+     * probe — by exact name first, then by prefix, because several projects
+     * ship ISA-suffixed binaries (`astcenc-neon`) — and links it into bin/.
+     */
+    private suspend fun linkBuilt(context: Context, distroId: String, probe: String): Boolean {
+        if (probe.isBlank()) return false
+        val root = ReaCatalog.ARCHIVE_ROOT
+        val bin = ReaCatalog.ARCHIVE_ROOT + "/bin"
+        val script = "set +e\n" +
+            "mkdir -p " + bin + "\n" +
+            "T=$(find " + root + " -type f -name " + GuestExec.shellQuote(probe) +
+            " 2>/dev/null | head -n 1)\n" +
+            "[ -n \"\$T\" ] || T=$(find " + root + " -type f -name " +
+            GuestExec.shellQuote(probe + "-*") + " 2>/dev/null | head -n 1)\n" +
+            "if [ -n \"\$T\" ]; then chmod +x \"\$T\" 2>/dev/null; " +
+            "ln -sf \"\$T\" " + bin + "/" + probe + " && echo LINKED \"\$T\"; fi\n"
+        val out = runCatching {
+            GuestExec.run(context.applicationContext, distroId, script, timeoutMs = 60_000L)
+        }.getOrNull()?.output.orEmpty()
+        val linked = out.lines().firstOrNull { it.startsWith("LINKED ") }?.removePrefix("LINKED ")
+        if (linked != null) append("linked " + linked.trim() + " onto PATH")
+        return linked != null
     }
 
     /** Mark one tool installed and stop the busy state. */
     private suspend fun finish(context: Context, tool: Tool) {
         append("installed " + tool.name)
-        _state.value = _state.value.copy(busyId = "", running = false)
+        _state.value = _state.value.copy(busyId = "", running = false, percent = 100)
         refresh(context)
+    }
+
+    /** Publish where the install is, for the progress line. */
+    private fun phase(percent: Int, what: String) {
+        _state.value = _state.value.copy(percent = percent, phase = what)
     }
 
     /** True when the probe binary resolves inside the distro. */
@@ -639,9 +763,7 @@ object ReaAssetTools {
     private fun probeModule(tool: Tool): String = when (tool.id) {
         "unitypy" -> "UnityPy"
         "binwalk" -> "binwalk"
-        "rpgmaker" -> "rgssad"
-        "fmod" -> "pyfmodex"
-        "unrealpak" -> "unpak"
+        "fmod" -> "fsb5"
         else -> tool.pip.replace('-', '_')
     }
 
@@ -657,12 +779,26 @@ object ReaAssetTools {
         val bin = ReaCatalog.ARCHIVE_ROOT + "/bin"
         append("mkdir -p ").append(bin).append('\n')
         append("cat > ").append(bin).append('/').append(probe).append(" <<'ALTARIS_IL_EOF'\n")
-        append("#!/bin/sh\n")
-        // "mono" is what the distro packages install (Debian, Alpine, Fedora
-        // and Arch all ship it); "dotnet" is kept for a self-contained build.
-        val runtime = if (archive.runtime == "dotnet") "dotnet" else "mono"
-        append("exec ").append(runtime).append(" \"").append(archive.dir)
-            .append('/').append(archive.launcher).append("\" \"\$@\"\n")
+        if (archive.runtime == "python") {
+            // A Python entry point has no shebang, so it cannot be exec'd
+            // directly, and it usually sits in a versioned directory inside the
+            // unpacked tree (a repo tarball extracts to `<repo>-<ref>/`). Both
+            // are handled by resolving the file at exec time rather than
+            // trusting a path fixed at install.
+            append("#!/bin/sh\n")
+            append("T=$(find '").append(archive.dir).append("' -name '")
+                .append(archive.launcher).append("' -type f 2>/dev/null | head -n 1)\n")
+            append("[ -n \"\$T\" ] || { echo \"not installed: ").append(probe)
+                .append("\"; exit 1; }\n")
+            append("exec python3 \"\$T\" \"\$@\"\n")
+        } else {
+            append("#!/bin/sh\n")
+            // "mono" is what the distro packages install (Debian, Alpine, Fedora
+            // and Arch all ship it); "dotnet" is kept for a self-contained build.
+            val runtime = if (archive.runtime == "dotnet") "dotnet" else "mono"
+            append("exec ").append(runtime).append(" \"").append(archive.dir)
+                .append('/').append(archive.launcher).append("\" \"\$@\"\n")
+        }
         append("ALTARIS_IL_EOF\n")
         append("chmod +x ").append(bin).append('/').append(probe).append('\n')
     }
@@ -672,32 +808,50 @@ object ReaAssetTools {
      *
      * The package-manager lane is batched (one transaction, one database lock);
      * everything else goes through [install] one at a time so a failure in one
-     * tool never stops the rest.
+     * tool never stops the rest. Each tool is caught separately: a throw in one
+     * used to escape the loop, leave `running` stuck true and freeze every
+     * button — the "install all stops on any error" report.
      */
     suspend fun installAll(context: Context) = withContext(Dispatchers.IO) {
         val id = ReaDistro.distroId(context) ?: return@withContext
-        _state.value = _state.value.copy(running = true)
-        val missing = ALL.filter { it.id !in _state.value.installed }
-        if (missing.isEmpty()) {
-            _state.value = _state.value.copy(running = false)
-            return@withContext
+        _state.value = _state.value.copy(running = true, percent = 0, phase = "")
+        try {
+            val missing = ALL.filter { it.id !in _state.value.installed }
+            if (missing.isEmpty()) return@withContext
+            val manager = ReaManager.detectPackageManager(context, id)
+            val packages = missing.flatMap { it.packages[manager].orEmpty() }.distinct()
+            if (packages.isNotEmpty()) {
+                append("installing " + packages.size + " packages via " + manager)
+                phase(5, packages.size.toString() + " packages via " + manager)
+                val result = runCatching {
+                    ReaManager.installPackages(context, id, packages) { line -> append(line) }
+                }.getOrNull()
+                if (result?.error?.isNotBlank() == true) append("ERROR: " + result.error)
+            }
+            refresh(context)
+            // Whatever the batch did not provide takes its own route.
+            val remaining = ALL.filter { it.id !in _state.value.installed }
+            remaining.forEachIndexed { index, tool ->
+                _state.value = _state.value.copy(
+                    percent = (index * 100) / remaining.size.coerceAtLeast(1),
+                    phase = tool.name,
+                )
+                try {
+                    install(context, tool, ownsRun = false)
+                } catch (t: Throwable) {
+                    append(
+                        "ERROR: " + tool.name + ": " +
+                            (t.message ?: t.javaClass.simpleName)
+                    )
+                }
+            }
+            _state.value = _state.value.copy(percent = 100)
+        } finally {
+            // The buttons must come back even when the run is cancelled or a
+            // tool throws, or the tab looks permanently busy.
+            _state.value = _state.value.copy(running = false, busyId = "", phase = "")
+            refresh(context)
         }
-        val manager = ReaManager.detectPackageManager(context, id)
-        val packages = missing.flatMap { it.packages[manager].orEmpty() }.distinct()
-        if (packages.isNotEmpty()) {
-            append("installing " + packages.size + " packages via " + manager)
-            val result = runCatching {
-                ReaManager.installPackages(context, id, packages) { line -> append(line) }
-            }.getOrNull()
-            if (result?.error?.isNotBlank() == true) append("ERROR: " + result.error)
-        }
-        refresh(context)
-        // Whatever the batch did not provide takes its own route.
-        ALL.filter { it.id !in _state.value.installed }.forEach { tool ->
-            install(context, tool)
-        }
-        _state.value = _state.value.copy(running = false)
-        refresh(context)
     }
 
     private fun append(line: String) {
