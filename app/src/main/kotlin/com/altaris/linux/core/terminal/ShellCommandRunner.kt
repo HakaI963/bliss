@@ -93,7 +93,17 @@ object ShellCommandRunner {
         /** Optional: store the live Process so callers can destroyForcibly on cancel. */
         processHolder: java.util.concurrent.atomic.AtomicReference<Process?>? = null,
         /** Optional: live line callback (bg thread). */
-        onLine: ((String) -> Unit)? = null
+        onLine: ((String) -> Unit)? = null,
+        /**
+         * Kill the process after this many milliseconds; 0 waits forever.
+         *
+         * Callers passed a timeout all along, but this function had no such
+         * parameter, so it was dropped. A hung guest command — an `apt-get`
+         * waiting on a lock, a network read with no deadline — therefore ran
+         * until the app was killed, and if it was root it kept the apt lock
+         * after the app died. Exit code -2 means it timed out.
+         */
+        timeoutMs: Long = 0L
     ): Pair<Int, String> {
         val pb = ProcessBuilder(*adjustHostCmd(cmd)); setHostCwd(pb, cmd)
         applyEnvironment(ctx, pb, envMap)
@@ -107,30 +117,52 @@ object ShellCommandRunner {
                 proc.outputStream.close()
             } catch (_: Exception) {
             }
-            val text = if (onLine != null) {
-                val sb = StringBuilder()
-                proc.inputStream.bufferedReader(Charsets.UTF_8).use { reader ->
-                    var line: String?
-                    while (reader.readLine().also { line = it } != null) {
-                        val l = line ?: continue
-                        sb.append(l).append('\n')
-                        try {
-                            onLine(l)
-                        } catch (_: Exception) {
+            // Read on a separate thread. Reading inline and then waiting makes
+            // the timeout useless: the read blocks until the process exits.
+            val sb = StringBuilder()
+            val reader = Thread {
+                try {
+                    proc.inputStream.bufferedReader(Charsets.UTF_8).use { r ->
+                        var line: String?
+                        while (r.readLine().also { line = it } != null) {
+                            val l = line ?: continue
+                            synchronized(sb) { sb.append(l).append('\n') }
+                            try {
+                                onLine?.invoke(l)
+                            } catch (_: Exception) {
+                            }
                         }
                     }
+                } catch (_: Exception) {
                 }
-                sb.toString()
-            } else {
-                proc.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
-            }
-            val exit = try {
-                proc.waitFor()
+            }.apply { isDaemon = true; start() }
+
+            val finished = try {
+                if (timeoutMs > 0L) {
+                    proc.waitFor(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS)
+                } else {
+                    proc.waitFor()
+                    true
+                }
             } catch (_: InterruptedException) {
                 proc.destroyForcibly()
-                -1
+                false
             }
-            exit to text
+            if (!finished) {
+                proc.destroyForcibly()
+                try {
+                    reader.join(1_000L)
+                } catch (_: Exception) {
+                }
+                val partial = synchronized(sb) { sb.toString() }
+                return -2 to partial
+            }
+            try {
+                reader.join(5_000L)
+            } catch (_: Exception) {
+            }
+            val exit = runCatching { proc.exitValue() }.getOrDefault(-1)
+            exit to synchronized(sb) { sb.toString() }
         } finally {
             processHolder?.compareAndSet(proc, null)
         }

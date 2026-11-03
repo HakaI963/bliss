@@ -27,6 +27,25 @@ fi
 fail() { echo "ERROR: $*"; exit 1; }
 say() { echo "$*"; }
 
+# Package-manager calls go through the shared lock discipline. Archives install
+# in parallel with the package lane, and both reach apt; without this the
+# second one failed with "Could not get lock" (see pkg-lock.sh).
+ALTARIS_PKG_SH_DIR=$(dirname "$0")
+if [ -r "$ALTARIS_PKG_SH_DIR/pkg-lock.sh" ]; then
+  . "$ALTARIS_PKG_SH_DIR/pkg-lock.sh"
+elif [ -r /opt/altaris/rea/scripts/pkg-lock.sh ]; then
+  . /opt/altaris/rea/scripts/pkg-lock.sh
+fi
+if ! command -v pkg_run >/dev/null 2>&1; then
+  pkg_run() {
+    if command -v timeout >/dev/null 2>&1; then
+      timeout -k 30 1800 "$@"
+    else
+      "$@"
+    fi
+  }
+fi
+
 # Splitting the comma list matters: the probe list is "aapt,aapt2" style and a
 # plain word split makes the whole string one token that can never be found.
 probe_list() {
@@ -59,16 +78,18 @@ if command -v curl >/dev/null 2>&1; then
 elif command -v wget >/dev/null 2>&1; then
   dl() { wget -c -O "$2" "$1"; }
 else
-  # Try to get one; some minimal rootfs images ship neither.
+  # Try to get one; some minimal rootfs images ship neither. curl is also what
+  # the terminal needs for the usual one-liners, so it is installed here rather
+  # than assumed — a rootfs with neither is common.
   if command -v apt-get >/dev/null 2>&1; then
-    apt-get update -qq >/dev/null 2>&1
-    apt-get install -y --no-install-recommends curl ca-certificates >/dev/null 2>&1
+    pkg_run apt-get update -qq >/dev/null 2>&1
+    pkg_run apt-get install -y --no-install-recommends curl ca-certificates >/dev/null 2>&1
   elif command -v dnf >/dev/null 2>&1; then
-    dnf install -y curl ca-certificates >/dev/null 2>&1
+    pkg_run dnf install -y curl ca-certificates >/dev/null 2>&1
   elif command -v apk >/dev/null 2>&1; then
-    apk add --no-cache curl ca-certificates >/dev/null 2>&1
+    pkg_run apk add --no-cache curl ca-certificates >/dev/null 2>&1
   elif command -v pacman >/dev/null 2>&1; then
-    pacman -Sy --noconfirm curl ca-certificates >/dev/null 2>&1
+    pkg_run pacman -Sy --noconfirm curl ca-certificates >/dev/null 2>&1
   fi
   command -v curl >/dev/null 2>&1 || fail "no curl or wget available in the distro"
   dl() { curl -fL --retry 3 --retry-delay 2 -C - -o "$2" "$1"; }
@@ -106,13 +127,13 @@ case "$FILE" in
   *.zip)
     command -v unzip >/dev/null 2>&1 || {
       if command -v apt-get >/dev/null 2>&1; then
-        apt-get install -y --no-install-recommends unzip >/dev/null 2>&1
+        pkg_run apt-get install -y --no-install-recommends unzip >/dev/null 2>&1
       elif command -v dnf >/dev/null 2>&1; then
-        dnf install -y unzip >/dev/null 2>&1
+        pkg_run dnf install -y unzip >/dev/null 2>&1
       elif command -v apk >/dev/null 2>&1; then
-        apk add --no-cache unzip >/dev/null 2>&1
+        pkg_run apk add --no-cache unzip >/dev/null 2>&1
       elif command -v pacman >/dev/null 2>&1; then
-        pacman -S --noconfirm --needed unzip >/dev/null 2>&1
+        pkg_run pacman -S --noconfirm --needed unzip >/dev/null 2>&1
       fi
     }
     command -v unzip >/dev/null 2>&1 || fail "unzip is required to extract $FILE"

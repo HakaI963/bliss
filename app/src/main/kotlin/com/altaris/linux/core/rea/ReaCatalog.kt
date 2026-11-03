@@ -295,6 +295,23 @@ object ReaCatalog {
             note = "REA refuses Ghidra, JADX, firmware and JavaScript analysis without it.",
         ),
         ReaDependency(
+            id = "curl",
+            label = "curl",
+            description = "Downloader used by installers, git and the usual one-liners.",
+            // Minimal rootfs images ship neither curl nor wget, and every
+            // installer that needs one had to install it itself — which meant a
+            // package-manager call in the middle of another install, taking the
+            // apt lock. It is part of the base set instead, so it is present
+            // before anything else runs.
+            variants = mapOf(
+                "apt" to every(listOf("curl")),
+                "apk" to every(listOf("curl")),
+                "dnf" to every(listOf("curl")),
+                "pacman" to every(listOf("curl")),
+            ),
+            probes = listOf("curl"),
+        ),
+        ReaDependency(
             id = "file",
             label = "file",
             description = "Magic-based type identification used by several workflows.",

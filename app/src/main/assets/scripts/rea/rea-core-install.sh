@@ -18,6 +18,24 @@ fi
 say() { echo "$*"; }
 fail() { echo "ERROR: $*"; exit 1; }
 
+# Package-manager calls go through the shared lock discipline (pkg-lock.sh):
+# the core install can run alongside the tool lane, and both reach apt.
+ALTARIS_PKG_SH_DIR=$(dirname "$0")
+if [ -r "$ALTARIS_PKG_SH_DIR/pkg-lock.sh" ]; then
+  . "$ALTARIS_PKG_SH_DIR/pkg-lock.sh"
+elif [ -r /opt/altaris/rea/scripts/pkg-lock.sh ]; then
+  . /opt/altaris/rea/scripts/pkg-lock.sh
+fi
+if ! command -v pkg_run >/dev/null 2>&1; then
+  pkg_run() {
+    if command -v timeout >/dev/null 2>&1; then
+      timeout -k 30 1800 "$@"
+    else
+      "$@"
+    fi
+  }
+fi
+
 mkdir -p "$BASE" || fail "cannot create $BASE"
 
 ARCH=$(uname -m)
@@ -32,14 +50,14 @@ ensure_downloader() {
   command -v curl >/dev/null 2>&1 && return 0
   command -v wget >/dev/null 2>&1 && return 0
   if command -v apt-get >/dev/null 2>&1; then
-    apt-get update -qq
-    apt-get install -y --no-install-recommends curl ca-certificates
+    pkg_run apt-get update -qq
+    pkg_run apt-get install -y --no-install-recommends curl ca-certificates
   elif command -v apk >/dev/null 2>&1; then
-    apk add --no-cache curl ca-certificates
+    pkg_run apk add --no-cache curl ca-certificates
   elif command -v dnf >/dev/null 2>&1; then
-    dnf install -y curl ca-certificates
+    pkg_run dnf install -y curl ca-certificates
   elif command -v pacman >/dev/null 2>&1; then
-    pacman -Sy --noconfirm curl ca-certificates
+    pkg_run pacman -Sy --noconfirm curl ca-certificates
   fi
   command -v curl >/dev/null 2>&1 && return 0
   command -v wget >/dev/null 2>&1 && return 0
@@ -78,7 +96,7 @@ fi
 
 # Alpine has its own nodejs package; use it when it is new enough.
 if [ -z "$NODE" ] && [ -f /etc/alpine-release ]; then
-  apk add --no-cache nodejs npm >/dev/null 2>&1
+  pkg_run apk add --no-cache nodejs npm >/dev/null 2>&1
   if command -v node >/dev/null 2>&1 && command -v npm >/dev/null 2>&1; then
     V=$(node_major "$(command -v node)")
     case "$V" in ''|*[!0-9]*) V=0 ;; esac

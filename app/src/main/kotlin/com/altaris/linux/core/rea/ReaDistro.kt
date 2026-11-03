@@ -891,9 +891,9 @@ object ReaDistro {
      * requirement is that one install leaves the environment complete.
      */
     val ALL_TOOLS = listOf(
-        "java", "jadx", "apktool", "aapt", "adb", "binutils", "gdb", "radare2",
-        "rizin", "python3", "binwalk", "p7zip", "sqlite3", "procps", "file",
-        "tshark", "ghidra",
+        "curl", "java", "jadx", "apktool", "aapt", "adb", "binutils", "gdb",
+        "radare2", "rizin", "python3", "binwalk", "p7zip", "sqlite3", "procps",
+        "file", "tshark", "ghidra",
     )
 
     /** Backwards-compatible alias: the tools installed by default. */

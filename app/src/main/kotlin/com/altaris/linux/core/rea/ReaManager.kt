@@ -768,14 +768,23 @@ object ReaManager {
     fun packageInstallScript(manager: String, packages: List<String>): String {
         if (packages.isEmpty()) return "true"
         val list = packages.joinToString(" ")
+        // Sourced from the staged helper so the lock discipline is the same
+        // one the tool installers use. A one-shot install runs while the tool
+        // lane may also be installing, and the second apt used to fail with
+        // "Could not get lock" instead of waiting.
+        val lock = "ALTARIS_PKG_SH=" + shellPath("pkg-lock.sh") + "\n" +
+            "if [ -r \"\$ALTARIS_PKG_SH\" ]; then . \"\$ALTARIS_PKG_SH\"; fi\n" +
+            "command -v pkg_run >/dev/null 2>&1 || pkg_run() { " +
+            "if command -v timeout >/dev/null 2>&1; then timeout -k 30 1800 \"\$@\"; " +
+            "else \"\$@\"; fi; }\n"
         return when (manager) {
-            "apt" -> "set +e\nexport DEBIAN_FRONTEND=noninteractive\n" +
-                "apt-get update -qq >/dev/null 2>&1\n" +
-                "apt-get install -y -qq --no-install-recommends $list 2>&1 | tail -20\n"
-            "apk" -> "set +e\napk update >/dev/null 2>&1\n" +
-                "apk add --no-cache $list 2>&1 | tail -20\n"
-            "dnf" -> "set +e\ndnf install -y -q $list 2>&1 | tail -20\n"
-            "pacman" -> "set +e\npacman -Sy --noconfirm --needed $list 2>&1 | tail -20\n"
+            "apt" -> "set +e\nexport DEBIAN_FRONTEND=noninteractive\n" + lock +
+                "pkg_run apt-get update -qq >/dev/null 2>&1\n" +
+                "pkg_run apt-get install -y -qq --no-install-recommends $list 2>&1 | tail -20\n"
+            "apk" -> "set +e\n" + lock + "pkg_run apk update >/dev/null 2>&1\n" +
+                "pkg_run apk add --no-cache $list 2>&1 | tail -20\n"
+            "dnf" -> "set +e\n" + lock + "pkg_run dnf install -y -q $list 2>&1 | tail -20\n"
+            "pacman" -> "set +e\n" + lock + "pkg_run pacman -Sy --noconfirm --needed $list 2>&1 | tail -20\n"
             else -> "echo \"no supported package manager\""
         }
     }
@@ -1207,6 +1216,7 @@ object ReaManager {
 
     /** Scripts that are copied verbatim into the guest. */
     private val VERBATIM_SCRIPTS = listOf(
+        "pkg-lock.sh",
         "rea-core-install.sh",
         "install-tool.sh",
         "install-archive.sh",

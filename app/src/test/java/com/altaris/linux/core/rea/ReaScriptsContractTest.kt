@@ -33,6 +33,7 @@ class ReaScriptsContractTest {
     @Test
     fun allInstallersAreShipped() {
         for (name in listOf(
+            "pkg-lock.sh",
             "rea-core-install.sh",
             "install-tool.sh",
             "install-archive.sh",
@@ -49,6 +50,7 @@ class ReaScriptsContractTest {
     @Test
     fun shellScriptsUseAPosixShebang() {
         for (name in listOf(
+            "pkg-lock.sh",
             "rea-core-install.sh",
             "install-tool.sh",
             "install-archive.sh",
@@ -74,6 +76,129 @@ class ReaScriptsContractTest {
         assertTrue(script.contains("unofficial-builds.nodejs.org"))
         // A pinned version must be honoured, not "latest".
         assertTrue(script.contains("rea-agents@\$REA_VERSION"))
+    }
+
+    @Test
+    fun everyPackageManagerCallGoesThroughTheLockHelper() {
+        // The user's terminal failed with "Could not get lock ... held by
+        // process 17639 (apt-get)" while REA was installing: several paths
+        // reached apt at once, and nothing serialised them or cleaned up after
+        // a killed installer. pkg_run is the single entry point that does.
+        val lock = reaScript("pkg-lock.sh")
+        assertTrue(lock.contains("flock"))
+        assertTrue("must bound the wait", lock.contains("ALTARIS_PKG_WAIT"))
+        assertTrue("must bound the transaction", lock.contains("ALTARIS_PKG_TIMEOUT"))
+        assertTrue("must reap orphans", lock.contains("pkg_reap_orphans()"))
+        // Only an orphan may be killed: a package manager the user started has
+        // a live parent and must be left alone.
+        assertTrue(lock.contains("pkg_is_orphan()"))
+        assertTrue(lock.contains("[ -d \"/proc/\$2\" ] && return 1"))
+
+        // Every installer that touches a package manager must source it and
+        // call pkg_run, not the manager directly.
+        for (name in listOf("install-tool.sh", "install-archive.sh", "rea-core-install.sh")) {
+            val script = reaScript(name)
+            assertTrue("$name must source pkg-lock.sh", script.contains("pkg-lock.sh"))
+            assertTrue("$name must define a fallback pkg_run", script.contains("pkg_run()"))
+            assertFalse(
+                "$name must not call apt-get outside pkg_run",
+                Regex("(?m)^\\s*(apt-get|apk|dnf|pacman)\\s").containsMatchIn(script),
+            )
+        }
+    }
+
+    @Test
+    fun aMissingHelperNeverSilentlyStopsAnInstaller() {
+        // Sourcing a missing file is fatal in a POSIX shell, so an unguarded
+        // `.` after a failed staging would exit before installing anything —
+        // a silent no-op, which is worse than an error.
+        for (name in listOf("install-tool.sh", "install-archive.sh", "rea-core-install.sh")) {
+            val script = reaScript(name)
+            assertTrue(
+                "$name must test pkg-lock.sh before sourcing it",
+                script.contains("[ -r \"\$ALTARIS_PKG_SH_DIR/pkg-lock.sh\" ]"),
+            )
+            assertFalse(
+                "$name must not source pkg-lock.sh unguarded",
+                Regex("(?m)^\\s*\\.\\s+/opt/altaris/rea/scripts/pkg-lock\\.sh\\s*$")
+                    .containsMatchIn(script),
+            )
+        }
+    }
+
+    @Test
+    fun curlIsInstalledAsPartOfTheBaseSet() {
+        // The user's rootfs had no curl at all. Every installer that needed one
+        // installed it mid-transaction, taking the apt lock in the middle of
+        // another install. It is a base tool now.
+        val distro = repoFile("src/main/kotlin/com/altaris/linux/core/rea/ReaDistro.kt").readText()
+        val tools = distro.substringAfter("val ALL_TOOLS = listOf(")
+            .substringBefore(")")
+        assertTrue("curl must be in the base tool set", tools.contains("\"curl\""))
+        val catalog = repoFile("src/main/kotlin/com/altaris/linux/core/rea/ReaCatalog.kt").readText()
+        val dep = catalog.substringAfter("id = \"curl\"")
+        assertTrue("curl must have an apt package", dep.contains("\"apt\" to every(listOf(\"curl\"))"))
+    }
+
+    /**
+     * A guest command must actually time out.
+     *
+     * `GuestExec.run` passed a timeout all along, but `runCaptureExit` had no
+     * timeout parameter and read stdout inline before waiting, so the value was
+     * dropped twice over. A hung `apt-get` ran until the app was killed, and
+     * being root it kept the apt lock afterwards — which is why the user's own
+     * `sudo apt update` then failed against a process they could not see.
+     */
+    @Test
+    fun guestCommandsHonourTheirTimeout() {
+        val runner = repoFile(
+            "src/main/kotlin/com/altaris/linux/core/terminal/ShellCommandRunner.kt"
+        ).readText()
+        val fn = runner.substringAfter("fun runCaptureExit(")
+            .substringBefore("fun runStreamed(")
+        assertTrue(
+            "must accept a timeout",
+            fn.contains("timeoutMs: Long = 0L"),
+        )
+        assertTrue(
+            "must wait with the deadline",
+            fn.contains("proc.waitFor(timeoutMs,"),
+        )
+        assertTrue(
+            "must kill on expiry",
+            fn.contains("proc.destroyForcibly()"),
+        )
+        // Reading must not happen before the wait, or the timeout never fires.
+        assertTrue(
+            "stdout must be drained on a reader thread",
+            fn.contains("val reader = Thread {"),
+        )
+        assertTrue(
+            "a timeout must be reported as -2",
+            fn.contains("-2 to partial"),
+        )
+
+        val guest = repoFile("src/main/kotlin/com/altaris/linux/core/rea/GuestExec.kt").readText()
+        val proot = guest.substringAfter("private fun runProot(")
+            .substringBefore("private fun reapOrphans(")
+        assertTrue(
+            "proot must pass the timeout through",
+            proot.contains("timeoutMs = timeoutMs"),
+        )
+        assertTrue(
+            "a timed-out proot run must reap what it left",
+            proot.contains("reapOrphans(ctx, profile)"),
+        )
+        assertTrue(
+            "a timed-out chroot run must reap what it left",
+            guest.contains("reapOrphans(ctx, profile)"),
+        )
+        // The reap must be orphan-only, or it would kill a package manager the
+        // user started in their own terminal.
+        assertTrue(
+            "the reap must use the orphan rule",
+            guest.contains("pkg_reap_orphans"),
+        )
     }
 
     @Test

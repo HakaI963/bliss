@@ -50,6 +50,18 @@ object GuestExec {
                 context = ctx,
                 onLine = onLine,
             )
+            // -2 is a timeout. Killing the chroot wrapper does not kill what it
+            // started, so a timed-out apt survives as an orphan still holding
+            // the package-database lock — exactly the failure the user then
+            // hits in their own terminal. The staged helper reaps those, and
+            // only those.
+            if (captured.exitCode == -2) {
+                reapOrphans(ctx, profile)
+                return Result(
+                    captured.exitCode,
+                    captured.stdout + "\ntimed out after " + (timeoutMs / 1000) + "s",
+                )
+            }
             return Result(captured.exitCode, captured.stdout)
         }
         return runProot(ctx, profile, script, asRoot, timeoutMs, onLine)
@@ -76,12 +88,68 @@ object GuestExec {
                 arrayOf(bash, "-c", login),
                 env,
                 onLine = onLine,
+                timeoutMs = timeoutMs,
             )
-            Result(exit, out)
+            // A timeout killed the tracer, not what it started. proot's
+            // children — an apt-get among them — survive as orphans and keep
+            // the package-database lock, which is exactly what the user then
+            // hit in their own terminal. Reap them guest-side: the rule only
+            // touches orphans, so a package manager the user is running is
+            // never affected.
+            if (exit == -2) {
+                reapOrphans(ctx, profile)
+            }
+            // -2 is the timeout, not a guest exit status. Say so: a bare "-2"
+            // reads like a mysterious failure, and the process was killed while
+            // it may have been mid-transaction.
+            val message = if (exit == -2) {
+                out + "\ntimed out after " + (timeoutMs / 1000) + "s"
+            } else {
+                out
+            }
+            Result(exit, message)
         } catch (t: Throwable) {
             Log.w(TAG, "proot exec failed", t)
             Result(-1, t.message ?: t.javaClass.simpleName)
         }
+    }
+
+    /**
+     * Stop orphaned package managers left behind by a timed-out run.
+     *
+     * Best-effort and bounded: this runs on the timeout path, where the caller
+     * is already waiting. It sources the staged helper so the orphan rule is
+     * the same one the installers use — a package manager with a live parent
+     * is never touched, so a `sudo apt upgrade` the user started is safe.
+     */
+    private fun reapOrphans(ctx: Context, profile: DistroInstallProfile) {
+        val helper = ReaManager.ROOT + "/scripts/pkg-lock.sh"
+        val script = "if [ -r " + helper + " ]; then . " + helper + "; pkg_reap_orphans; fi"
+        runCatching {
+            if (profile.method == "chroot") {
+                val path = profile.chrootPath ?: return
+                RootShell.captureInChroot(
+                    cmd = script,
+                    user = "root",
+                    chrootPath = path,
+                    timeoutMs = 20_000L,
+                    context = ctx,
+                )
+            } else {
+                // Same proot invocation, without the timeout: this is the
+                // cleanup, and it must be allowed to finish.
+                val bash = TermuxHostPaths.libBash(ctx.applicationContext).absolutePath
+                val login = "exec python " + TermuxHostPaths.PROOT_DISTRO +
+                    " login " + shellQuote(profile.prootName) + " --user root" +
+                    " --shared-tmp -- /bin/sh -c " + shellQuote(script)
+                ShellCommandRunner.runCaptureExit(
+                    ctx.applicationContext,
+                    arrayOf(bash, "-c", login),
+                    HostCommandBuilder.envMap(ctx.applicationContext, includeTerm = false),
+                    timeoutMs = 30_000L,
+                )
+            }
+        }.onFailure { Log.w(TAG, "orphan reap failed", it) }
     }
 
     /** POSIX single-quote escaping; the only safe form for arbitrary scripts. */
