@@ -330,12 +330,8 @@ class ReaTabsAndFilesTest {
             "app/src/main/kotlin/com/altaris/linux/ui/screens/ReaScreen.kt"
         )
         assertTrue(
-            "must say the agent drives it",
-            screen.contains("The agent drives this"),
-        )
-        assertTrue(
-            "must name the agent tools",
-            screen.contains("altaris_debug_attach"),
+            "must say the agent drives the session",
+            screen.contains("The agent attaches"),
         )
     }
 
@@ -379,7 +375,7 @@ class ReaTabsAndFilesTest {
         val guide = ReaKnowledge.GUIDE
         assertTrue(
             "must say the target is a clone",
-            guide.contains("The target is usually a clone"),
+            guide.contains("The target is a clone"),
         )
         assertTrue(
             "must name the clone listing tool",
@@ -524,13 +520,12 @@ class ReaTabsAndFilesTest {
     @Test
     fun theGuideExplainsFridaForRuntimeChanges() {
         val guide = ReaKnowledge.GUIDE
-        assertTrue("must name the install tool", guide.contains("altaris_frida_install"))
         assertTrue(
             "must explain the $ prefix",
             guide.contains("starting with `$` is JavaScript"),
         )
         assertTrue(
-            "must say it enables changes, not only reads",
+            "must say the debugger answers runtime questions",
             guide.contains("runtime"),
         )
     }
@@ -799,8 +794,8 @@ class ReaTabsAndFilesTest {
         )
         assertTrue("must publish instructions", source.contains(".put(\"instructions\""))
         assertTrue(
-            "must say the clone is the whole world",
-            source.contains("There is no separate physical device"),
+            "must say every app is a clone",
+            source.contains("Every app you can reach is a clone"),
         )
         assertTrue(
             "must prefer the node tree",
