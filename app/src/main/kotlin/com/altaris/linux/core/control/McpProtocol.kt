@@ -333,10 +333,11 @@ object McpProtocol {
         put(
             tool(
                 "altaris_debug_attach",
-                "Attach gdb inside the REA distro to the app running in the clone. " +
-                    "Accepts a package name or a host pid. This is the live debugger: " +
-                    "registers, memory, mappings and backtraces read from the running " +
-                    "process. Use it for runtime questions instead of screenshots.",
+                "Attach the live debugger to a clone. Accepts a package name or a pid, " +
+                    "and starts the clone itself when it is not running — you do not " +
+                    "need to launch it first. Registers, memory, mappings and " +
+                    "backtraces are read from the running process, so this answers " +
+                    "runtime questions that a screenshot cannot.",
                 schema(
                     "target" to "string: clone package name or host pid",
                 )
@@ -356,7 +357,7 @@ object McpProtocol {
         put(tool("altaris_frida_install", "Install and start frida-server on the host and the frida CLI in the REA distro. Needed once, before runtime instrumentation. Requires root.", JSONObject()))
         put(tool("altaris_frida_stop", "Stop frida-server.", JSONObject()))
         put(tool("altaris_gadget_prepare", "Download Frida Gadget so new clones are debuggable without root. Root attaches from outside; Gadget runs inside the clone.", JSONObject()))
-        put(tool("altaris_debug_state", "Show the debugger state: attached pid, target, backend availability, and the console transcript.", JSONObject()))
+        put(tool("altaris_debug_state", "Debugger state: attached pid, target, backend, and the transcript.", JSONObject()))
         put(tool("altaris_debug_detach", "Detach the debugger and leave the cloned app running.", JSONObject()))
         put(
             tool(
@@ -767,25 +768,28 @@ object McpProtocol {
      * device here, and the screen-based tools are the slow path.
      */
     private val INSTRUCTIONS = """
-        This server drives Android apps running in a clone on the same device.
-        There is no separate physical device: every app you can reach is the
-        clone, and `altaris_apps` / `altaris_clones` are the whole world.
+        Every app you can reach is a clone on this device. There is no separate
+        physical device, and no folder to search. Do not look in /sdcard, /data
+        or anywhere else for an app: `altaris_clones` lists them and
+        `altaris_launch_clone` starts one.
 
-        Work headless first. `altaris_ui_tree` gives you the real view
-        hierarchy — text, resource ids, bounds and clickability — in one call,
-        and `altaris_ui_click` / `altaris_ui_type` / `altaris_ui_scroll` act on
-        nodes from it. That is fast and precise. `altaris_ocr` and
-        `altaris_screenshot` are the fallback, for a canvas, a game, or a view
-        that exposes no nodes; they cost a capture plus recognition per step, so
-        never use them to find a button that the tree already names.
+        "Not running" is never a reason to stop. Launch the clone, then act on
+        it.
 
-        `altaris_tap` / `altaris_swipe` / `altaris_key` take raw coordinates and
-        are the last resort. If a step fails, re-read the tree rather than
-        guessing another coordinate.
+        Working the UI: `altaris_ui_tree` returns the real view hierarchy —
+        text, resource ids, bounds, clickability — in one call, and
+        `altaris_ui_click` / `altaris_ui_type` / `altaris_ui_scroll` act on its
+        nodes. That is the fast path. `altaris_ocr` and `altaris_screenshot` are
+        the fallback for a canvas, a game, or a view with no nodes; they cost a
+        capture and a recognition per step. `altaris_tap` / `altaris_swipe` /
+        `altaris_key` take raw coordinates and are the last resort. When a step
+        fails, re-read the tree instead of guessing a coordinate.
 
-        For binary, APK, game-asset or runtime work, REA is the other server:
-        open the artifact with its tools instead of trying to infer structure
-        from the UI.
+        Working an app's code or runtime: use REA, the other server.
+        `altaris_rea_clone_apk` exports the clone's APKs and native libraries,
+        and `altaris_debug_attach` attaches to the running clone (starting it
+        first if needed). Ask the debugger what a value or a method really is
+        instead of inferring it from the UI.
     """.trimIndent()
 
     /** The debugger state as an agent can read it. */

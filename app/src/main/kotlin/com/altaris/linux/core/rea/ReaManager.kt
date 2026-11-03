@@ -957,12 +957,19 @@ object ReaManager {
      */
     suspend fun attachDebugger(ctx: Context, distroId: String, target: String): Attach =
         withContext(Dispatchers.IO) {
-            val pid = resolvePid(target)
+            // If the clone is installed but not running, start it. An agent that
+            // is told to inspect an app should not have to be told to launch it
+            // first, and "not running" is not a useful answer when starting it
+            // is one call away.
+            var pid = resolvePid(target)
+            if (pid == null) {
+                pid = launchAndWaitFor(target)
+            }
             if (pid == null) {
                 return@withContext Attach(
                     pid = null,
                     output = "No running process matches \"" + target + "\". " +
-                        "Start it in the clone first.",
+                        "It is not installed as a clone, or it failed to start.",
                 )
             }
             // Gadget first when it is the only option: with no root there is
@@ -982,8 +989,13 @@ object ReaManager {
                     return@withContext Attach(pid = pid, output = viaGadget.stdout)
                 }
             }
-            // Preferred: frida on the host. It survives detaching cleanly and
-            // gives scripting, not just a one-shot read.
+            // Preferred: frida on the host. Start it for this session rather
+            // than keeping a resident root process alive all day — that idle
+            // server is what drained the battery.
+            if (!ReaFrida.isServerRunning()) {
+                runCatching { ReaFrida.ensureRunningForSession() }
+            }
+            ReaFrida.touch()
             if (ReaFrida.isServerRunning()) {
                 val result = runCatching {
                     RootShell.captureResult(
@@ -1021,15 +1033,43 @@ object ReaManager {
     /** The port a Gadget-instrumented clone listens on (see [FridaGadget]). */
     private const val GADGET_PORT = 27043
 
+    /**
+     * Start [target] as a clone and wait for its process to appear.
+     *
+     * The debugger used to refuse when the app was not running, which read as
+     * "the app is not there" even though it was installed and one launch away.
+     * Starting it is the obvious repair, and the wait is bounded so a crash on
+     * startup is reported rather than hanging.
+     */
+    private suspend fun launchAndWaitFor(target: String): Int? {
+        val packageName = target.trim().substringBefore(':')
+        if (packageName.isBlank() || !packageName.contains('.')) return null
+        val launched = runCatching {
+            com.altaris.linux.core.clone.HeadlessCloneEngine.apiLaunch(packageName)
+        }.getOrNull()
+        if (launched == null) return null
+        // Poll for the process; a cold start is a few seconds, not instant.
+        repeat(20) {
+            kotlinx.coroutines.delay(500L)
+            resolvePid(packageName)?.let { return it }
+        }
+        return null
+    }
+
     /** Detach whatever the debugger holds. */
     suspend fun detachDebugger(ctx: Context, distroId: String): String =
         withContext(Dispatchers.IO) {
-            GuestExec.run(
+            val output = GuestExec.run(
                 ctx.applicationContext,
                 distroId,
                 "set +e; pkill -INT gdb 2>/dev/null; echo detached",
                 timeoutMs = 20_000L,
             ).tail(10)
+            // A detach ends the session, so the root daemon has no reason to
+            // stay resident. The idle watchdog covers a client that never
+            // detaches; this covers the one that does.
+            runCatching { ReaFrida.stopServer() }
+            output
         }
 
     /**
@@ -1049,6 +1089,7 @@ object ReaManager {
         if (pid == null) {
             return@withContext GuestExec.Result(-1, "Not attached.")
         }
+        ReaFrida.touch()
         if (ReaFrida.isServerRunning()) {
             // A `$` prefix means "this is JavaScript"; anything else is a gdb
             // command, so the console can speak both without a mode switch.

@@ -167,7 +167,66 @@ object ReaFrida {
         runCatching {
             RootShell.captureResult("pkill -f frida-server 2>/dev/null; echo done", 30_000L)
         }
+        lastUseAt = 0L
         State(serverInstalled = isServerInstalled(), serverRunning = false)
+    }
+
+    /** Last time a tool touched the server, for the idle watchdog. */
+    @Volatile
+    private var lastUseAt = 0L
+
+    /**
+     * How long the server may sit unused before it is stopped.
+     *
+     * frida-server is a resident root process that keeps a loopback socket and
+     * a ptrace-capable agent in memory. Leaving it up permanently is what made
+     * the battery drain: it is pure idle cost between sessions.
+     */
+    private const val IDLE_STOP_MS = 90_000L
+
+    @Volatile
+    private var watchdog: Thread? = null
+
+    /** Record that the server was just used, so the watchdog resets. */
+    fun touch() {
+        lastUseAt = System.currentTimeMillis()
+    }
+
+    /**
+     * Start the server for one session and arm the idle watchdog.
+     *
+     * Called from an attach rather than from the UI, so the server only exists
+     * while an agent is actually debugging.
+     */
+    suspend fun ensureRunningForSession(): State {
+        val state = startServer()
+        touch()
+        armWatchdog()
+        return state
+    }
+
+    private fun armWatchdog() {
+        if (watchdog?.isAlive == true) return
+        watchdog = Thread {
+            // Polls cheaply; the process check only runs when the deadline has
+            // actually passed, so this is not a busy loop.
+            while (true) {
+                Thread.sleep(15_000L)
+                val used = lastUseAt
+                if (used == 0L) break
+                if (System.currentTimeMillis() - used < IDLE_STOP_MS) continue
+                Log.i(TAG, "frida-server idle, stopping")
+                runCatching {
+                    RootShell.captureResult("pkill -f frida-server 2>/dev/null", 20_000L)
+                }
+                lastUseAt = 0L
+                break
+            }
+        }.apply {
+            isDaemon = true
+            name = "frida-idle"
+            start()
+        }
     }
 
     /**

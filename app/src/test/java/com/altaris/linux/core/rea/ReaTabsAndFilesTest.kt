@@ -665,6 +665,132 @@ class ReaTabsAndFilesTest {
         }
     }
 
+    /**
+     * frida-server must not run permanently.
+     *
+     * It is a resident root process holding a loopback socket and a
+     * ptrace-capable agent; leaving it up all day is pure idle cost and was
+     * what drained the battery.
+     */
+    @Test
+    fun fridaServerStopsWhenIdle() {
+        val frida = readSource(
+            "app/src/main/kotlin/com/altaris/linux/core/rea/ReaFrida.kt"
+        )
+        assertTrue("must have an idle deadline", frida.contains("IDLE_STOP_MS"))
+        assertTrue("must arm a watchdog", frida.contains("private fun armWatchdog("))
+        assertTrue(
+            "must start per session, not permanently",
+            frida.contains("suspend fun ensureRunningForSession("),
+        )
+        val manager = readSource(
+            "app/src/main/kotlin/com/altaris/linux/core/rea/ReaManager.kt"
+        )
+        val attach = manager.substringAfter("suspend fun attachDebugger(")
+            .substringBefore("suspend fun detachDebugger(")
+        assertTrue(
+            "attach must start the server on demand",
+            attach.contains("ReaFrida.ensureRunningForSession()"),
+        )
+        assertTrue(
+            "attach must reset the idle timer",
+            attach.contains("ReaFrida.touch()"),
+        )
+        val detach = manager.substringAfter("suspend fun detachDebugger(")
+            .substringBefore("private fun resolvePid(")
+        assertTrue(
+            "detach must stop the server",
+            detach.contains("ReaFrida.stopServer()"),
+        )
+    }
+
+    /** The debugger tab must be short, and root-only rows must be conditional. */
+    @Test
+    fun theDebuggerTabIsTerseAndRootAware() {
+        val screen = readSource(
+            "app/src/main/kotlin/com/altaris/linux/ui/screens/ReaScreen.kt"
+        )
+        val tab = screen.substringAfter("private fun DebuggerTab(")
+            .substringBefore("// --------------------------------------------------------------------- other")
+        assertFalse(
+            "must not print the agent tool list in the UI",
+            tab.contains("Agent tools: altaris_debug_attach"),
+        )
+        assertTrue(
+            "must gate the root-only backend",
+            tab.contains("if (hasRoot) PrismRow("),
+        )
+    }
+
+    /**
+     * Attaching must start the clone when it is not running.
+     *
+     * The agent was told the app was not running and gave up, when launching it
+     * is one call away.
+     */
+    @Test
+    fun attachStartsTheCloneWhenItIsNotRunning() {
+        val manager = readSource(
+            "app/src/main/kotlin/com/altaris/linux/core/rea/ReaManager.kt"
+        )
+        val attach = manager.substringAfter("suspend fun attachDebugger(")
+            .substringBefore("suspend fun detachDebugger(")
+        assertTrue(
+            "must launch instead of refusing",
+            attach.contains("launchAndWaitFor("),
+        )
+        val launch = manager.substringAfter("private suspend fun launchAndWaitFor(")
+            .substringBefore("/** Detach whatever the debugger holds. */")
+        assertTrue(
+            "must launch the clone",
+            launch.contains("HeadlessCloneEngine.apiLaunch("),
+        )
+        assertTrue(
+            "must wait for the process to appear",
+            launch.contains("resolvePid("),
+        )
+    }
+
+    /**
+     * The guide must forbid filesystem searching and require launching.
+     *
+     * An agent asked to attach to an app searched /sdcard for files and then
+     * reported the app was not running — both wrong, and both things the guide
+     * failed to rule out.
+     */
+    @Test
+    fun theGuideForbidsSearchingAndRequiresLaunching() {
+        val guide = ReaKnowledge.GUIDE
+        assertTrue(
+            "must say not to search the filesystem",
+            guide.contains("Do not search the filesystem"),
+        )
+        assertTrue(
+            "must name the launch tool",
+            guide.contains("altaris_launch_clone"),
+        )
+        assertTrue(
+            "must say the debugger starts the clone",
+            guide.contains("starts the clone"),
+        )
+        val mcp = readSource(
+            "app/src/main/kotlin/com/altaris/linux/core/control/McpProtocol.kt"
+        )
+        assertTrue(
+            "the clone instructions must forbid searching too",
+            mcp.contains("no folder to search"),
+        )
+        assertTrue(
+            "and must say not-running is not a stop",
+            mcp.contains("is never a reason to stop"),
+        )
+        // The attach tool itself must advertise the launch behaviour.
+        assertTrue(
+            "the attach tool must say it starts the clone",
+            mcp.contains("starts the clone itself when it is not running"),
+        )
+    }
+
     /** The clone MCP server must tell an agent there is no real device. */
     @Test
     fun theCloneServerSaysThereIsNoRealDevice() {

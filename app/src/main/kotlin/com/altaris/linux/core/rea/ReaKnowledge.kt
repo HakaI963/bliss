@@ -82,40 +82,35 @@ object ReaKnowledge {
         4. full decompile of the specific function
         5. whole-binary decompile (last resort)
 
-        ## 3b. The target is usually a clone, not a file on /sdcard
+        ## 3b. The target is a clone, never a file you go looking for
 
-        Altaris runs Android apps in clones. When the task is about an app on
-        this device — "attach to animetchiron and see what it does" — do not
-        search the filesystem for it. There is one correct path:
+        Every app on this device is an Android app running in a clone. There is
+        no separate physical device and no folder you need to search.
 
-        1. `altaris_clones` (or `altaris_apps`) on the **clone server** lists
-           what is installed. That is the whole world: there is no separate
-           physical device here.
-        2. `altaris_rea_clone_apk` exports the clone's APKs and its native
-           libraries to a known directory and returns the paths. Those are the
-           artifacts you analyse — not whatever happens to be in /sdcard.
-        3. For anything about *runtime* behaviour — what a method returns, what
-           a value is at an address, which library is loaded, what the process
-           maps — attach the live debugger instead of decompiling and guessing:
+        **Do not search the filesystem.** Do not look in /sdcard, /data, or
+        anywhere else for a package name. If you find yourself listing
+        directories, stop: you are on the wrong path.
 
-             altaris_frida_install                       (once, needs root)
-             altaris_debug_attach   { "target": "<clone package>" }
-             altaris_debug_command  { "command": "info proc mappings" }
-             altaris_debug_command  { "command": "bt" }
-             altaris_debug_command  { "command": "x/16gx <address>" }
-             altaris_debug_command  { "command": "${'$'}Process.enumerateModules()" }
-             altaris_debug_command  { "command": "${'$'}Interceptor.attach(...)" }
-             altaris_debug_detach
+        To work on an app:
 
-           A command starting with `$` is JavaScript evaluated in the target by
-           Frida; anything else is a gdb command. Frida is what makes runtime
-           *changes* possible — hooking a method, replacing a return value,
-           dumping a decrypted buffer — not just reading state. Registers,
-           memory and mappings are real reads either way. Attaching needs root.
+        1. `altaris_clones` — lists the clones. Pick the package from it.
+        2. `altaris_launch_clone { "package": "<pkg>" }` — starts it. You do not
+           need the user to start it first, and "not running" is not a reason to
+           give up: launching it is one call.
+        3. `altaris_rea_clone_apk { "package": "<pkg>" }` — writes its APKs and
+           native libraries somewhere known and returns the paths. Analyse those.
+        4. For runtime questions, attach:
+           `altaris_debug_attach { "target": "<pkg>" }` — this starts the clone
+           itself if it is not running, then attaches.
+           Then `altaris_debug_command`, and `altaris_debug_detach` when done.
 
-        Searching /sdcard for a package name finds nothing useful: an installed
-        app's code is in its own directory, and the clone's copy is what
-        `altaris_rea_clone_apk` gives you.
+        The debugger is the right tool when the question is about behaviour —
+        what a method returns, what a value is at an address, which library is
+        loaded, what the process maps. Decompiling and guessing is slower and
+        usually wrong.
+
+        A command starting with `$` is JavaScript run in the target by Frida;
+        anything else is a gdb command.
 
         ## 4. Compare instead of eyeballing
 

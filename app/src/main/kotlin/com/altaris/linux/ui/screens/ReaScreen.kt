@@ -1113,26 +1113,20 @@ private fun DebuggerTab(accent: Color) {
                 color = if (session.attachedPid != null) accent else altarisMutedText(),
             )
         }
-        Spacer(Modifier.height(4.dp))
-        PrismNote(
-            "The agent drives this. It attaches to the app running in the clone and " +
-                "reads registers, memory, mappings and backtraces from the live " +
-                "process — so it answers runtime questions instead of guessing from " +
-                "screenshots. The console below is the same session, if you want to " +
-                "look or step in yourself. Attaching needs root.",
-            fontSize = 9.sp,
-        )
         Spacer(Modifier.height(3.dp))
         PrismNote(
-            "Agent tools: altaris_debug_attach · altaris_debug_command · " +
-                "altaris_debug_state · altaris_debug_detach",
-            fontSize = 8.sp,
-            color = altarisMutedText(),
+            "The agent attaches, inspects and detaches. This tab shows its session.",
+            fontSize = 9.sp,
         )
         Spacer(Modifier.height(4.dp))
 
         // Frida: the backend that can actually see and patch the clone.
-        PrismRow(
+        //
+        // Root-only. Without root it cannot attach across UIDs, so showing it
+        // would offer a button that can only fail; the Gadget row below is the
+        // no-root path and is the only one shown in that case.
+        val hasRoot = remember { com.altaris.linux.core.root.RootShell.isRootAvailable() }
+        if (hasRoot) PrismRow(
             title = "Frida runtime",
             subtitle = when {
                 session.fridaBusy.isNotBlank() -> session.fridaBusy
@@ -1172,6 +1166,7 @@ private fun DebuggerTab(accent: Color) {
                 )
             },
         )
+        if (hasRoot) Spacer(Modifier.height(4.dp))
         // Gadget: the no-root path, and it only applies to clones built after
         // it is downloaded.
         PrismRow(
