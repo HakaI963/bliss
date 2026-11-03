@@ -803,7 +803,7 @@ class ReaTabsAndFilesTest {
         )
         assertTrue(
             "must mark OCR as the fallback",
-            source.contains("are the fallback"),
+            source.contains("the fallback for a canvas"),
         )
     }
 }
