@@ -94,7 +94,6 @@ class ReaAssetToolsTest {
         )
         // And the app passes each archive's own floor through.
         val source = readSource("app/src/main/kotlin/com/altaris/linux/core/rea/ReaAssetTools.kt")
-        val call = source.substringAfter("sh ").append("")
         val flow = source.substringAfter("install-archive.sh\"").substringBefore("timeoutMs")
         assertTrue(
             "the install must pass the archive's floor",
