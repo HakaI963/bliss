@@ -412,6 +412,11 @@ object ReaManager {
             var coreError = ""
             if (alreadyInstalled) {
                 line("REA core already installed in " + distroId)
+                // Repair what an older build's install left out. The core is
+                // skipped when REA is present, so a missing piece — the frida
+                // module the hook tools import — would otherwise never arrive
+                // without a full uninstall and reinstall.
+                ensureFridaModule(app, distroId) { line(it) }
             } else {
                 update { it.copy(busy = "Installing REA core") }
                 line("installing Node " + NODE_VERSION + " + rea-agents " + REA_VERSION)
@@ -554,6 +559,9 @@ object ReaManager {
 
             if (alreadyInstalled) {
                 line("REA core already installed in " + distroId)
+                // Same repair as in [install]: an installed core is skipped, so
+                // a piece an older build left out would never be added.
+                ensureFridaModule(app, distroId) { line(it) }
             } else {
                 update { it.copy(busy = "Installing REA core") }
                 line("installing Node " + NODE_VERSION + " + rea-agents " + REA_VERSION)
@@ -1240,6 +1248,31 @@ object ReaManager {
         GuestExec.shellQuote(ROOT) + " " + GuestExec.shellQuote(NODE_VERSION) + " " +
         GuestExec.shellQuote(REA_VERSION)
 
+    /**
+     * Make sure the Node `frida` module is importable in REA's tree.
+     *
+     * REA's hook tools import it, npm does not always lay it down, and an
+     * installed core is never re-run — so a tree created before this was part
+     * of the install would keep failing with capability_unavailable forever.
+     * The script is idempotent: it exits immediately when the module imports,
+     * so calling it on every prepare costs one node invocation.
+     */
+    private suspend fun ensureFridaModule(
+        app: Context,
+        distroId: String,
+        line: (String) -> Unit,
+    ) {
+        val script = "sh " + shellPath("rea-frida-module.sh") + " " + GuestExec.shellQuote(ROOT)
+        val result = GuestExec.run(app, distroId, script, timeoutMs = 10 * 60_000L)
+        for (raw in result.output.lines()) {
+            val text = raw.trim()
+            if (text.isNotEmpty()) line(text)
+        }
+        if (!result.ok) {
+            line("warning: REA's runtime-hook tools may report capability_unavailable until the frida module installs")
+        }
+    }
+
     // ------------------------------------------------------------- staging
 
     private fun readAsset(ctx: Context, name: String): String =
@@ -1249,6 +1282,7 @@ object ReaManager {
     private val VERBATIM_SCRIPTS = listOf(
         "pkg-lock.sh",
         "rea-core-install.sh",
+        "rea-frida-module.sh",
         "install-tool.sh",
         "install-archive.sh",
         "ghidra-install.sh",

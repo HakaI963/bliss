@@ -130,24 +130,50 @@ class ReaInstallRegressionTest {
      */
     @Test
     fun theFridaNodeModuleIsInstalledWithRea() {
-        val script = readAsset("scripts/rea/rea-core-install.sh")
-        assertTrue(
-            "must install frida into the REA tree",
-            script.contains("ensure_frida_module"),
-        )
+        // Its own script, because an installed core is never re-run: the fix
+        // has to be callable for a tree that predates it.
+        val module = readAsset("scripts/rea/rea-frida-module.sh")
+        assertTrue("must install into the REA tree", module.contains("--prefix \"\$BASE/npm\""))
         assertTrue(
             "must prefer the version REA declares",
-            script.contains("optionalDependencies"),
+            module.contains("optionalDependencies"),
         )
+        assertTrue("must prove the module imports", module.contains("import('frida')"))
         assertTrue(
-            "must prove the module imports",
-            script.contains("import('frida')"),
+            "must be a no-op when it already imports",
+            module.contains("if importable; then"),
         )
         // A missing frida must not fail the whole core install: static analysis
         // tools do not need it, and a hard failure would leave REA uninstalled.
         assertTrue(
             "must warn rather than abort",
-            script.contains("warning: the frida module did not install"),
+            module.contains("warning: the frida module did not install"),
+        )
+        // A partial install must be replaced, not left broken.
+        assertTrue(
+            "must detect a module that will not import",
+            module.contains("present but does not import"),
+        )
+
+        val core = readAsset("scripts/rea/rea-core-install.sh")
+        assertTrue(
+            "the core install must run it",
+            core.contains("rea-frida-module.sh"),
+        )
+
+        // And an already-installed REA must be repaired too — that is the tree
+        // the user actually has, and the core install skips it.
+        val manager = readSource(
+            "app/src/main/kotlin/com/altaris/linux/core/rea/ReaManager.kt"
+        )
+        assertTrue(
+            "must stage the repair script",
+            manager.contains("\"rea-frida-module.sh\""),
+        )
+        val already = manager.substringAfter("REA core already installed in ")
+        assertTrue(
+            "an existing install must get the module",
+            already.contains("ensureFridaModule("),
         )
     }
 

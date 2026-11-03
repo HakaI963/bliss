@@ -161,6 +161,33 @@ class ReaBridgeTest {
         assertTrue(server.getString("url").endsWith("/mcp"))
     }
 
+    /**
+     * Some OpenCode builds ignore a server nested under `mcp.servers` and only
+     * read the name directly under `mcp`, with a plain millisecond timeout.
+     * Both shapes are offered rather than guessing which one an install reads.
+     */
+    @Test
+    fun aFlatOpenCodeBlockIsOfferedForOlderBuilds() {
+        val body = ReaBridge.configJsonFlat()
+        // Flat: the server name directly under mcp, not under mcp.servers.
+        assertFalse("must not nest under mcp.servers", body.contains("\"servers\""))
+        assertTrue(body.contains("\"mcp\": {"))
+        assertTrue("a URL server is type remote", body.contains("\"type\": \"remote\""))
+        assertTrue("OAuth must be off", body.contains("\"oauth\": false"))
+        // This shape predates the startup/catalog/execution split, so the
+        // budget is a single number — the form those builds accept.
+        assertTrue("must carry a millisecond budget", body.contains("\"timeout\": 900000"))
+        // It is labelled as the older form, so the user knows which to try
+        // first.
+        assertTrue(
+            "must say when to use it",
+            body.contains("older OpenCode builds"),
+        )
+        // And it must be offered as a client block, not just exist.
+        val labels = ReaBridge.clientConfigs().map { it.label }
+        assertTrue("must be offered in Tools", labels.contains("OpenCode (flat)"))
+    }
+
     @Test
     fun aCallIsRecordedBeforeItFinishesAndThenCompleted() {
         ReaBridge.clearHistory()

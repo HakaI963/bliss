@@ -85,6 +85,12 @@ import kotlinx.coroutines.withContext
 
 private enum class ToolsPage { HOME, CLONE, REA }
 
+// The endpoint config, in both shapes OpenCode reads.
+//
+// V2 documents servers under mcp.servers; builds observed in the field
+// ignored a server nested there and only connected with the name directly
+// under mcp, taking a plain millisecond timeout. Both are shown rather than
+// guessing which one an install reads.
 private const val MCP_CONFIG = """{
   "${'$'}schema": "https://opencode.ai/config.json",
   "mcp": {
@@ -98,6 +104,17 @@ private const val MCP_CONFIG = """{
         "type": "remote",
         "url": "http://127.0.0.1:47831/mcp"
       }
+    }
+  }
+}"""
+
+private const val MCP_CONFIG_FLAT = """{
+  "${'$'}schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "timeout": 900000,
+    "altaris": {
+      "type": "remote",
+      "url": "http://127.0.0.1:47831/mcp"
     }
   }
 }"""
@@ -474,6 +491,18 @@ private fun McpCard(context: Context, accent: Color) {
             icon = Icons.Default.ContentCopy,
             modifier = Modifier.fillMaxWidth(),
             onClick = { copy(context, MCP_CONFIG, "MCP config copied") }
+        )
+        // The flat form: some OpenCode builds ignore a server nested under
+        // mcp.servers and only read the name directly under mcp.
+        Spacer(Modifier.height(Prism.Tight))
+        CodeBlock(MCP_CONFIG_FLAT)
+        Spacer(Modifier.height(Prism.Tight))
+        PrismButton(
+            text = "Copy config (flat)",
+            accent = accent,
+            icon = Icons.Default.ContentCopy,
+            modifier = Modifier.fillMaxWidth(),
+            onClick = { copy(context, MCP_CONFIG_FLAT, "Flat MCP config copied") }
         )
     }
     PrismSectionLabel("Tools", accent)

@@ -688,6 +688,36 @@ object ReaBridge {
     """.trimIndent()
 
     /**
+     * The same server in the flat form some OpenCode builds still read.
+     *
+     * The documented V2 shape is `mcp.servers`, and that is what the block
+     * above uses. A build observed in the field ignored a server nested there
+     * and only connected once it was moved directly under `mcp`, and it took a
+     * plain millisecond `timeout` rather than the V2 object — so both are
+     * offered rather than guessing which one a given install reads. Try the V2
+     * block first; use this one if `opencode mcp list` does not see the server.
+     */
+    fun configJsonFlat(): String = """
+        {
+          "${'$'}schema": "https://opencode.ai/config.json",
+          // Servers directly under "mcp": the form older OpenCode builds read.
+          // V2 documents mcp.servers; if this entry connects, your build is the
+          // older shape.
+          "mcp": {
+            // A single millisecond budget: this form predates the
+            // startup/catalog/execution split. Raise it rather than adding a
+            // second field — a heavy Ghidra call runs for minutes.
+            "timeout": 900000,
+            "rea": {
+              "type": "remote",
+              "url": "${liveEndpoint}",
+              "oauth": false
+            }
+          }
+        }
+    """.trimIndent()
+
+    /**
      * One agent client that can talk to the bridge, with the config it wants.
      *
      * Every entry is a client people actually run against an MCP server; the
@@ -710,6 +740,11 @@ object ReaBridge {
             "OpenCode v2",
             "opencode.jsonc",
             configJson(),
+        ),
+        ClientConfig(
+            "OpenCode (flat)",
+            "opencode.jsonc",
+            configJsonFlat(),
         ),
         ClientConfig(
             "Claude Code",
