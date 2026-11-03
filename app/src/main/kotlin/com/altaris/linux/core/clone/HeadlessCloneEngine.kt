@@ -164,6 +164,9 @@ object HeadlessCloneEngine {
     val touchEnabled = MutableStateFlow(true)
 
     // Lists
+    /** Prefix the clone engine gives every clone it installs. */
+    private const val CLONE_PACKAGE_PREFIX = "com.altaris.apps."
+
     val clones = MutableStateFlow<List<CloneApp>>(emptyList())
     val deviceApps = MutableStateFlow<List<DeviceApp>>(emptyList())
 
@@ -975,6 +978,19 @@ object HeadlessCloneEngine {
             if (packageName.isBlank()) {
                 return@withContext JSONObject().put("ok", false).put("error", "package is required")
             }
+            // Launch only clones.
+            //
+            // `cloneLaunch` in the engine already requires a registry record,
+            // but this ran first: it created a virtual display for whatever
+            // package it was given, so a real device app could be started on
+            // the clone display and then attached to. Checking here means the
+            // refusal happens before any display exists.
+            if (!isClonePackage(packageName)) {
+                return@withContext JSONObject()
+                    .put("ok", false)
+                    .put("error", "not a clone: " + packageName +
+                        " — this only launches apps created by Altaris, not real apps on the device")
+            }
             val c = ensureClient()
             if (c == null || !c.isServiceConnected()) {
                 return@withContext JSONObject().put("ok", false).put("error", "Shell engine is not connected")
@@ -1039,6 +1055,18 @@ object HeadlessCloneEngine {
                 JSONObject().put("ok", false).put("error", t.message ?: "Launch failed")
             }
         }
+
+    /**
+     * True when [packageName] is a clone this app created.
+     *
+     * The registry is authoritative; the package prefix is only a fallback for
+     * a clone created before the registry was read into [clones].
+     */
+    fun isClonePackage(packageName: String): Boolean {
+        if (packageName.isBlank()) return false
+        if (clones.value.any { it.packageName == packageName }) return true
+        return packageName.startsWith(CLONE_PACKAGE_PREFIX)
+    }
 
     /** Stop one clone and release only its display. */
     suspend fun apiStop(packageName: String): JSONObject = withContext(Dispatchers.IO) {

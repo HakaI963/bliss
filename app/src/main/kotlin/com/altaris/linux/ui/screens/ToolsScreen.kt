@@ -739,6 +739,35 @@ private fun ReaCard(context: Context, accent: Color) {
                 color = MaterialTheme.colorScheme.error,
             )
         }
+
+        // The debugger can attach to any process when root is granted, so the
+        // restriction is a real safety boundary, not a preference. It is on by
+        // default and stated plainly, because the failure it prevents — the
+        // agent debugging the user's real app instead of the clone — is silent.
+        Spacer(Modifier.height(Prism.Stack))
+        var cloneOnly by remember { mutableStateOf(ReaDistro.isCloneOnly(context)) }
+        PrismRow(
+            title = "Debugger: clones only",
+            subtitle = if (cloneOnly) {
+                "The agent may only attach to apps running in a clone. Real apps " +
+                    "on this device are refused."
+            } else {
+                "Off — the agent can attach to any running app on this device, " +
+                    "including your real ones."
+            },
+            accent = if (cloneOnly) accent else MaterialTheme.colorScheme.error,
+            leading = { PrismOrb(active = cloneOnly, accent = accent) },
+            trailing = {
+                com.altaris.linux.ui.components.AltarisSwitch(
+                    checked = cloneOnly,
+                    onCheckedChange = { enabled ->
+                        cloneOnly = enabled
+                        ReaDistro.setCloneOnly(context, enabled)
+                    },
+                )
+            },
+        )
+
         if (state.installed) {
             Spacer(Modifier.height(Prism.Tight))
             PrismSecondaryButton(

@@ -786,6 +786,89 @@ class ReaTabsAndFilesTest {
         )
     }
 
+    /**
+     * The debugger must never attach to a real app.
+     *
+     * Root can attach to any process on the device, so an agent told to
+     * inspect "Anime Chicken" attached to the user's real installation instead
+     * of the clone — and launched it on the clone display to do so. Nothing in
+     * the path checked that the target was a clone.
+     */
+    @Test
+    fun theDebuggerRefusesNonClones() {
+        val distro = readSource(
+            "app/src/main/kotlin/com/altaris/linux/core/rea/ReaDistro.kt"
+        )
+        assertTrue(
+            "must have a clone-only setting",
+            distro.contains("fun isCloneOnly("),
+        )
+        assertTrue(
+            "it must default to on",
+            distro.contains("getBoolean(KEY_CLONE_ONLY, true)"),
+        )
+
+        val manager = readSource(
+            "app/src/main/kotlin/com/altaris/linux/core/rea/ReaManager.kt"
+        )
+        val attach = manager.substringAfter("suspend fun attachDebugger(")
+            .substringBefore("suspend fun detachDebugger(")
+        assertTrue(
+            "attach must check the target before doing anything",
+            attach.contains("isClone(packageName)"),
+        )
+        assertTrue(
+            "a rejected target must be explained",
+            attach.contains("notACloneReason("),
+        )
+        // A raw pid says nothing about what the process is, so it can never be
+        // a clone.
+        val guarded = manager.substringAfter("private fun resolveClonePid(")
+            .substringBefore("private fun isClone(")
+        assertTrue(
+            "a bare pid must be refused",
+            guarded.contains("toIntOrNull() != null"),
+        )
+    }
+
+    /** Launching must also refuse a non-clone, before any display exists. */
+    @Test
+    fun launchingRefusesNonClones() {
+        val engine = readSource(
+            "app/src/main/kotlin/com/altaris/linux/core/clone/HeadlessCloneEngine.kt"
+        )
+        val launch = engine.substringAfter("suspend fun apiLaunch(")
+            .substringBefore("suspend fun apiStop(")
+        assertTrue(
+            "must verify the package is a clone",
+            launch.contains("isClonePackage(packageName)"),
+        )
+        assertTrue(
+            "the refusal must come before the display is created",
+            launch.indexOf("isClonePackage") < launch.indexOf("createDisplay"),
+        )
+    }
+
+    /** The restriction must be switchable, and stated plainly in the UI. */
+    @Test
+    fun theCloneOnlySwitchIsInTools() {
+        val screen = readSource(
+            "app/src/main/kotlin/com/altaris/linux/ui/screens/ToolsScreen.kt"
+        )
+        assertTrue(
+            "must expose the switch",
+            screen.contains("ReaDistro.setCloneOnly("),
+        )
+        assertTrue(
+            "must say what it protects",
+            screen.contains("Debugger: clones only"),
+        )
+        assertTrue(
+            "must warn when it is off",
+            screen.contains("including your real ones"),
+        )
+    }
+
     /** The clone MCP server must tell an agent there is no real device. */
     @Test
     fun theCloneServerSaysThereIsNoRealDevice() {

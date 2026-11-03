@@ -333,6 +333,31 @@ object ReaDistro {
         "altaris_rea_settings", Context.MODE_PRIVATE,
     )
 
+    // ----------------------------------------------------------- clone-only
+
+    /** Preference: the debugger may only ever touch clones. */
+    private const val KEY_CLONE_ONLY = "debug_clone_only"
+
+    /**
+     * True when the debugger is restricted to clones.
+     *
+     * **On by default, and it should stay on.** A clone is a separate package
+     * with its own UID, and root can attach to *any* process on the device —
+     * including the user's real apps. Without this restriction an agent that
+     * was told "attach to <app>" could attach to the real installation instead
+     * of the clone, which is both wrong and invasive. The switch exists only so
+     * a developer can deliberately opt out.
+     */
+    fun isCloneOnly(context: Context): Boolean =
+        prefs(context.applicationContext).getBoolean(KEY_CLONE_ONLY, true)
+
+    /** Turn the clone-only restriction on or off. */
+    fun setCloneOnly(context: Context, enabled: Boolean) {
+        prefs(context.applicationContext).edit()
+            .putBoolean(KEY_CLONE_ONLY, enabled)
+            .apply()
+    }
+
     // ----------------------------------------------------------------- refresh
 
     /**

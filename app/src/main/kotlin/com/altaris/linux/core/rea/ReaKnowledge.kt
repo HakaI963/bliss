@@ -109,6 +109,11 @@ object ReaKnowledge {
         loaded, what the process maps. Decompiling and guessing is slower and
         usually wrong.
 
+        **The debugger only attaches to clones.** A real app installed on the
+        device is refused, by design: it is the user's, not an analysis target.
+        If you are given a name that is not a clone, clone it first — do not
+        look for the real one.
+
         A command starting with `$` is JavaScript run in the target by Frida;
         anything else is a gdb command.
 

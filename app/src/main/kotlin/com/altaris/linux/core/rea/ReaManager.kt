@@ -957,13 +957,19 @@ object ReaManager {
      */
     suspend fun attachDebugger(ctx: Context, distroId: String, target: String): Attach =
         withContext(Dispatchers.IO) {
+            // Refuse anything that is not a clone before doing any work. This
+            // is the guard that stops an agent attaching to the user's real app.
+            val packageName = target.trim().substringBefore(':')
+            if (ReaDistro.isCloneOnly(ctx) && !isClone(packageName)) {
+                return@withContext Attach(pid = null, output = notACloneReason(target))
+            }
             // If the clone is installed but not running, start it. An agent that
             // is told to inspect an app should not have to be told to launch it
             // first, and "not running" is not a useful answer when starting it
             // is one call away.
-            var pid = resolvePid(target)
+            var pid = resolveClonePid(ctx, target)
             if (pid == null) {
-                pid = launchAndWaitFor(target)
+                pid = launchAndWaitFor(packageName)
             }
             if (pid == null) {
                 return@withContext Attach(
@@ -1143,6 +1149,41 @@ object ReaManager {
         table.firstOrNull { it.second.startsWith(value + ":") }?.let { return it.first }
         return null
     }
+
+    /**
+     * Resolve [target] to a PID, refusing anything that is not a clone.
+     *
+     * This is the guard that was missing. Root can attach to any process on the
+     * device, so an agent told to inspect "Anime Chicken" could attach to the
+     * real installation in the user's app drawer rather than the clone — and
+     * `resolvePid` alone happily returned that PID because it only matched a
+     * name against the process table.
+     *
+     * A clone is identified by its presence in the clone registry, not by a
+     * name pattern: `com.altaris.apps.` is the prefix the engine generates, but
+     * the registry is the authoritative list and it also covers clones created
+     * before the prefix was fixed.
+     */
+    private fun resolveClonePid(ctx: Context, target: String): Int? {
+        val value = target.trim().substringBefore(':')
+        if (value.isEmpty()) return null
+        // A raw PID is never acceptable: a number says nothing about what the
+        // process is, and "attach to pid 1234" is exactly the wrong-app case.
+        if (value.toIntOrNull() != null) return null
+        if (ReaDistro.isCloneOnly(ctx) && !isClone(value)) return null
+        return resolvePid(value)
+    }
+
+    /** True when [packageName] is a clone this app created. */
+    private fun isClone(packageName: String): Boolean =
+        clonePackages().any { it == packageName }
+
+    /** The reason a target was rejected, for the agent and the UI. */
+    private fun notACloneReason(target: String): String =
+        "\"" + target + "\" is not a clone. The debugger only attaches to apps " +
+            "running in the clone — not to the real app on this device. Clone it " +
+            "first (altaris_installed_apps then altaris_clone), or switch off " +
+            "\"Clones only\" in Tools → Reverse engineering to allow real apps."
 
     /** Absolute in-guest path of a staged REA helper script. */
     private fun shellPath(name: String): String = GuestExec.shellQuote(GHIDRA_SCRIPTS + "/" + name)
