@@ -138,11 +138,18 @@ class ReaTabsAndFilesTest {
                 tool.archive != null || tool.pip.isNotBlank() || tool.build.isNotBlank()
             assertTrue("${tool.id} must resolve to a route", hasRoute)
         }
-        // The specific three that were wrong.
+        // The ones that were wrong, and how they are right now: Debian ships
+        // no vgmstream package at all (checked against trixie), so the claim
+        // that apt provides it was a guaranteed failure — the source build is
+        // the route, and it must be able to run twice.
+        val vgmstream = ReaAssetTools.ALL.first { it.id == "vgmstream" }
+        assertFalse(
+            "apt does not ship vgmstream; claiming it is a guaranteed failure",
+            vgmstream.packages["apt"]?.contains("vgmstream-cli") == true,
+        )
         assertTrue(
-            "vgmstream must come from a package",
-            ReaAssetTools.ALL.first { it.id == "vgmstream" }.packages["apt"]
-                ?.contains("vgmstream-cli") == true,
+            "vgmstream must build from source",
+            vgmstream.build.isNotBlank(),
         )
         assertTrue(
             "astcenc must come from a package",

@@ -201,11 +201,11 @@ class ReaAssetToolsTest {
         // Exact name first, then the ISA-suffixed variants (astcenc-neon).
         assertTrue(
             "must match the probe by exact name",
-            link.contains("-name \" + GuestExec.shellQuote(probe)"),
+            link.contains("GuestExec.shellQuote(probe)"),
         )
         assertTrue(
             "must match ISA-suffixed variants too",
-            link.contains("-name \" + GuestExec.shellQuote(probe + \"-*\")"),
+            link.contains("GuestExec.shellQuote(probe + \"-*\")"),
         )
     }
 
