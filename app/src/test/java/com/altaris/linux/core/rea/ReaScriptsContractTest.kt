@@ -118,11 +118,17 @@ class ReaScriptsContractTest {
                 "$name must test pkg-lock.sh before sourcing it",
                 script.contains("[ -r \"\$ALTARIS_PKG_SH_DIR/pkg-lock.sh\" ]"),
             )
-            assertFalse(
-                "$name must not source pkg-lock.sh unguarded",
-                Regex("(?m)^\\s*\\.\\s+/opt/altaris/rea/scripts/pkg-lock\\.sh\\s*$")
-                    .containsMatchIn(script),
-            )
+            // Every `. pkg-lock.sh` line must sit under a `[ -r ]` test. A
+            // plain "does it source it" check is not enough: the bug was the
+            // unguarded form, so assert that no source line appears without a
+            // preceding readability test in the same if/elif chain.
+            val lines = script.lines()
+            for ((i, line) in lines.withIndex()) {
+                val trimmed = line.trim()
+                if (!trimmed.startsWith(".") || !trimmed.contains("pkg-lock.sh")) continue
+                val guarded = lines.subList(maxOf(0, i - 2), i + 1).any { it.contains("[ -r ") }
+                assertTrue("$name sources pkg-lock.sh unguarded: $trimmed", guarded)
+            }
         }
     }
 
@@ -281,7 +287,10 @@ class ReaScriptsContractTest {
         val script = reaScript("install-tool.sh")
         assertTrue(
             "apt needs a retry without --no-install-recommends",
-            script.contains("apt-get install -y --no-install-recommends \"\$@\" || apt-get install -y \"\$@\""),
+            script.contains(
+                "pkg_run apt-get install -y --no-install-recommends \"\$@\" || " +
+                    "pkg_run apt-get install -y \"\$@\""
+            ),
         )
     }
 
