@@ -163,6 +163,43 @@ if ! install_rea; then
     || fail "npm could not install rea-agents@$REA_VERSION"
 fi
 
+# The `frida` Node module.
+#
+# REA 6.8.0 imports it at runtime for every hook tool, but it is not always
+# present in the tree npm lays down — the result is a capability_unavailable
+# error on start_frida_session, list_frida_processes and friends, with no hint
+# that a module is missing. Install it next to rea-agents (the same global
+# root, which Node resolves from rea-agents' own directory) and prove it loads.
+ensure_frida_module() {
+  AGENT_DIR="$BASE/npm/lib/node_modules/rea-agents"
+  [ -d "$AGENT_DIR" ] || return 0
+  # Prefer the range REA itself declares; fall back to latest.
+  RANGE=$("$NODE" -e "
+    try {
+      const p = require('$AGENT_DIR/package.json');
+      const d = p.dependencies || {}, o = p.optionalDependencies || {}, pe = p.peerDependencies || {};
+      console.log(o.frida || d.frida || pe.frida || '');
+    } catch (e) { console.log(''); }
+  " 2>/dev/null | tail -n 1)
+  if [ -z "$RANGE" ]; then
+    RANGE=latest
+  fi
+  if [ -d "$BASE/npm/lib/node_modules/frida" ]; then
+    say "frida module already installed"
+    return 0
+  fi
+  say "installing the frida module (rea-agents declares $RANGE)"
+  "$NPM" install --prefix "$BASE/npm" "frida@$RANGE" \
+    --no-audit --no-fund --loglevel=error || return 1
+  # Import it from REA's own directory, which is where Node will resolve it.
+  ( cd "$AGENT_DIR" && "$NODE" --input-type=module -e "import('frida').then(() => console.log('frida module ok'))" ) >/dev/null 2>&1
+}
+
+if ! ensure_frida_module; then
+  say "warning: the frida module did not install; REA's runtime-hook tools will report capability_unavailable"
+  say "warning: nothing else is affected — static analysis tools still work"
+fi
+
 # npm creates the bin link without the exec bit in some proot setups.
 if [ -f "$BASE/npm/bin/rea" ] && [ ! -x "$BASE/npm/bin/rea" ]; then
   chmod +x "$BASE/npm/bin/rea"

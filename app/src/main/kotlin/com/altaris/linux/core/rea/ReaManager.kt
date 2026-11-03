@@ -50,8 +50,28 @@ object ReaManager {
     const val GHIDRA_ROOT = ROOT + "/ghidra"
     const val GHIDRA_SCRIPTS = ROOT + "/scripts"
     const val GHIDRA_OUT = ROOT + "/ghidra-out"
-    const val GHIDRA_TAG = "Ghidra_11.4.3_build"
-    const val GHIDRA_ASSET = "ghidra_11.4.3_PUBLIC_20251203.zip"
+    const val GHIDRA_TAG = "Ghidra_12.1.4_build"
+    const val GHIDRA_ASSET = "ghidra_12.1.4_PUBLIC_20260921.zip"
+
+    /**
+     * SHA-256 of [GHIDRA_ASSET], from the NSA release page.
+     *
+     * A 570 MB binary installed as root deserves an integrity check: a
+     * truncated download used to be caught only by a size floor, which an
+     * attacker in the middle cannot pass but a silent bit-flip inside a
+     * complete file can.
+     */
+    const val GHIDRA_SHA256 = "ddac49f903da9d5bac833e5cc79395098b9c33cfd3279be5f31bd00387d2d4db"
+
+    /**
+     * The Ghidra release REA supports.
+     *
+     * REA gates its Ghidra provider on this version and rejects anything else,
+     * so an older install is not merely unconfigured — every decompile through
+     * REA fails. The probe reports a mismatched tree as missing, which makes
+     * Tools offer the upgrade instead of silently keeping the old one.
+     */
+    const val GHIDRA_REQUIRED = "12.1.4"
 
     /**
      * Launchers for tools installed from release archives (JADX, Apktool).
@@ -249,7 +269,17 @@ object ReaManager {
             "elif command -v pacman >/dev/null 2>&1; then echo pm=pacman; else echo pm=none; fi",
         "for b in " + probeNames().joinToString(" ") + "; do " +
             "if command -v \$b >/dev/null 2>&1; then echo bin:\$b=1; else echo bin:\$b=0; fi; done",
-        "if [ -x " + GHIDRA_ROOT + "/support/analyzeHeadless ]; then echo bin:ghidra=1; else echo bin:ghidra=0; fi",
+        // The release REA supports, not just any install: REA rejects other
+        // versions at the provider level, so an 11.x tree left in place would
+        // look installed while every decompile through REA failed.
+        "if [ -x " + GHIDRA_ROOT + "/support/analyzeHeadless ] && " +
+            "grep -q '^application.version=" + GHIDRA_REQUIRED + "\$' " +
+            GHIDRA_ROOT + "/Ghidra/application.properties 2>/dev/null; then " +
+            "echo bin:ghidra=1; else echo bin:ghidra=0; fi",
+        // No prebuilt ARM64 decompiler ships with Ghidra; it is compiled on
+        // device during install. Without it only disassembly works.
+        "if [ -x " + GHIDRA_ROOT + "/Ghidra/Features/Decompiler/os/linux_arm_64/decompile ]; then " +
+            "echo bin:ghidra-decompiler=1; else echo bin:ghidra-decompiler=0; fi",
         // No prebuilt ARM64 decompiler ships with Ghidra; it is compiled on
         // device during install. Without it only disassembly works.
         "if [ -x " + GHIDRA_ROOT + "/Ghidra/Features/Decompiler/os/linux_arm_64/decompile ]; then " +
@@ -557,6 +587,7 @@ object ReaManager {
                 GHIDRA_ASSET,
                 JDK_TEMURIN,
                 GHIDRA_SCRIPTS + "/ghidra-decompiler-build.sh",
+                GHIDRA_SHA256,
             )
             // ROOT is an absolute path: quoting it directly. shellPath() would
             // prepend the scripts directory and produce

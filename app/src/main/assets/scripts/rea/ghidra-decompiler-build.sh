@@ -35,17 +35,34 @@ if [ ! -d "$CPP" ]; then
 fi
 
 echo "installing build dependencies (g++, make, zlib headers)"
+# Through the shared lock helper: this build runs while the tool lane may be
+# installing, and both reach apt.
+ALTARIS_PKG_SH_DIR=$(dirname "$0")
+if [ -r "$ALTARIS_PKG_SH_DIR/pkg-lock.sh" ]; then
+  . "$ALTARIS_PKG_SH_DIR/pkg-lock.sh"
+elif [ -r /opt/altaris/rea/scripts/pkg-lock.sh ]; then
+  . /opt/altaris/rea/scripts/pkg-lock.sh
+fi
+if ! command -v pkg_run >/dev/null 2>&1; then
+  pkg_run() {
+    if command -v timeout >/dev/null 2>&1; then
+      timeout -k 30 1800 "$@"
+    else
+      "$@"
+    fi
+  }
+fi
 if command -v apt-get >/dev/null 2>&1; then
   export DEBIAN_FRONTEND=noninteractive
-  apt-get update -qq
-  apt-get install -y --no-install-recommends g++ make zlib1g-dev \
-    || apt-get install -y g++ make zlib1g-dev
+  pkg_run apt-get update -qq
+  pkg_run apt-get install -y --no-install-recommends g++ make zlib1g-dev \
+    || pkg_run apt-get install -y g++ make zlib1g-dev
 elif command -v apk >/dev/null 2>&1; then
-  apk add --no-cache g++ make zlib-dev
+  pkg_run apk add --no-cache g++ make zlib-dev
 elif command -v dnf >/dev/null 2>&1; then
-  dnf install -y gcc-c++ make zlib-devel
+  pkg_run dnf install -y gcc-c++ make zlib-devel
 elif command -v pacman >/dev/null 2>&1; then
-  pacman -Sy --noconfirm gcc make zlib
+  pkg_run pacman -Sy --noconfirm gcc make zlib
 fi
 if ! command -v g++ >/dev/null 2>&1; then
   echo "ERROR: g++ is unavailable, cannot build the decompiler"

@@ -117,7 +117,8 @@ class ReaBridgeTest {
     @Test
     fun theConfigBlockUsesTheCurrentOpenCodeShape() {
         val json = org.json.JSONObject(ReaBridge.configJson())
-        val server = json.getJSONObject("mcp").getJSONObject("servers").getJSONObject("rea")
+        val mcp = json.getJSONObject("mcp")
+        val server = mcp.getJSONObject("servers").getJSONObject("rea")
         // V2 accepts exactly two type values. A URL server is "remote"; "http"
         // is not a value it recognises, so the entry was rejected outright.
         assertEquals("remote", server.getString("type"))
@@ -127,6 +128,28 @@ class ReaBridgeTest {
         assertFalse("must disable the OAuth discovery", server.getBoolean("oauth"))
         // `enabled` is silently ignored by v2; opting out is `disabled: true`.
         assertFalse("must not send the ignored enabled flag", server.has("enabled"))
+    }
+
+    /**
+     * The timeouts must be the documented object form, with real headroom.
+     *
+     * A cold Ghidra import plus decompile takes minutes. A client that budgets
+     * a catalogue-fetch for tool *calls* kills the work mid-flight and reports
+     * it as a host timeout, which looks like REA died. V2's timeout is an
+     * object of millisecond budgets; the defaults for startup and catalogue
+     * are also raised because a phone-side REA takes seconds to answer.
+     */
+    @Test
+    fun theConfigBlockCarriesRealisticTimeouts() {
+        val json = org.json.JSONObject(ReaBridge.configJson())
+        val timeout = json.getJSONObject("mcp").getJSONObject("timeout")
+        for (key in listOf("startup", "catalog", "execution")) {
+            assertTrue("must budget $key", timeout.getLong(key) >= 60_000L)
+        }
+        assertTrue(
+            "execution must allow minutes, not a catalogue fetch",
+            timeout.getLong("execution") >= 600_000L,
+        )
     }
 
     /** Clients that still use the flat form get it too. */

@@ -632,15 +632,20 @@ object ReaBridge {
     /**
      * The config block shown in Tools, in the shape OpenCode v2 reads.
      *
-     * Three details decide whether this works, and all three were wrong before:
+     * Four details decide whether this works, and all four were wrong at some
+     * point:
      *
      *  - the key is `mcp.servers` (V2 does not place names directly under
-     *    `mcp`), which was already right;
+     *    `mcp`);
      *  - `type` must be **`remote`** for a URL server. `http` is not a value V2
      *    accepts, so the entry was rejected instead of connected;
      *  - `oauth` must be `false`. Remote servers default to OAuth, so V2 would
      *    try to discover an authorization server on our bridge, get nothing,
-     *    and report the server as needing authentication.
+     *    and report the server as needing authentication;
+     *  - `timeout` is an object of millisecond budgets (`startup`, `catalog`,
+     *    `execution`), not a single number. Heavy REA calls — a cold Ghidra
+     *    import plus decompile — take minutes, so execution gets headroom
+     *    instead of a value tuned for a catalogue fetch.
      *
      * `enabled` is still omitted: V2 ignores it and opts out with
      * `disabled: true`.
@@ -649,6 +654,11 @@ object ReaBridge {
         {
           "${'$'}schema": "https://opencode.ai/config.json",
           "mcp": {
+            "timeout": {
+              "startup": 60000,
+              "catalog": 60000,
+              "execution": 900000
+            },
             "servers": {
               "rea": {
                 "type": "remote",

@@ -57,8 +57,14 @@ class ReaStdio(private val ctx: Context, val distroId: String) {
         // without a procps-compatible `ps` on PATH, and the compact schema
         // profile keeps the advertised tool list small enough for a phone-side
         // MCP client. Both are set here so they cannot drift per distro.
+        //
+        // GHIDRA_INSTALL_DIR points REA at the tree the app installs. Without
+        // it REA reports the Ghidra provider as not_configured even though the
+        // analyzer is right there — and REA reads the value at startup, so it
+        // belongs on the child's environment, not in a shell profile.
         val command = "PATH=" + ReaManager.PROBE_PATH + ":\$PATH; export PATH; " +
             "REA_MCP_INPUT_SCHEMA_PROFILE=\${REA_MCP_INPUT_SCHEMA_PROFILE:-compact}; export REA_MCP_INPUT_SCHEMA_PROFILE; " +
+            "GHIDRA_INSTALL_DIR=" + ReaManager.GHIDRA_ROOT + "; export GHIDRA_INSTALL_DIR; " +
             "exec " + ReaManager.REA_BIN + " mcp"
         val proc = if (profile.method == "chroot") {
             val path = profile.chrootPath

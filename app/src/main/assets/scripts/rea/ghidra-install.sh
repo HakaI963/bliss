@@ -14,14 +14,35 @@ TAG="$3"
 ASSET="$4"
 JDK_URL="$5"
 BUILD_SH="$6"
+# Optional SHA-256 of the release zip, from the NSA release page. A 570 MB
+# binary installed as root is verified rather than trusted.
+EXPECTED_SHA="$7"
 
 if [ -z "$BASE" ] || [ -z "$GH" ] || [ -z "$TAG" ] || [ -z "$ASSET" ] || [ -z "$JDK_URL" ]; then
-  echo "usage: ghidra-install.sh <base> <ghidra-root> <tag> <asset> <jdk-url> [build-script]"
+  echo "usage: ghidra-install.sh <base> <ghidra-root> <tag> <asset> <jdk-url> [build-script] [sha256]"
   exit 2
 fi
 
 say() { echo "$*"; }
 fail() { echo "ERROR: $*"; exit 1; }
+
+# Package-manager calls go through the shared lock discipline: this installer
+# runs alongside the tool lane, and both reach apt (see pkg-lock.sh).
+ALTARIS_PKG_SH_DIR=$(dirname "$0")
+if [ -r "$ALTARIS_PKG_SH_DIR/pkg-lock.sh" ]; then
+  . "$ALTARIS_PKG_SH_DIR/pkg-lock.sh"
+elif [ -r /opt/altaris/rea/scripts/pkg-lock.sh ]; then
+  . /opt/altaris/rea/scripts/pkg-lock.sh
+fi
+if ! command -v pkg_run >/dev/null 2>&1; then
+  pkg_run() {
+    if command -v timeout >/dev/null 2>&1; then
+      timeout -k 30 1800 "$@"
+    else
+      "$@"
+    fi
+  }
+fi
 
 mkdir -p "$BASE" || fail "cannot create $BASE"
 
@@ -60,15 +81,15 @@ if [ "$JDK" -eq 0 ]; then
   say "installing a JDK 21 through the package manager"
   if command -v apt-get >/dev/null 2>&1; then
     export DEBIAN_FRONTEND=noninteractive
-    apt-get update -qq
-    apt-get install -y --no-install-recommends openjdk-21-jdk-headless \
-      || apt-get install -y --no-install-recommends openjdk-17-jdk-headless
+    pkg_run apt-get update -qq
+    pkg_run apt-get install -y --no-install-recommends openjdk-21-jdk-headless \
+      || pkg_run apt-get install -y --no-install-recommends openjdk-17-jdk-headless
   elif command -v apk >/dev/null 2>&1; then
-    apk add --no-cache openjdk21-jdk || apk add --no-cache openjdk17-jdk
+    pkg_run apk add --no-cache openjdk21-jdk || pkg_run apk add --no-cache openjdk17-jdk
   elif command -v dnf >/dev/null 2>&1; then
-    dnf install -y java-21-openjdk-devel || dnf install -y java-17-openjdk-devel
+    pkg_run dnf install -y java-21-openjdk-devel || pkg_run dnf install -y java-17-openjdk-devel
   elif command -v pacman >/dev/null 2>&1; then
-    pacman -Sy --noconfirm jdk21-openjdk || pacman -Sy --noconfirm jdk-openjdk
+    pkg_run pacman -Sy --noconfirm jdk21-openjdk || pkg_run pacman -Sy --noconfirm jdk-openjdk
   fi
   if command -v javac >/dev/null 2>&1; then
     v=$(java_major "$(command -v java)")
@@ -82,10 +103,10 @@ if [ "$JDK" -eq 0 ] && [ ! -f /etc/alpine-release ]; then
   say "no distro JDK 21+; installing Temurin 21"
   if ! command -v curl >/dev/null 2>&1; then
     if command -v apt-get >/dev/null 2>&1; then
-      apt-get update -qq
-      apt-get install -y --no-install-recommends curl ca-certificates
+      pkg_run apt-get update -qq
+      pkg_run apt-get install -y --no-install-recommends curl ca-certificates
     elif command -v dnf >/dev/null 2>&1; then
-      dnf install -y curl ca-certificates
+      pkg_run dnf install -y curl ca-certificates
     fi
   fi
   rm -rf "$BASE/jdk" "$BASE/jdk.tmp" "$BASE/jdk.tgz"
@@ -115,14 +136,14 @@ else
   for tool in unzip curl; do
     command -v "$tool" >/dev/null 2>&1 && continue
     if command -v apt-get >/dev/null 2>&1; then
-      apt-get update -qq
-      apt-get install -y --no-install-recommends "$tool" ca-certificates
+      pkg_run apt-get update -qq
+      pkg_run apt-get install -y --no-install-recommends "$tool" ca-certificates
     elif command -v apk >/dev/null 2>&1; then
-      apk add --no-cache "$tool" ca-certificates
+      pkg_run apk add --no-cache "$tool" ca-certificates
     elif command -v dnf >/dev/null 2>&1; then
-      dnf install -y "$tool"
+      pkg_run dnf install -y "$tool"
     elif command -v pacman >/dev/null 2>&1; then
-      pacman -Sy --noconfirm "$tool"
+      pkg_run pacman -Sy --noconfirm "$tool"
     fi
   done
   command -v unzip >/dev/null 2>&1 || fail "unzip is unavailable in the distro"
@@ -154,6 +175,20 @@ else
   if [ "$SIZE" -lt 100000000 ]; then
     rm -f "$ZIP"
     fail "Ghidra download is too small ($SIZE bytes); check the network"
+  fi
+  # Integrity: the release page publishes a SHA-256, and the app passes it in.
+  # A complete but corrupt file passes the size floor and only fails here.
+  if [ -n "$EXPECTED_SHA" ]; then
+    if command -v sha256sum >/dev/null 2>&1; then
+      ACTUAL_SHA=$(sha256sum "$ZIP" 2>/dev/null | cut -d' ' -f1)
+      if [ "$ACTUAL_SHA" != "$EXPECTED_SHA" ]; then
+        rm -f "$ZIP"
+        fail "Ghidra download failed its SHA-256 check (got ${ACTUAL_SHA:-none}, expected $EXPECTED_SHA)"
+      fi
+      say "SHA-256 verified"
+    else
+      say "warning: sha256sum is not available; skipping the integrity check"
+    fi
   fi
   # The zip must be readable before unzip is trusted with it: a truncated
   # archive reports "End-of-central-directory signature not found" later, which

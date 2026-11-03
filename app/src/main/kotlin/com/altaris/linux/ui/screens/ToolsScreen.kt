@@ -86,11 +86,18 @@ import kotlinx.coroutines.withContext
 private enum class ToolsPage { HOME, CLONE, REA }
 
 private const val MCP_CONFIG = """{
+  "${'$'}schema": "https://opencode.ai/config.json",
   "mcp": {
-    "altaris": {
-      "type": "remote",
-      "url": "http://127.0.0.1:47831/mcp",
-      "enabled": true
+    "timeout": {
+      "startup": 60000,
+      "catalog": 60000,
+      "execution": 900000
+    },
+    "servers": {
+      "altaris": {
+        "type": "remote",
+        "url": "http://127.0.0.1:47831/mcp"
+      }
     }
   }
 }"""
