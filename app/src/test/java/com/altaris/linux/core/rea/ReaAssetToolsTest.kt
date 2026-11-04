@@ -877,11 +877,17 @@ class ReaAssetToolsTest {
         val manager = readSource("app/src/main/kotlin/com/altaris/linux/core/rea/ReaManager.kt")
         val fn = manager.substringAfter("private suspend fun ensureFridaModule(")
             .substringBefore("private fun coreScript()")
+        // Through the guest directly, not installPackages: this runs while the
+        // install mutex is already held, and installPackages would deadlock.
         assertTrue(
             "must install a compiler before npm runs",
-            fn.contains("installPackages(app, distroId, toolchain)"),
+            fn.contains("packageInstallScript(manager, toolchain)"),
         )
         assertTrue("must name them per manager", fn.contains("build-essential"))
+        assertFalse(
+            "must not take the install lock again",
+            fn.contains("installPackages("),
+        )
     }
 
     private fun readAsset(path: String): String {
