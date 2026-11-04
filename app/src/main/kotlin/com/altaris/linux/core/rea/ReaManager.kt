@@ -74,6 +74,31 @@ object ReaManager {
     const val GHIDRA_REQUIRED = "12.1.4"
 
     /**
+     * The jadx bridge REA uses for the whole Android/Java lane.
+     *
+     * REA does not ship or fetch it: it refuses every Android operation —
+     * inspect_android_package, search_android_classes, decompile_all,
+     * decode_android_resources — until REA_JADX_MCP_JAR points at a jar it
+     * accepts. The installed `jadx` CLI is a different program and does not
+     * satisfy it.
+     *
+     * The version is pinned deliberately. REA checks both the bridge's
+     * reported version and the release version, so a newer jar fails with the
+     * same "not configured" error as a missing one — which is a confusing way
+     * to say "wrong version". v0.7.1 is the one it accepts.
+     */
+    const val JADX_MCP_URL =
+        "https://github.com/1013503897/jadx-headless-mcp/releases/download/v0.7.1/" +
+            "jadx-headless-mcp-0.7.1-all.jar"
+    const val JADX_MCP_FILE = "jadx-headless-mcp-0.7.1-all.jar"
+    const val JADX_MCP_BYTES = 42_619_858L
+    const val JADX_MCP_SHA256 =
+        "6e5eacf500b64292bfb73c49797c1958f6ee44646e43e868039ae7feb573ff75"
+
+    /** Where the bridge jar lives once installed. */
+    const val JADX_MCP_JAR = ROOT + "/tools/jadx-mcp/" + JADX_MCP_FILE
+
+    /**
      * Launchers for tools installed from release archives (JADX, Apktool).
      *
      * This directory is prepended to PATH by [PROBE_PATH] and by every REA
@@ -429,12 +454,16 @@ object ReaManager {
                 // module the hook tools import — would otherwise never arrive
                 // without a full uninstall and reinstall.
                 ensureFridaModule(app, distroId) { line(it) }
+                ensureJadxBridge(app, distroId) { line(it) }
             } else {
                 update { it.copy(busy = "Installing REA core") }
                 line("installing Node " + NODE_VERSION + " + rea-agents " + REA_VERSION)
                 val core = GuestExec.run(app, distroId, coreScript(), timeoutMs = 45 * 60_000L) { line(it) }
                 if (core.ok) {
                     line("REA core ready")
+                    // A fresh install needs the bridge too; the "already
+                    // installed" branch above only covers upgrades.
+                    ensureJadxBridge(app, distroId) { line(it) }
                 } else {
                     coreError = core.tail(8).ifBlank { "REA core install failed" }
                     line("ERROR: REA core install failed (tools below are still attempted)")
@@ -584,6 +613,7 @@ object ReaManager {
                 // Same repair as in [install]: an installed core is skipped, so
                 // a piece an older build left out would never be added.
                 ensureFridaModule(app, distroId) { line(it) }
+                ensureJadxBridge(app, distroId) { line(it) }
             } else {
                 update { it.copy(busy = "Installing REA core") }
                 line("installing Node " + NODE_VERSION + " + rea-agents " + REA_VERSION)
@@ -1328,7 +1358,72 @@ object ReaManager {
             "REA_MCP_INPUT_SCHEMA_PROFILE=\${REA_MCP_INPUT_SCHEMA_PROFILE:-compact}; " +
             "export REA_MCP_INPUT_SCHEMA_PROFILE; " +
             "GHIDRA_INSTALL_DIR=" + GHIDRA_ROOT + "; export GHIDRA_INSTALL_DIR; " +
+            // Only when the bridge is actually there: REA treats the variable
+            // as authoritative, and pointing it at a missing file produces a
+            // different, worse failure than leaving it unset.
+            "if [ -f " + JADX_MCP_JAR + " ]; then " +
+            "REA_JADX_MCP_JAR=" + JADX_MCP_JAR + "; export REA_JADX_MCP_JAR; fi; " +
             "exec " + REA_BIN + " mcp"
+
+    /**
+     * Install the jadx bridge on demand, returning an error or "".
+     *
+     * Public because the agent needs to trigger it: REA reports
+     * capability_unavailable for the whole Android lane until this exists, and
+     * asking a human to run a shell command is not an answer. Safe to call
+     * repeatedly — the script verifies what is already there.
+     */
+    suspend fun installJadxBridge(
+        ctx: Context,
+        distroId: String,
+        onLog: (String) -> Unit = {},
+    ): String = withContext(Dispatchers.IO) {
+        ensureJadxBridge(ctx.applicationContext, distroId, onLog)
+        val present = runCatching {
+            GuestExec.run(
+                ctx.applicationContext,
+                distroId,
+                "test -s " + JADX_MCP_JAR + " && echo YES || echo NO",
+                timeoutMs = 30_000L,
+            ).output.contains("YES")
+        }.getOrDefault(false)
+        if (present) "" else "the jadx bridge is still missing after the install"
+    }
+
+    /**
+     * Install the jadx bridge the Android lane needs.
+     *
+     * REA refuses every Android/Java operation — inspect_android_package,
+     * search_android_classes, decompile_all, decode_android_resources — until
+     * REA_JADX_MCP_JAR points at a jar it accepts, and it does not fetch one
+     * itself. Without this the agent can analyse native libraries and nothing
+     * else, which is exactly the wall it reported.
+     *
+     * Pinned to v0.7.1 and verified by size and SHA-256: REA checks the
+     * bridge's version as well as the release, so a newer jar fails with the
+     * same "not configured" error and looks like a missing file.
+     */
+    private suspend fun ensureJadxBridge(
+        app: Context,
+        distroId: String,
+        line: (String) -> Unit,
+    ) {
+        val script = "sh " + shellPath("rea-jadx-mcp.sh") + " " +
+            GuestExec.shellQuote(ROOT) + " " +
+            GuestExec.shellQuote(JADX_MCP_URL) + " " +
+            GuestExec.shellQuote(JADX_MCP_FILE) + " " +
+            JADX_MCP_BYTES + " " +
+            GuestExec.shellQuote(JADX_MCP_SHA256)
+        val result = GuestExec.run(app, distroId, script, timeoutMs = 30 * 60_000L)
+        for (raw in result.output.lines()) {
+            val text = raw.trim()
+            // curl's progress meter is noise in an install log.
+            if (text.isNotEmpty() && !text.contains("% Total")) line(text)
+        }
+        if (!result.ok) {
+            line("warning: the jadx bridge did not install; REA's Android tools will report capability_unavailable")
+        }
+    }
 
     private fun coreScript(): String = "sh " + shellPath("rea-core-install.sh") + " " +
         GuestExec.shellQuote(ROOT) + " " + GuestExec.shellQuote(NODE_VERSION) + " " +
@@ -1401,6 +1496,7 @@ object ReaManager {
         "pkg-lock.sh",
         "rea-core-install.sh",
         "rea-frida-module.sh",
+        "rea-jadx-mcp.sh",
         "install-tool.sh",
         "install-archive.sh",
         "ghidra-install.sh",

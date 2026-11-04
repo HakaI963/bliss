@@ -310,6 +310,17 @@ object McpProtocol {
         put(tool("altaris_rea_stop", "Stop the REA MCP server.", JSONObject()))
         put(
             tool(
+                "altaris_jadx_bridge_install",
+                "Install the pinned jadx MCP bridge that REA's Android/Java lane " +
+                    "requires (inspect_android_package, decompile_all, " +
+                    "decode_android_resources and friends). It is downloaded, its " +
+                    "size and SHA-256 verified, and REA is restarted so it picks up " +
+                    "REA_JADX_MCP_JAR. Safe to call when already installed.",
+                JSONObject()
+            )
+        )
+        put(
+            tool(
                 "altaris_rea_tools",
                 "List every REA tool currently published through this endpoint.",
                 JSONObject()
@@ -681,6 +692,30 @@ object McpProtocol {
             textResult(reaStatusJson(runBlocking { ReaManager.start(ctx, distro) }))
         }
         "altaris_rea_stop" -> textResult(reaStatusJson(runBlocking { ReaManager.stop() }))
+        "altaris_jadx_bridge_install" -> {
+            val ctx = ControlServer.context() ?: throw IllegalStateException("App context unavailable")
+            val distro = reaTargetDistro(ctx)
+                ?: throw IllegalStateException("no installed distro")
+            val lines = StringBuilder()
+            val result = runBlocking {
+                ReaManager.installJadxBridge(ctx, distro) { lines.append(it).append('\n') }
+            }
+            // REA reads REA_JADX_MCP_JAR at startup, so a running server has to
+            // be restarted before the Android lane works.
+            var restarted = false
+            if (result.isBlank()) {
+                runBlocking { ReaManager.stop() }
+                restarted = runBlocking { ReaManager.start(ctx, distro) }.running
+            }
+            textResult(
+                JSONObject()
+                    .put("ok", result.isBlank())
+                    .put("installed", result.isBlank())
+                    .put("restarted", restarted)
+                    .put("log", lines.toString().takeLast(4000))
+                    .put("error", result)
+            )
+        }
         "altaris_rea_tools" -> {
             val tools = runBlocking { ensureReaRunning() }?.let { ReaManager.cachedTools() }
                 ?: throw IllegalStateException(
@@ -872,6 +907,14 @@ object McpProtocol {
         These calls start REA themselves; you do not need to start it first.
         If `altaris_rea_status` says it is not installed, say so and stop —
         do not fall back to reading the file by hand.
+
+        If an REA Android tool answers `capability_unavailable` naming
+        REA_JADX_MCP_JAR, call `altaris_jadx_bridge_install`. REA does not ship
+        the jadx bridge and will not fetch it, so that whole lane — manifest,
+        DEX classes, decompiled Java, resources — is blocked until it is
+        installed. The tool downloads the pinned, checksum-verified release and
+        restarts REA so it reads the variable. Do not try to install it by hand
+        and do not guess at tracker names when it is missing.
 
         REA calls can take minutes: a cold Ghidra import plus decompile of a
         23 MB binary legitimately runs for several minutes. Call it, wait for

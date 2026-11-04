@@ -41,6 +41,13 @@ object ReaKnowledge {
         These start REA themselves; you never need to start it first. If it is
         not installed, say so and stop rather than analysing by hand.
 
+        **The Android lane needs a bridge jar.** REA does not ship the jadx MCP
+        bridge and refuses `inspect_android_package`, `search_android_classes`,
+        `decompile_all` and `decode_android_resources` until `REA_JADX_MCP_JAR`
+        points at a jar it accepts. `altaris_jadx_bridge_install` installs the
+        pinned, checksum-verified release and restarts REA. The installed
+        `jadx` CLI is a different program and does not satisfy it.
+
         **REA calls can take minutes.** A cold Ghidra import plus analysis of a
         23 MB binary is several minutes of legitimate work, and the first call
         after a restart also pays for the JVM and the provider handshake. Wait
