@@ -337,7 +337,17 @@ object ReaAssetTools {
                     // plain clone produced "nlohmann/json.hpp: No such file or
                     // directory" every time. Submodules are the dependency, not
                     // a package manager for it.
-                    build = "rm -rf GodotPckTool && git clone --depth 1 --recurse-submodules --shallow-submodules https://github.com/hhyyrylainen/GodotPckTool.git && cd GodotPckTool && make",
+                    //
+                    // It also hardcodes `-fuse-ld=gold`, and Debian 13 no
+                    // longer ships the gold linker — the link then dies with
+                    // "collect2: fatal error: cannot find 'ld'", which reads
+                    // like a missing binutils and is not. The flag is stripped
+                    // so it links with the default linker.
+                    build = "rm -rf GodotPckTool && git clone --depth 1 " +
+                        "--recurse-submodules --shallow-submodules " +
+                        "https://github.com/hhyyrylainen/GodotPckTool.git && " +
+                        "cd GodotPckTool && " +
+                        "sed -i 's/ -fuse-ld=gold//' src/CMakeLists.txt && make",
                 ),
                 Tool(
                     id = "gamemaker",
@@ -429,7 +439,20 @@ object ReaAssetTools {
                     // the source build is the real route everywhere. The build
                     // clears its directory first: a retry after a failed clone
                     // used to die on "destination path already exists".
-                    build = "rm -rf vgmstream && git clone --depth 1 https://github.com/vgmstream/vgmstream.git && cd vgmstream && cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_CLI=ON && cmake --build build",
+                    //
+                    // The flags are the whole difference between a working
+                    // build and "Configuring incomplete, errors occurred!".
+                    // Upstream defaults the Audacious plugin and the
+                    // vgmstream123 player ON, and both need headers a phone
+                    // rootfs does not have. FFmpeg, Speex and CELT default ON
+                    // too, and each pulls bundled code that builds itself with
+                    // autoconf. Turning them off is what makes the CLI compile;
+                    // verified by building it end to end.
+                    build = "rm -rf vgmstream && git clone --depth 1 " +
+                        "https://github.com/vgmstream/vgmstream.git && cd vgmstream && " +
+                        "cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_CLI=ON " +
+                        "-DBUILD_AUDACIOUS=OFF -DBUILD_V123=OFF -DUSE_FFMPEG=OFF " +
+                        "-DUSE_SPEEX=OFF -DUSE_CELT=OFF && cmake --build build",
                 ),
                 Tool(
                     id = "fmod",
@@ -689,17 +712,29 @@ object ReaAssetTools {
         if (tool.build.isNotBlank()) {
             tried.add("source build")
             append("building " + tool.name + " from source (no arm64 binary is published)")
-            // A source build needs git, a compiler, cmake, pkg-config and the
-            // python headers; a minimal rootfs has none of them. pkg-config is
-            // what vgmstream's cmake died on ("Could NOT find PkgConfig") even
-            // for a build with no optional libraries. Best-effort: the build
-            // may still work with what is installed, and a missing dep is
-            // reported by the build itself rather than assumed here.
+            // A source build needs git, a compiler, cmake, pkg-config, binutils
+            // (ld lives there — without it the link dies with "cannot find
+            // 'ld'"), zlib and the python headers; a minimal rootfs has none of
+            // them. pkg-config is what vgmstream's cmake died on ("Could NOT
+            // find PkgConfig"). Best-effort: the build may still work with what
+            // is installed, and a missing dep is reported by the build itself.
             val deps = when (manager) {
-                "apt" -> listOf("git", "cmake", "build-essential", "pkg-config", "zlib1g-dev", "python3-dev")
-                "apk" -> listOf("git", "cmake", "g++", "make", "pkgconf", "zlib-dev", "python3-dev")
-                "dnf" -> listOf("git", "cmake", "gcc-c++", "make", "pkgconf-pkg-config", "zlib-devel", "python3-devel")
-                "pacman" -> listOf("git", "cmake", "base-devel", "pkgconf", "zlib", "python")
+                "apt" -> listOf(
+                    "git", "cmake", "build-essential", "binutils",
+                    "pkg-config", "zlib1g-dev", "python3-dev",
+                )
+                "apk" -> listOf(
+                    "git", "cmake", "g++", "make", "binutils",
+                    "pkgconf", "zlib-dev", "python3-dev",
+                )
+                "dnf" -> listOf(
+                    "git", "cmake", "gcc-c++", "make", "binutils",
+                    "pkgconf-pkg-config", "zlib-devel", "python3-devel",
+                )
+                "pacman" -> listOf(
+                    "git", "cmake", "base-devel", "binutils",
+                    "pkgconf", "zlib", "python",
+                )
                 else -> emptyList()
             }
             if (deps.isNotEmpty() && manager != "none") {
@@ -714,12 +749,34 @@ object ReaAssetTools {
             val root = ReaCatalog.ARCHIVE_ROOT
             val script = "set +e\nmkdir -p " + root + " && cd " + root + " || exit 1\n" +
                 tool.build + " 2>&1 | tail -30\n"
-            val result = runCatching {
+            var result = runCatching {
                 GuestExec.run(context.applicationContext, id, script, timeoutMs = 60 * 60_000L) { append(it) }
             }.getOrNull()
+
+            // Safety net for a linker that no longer exists. Some projects
+            // hardcode `-fuse-ld=gold`, and Debian 13 dropped gold: the link
+            // then dies with "collect2: fatal error: cannot find 'ld'", which
+            // reads like a missing binutils and is not. If the tree asks for a
+            // linker this system does not have, drop the flag and retry once —
+            // the default linker produces the same binary.
+            val linkerMissing = result?.output?.contains("cannot find") == true &&
+                result?.output?.contains("ld") == true
+            if (linkerMissing) {
+                append("the build asked for a linker this distro does not ship; retrying with the default one")
+                val fix = "set +e\ncd " + root + " || exit 1\n" +
+                    "find . -maxdepth 5 -name CMakeLists.txt -exec " +
+                    "sed -i 's/ -fuse-ld=gold//g' {} + 2>/dev/null\n" +
+                    "find . -maxdepth 5 -name Makefile -exec " +
+                    "sed -i 's/ -fuse-ld=gold//g' {} + 2>/dev/null\n" +
+                    tool.build + " 2>&1 | tail -30\n"
+                result = runCatching {
+                    GuestExec.run(context.applicationContext, id, fix, timeoutMs = 60 * 60_000L) { append(it) }
+                }.getOrNull()
+                if (result?.output?.isNotBlank() == true) append(result.tail(10))
+            }
             if (result?.output?.isNotBlank() == true) append(result.tail(10))
             // The binary is built somewhere inside the tree, not on PATH —
-            // vgmstream's lands in vgmstream/build/, astcenc's in
+            // vgmstream's lands in vgmstream/build/cli/, astcenc's in
             // astc-encoder/Source/build/ under an ISA-suffixed name. Without
             // this the build succeeded and the tool still read as missing.
             if (linkBuilt(context, id, tool.probe)) {
@@ -728,7 +785,14 @@ object ReaAssetTools {
                     return
                 }
             }
-            append("the source build did not produce " + tool.probe)
+            // "did not produce X" alone says nothing about why. Name the
+            // failure the compiler actually reported, so a missing header or a
+            // missing linker is visible in the row instead of a mystery.
+            val why = buildFailureReason(result?.output.orEmpty())
+            append(
+                "the source build did not produce " + tool.probe +
+                    (if (why.isBlank()) "" else " — " + why)
+            )
         }
 
         append("ERROR: could not install " + tool.name +
@@ -762,6 +826,32 @@ object ReaAssetTools {
         val linked = out.lines().firstOrNull { it.startsWith("LINKED ") }?.removePrefix("LINKED ")
         if (linked != null) append("linked " + linked.trim() + " onto PATH")
         return linked != null
+    }
+
+    /**
+     * The one line worth showing from a failed build.
+     *
+     * A build prints hundreds of lines; the app kept the last ten, which are
+     * usually make's "Error 2" echoes rather than the cause. These patterns
+     * cover the failures seen in the field, so the row says "cannot find 'ld'"
+     * or "PkgConfig not found" instead of "did not produce".
+     */
+    private fun buildFailureReason(output: String): String {
+        val patterns = listOf(
+            Regex("""cannot find ['\u2018\u2019]ld['\u2018\u2019]"""),
+            Regex("""Could NOT find (\w+)"""),
+            Regex("""fatal error: ([^:\n]+): No such file or directory"""),
+            Regex("""fatal error: ([^\n]+)"""),
+            Regex("""CMake Error[^\n]*"""),
+            Regex("""error: ([^\n]+)"""),
+            Regex("""No such file or directory"""),
+        )
+        val lines = output.lines().map { it.trim() }.filter { it.isNotEmpty() }
+        for (pattern in patterns) {
+            val hit = lines.firstOrNull { pattern.containsMatchIn(it) } ?: continue
+            return hit.take(180)
+        }
+        return ""
     }
 
     /** Mark one tool installed and stop the busy state. */

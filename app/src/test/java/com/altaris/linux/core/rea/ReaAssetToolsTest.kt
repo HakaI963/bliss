@@ -374,6 +374,75 @@ class ReaAssetToolsTest {
     }
 
     /**
+     * vgmstream's cmake defaults the Audacious plugin, the vgmstream123
+     * player, FFmpeg, Speex and CELT ON. The plugins need headers a phone
+     * rootfs has not got, and the codec libraries build themselves with
+     * autoconf. The build died at configure time with only "Configuring
+     * incomplete, errors occurred!" — the flags are the whole fix, verified by
+     * building the CLI end to end.
+     */
+    @Test
+    fun vgmstreamBuildsOnlyTheCli() {
+        val vgm = byId("vgmstream")
+        for (flag in listOf(
+            "-DBUILD_AUDACIOUS=OFF",
+            "-DBUILD_V123=OFF",
+            "-DUSE_FFMPEG=OFF",
+            "-DUSE_SPEEX=OFF",
+            "-DUSE_CELT=OFF",
+        )) {
+            assertTrue("vgmstream must pass $flag", vgm.build.contains(flag))
+        }
+        assertTrue("the CLI itself must stay on", vgm.build.contains("-DBUILD_CLI=ON"))
+    }
+
+    /**
+     * GodotPckTool hardcodes `-fuse-ld=gold`, and Debian 13 dropped the gold
+     * linker: the link fails with \"collect2: fatal error: cannot find 'ld'\",
+     * which reads like missing binutils and is not. The flag must be stripped.
+     */
+    @Test
+    fun theGoldLinkerRequirementIsStripped() {
+        val godot = byId("godot")
+        assertTrue(
+            "the hardcoded gold linker must be removed before building",
+            godot.build.contains("s/ -fuse-ld=gold//"),
+        )
+        // And the build route retries once for any tree that still asks for a
+        // linker this distro does not ship.
+        val source = readSource("app/src/main/kotlin/com/altaris/linux/core/rea/ReaAssetTools.kt")
+        assertTrue(
+            "the build route must retry when the linker is missing",
+            source.contains("the build asked for a linker this distro does not ship"),
+        )
+        // binutils provides ld and is part of the toolchain now.
+        assertTrue(
+            "binutils must be in the build toolchain",
+            source.contains("\"binutils\""),
+        )
+    }
+
+    /**
+     * A failed build must say why.
+     *
+     * \"did not produce X\" was printed while the actual cause — a missing
+     * header, a missing linker, a cmake error — scrolled past in the log.
+     */
+    @Test
+    fun aFailedBuildNamesItsCause() {
+        val source = readSource("app/src/main/kotlin/com/altaris/linux/core/rea/ReaAssetTools.kt")
+        assertTrue(
+            "the build route must report a reason",
+            source.contains("buildFailureReason("),
+        )
+        val fn = source.substringAfter("private fun buildFailureReason(")
+            .substringBefore("/** Mark one tool installed")
+        assertTrue("must recognise a missing linker", fn.contains("cannot find"))
+        assertTrue("must recognise a missing cmake package", fn.contains("Could NOT find"))
+        assertTrue("must recognise a missing header", fn.contains("fatal error"))
+    }
+
+    /**
      * Every source build's toolchain must include pkg-config: vgmstream's
      * cmake died with \"Could NOT find PkgConfig\" on a minimal rootfs.
      */
