@@ -734,6 +734,86 @@ class ReaAssetToolsTest {
     }
 
     /**
+     * REA must be visible to the agent before it is running.
+     *
+     * The catalog was advertised only when `cachedTools()` was non-null, which
+     * requires a running server. An agent connecting first saw no REA tools at
+     * all — so it never used REA, and "forgot" it existed mid-session.
+     */
+    @Test
+    fun reaIsAdvertisedBeforeItIsRunning() {
+        val mcp = readSource("app/src/main/kotlin/com/altaris/linux/core/control/McpProtocol.kt")
+        assertTrue(
+            "must have a static entry-point list",
+            mcp.contains("private val REA_ENTRY_POINTS"),
+        )
+        val tools = mcp.substringAfter("private fun tools(): JSONArray")
+            .substringBefore("private fun tool(")
+        assertTrue(
+            "must fall back to the static list when the catalog is absent",
+            tools.contains("REA_ENTRY_POINTS"),
+        )
+        for (name in listOf(
+            "altaris_rea_status",
+            "altaris_rea_tools",
+            "altaris_rea_call",
+            "altaris_rea_clone_apk",
+        )) {
+            assertTrue("$name must be advertised", mcp.contains("\"$name\" to"))
+        }
+    }
+
+    /**
+     * The instructions must route reverse-engineering work to REA explicitly.
+     *
+     * The agent analysed binaries without REA and had to be told each time,
+     * then forgot in the same session. The instruction block is what it reads
+     * first, so the rule has to be there, not just implied.
+     */
+    @Test
+    fun theInstructionsRequireReaForReverseEngineering() {
+        val mcp = readSource("app/src/main/kotlin/com/altaris/linux/core/control/McpProtocol.kt")
+        val instructions = mcp.substringAfter("private val INSTRUCTIONS = \"\"\"")
+            .substringBefore("\"\"\".trimIndent()")
+        assertTrue(
+            "must say reverse engineering is REA's job",
+            instructions.contains("Reverse engineering is REA's job"),
+        )
+        assertTrue(
+            "must say which calls to start with",
+            instructions.contains("altaris_rea_tools"),
+        )
+        assertTrue(
+            "must forbid analysing by hand",
+            instructions.contains("do not read bytes yourself") ||
+                instructions.contains("do not guess"),
+        )
+        assertTrue(
+            "must warn that REA calls are slow",
+            instructions.contains("minutes"),
+        )
+    }
+
+    /** Ghidra needs a bounded heap or a large binary thrashes the JVM. */
+    @Test
+    fun ghidraGetsAFixedHeap() {
+        val script = readAsset("scripts/rea/ghidra-analyze.sh")
+        assertTrue("must set an explicit heap", script.contains("JAVA_OPTS=\"-Xmx"))
+        assertTrue("must read the real RAM", script.contains("/proc/meminfo"))
+        assertTrue(
+            "must clamp the heap to a phone-sized window",
+            script.contains("-gt 3072"),
+        )
+        val manager = readSource("app/src/main/kotlin/com/altaris/linux/core/rea/ReaManager.kt")
+        val ghidra = manager.substringAfter("suspend fun analyzeGhidra(")
+            .substringBefore("// ------------------------------------------------------------- server")
+        assertTrue(
+            "must explain a timeout in terms of the work",
+            ghidra.contains("did not finish within"),
+        )
+    }
+
+    /**
      * Stopping frida must not kill REA or the user's shell.
      *
      * `pkill -f frida-server` is a substring match over every command line —

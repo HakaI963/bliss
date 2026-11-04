@@ -1473,13 +1473,27 @@ object ReaManager {
         // guest's own stale JAVA_HOME cannot point Ghidra at a JRE.
         val script = "sh " + shellPath("ghidra-analyze.sh") + " " +
             GuestExec.shellQuote(target) + " " + max
+        // Ghidra on a large binary is minutes, not seconds: a 23 MB object is a
+        // cold import plus full analysis, and the JVM alone takes tens of
+        // seconds to start. The caller's timeout must not be shorter than the
+        // work, or it reports a timeout for an analysis that was still running.
         val result = GuestExec.run(ctx, distroId, script, timeoutMs = 45 * 60_000L)
         JSONObject()
             .put("ok", result.ok)
             .put("target", target)
             .put("exit", result.exit)
             .put("output", result.output.takeLast(8000))
-            .put("error", if (result.ok) "" else result.tail(6))
+            .put(
+                "error",
+                when {
+                    result.ok -> ""
+                    result.exit == -2 ->
+                        "Ghidra did not finish within 45 minutes. Large binaries " +
+                            "can exceed that; retry, or analyse a single function " +
+                            "with REA's decompiler instead of the whole file."
+                    else -> result.tail(6)
+                },
+            )
     }
 
     // ------------------------------------------------------------- server

@@ -370,6 +370,18 @@ object McpProtocol {
                 )
             )
         )
+        // REA's tools are advertised even when the server is not up yet.
+        //
+        // They used to be listed only when `cachedTools()` was non-null, which
+        // requires a running server. So an agent that connected before REA was
+        // started saw no REA tools at all — and then never used REA, even
+        // though it was installed and one call away. That is why it "forgot"
+        // REA existed: the tool list it was given genuinely did not contain it.
+        //
+        // The live catalog is used when it exists. When it does not, a static
+        // set of entry points is advertised instead, so the agent knows REA is
+        // there and can start it. This is a tool list, so it must not block on
+        // starting a server.
         val reaTools = ReaManager.cachedTools()
         if (reaTools != null) {
             for (i in 0 until reaTools.length()) {
@@ -379,8 +391,34 @@ object McpProtocol {
                         .put("description", "[REA] " + definition.optString("description"))
                 )
             }
+        } else {
+            for ((name, description) in REA_ENTRY_POINTS) {
+                put(tool(name, "[REA] " + description, JSONObject()))
+            }
         }
     }
+
+    /**
+     * REA entry points advertised when the live catalog is not loaded yet.
+     *
+     * The agent needs to know REA exists before it is running, or it will
+     * analyse a binary with nothing at all. These are the calls that matter for
+     * a reverse-engineering task, and each one starts REA itself.
+     */
+    private val REA_ENTRY_POINTS = listOf(
+        "altaris_rea_status" to
+            "REA status. Call this first for any binary, APK, DEX or native-library task.",
+        "altaris_rea_start" to
+            "Start the REA reverse-engineering server. Most REA tools need it.",
+        "altaris_rea_tools" to
+            "List every REA tool available once the server is up.",
+        "altaris_rea_call" to
+            "Call any REA tool by name with its arguments.",
+        "altaris_rea_clone_apk" to
+            "Export a clone's APKs and native libraries for analysis.",
+        "altaris_ghidra_analyze" to
+            "Run Ghidra headless on a file and return its function list.",
+    )
 
     private fun tool(name: String, description: String, properties: JSONObject): JSONObject {
         val required = JSONArray()
@@ -786,20 +824,44 @@ object McpProtocol {
         "Not running" is never a reason to stop. Launch the clone, then act on
         it.
 
-        Working the UI: `altaris_ui_tree` returns the real view hierarchy —
-        text, resource ids, bounds, clickability — in one call, and
-        `altaris_ui_click` / `altaris_ui_type` / `altaris_ui_scroll` act on its
-        nodes. That is the fast path. `altaris_ocr` and `altaris_screenshot` are
-        the fallback for a canvas, a game, or a view with no nodes; they cost a
-        capture and a recognition per step. `altaris_tap` / `altaris_swipe` /
-        `altaris_key` take raw coordinates and are the last resort. When a step
-        fails, re-read the tree instead of guessing a coordinate.
+        ## Reverse engineering is REA's job, not yours
 
-        Working an app's code or runtime: use REA, the other server.
-        `altaris_rea_clone_apk` exports the clone's APKs and native libraries,
-        and `altaris_debug_attach` attaches to the running clone (starting it
-        first if needed). Ask the debugger what a value or a method really is
-        instead of inferring it from the UI.
+        For ANY question about a binary, APK, DEX, native library, firmware
+        image, archive, game asset, or what code does at runtime, use REA. Do
+        not reason about the file from its name, do not read bytes yourself, do
+        not guess, and do not shell out to objdump/strings/readelf when REA has
+        a tool for it.
+
+        Start here, every time:
+
+        1. `altaris_rea_status` — is REA installed and running.
+        2. `altaris_rea_tools` — the real catalog. REA exposes ~229 tools; call
+           `altaris_rea_call { "name": "<tool>", "arguments": { ... } }` with
+           the one that matches the question.
+        3. `altaris_rea_clone_apk` — export a clone's APKs and .so files, which
+           returns the paths to analyse.
+        4. `altaris_debug_attach` — for runtime behaviour (what a method
+           returns, what an address holds, what the process maps).
+
+        These calls start REA themselves; you do not need to start it first.
+        If `altaris_rea_status` says it is not installed, say so and stop —
+        do not fall back to reading the file by hand.
+
+        REA calls can take minutes: a cold Ghidra import plus decompile of a
+        23 MB binary legitimately runs for several minutes. Call it, wait for
+        the result, and do not assume it failed because it is slow. Do not
+        retry the same call while one is still running.
+
+        ## Working the UI
+
+        `altaris_ui_tree` returns the real view hierarchy — text, resource ids,
+        bounds, clickability — in one call, and `altaris_ui_click` /
+        `altaris_ui_type` / `altaris_ui_scroll` act on its nodes. That is the
+        fast path. `altaris_ocr` and `altaris_screenshot` are the fallback for
+        a canvas, a game, or a view with no nodes; they cost a capture and a
+        recognition per step. `altaris_tap` / `altaris_swipe` / `altaris_key`
+        take raw coordinates and are the last resort. When a step fails,
+        re-read the tree instead of guessing a coordinate.
     """.trimIndent()
 
     /** The debugger state as an agent can read it. */

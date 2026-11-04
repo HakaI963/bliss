@@ -27,6 +27,26 @@ object ReaKnowledge {
         tools; you decide what to call and in what order. It has no model of its
         own.
 
+        **For any binary, APK, DEX, native library, firmware or asset question,
+        REA is the tool — not your own reading of the bytes.** Do not reason
+        from a file name, do not shell out to strings/objdump/readelf when REA
+        has a tool for it, and do not guess.
+
+        ## 0. Start here, every time
+
+        1. `altaris_rea_status` — is it installed and running.
+        2. `altaris_rea_tools` — the real catalog (~229 tools).
+        3. `altaris_rea_call { "name": "<tool>", "arguments": { ... } }`.
+
+        These start REA themselves; you never need to start it first. If it is
+        not installed, say so and stop rather than analysing by hand.
+
+        **REA calls can take minutes.** A cold Ghidra import plus analysis of a
+        23 MB binary is several minutes of legitimate work, and the first call
+        after a restart also pays for the JVM and the provider handshake. Wait
+        for the result. Do not retry a call that is still running, and do not
+        conclude it failed because it is slow.
+
         ## 1. Identify the artifact first
 
         Before any analysis, establish what you are looking at:
