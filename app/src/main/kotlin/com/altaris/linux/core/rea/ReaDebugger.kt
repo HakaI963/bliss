@@ -192,7 +192,7 @@ object ReaDebugger {
     fun prepareGadgetAsync(context: Context) { runBlockingJob(context, "prepareGadget") }
 
     private var job: kotlinx.coroutines.Job? = null
-    private val scope = kotlinx.CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.IO)
+    private val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.IO)
 
     private fun runBlockingJob(context: Context, what: String) {
         if (job?.isActive == true) return
