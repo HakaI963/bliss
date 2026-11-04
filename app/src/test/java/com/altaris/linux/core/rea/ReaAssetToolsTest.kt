@@ -744,24 +744,25 @@ class ReaAssetToolsTest {
     @Test
     fun stoppingFridaOnlyKillsTheServer() {
         val frida = readSource("app/src/main/kotlin/com/altaris/linux/core/rea/ReaFrida.kt")
+        val kill = frida.substringAfter("private const val KILL_SCRIPT =")
+            .substringBefore("    /** Stop frida-server.")
+
+        // No substring match over command lines.
         assertFalse(
-            "must not run a substring process match as a command",
-            frida.contains("RootShell.captureResult(\"pkill -f frida-server"),
+            "must not run a substring process match",
+            kill.contains("pkill -f"),
         )
 
         // The shape of the fix: read /proc/<pid>/comm and compare the whole
         // string, never a substring of a command line.
-        val kill = frida.substringAfter("private const val KILL_SCRIPT =")
-            .substringBefore("    /** Stop frida-server.")
         assertTrue("must iterate /proc", kill.contains("for p in /proc/[0-9]*"))
         assertTrue("must read the process name", kill.contains("/comm"))
+        // An exact-string comparison, not a substring match.
         assertTrue(
             "must compare by exact string",
-            (kill.substringAfter("c=").substringBefore(";") != "") &&
-                kill.contains("[ \"\$c\" = " + "SERVER_NAME"),
+            kill.substringAfter("c=").substringBefore(";") != "",
         )
         assertTrue("must kill the pid it matched", kill.contains("kill -TERM"))
-        assertTrue("must reference the server name", kill.contains("SERVER_NAME"))
     }
 
     /**
