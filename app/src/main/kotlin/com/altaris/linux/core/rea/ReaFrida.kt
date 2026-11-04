@@ -64,11 +64,24 @@ object ReaFrida {
      * readable by the app uid.
      */
     fun isServerRunning(): Boolean = runCatching {
-        RootShell.captureResult(
+        val running = RootShell.captureResult(
             "pidof frida-server >/dev/null 2>&1 && echo RUNNING || echo STOPPED",
             15_000L,
         ).stdout.contains("RUNNING")
+        cachedRunning = running
+        running
     }.getOrDefault(false)
+
+    /**
+     * The last known server state, without asking root.
+     *
+     * A `su` call per UI poll is what made the Debugger tab expensive. This
+     * returns what the last real probe recorded, and is refreshed by
+     * [isServerRunning] whenever something actually starts or stops the server.
+     */
+    @Volatile private var cachedRunning = false
+
+    fun cachedServerRunning(): Boolean = cachedRunning
 
     /** True when the binary exists on the host. */
     fun isServerInstalled(): Boolean = runCatching {
@@ -155,6 +168,7 @@ object ReaFrida {
             )
         }.getOrNull()
         val started = result?.stdout?.contains("STARTED") == true
+        cachedRunning = started
         State(
             serverInstalled = true,
             serverRunning = started,
@@ -182,6 +196,7 @@ object ReaFrida {
             RootShell.captureResult(KILL_SCRIPT + "; echo done", 30_000L)
         }
         lastUseAt = 0L
+        cachedRunning = false
         State(serverInstalled = isServerInstalled(), serverRunning = false)
     }
 
@@ -233,6 +248,7 @@ object ReaFrida {
                 runCatching {
                     RootShell.captureResult(KILL_SCRIPT, 20_000L)
                 }
+                cachedRunning = false
                 lastUseAt = 0L
                 break
             }

@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -19,6 +20,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.altaris.linux.ui.theme.AltarisPalette
 import com.altaris.linux.ui.theme.LocalAltarisPalette
@@ -47,16 +50,59 @@ fun PrismBackdrop(
     )
 
     Box(modifier = modifier.fillMaxSize().background(palette.base)) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            if (palette.isDark) {
-                drawLattice(palette.onSurface)
-            } else {
-                drawTree(palette.onSurface)
+        // The static half — the lattice or the tree — is drawn once into a
+        // bitmap and reused. Redrawing a full-screen lattice of a few hundred
+        // circles every frame, on every screen, was pure cost: nothing in it
+        // moves.
+        val staticLayer = remember(palette.isDark, palette.onSurface, palette.base) {
+            drawStaticLayer(palette)
+        }
+        if (staticLayer != null) {
+            androidx.compose.foundation.Image(
+                bitmap = staticLayer,
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = androidx.compose.ui.layout.ContentScale.FillBounds,
+            )
+        } else {
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                if (palette.isDark) drawLattice(palette.onSurface) else drawTree(palette.onSurface)
+            }
+        }
+        // Only the leaves move, so only they are redrawn per frame.
+        if (!palette.isDark) {
+            Canvas(modifier = Modifier.fillMaxSize()) {
                 drawLeaves(palette.onSurface, phase)
             }
         }
     }
 }
+
+/**
+ * Rasterise the non-moving part of the backdrop once.
+ *
+ * Returns null when the bitmap cannot be allocated, in which case the caller
+ * falls back to drawing directly — a decorative background must never crash the
+ * screen. The lattice and the tree never change between recompositions, so
+ * caching them removes the per-frame cost entirely.
+ */
+private fun drawStaticLayer(palette: AltarisPalette): androidx.compose.ui.graphics.ImageBitmap? =
+    runCatching {
+        val width = 720
+        val height = 1280
+        val bitmap = androidx.compose.ui.graphics.ImageBitmap(width, height)
+        val canvas = androidx.compose.ui.graphics.Canvas(bitmap)
+        val scope = androidx.compose.ui.graphics.drawscope.CanvasDrawScope()
+        scope.draw(
+            density = Density(1f),
+            layoutDirection = LayoutDirection.Ltr,
+            canvas = canvas,
+            size = androidx.compose.ui.geometry.Size(width.toFloat(), height.toFloat()),
+        ) {
+            if (palette.isDark) drawLattice(palette.onSurface) else drawTree(palette.onSurface)
+        }
+        bitmap
+    }.getOrNull()
 
 /** A faint dot lattice: structure without noise. */
 private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawLattice(ink: Color) {

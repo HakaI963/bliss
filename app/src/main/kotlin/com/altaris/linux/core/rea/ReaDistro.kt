@@ -675,12 +675,30 @@ object ReaDistro {
                 _state.value = _state.value.copy(error = "Install a distro first")
                 return@withLock _state.value
             }
-            val status = ReaManager.status.value
+            // Probe first: the in-memory list is empty after a restart, and
+            // "nothing missing" would then be decided from stale data.
+            val status = runCatching { ReaManager.probe(app, target.id) }
+                .getOrDefault(ReaManager.status.value)
             val missing = ALL_TOOLS.filterNot { it in status.available }
-            if (missing.isEmpty()) return@withLock _state.value
+            if (missing.isEmpty()) {
+                // Say so. This used to return silently, so tapping Reinstall
+                // did visibly nothing at all — no progress, no message, no
+                // change. A no-op is only acceptable if it is stated.
+                _state.value = _state.value.copy(
+                    busy = "",
+                    percent = 100,
+                    installed = true,
+                    ready = true,
+                    detail = "Every tool is already installed.",
+                    error = "",
+                )
+                appendLog("nothing to install: all " + ALL_TOOLS.size + " tools are present")
+                return@withLock _state.value
+            }
             _state.value = _state.value.copy(
                 busy = "Installing " + missing.size + " tools",
                 percent = 0,
+                detail = "missing: " + missing.size + " of " + ALL_TOOLS.size,
                 error = "",
             )
             val result = ReaManager.install(app, target.id, missing) { line ->

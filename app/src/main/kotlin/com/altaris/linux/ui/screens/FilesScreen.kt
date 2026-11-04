@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
@@ -26,7 +27,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,11 +37,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.altaris.linux.core.files.FileBrowser
-import com.altaris.linux.ui.components.PrismCard
 import com.altaris.linux.ui.components.PrismChip
 import com.altaris.linux.ui.components.PrismNote
 import com.altaris.linux.ui.theme.Prism
@@ -54,12 +54,17 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * A real file manager.
+ * A dual-pane file manager.
+ *
+ * Two panes, each an independent location with its own history. The active
+ * pane is the one a tap acts on; the other is the destination for a copy or a
+ * move, which is the whole reason to have two — dragging a file from a distro
+ * rootfs into internal storage is one action instead of three.
  *
  * It browses three kinds of place, and the distinction matters:
  *
  *  - **host** — internal storage, Downloads, the app's own data, and (with
- *    root) /data and /system;
+ *    root) /data, /system, /vendor and the filesystem root;
  *  - **proot guest** — a distro rootfs, which is ordinary files to this
  *    process;
  *  - **chroot guest** — a tree under /data/local, which SELinux hides from the
@@ -77,210 +82,194 @@ fun FilesScreen(
     val scope = rememberCoroutineScope()
     val accent = MaterialTheme.colorScheme.primary
 
-    var path by remember { mutableStateOf("") }
-    var listing by remember { mutableStateOf(FileBrowser.Listing("")) }
-    var loading by remember { mutableStateOf(false) }
-    var showHidden by remember { mutableStateOf(false) }
-    var picked by remember { mutableStateOf<FileBrowser.Entry?>(null) }
-    var pendingDelete by remember { mutableStateOf<FileBrowser.Entry?>(null) }
-    var editing by remember { mutableStateOf<Pair<String, String>?>(null) }
-    var creating by remember { mutableStateOf<String?>(null) }
-    var renaming by remember { mutableStateOf<FileBrowser.Entry?>(null) }
+    // One pane model, two instances. Everything per-pane lives here so the two
+    // panes cannot drift in behaviour.
+    var panes by remember { mutableStateOf(listOf(PaneState(), PaneState())) }
+    var active by remember { mutableStateOf(0) }
+    var dual by remember { mutableStateOf(true) }
     var places by remember { mutableStateOf<List<FileBrowser.Place>>(emptyList()) }
     var notice by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf("") }
     var sort by remember { mutableStateOf(FileBrowser.Sort.NAME) }
     var descending by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
+    var picked by remember { mutableStateOf<Pair<Int, FileBrowser.Entry>?>(null) }
+    var pendingDelete by remember { mutableStateOf<Pair<Int, FileBrowser.Entry>?>(null) }
+    var editing by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var creating by remember { mutableStateOf<String?>(null) }
+    var renaming by remember { mutableStateOf<Pair<Int, FileBrowser.Entry>?>(null) }
 
-    suspend fun load(target: String) {
-        loading = true
+    suspend fun load(index: Int, target: String) {
+        panes = panes.toMutableList().also { it[index] = it[index].copy(loading = true) }
         val result = withContext(Dispatchers.IO) {
-            FileBrowser.list(context, target, showHidden)
+            FileBrowser.list(context, target, panes[index].showHidden)
         }
-        listing = result
-        path = target
-        loading = false
+        panes = panes.toMutableList().also {
+            it[index] = it[index].copy(
+                path = target,
+                listing = result,
+                loading = false,
+            )
+        }
     }
 
     LaunchedEffect(Unit) {
         places = withContext(Dispatchers.IO) { FileBrowser.places(context) }
-        load(FileBrowser.defaultPath(context))
+        val start = FileBrowser.defaultPath(context)
+        load(0, start)
+        // The second pane opens on the same place: the first action is usually
+        // "copy something out of here", and starting at the top-level list
+        // would be a second navigation.
+        load(1, start)
+    }
+
+    fun refreshBoth() {
+        scope.launch {
+            load(0, panes[0].path)
+            load(1, panes[1].path)
+        }
     }
 
     Column(
         modifier = modifier
             .fillMaxSize()
             .padding(horizontal = if (embeddedInBottomNav) Prism.Gutter else 0.dp)
-            .padding(top = 6.dp),
-        verticalArrangement = Arrangement.spacedBy(5.dp),
+            .padding(top = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        // Where you are.
-        PrismCard(accent = accent) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Files", fontSize = 11.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
-                Spacer(Modifier.weight(1f))
-                PrismChip(
-                    if (showHidden) "Hidden on" else "Hidden off",
-                    accent,
-                    selected = showHidden,
-                    onClick = {
-                        showHidden = !showHidden
-                        scope.launch { load(path) }
-                    },
-                )
-            }
-            Spacer(Modifier.height(3.dp))
-            // Breadcrumbs scroll horizontally so a deep path never pushes the
-            // controls off screen.
-            Row(
-                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                val crumbs = remember(path, places) { FileBrowser.crumbs(context, path) }
-                crumbs.forEachIndexed { index, (label, target) ->
-                    if (index > 0) {
-                        Text(" / ", fontSize = 8.sp, color = altarisMutedText())
-                    }
-                    Text(
-                        label,
-                        fontSize = 8.5.sp,
-                        fontFamily = FontFamily.Monospace,
-                        color = if (index == crumbs.lastIndex) accent else altarisMutedText(),
-                        maxLines = 1,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(3.dp))
-                            .clickable { scope.launch { load(target) } }
-                            .padding(horizontal = 2.dp, vertical = 1.dp),
-                    )
-                }
-            }
-            Spacer(Modifier.height(3.dp))
-            // Places, in one scrollable row.
-            Row(
-                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                places.forEach { place ->
-                    PrismChip(
-                        place.label,
-                        accent,
-                        selected = path.startsWith(place.path),
-                        onClick = { scope.launch { load(place.path) } },
-                    )
-                }
-            }
-            if (notice.isNotBlank()) {
-                Spacer(Modifier.height(3.dp))
-                PrismNote(notice, fontSize = 9.sp)
-            }
-        }
-
-        // Actions for the current directory.
-        PrismCard(accent = accent) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                PrismChip("Up", accent) {
-                    val parent = FileBrowser.parent(context, path)
-                    if (parent != null) scope.launch { load(parent) }
-                }
-                PrismChip("New file", accent) { creating = "file" }
-                PrismChip("New folder", accent) { creating = "dir" }
-                PrismChip("Refresh", accent) { scope.launch { load(path) } }
-            }
-            Spacer(Modifier.height(3.dp))
-            OutlinedTextField(
-                value = query,
-                onValueChange = { query = it },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                textStyle = androidx.compose.ui.text.TextStyle(fontSize = 10.sp),
-                placeholder = {
-                    Text("Filter this folder", fontSize = 10.sp, color = altarisMutedText())
+        // ---------------------------------------------------------- controls
+        Row(
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            PrismChip(
+                if (dual) "Two panes" else "One pane",
+                accent,
+                selected = dual,
+                onClick = {
+                    dual = !dual
+                    if (!dual) active = 0
                 },
             )
-            Spacer(Modifier.height(3.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                FileBrowser.Sort.entries.forEach { option ->
-                    PrismChip(
-                        option.label,
-                        accent,
-                        selected = sort == option,
-                        onClick = { sort = option },
-                    )
-                }
+            PrismChip("New folder", accent) { creating = "dir" }
+            PrismChip("New file", accent) { creating = "file" }
+            PrismChip(
+                if (panes[active].showHidden) "Hidden on" else "Hidden off",
+                accent,
+                selected = panes[active].showHidden,
+                onClick = {
+                    val next = !panes[active].showHidden
+                    panes = panes.toMutableList().also {
+                        it[active] = it[active].copy(showHidden = next)
+                    }
+                    scope.launch { load(active, panes[active].path) }
+                },
+            )
+            PrismChip("Refresh", accent) { refreshBoth() }
+            FileBrowser.Sort.entries.forEach { option ->
                 PrismChip(
-                    if (descending) "Z→A" else "A→Z",
+                    option.label,
                     accent,
-                    selected = descending,
-                    onClick = { descending = !descending },
+                    selected = sort == option,
+                    onClick = { sort = option },
                 )
             }
+            PrismChip(
+                if (descending) "Z→A" else "A→Z",
+                accent,
+                selected = descending,
+                onClick = { descending = !descending },
+            )
         }
 
-        // The listing.
-        PrismCard(accent = accent, modifier = Modifier.fillMaxWidth().weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+        // Filter applies to the active pane only: it is a lens, not a mode.
+        OutlinedTextField(
+            value = query,
+            onValueChange = { query = it },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            textStyle = androidx.compose.ui.text.TextStyle(fontSize = 10.sp),
+            placeholder = {
                 Text(
-                    if (query.isBlank()) listing.entries.size.toString() + " items"
-                    else FileBrowser.filtered(listing.entries, query).size.toString() +
-                        " of " + listing.entries.size,
-                    fontSize = 8.5.sp,
+                    "Filter " + panes[active].path.substringAfterLast('/'),
+                    fontSize = 10.sp,
                     color = altarisMutedText(),
                 )
-                if (listing.usedRoot) {
-                    Spacer(Modifier.width(4.dp))
-                    Text("· via root", fontSize = 8.sp, color = accent)
-                }
-                Spacer(Modifier.weight(1f))
-                if (loading) Text("…", fontSize = 9.sp, color = accent)
-            }
-            if (listing.error.isNotBlank()) {
-                Spacer(Modifier.height(3.dp))
-                PrismNote(listing.error, color = MaterialTheme.colorScheme.error, fontSize = 9.sp)
-                return@PrismCard
-            }
-            Spacer(Modifier.height(2.dp))
-            val visible = remember(listing, query, sort, descending) {
-                FileBrowser.sorted(FileBrowser.filtered(listing.entries, query), sort, descending)
-            }
-            LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f)) {
-                items(visible, key = { it.path }) { entry ->
-                    FileRow(
-                        entry = entry,
-                        accent = accent,
-                        onOpen = {
-                            if (entry.dir) {
-                                scope.launch { load(entry.path) }
-                            } else if (FileBrowser.isViewable(entry)) {
-                                scope.launch {
-                                    val text = withContext(Dispatchers.IO) {
-                                        FileBrowser.read(context, entry.path)
-                                    }
-                                    text.onSuccess { editing = entry.path to it }
-                                        .onFailure { notice = it.message ?: "cannot open" }
-                                }
-                            } else {
-                                picked = entry
-                            }
-                        },
-                        onMore = { picked = entry },
-                    )
-                }
-            }
+            },
+        )
+
+        // The two panes. In dual mode they split the height; in single mode the
+        // active one takes everything.
+        if (dual) {
+            Pane(
+                state = panes[0],
+                active = active == 0,
+                accent = accent,
+                query = if (active == 0) query else "",
+                sort = sort,
+                descending = descending,
+                places = places,
+                modifier = Modifier.weight(1f),
+                onActivate = { active = 0 },
+                onNavigate = { scope.launch { load(0, it) } },
+                onMore = { picked = 0 to it },
+                onTransfer = { entry, move ->
+                    scope.launch {
+                        notice = transfer(context, entry, move, panes[1].path) { busy = it }
+                        busy = ""
+                        load(1, panes[1].path)
+                    }
+                },
+            )
+            Pane(
+                state = panes[1],
+                active = active == 1,
+                accent = accent,
+                query = if (active == 1) query else "",
+                sort = sort,
+                descending = descending,
+                places = places,
+                modifier = Modifier.weight(1f),
+                onActivate = { active = 1 },
+                onNavigate = { scope.launch { load(1, it) } },
+                onMore = { picked = 1 to it },
+                onTransfer = { entry, move ->
+                    scope.launch {
+                        notice = transfer(context, entry, move, panes[0].path) { busy = it }
+                        busy = ""
+                        load(0, panes[0].path)
+                    }
+                },
+            )
+        } else {
+            Pane(
+                state = panes[0],
+                active = true,
+                accent = accent,
+                query = query,
+                sort = sort,
+                descending = descending,
+                places = places,
+                modifier = Modifier.weight(1f),
+                onActivate = { active = 0 },
+                onNavigate = { scope.launch { load(0, it) } },
+                onMore = { picked = 0 to it },
+                onTransfer = { _, _ -> },
+            )
+        }
+
+        if (busy.isNotBlank()) {
+            PrismNote(busy, fontSize = 9.sp)
+        }
+        if (notice.isNotBlank()) {
+            PrismNote(notice, fontSize = 9.sp)
         }
     }
 
     // ------------------------------------------------------------- dialogs
 
-    picked?.let { entry ->
-        val isDir = entry.dir
+    picked?.let { (index, entry) ->
         AlertDialog(
             onDismissRequest = { picked = null },
             confirmButton = {
@@ -288,7 +277,7 @@ fun FilesScreen(
             },
             dismissButton = {
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    if (!isDir && FileBrowser.isViewable(entry)) {
+                    if (!entry.dir && FileBrowser.isViewable(entry)) {
                         TextButton(onClick = {
                             picked = null
                             scope.launch {
@@ -301,11 +290,11 @@ fun FilesScreen(
                     }
                     TextButton(onClick = {
                         picked = null
-                        renaming = entry
+                        renaming = index to entry
                     }) { Text("Rename", color = accent) }
                     TextButton(onClick = {
                         picked = null
-                        pendingDelete = entry
+                        pendingDelete = index to entry
                     }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
                 }
             },
@@ -313,12 +302,10 @@ fun FilesScreen(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     Detail(entry.path, accent)
-                    if (!isDir) {
+                    if (!entry.dir) {
                         Detail(com.altaris.linux.core.rea.ReaDistro.formatBytes(entry.size), accent)
                     }
-                    if (entry.modified > 0) {
-                        Detail(formatTime(entry.modified), accent)
-                    }
+                    if (entry.modified > 0) Detail(formatTime(entry.modified), accent)
                     if (entry.mode.isNotBlank()) Detail(entry.mode, accent)
                     if (entry.needsRoot) {
                         Text(
@@ -332,7 +319,7 @@ fun FilesScreen(
         )
     }
 
-    pendingDelete?.let { entry ->
+    pendingDelete?.let { (index, entry) ->
         AlertDialog(
             onDismissRequest = { pendingDelete = null },
             confirmButton = {
@@ -342,7 +329,7 @@ fun FilesScreen(
                         withContext(Dispatchers.IO) { FileBrowser.delete(context, entry.path) }
                             .onFailure { notice = it.message ?: "delete failed" }
                             .onSuccess { notice = "Deleted " + entry.name }
-                        load(path)
+                        load(index, panes[index].path)
                     }
                 }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
             },
@@ -374,7 +361,7 @@ fun FilesScreen(
                             .onFailure { notice = it.message ?: "write failed" }
                             .onSuccess { notice = "Saved" }
                         editing = null
-                        load(path)
+                        refreshBoth()
                     }
                 }) { Text("Save", color = accent) }
             },
@@ -402,7 +389,7 @@ fun FilesScreen(
             onDismissRequest = { creating = null },
             confirmButton = {
                 TextButton(onClick = {
-                    val target = path.trimEnd('/') + "/" + name.trim()
+                    val target = panes[active].path.trimEnd('/') + "/" + name.trim()
                     if (name.isBlank()) return@TextButton
                     creating = null
                     scope.launch {
@@ -410,16 +397,14 @@ fun FilesScreen(
                             if (kind == "dir") FileBrowser.createDirectory(context, target)
                             else FileBrowser.createFile(context, target)
                         }.onFailure { notice = it.message ?: "failed" }
-                        load(path)
+                        load(active, panes[active].path)
                     }
                 }) { Text("Create", color = accent) }
             },
             dismissButton = {
                 TextButton(onClick = { creating = null }) { Text("Cancel") }
             },
-            title = {
-                Text(if (kind == "dir") "New folder" else "New file", fontSize = 13.sp)
-            },
+            title = { Text(if (kind == "dir") "New folder" else "New file", fontSize = 13.sp) },
             text = {
                 OutlinedTextField(
                     value = name,
@@ -432,7 +417,7 @@ fun FilesScreen(
         )
     }
 
-    renaming?.let { entry ->
+    renaming?.let { (index, entry) ->
         var name by remember(entry.path) { mutableStateOf(entry.name) }
         AlertDialog(
             onDismissRequest = { renaming = null },
@@ -446,7 +431,7 @@ fun FilesScreen(
                         withContext(Dispatchers.IO) {
                             FileBrowser.rename(context, entry.path, target)
                         }.onFailure { notice = it.message ?: "rename failed" }
-                        load(path)
+                        load(index, panes[index].path)
                     }
                 }) { Text("Rename", color = accent) }
             },
@@ -466,28 +451,189 @@ fun FilesScreen(
     }
 }
 
+/** Everything one pane remembers. */
+private data class PaneState(
+    val path: String = "",
+    val listing: FileBrowser.Listing = FileBrowser.Listing(""),
+    val loading: Boolean = false,
+    val showHidden: Boolean = false,
+)
+
+/**
+ * Copy or move [entry] into [destination].
+ *
+ * A directory can be large, so this is a suspend call the caller launches and
+ * reports through [status] — never a fire-and-forget on a global scope, which
+ * would outlive the screen and update state after it is gone.
+ */
+private suspend fun transfer(
+    context: android.content.Context,
+    entry: FileBrowser.Entry,
+    move: Boolean,
+    destination: String,
+    status: (String) -> Unit,
+): String {
+    val target = destination.trimEnd('/') + "/" + entry.name
+    if (target == entry.path) return "That is already the destination."
+    status((if (move) "Moving " else "Copying ") + entry.name)
+    return withContext(Dispatchers.IO) {
+        val result = FileBrowser.copy(context, entry.path, target)
+        if (result.isSuccess && move) FileBrowser.delete(context, entry.path)
+        status("")
+        if (result.isFailure) {
+            (if (move) "Move" else "Copy") + " failed: " +
+                (result.exceptionOrNull()?.message ?: "unknown error")
+        } else {
+            (if (move) "Moved " else "Copied ") + entry.name
+        }
+    }
+}
+
+/** One pane: location chips, breadcrumbs and the listing. */
+@Composable
+private fun Pane(
+    state: PaneState,
+    active: Boolean,
+    accent: androidx.compose.ui.graphics.Color,
+    query: String,
+    sort: FileBrowser.Sort,
+    descending: Boolean,
+    places: List<FileBrowser.Place>,
+    modifier: Modifier = Modifier,
+    onActivate: () -> Unit,
+    onNavigate: (String) -> Unit,
+    onMore: (FileBrowser.Entry) -> Unit,
+    onTransfer: (FileBrowser.Entry, Boolean) -> Unit,
+) {
+    val listState = rememberLazyListState()
+    val context = LocalContext.current
+    val border = if (active) accent.copy(alpha = 0.55f) else MaterialTheme.colorScheme.outline
+    val visible = remember(state.listing, query, sort, descending) {
+        FileBrowser.sorted(FileBrowser.filtered(state.listing.entries, query), sort, descending)
+    }
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(Prism.PanelRadius))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f))
+            .border(1.dp, border, RoundedCornerShape(Prism.PanelRadius))
+            .clickable(onClick = onActivate)
+            .padding(4.dp),
+        verticalArrangement = Arrangement.spacedBy(3.dp),
+    ) {
+        // Where this pane is.
+        Row(
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                if (active) "●" else "○",
+                fontSize = 7.sp,
+                color = if (active) accent else altarisMutedText(),
+            )
+            Spacer(Modifier.width(4.dp))
+            FileBrowser.crumbs(context = context, path = state.path)
+                .forEachIndexed { index, (label, target) ->
+                    if (index > 0) Text("/", fontSize = 8.sp, color = altarisMutedText())
+                    Text(
+                        label,
+                        fontSize = 8.5.sp,
+                        fontFamily = FontFamily.Monospace,
+                        color = if (index == 0) accent else altarisMutedText(),
+                        maxLines = 1,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(3.dp))
+                            .clickable { onNavigate(target) }
+                            .padding(horizontal = 2.dp, vertical = 1.dp),
+                    )
+                }
+        }
+
+        // Places, so a pane can jump to a distro or the filesystem root.
+        Row(
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(3.dp),
+        ) {
+            places.forEach { place ->
+                PrismChip(
+                    place.label,
+                    accent,
+                    selected = state.path == place.path || state.path.startsWith(place.path + "/"),
+                    onClick = { onNavigate(place.path) },
+                )
+            }
+        }
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                when {
+                    state.loading -> "…"
+                    query.isNotBlank() -> visible.size.toString() + " of " +
+                        state.listing.entries.size
+                    else -> state.listing.entries.size.toString() + " items"
+                },
+                fontSize = 8.sp,
+                color = altarisMutedText(),
+            )
+            if (state.listing.usedRoot) {
+                Spacer(Modifier.width(4.dp))
+                Text("· root", fontSize = 7.5.sp, color = accent)
+            }
+            Spacer(Modifier.weight(1f))
+            PrismChip("Up", accent) {
+                FileBrowser.parent(context, state.path)
+                    ?.let(onNavigate)
+            }
+        }
+
+        if (state.listing.error.isNotBlank()) {
+            PrismNote(state.listing.error, color = MaterialTheme.colorScheme.error, fontSize = 9.sp)
+        }
+
+        LazyColumn(state = listState, modifier = Modifier.fillMaxWidth().weight(1f)) {
+            items(visible, key = { it.path }) { entry ->
+                FileRow(
+                    entry = entry,
+                    accent = accent,
+                    onOpen = {
+                        onActivate()
+                        if (entry.dir) onNavigate(entry.path) else onMore(entry)
+                    },
+                    onMore = {
+                        onActivate()
+                        onMore(entry)
+                    },
+                    onCopy = { onTransfer(entry, false) },
+                    onMove = { onTransfer(entry, true) },
+                )
+            }
+        }
+    }
+}
+
 @Composable
 private fun FileRow(
     entry: FileBrowser.Entry,
     accent: androidx.compose.ui.graphics.Color,
     onOpen: () -> Unit,
     onMore: () -> Unit,
+    onCopy: () -> Unit,
+    onMove: () -> Unit,
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(3.dp))
             .clickable(onClick = onOpen)
-            .padding(horizontal = 3.dp, vertical = 5.dp),
+            .padding(horizontal = 3.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
             modifier = Modifier
                 .size(4.dp)
                 .clip(RoundedCornerShape(2.dp))
-                .background(
-                    if (entry.dir) accent else MaterialTheme.colorScheme.outline
-                ),
+                .background(if (entry.dir) accent else MaterialTheme.colorScheme.outline),
         )
         Spacer(Modifier.width(6.dp))
         Column(Modifier.weight(1f)) {
@@ -501,23 +647,40 @@ private fun FileRow(
                     MaterialTheme.colorScheme.onSurface
                 },
             )
-            val meta = buildList {
-                if (!entry.dir) add(com.altaris.linux.core.rea.ReaDistro.formatBytes(entry.size))
-                if (entry.modified > 0) add(formatTime(entry.modified))
-                if (entry.needsRoot) add("needs root")
-            }.joinToString(" · ")
-            if (meta.isNotBlank()) {
-                Text(meta, fontSize = 7.5.sp, color = altarisMutedText(), maxLines = 1)
+            if (!entry.dir) {
+                Text(
+                    com.altaris.linux.core.rea.ReaDistro.formatBytes(entry.size),
+                    fontSize = 7.5.sp,
+                    color = altarisMutedText(),
+                )
             }
         }
         Text(
-            if (entry.dir) "dir" else entry.ext.ifBlank { "file" },
-            fontSize = 7.5.sp,
+            "⇄",
+            fontSize = 11.sp,
+            color = accent,
+            modifier = Modifier
+                .clip(RoundedCornerShape(3.dp))
+                .clickable(onClick = onCopy)
+                .padding(horizontal = 5.dp, vertical = 2.dp),
+        )
+        Text(
+            "→",
+            fontSize = 11.sp,
+            color = accent,
+            modifier = Modifier
+                .clip(RoundedCornerShape(3.dp))
+                .clickable(onClick = onMove)
+                .padding(horizontal = 5.dp, vertical = 2.dp),
+        )
+        Text(
+            "⋯",
+            fontSize = 11.sp,
             color = altarisMutedText(),
             modifier = Modifier
                 .clip(RoundedCornerShape(3.dp))
                 .clickable(onClick = onMore)
-                .padding(horizontal = 4.dp, vertical = 2.dp),
+                .padding(horizontal = 5.dp, vertical = 2.dp),
         )
     }
 }
@@ -526,11 +689,9 @@ private fun FileRow(
 private fun Detail(text: String, accent: androidx.compose.ui.graphics.Color) {
     Text(
         text,
-        fontSize = 9.sp,
+        fontSize = 8.5.sp,
         fontFamily = FontFamily.Monospace,
-        color = altarisMutedText(),
-        maxLines = 3,
-        overflow = TextOverflow.Ellipsis,
+        color = accent,
     )
 }
 

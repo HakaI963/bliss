@@ -471,6 +471,29 @@ fun PrismSegmented(
     }
 }
 
+/**
+ * The shared pulse for every status dot on screen.
+ *
+ * Each orb used to own an `rememberInfiniteTransition`, so a list with forty
+ * active rows ran forty independent animations, each repainting its own layer
+ * forever. That is the main reason scrolling felt heavy. One clock drives them
+ * all, and the phase is derived from it.
+ */
+@Composable
+private fun orbPulse(): Float {
+    val pulse = rememberInfiniteTransition(label = "orbPulseShared")
+    val value by pulse.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1800, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart,
+        ),
+        label = "orbHaloShared",
+    )
+    return value
+}
+
 /** A status dot — the reference's `.status-dot`. It breathes while live. */
 @Composable
 fun PrismOrb(
@@ -479,16 +502,8 @@ fun PrismOrb(
     modifier: Modifier = Modifier,
 ) {
     val scheme = MaterialTheme.colorScheme
-    val pulse = rememberInfiniteTransition(label = "orbPulse")
-    val halo by pulse.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1800, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart,
-        ),
-        label = "orbHalo",
-    )
+    // Only a live orb animates at all; an inactive one draws a static dot.
+    val halo = if (active) orbPulse() else 0f
     val haloScale = if (active) 0.6f + halo * 1.4f else 0f
     Box(
         modifier = modifier.size(6.dp),

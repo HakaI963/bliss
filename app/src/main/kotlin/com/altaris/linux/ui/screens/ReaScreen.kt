@@ -1099,15 +1099,17 @@ private fun DebuggerTab(accent: Color) {
     val scope = rememberCoroutineScope()
     val session by ReaDebugger.state.collectAsState()
 
-    // Poll, do not read once.
+    // Poll, do not read once — but poll cheaply.
     //
-    // This was a single refresh on open, so every row kept whatever the state
-    // was when the tab appeared: the Frida row could say "Install" while the
-    // server was running, and nothing ever showed it stopping. A two-second
-    // poll is cheap (two root process checks) and makes the tab honest.
+    // A full refresh spawns a guest shell and two root process checks; running
+    // that every two seconds is what made the app laggy whenever this tab was
+    // open. The loop now does a light refresh (cached state only) and a full one
+    // every fifth tick, so the rows stay honest without a shell per second.
     LaunchedEffect(Unit) {
+        var tick = 0
         while (true) {
-            withContext(Dispatchers.IO) { ReaDebugger.refresh(context) }
+            withContext(Dispatchers.IO) { ReaDebugger.refresh(context, light = tick % 5 != 0) }
+            tick += 1
             delay(2_000L)
         }
     }

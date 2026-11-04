@@ -74,11 +74,31 @@ object ReaDebugger {
      * Cheap: one probe inside the distro, plus the list of processes the clone
      * owns. Called when the tab opens and after every attach.
      */
-    suspend fun refresh(context: Context) = withContext(Dispatchers.IO) {
+    /**
+     * Re-read the backend state.
+     *
+     * [light] skips the expensive half: the guest shell probe and the two root
+     * process checks. The Debugger tab polls this while it is open, and running
+     * all of it every two seconds spawned a shell plus two `su` calls per tick
+     * — which is what made the whole app feel laggy while that tab was up. The
+     * light path reads only what is cached in this process; a full refresh runs
+     * on open, on attach, and after any action that changes the state.
+     */
+    suspend fun refresh(context: Context, light: Boolean = false) = withContext(Dispatchers.IO) {
         val id = distro(context) ?: run {
             _state.value = _state.value.copy(
                 available = false,
                 reason = "REA is not installed. Install it from Tools → Reverse engineering.",
+            )
+            return@withContext
+        }
+        if (light) {
+            // Cheap: only what is already known without touching the guest.
+            val fridaRunning = ReaFrida.cachedServerRunning()
+            _state.value = _state.value.copy(
+                available = _state.value.available || fridaRunning,
+                fridaRunning = fridaRunning,
+                gadgetReady = FridaGadget.isCached(context),
             )
             return@withContext
         }

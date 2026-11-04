@@ -574,6 +574,28 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * Ask for the display's highest refresh rate.
+     *
+     * The app never requested one, so it ran at whatever the system chose —
+     * usually 60 Hz even on a 120 Hz panel, because that is the safe default
+     * when an app does not say otherwise. Compose draws in step with the
+     * display, so this is the difference between 60 and 120 fps for every
+     * animation and every scroll. The system still wins: if it throttles for
+     * heat or battery, the rate drops and nothing here fights it.
+     */
+    private fun requestHighRefreshRate() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
+        runCatching {
+            val display = display ?: return
+            val best = display.supportedModes.maxByOrNull { it.refreshRate } ?: return
+            val params = window.attributes
+            params.preferredDisplayModeId = best.modeId
+            params.preferredRefreshRate = best.refreshRate
+            window.attributes = params
+        }
+    }
+
     override fun onDestroy() {
         GpuDriverInstaller.onPending = null
         DriverRelease.disarm(this)
@@ -583,6 +605,7 @@ class MainActivity : ComponentActivity() {
     @OptIn(ExperimentalPermissionsApi::class, ExperimentalHazeMaterialsApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        requestHighRefreshRate()
         GpuDriverInstaller.onPending = { runOnUiThread { armDriverResume() } }
         armDriverResume()
         if (savedInstanceState == null) {
