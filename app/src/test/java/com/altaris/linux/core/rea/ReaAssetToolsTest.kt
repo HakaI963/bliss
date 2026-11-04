@@ -773,8 +773,10 @@ class ReaAssetToolsTest {
     @Test
     fun theInstructionsRequireReaForReverseEngineering() {
         val mcp = readSource("app/src/main/kotlin/com/altaris/linux/core/control/McpProtocol.kt")
+        // Instruction text wraps, so collapse whitespace before matching.
         val instructions = mcp.substringAfter("private val INSTRUCTIONS = \"\"\"")
             .substringBefore("\"\"\".trimIndent()")
+            .replace(Regex("\\s+"), " ")
         assertTrue(
             "must say reverse engineering is REA's job",
             instructions.contains("Reverse engineering is REA's job"),

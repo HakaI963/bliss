@@ -882,18 +882,21 @@ class ReaTabsAndFilesTest {
         val source = readSource(
             "app/src/main/kotlin/com/altaris/linux/core/control/McpProtocol.kt"
         )
+        // Instruction text wraps, so match on whitespace-collapsed content
+        // rather than a single line.
+        val flat = source.replace(Regex("\\s+"), " ")
         assertTrue("must publish instructions", source.contains(".put(\"instructions\""))
         assertTrue(
             "must say every app is a clone",
-            source.contains("Every app you can reach is a clone"),
+            flat.contains("Every app you can reach is a clone"),
         )
         assertTrue(
             "must prefer the node tree",
-            source.contains("That is the fast path"),
+            flat.contains("That is the fast path"),
         )
         assertTrue(
             "must mark OCR as the fallback",
-            source.contains("the fallback for a canvas"),
+            flat.contains("the fallback for a canvas"),
         )
     }
 }
