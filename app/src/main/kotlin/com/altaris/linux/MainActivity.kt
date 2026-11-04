@@ -31,17 +31,8 @@ import androidx.compose.foundation.background
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.material.icons.filled.Apps
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.Build
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Layers
-import androidx.compose.material.icons.filled.Terminal
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -59,9 +50,7 @@ import com.google.accompanist.permissions.rememberPermissionState
 import com.altaris.linux.ui.components.BottomTab
 import com.altaris.linux.ui.components.AltarisCommandBar
 import com.altaris.linux.ui.components.AltarisDock
-import com.altaris.linux.ui.components.CommandPaletteOverlay
 import com.altaris.linux.ui.components.DockDestination
-import com.altaris.linux.ui.components.PaletteAction
 import com.altaris.linux.ui.components.GlassScaffold
 import com.altaris.linux.ui.components.InstallTaskBar
 import com.altaris.linux.ui.theme.AltarisTheme
@@ -648,7 +637,6 @@ class MainActivity : ComponentActivity() {
 
                 // The command palette is the new navigation surface: one
                 // searchable list that jumps to screens and actions.
-                var paletteOpen by remember { mutableStateOf(false) }
 
 
                 // Drain external intent requests (one-shot; request side never
@@ -720,7 +708,8 @@ class MainActivity : ComponentActivity() {
                         currentScreen = Screen.HOME
                     } else if (currentScreen == Screen.SETTINGS
                         || currentScreen == Screen.DISTRO_SETTINGS
-                        || currentScreen == Screen.INSTALL_WIZARD) {
+                        || currentScreen == Screen.INSTALL_WIZARD
+                        || currentScreen == Screen.FILES) {
                         currentScreen = Screen.HOME
                         currentTab = BottomTab.HOME
                     } else if (currentScreen == Screen.ONBOARDING || currentScreen == Screen.PREREQUISITES) {
@@ -940,7 +929,6 @@ class MainActivity : ComponentActivity() {
                 fun ShellCommandBar(
                     displayLive: Boolean,
                     cloneRunning: Boolean,
-                    onOpenPalette: () -> Unit,
                     onOpenTools: () -> Unit,
                     onOpenSettings: () -> Unit,
                     onOpenHostShell: () -> Unit,
@@ -954,7 +942,6 @@ class MainActivity : ComponentActivity() {
                             else -> "READY"
                         },
                         live = displayLive || cloneRunning,
-                        onOpenPalette = onOpenPalette,
                         onOpenTools = onOpenTools,
                         onOpenSettings = onOpenSettings,
                         onOpenHostShell = onOpenHostShell,
@@ -1068,7 +1055,6 @@ class MainActivity : ComponentActivity() {
                                                 ShellCommandBar(
                                                     displayLive = session != null,
                                                     cloneRunning = activeClone != null,
-                                                    onOpenPalette = { paletteOpen = true },
                                                     onOpenTools = { currentTab = BottomTab.TOOLS },
                                                     onOpenSettings = { currentScreen = Screen.SETTINGS },
                                                     onOpenHostShell = openHostShell,
@@ -1142,25 +1128,6 @@ class MainActivity : ComponentActivity() {
                                     .padding(horizontal = 12.dp)
                                     .statusBarsPadding(),
                             ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    Text(
-                                        "Files",
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                    )
-                                    Spacer(Modifier.weight(1f))
-                                    Text(
-                                        "back",
-                                        fontSize = 10.sp,
-                                        color = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier
-                                            .clickable { currentScreen = Screen.HOME }
-                                            .padding(6.dp),
-                                    )
-                                }
                                 com.altaris.linux.ui.screens.FilesScreen(
                                     embeddedInBottomNav = true,
                                 )
@@ -1434,84 +1401,6 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                // The command palette floats above the whole shell.
-                if (paletteOpen) {
-                    CommandPaletteOverlay(
-                        actions = buildList {
-                            add(
-                                PaletteAction(
-                                    id = "home",
-                                    title = "Home",
-                                    subtitle = "Containers, status and the host shell",
-                                    icon = Icons.Default.Home,
-                                    accent = MaterialTheme.colorScheme.primary,
-                                    onSelect = { currentTab = BottomTab.HOME },
-                                )
-                            )
-                            add(
-                                PaletteAction(
-                                    id = "distros",
-                                    title = "Distros",
-                                    subtitle = "Install and manage containers",
-                                    icon = Icons.Default.Layers,
-                                    accent = MaterialTheme.colorScheme.secondary,
-                                    onSelect = { currentTab = BottomTab.DISTROS },
-                                )
-                            )
-                            add(
-                                PaletteAction(
-                                    id = "utility",
-                                    title = "Utility",
-                                    subtitle = "Cloned apps and the file manager",
-                                    icon = Icons.Default.Apps,
-                                    accent = MaterialTheme.colorScheme.tertiary,
-                                    onSelect = { currentTab = BottomTab.UTILITY },
-                                )
-                            )
-                            add(
-                                PaletteAction(
-                                    id = "rea",
-                                    title = "REA",
-                                    subtitle = "Reverse engineering analysis",
-                                    icon = Icons.Default.AutoAwesome,
-                                    accent = MaterialTheme.colorScheme.secondary,
-                                    onSelect = { currentTab = BottomTab.REA },
-                                )
-                            )
-                            add(
-                                PaletteAction(
-                                    id = "tools",
-                                    title = "Tools",
-                                    subtitle = "Reverse engineering, MCP and agent actions",
-                                    icon = Icons.Default.Build,
-                                    accent = MaterialTheme.colorScheme.primary,
-                                    onSelect = { currentTab = BottomTab.TOOLS },
-                                )
-                            )
-                            add(
-                                PaletteAction(
-                                    id = "terminal",
-                                    title = "Host shell",
-                                    subtitle = "A shell on the Android host",
-                                    icon = Icons.Default.Terminal,
-                                    accent = MaterialTheme.colorScheme.secondary,
-                                    onSelect = { openHostShell() },
-                                )
-                            )
-                            add(
-                                PaletteAction(
-                                    id = "settings",
-                                    title = "Settings",
-                                    subtitle = "Theme, storage, diagnostics",
-                                    icon = Icons.Default.Settings,
-                                    accent = MaterialTheme.colorScheme.tertiary,
-                                    onSelect = { currentScreen = Screen.SETTINGS },
-                                )
-                            )
-                        },
-                        onDismiss = { paletteOpen = false },
-                    )
-                }
             }
         }
     }

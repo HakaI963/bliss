@@ -930,6 +930,35 @@ object McpProtocol {
         the result, and do not assume it failed because it is slow. Do not
         retry the same call while one is still running.
 
+        ## Ghidra: low-memory mode is the default, and the reason matters
+
+        `altaris_ghidra_analyze` defaults to `"mode": "low"`. That is not a
+        limitation to work around — it is what keeps the device alive.
+
+        Low mode disables Decompiler Parameter ID and the other analyzers whose
+        working set is many times the binary. On a phone, running them took the
+        JVM heap to its ceiling and the kernel OOM killer took the app and the
+        launcher with it: the whole device froze. Names, addresses, sections,
+        symbols and the call graph are unaffected. What is less precise is
+        parameter and return types.
+
+        Use low mode. Ask for `"mode": "full"` only on a small binary, and only
+        when parameter-level detail is the actual question.
+
+        The wrapper refuses rather than risks the device: it sizes the heap from
+        MemAvailable, holds 768 MB back for Android, caps at 2 GB, and returns
+        an error if the target is more than half the heap. If it refuses, the
+        answer is "close other apps" or "analyse a smaller file" — not to retry
+        the same call. Two Ghidra analyses cannot run at once; the second is
+        refused with an explicit message.
+
+        ## Configuration updates itself
+
+        The MCP registration, the skill, the guide and the Ghidra/jadx pins are
+        re-applied automatically when their version changes — you do not need to
+        ask the user to reinstall REA after an app update, and you should not
+        edit the agent config files yourself.
+
         ## Working the UI
 
         `altaris_ui_tree` returns the real view hierarchy — text, resource ids,
@@ -983,6 +1012,11 @@ object McpProtocol {
         val ctx = ControlServer.context() ?: return null
         if (ReaManager.status.value.running) return ReaManager.status.value
         val distro = reaTargetDistro(ctx) ?: return null
+        // Apply the current agent configuration before the server comes up.
+        // This is the path an agent's first call takes, so it is the one place
+        // that guarantees an app update reaches a distro the user installed
+        // months ago. It is a single `cat` when the stamp already matches.
+        runCatching { runBlocking { ReaManager.ensureAgentConfig(ctx, distro) } }
         return runCatching { runBlocking { ReaManager.start(ctx, distro) } }.getOrNull()
             ?.takeIf { it.running }
     }
@@ -1004,6 +1038,7 @@ object McpProtocol {
             .put("busy", status.busy)
             .put("error", status.error)
             .put("log", status.log.takeLast(4000))
+            .put("configVersion", ReaManager.CONFIG_VERSION)
     }
 
     private fun textResult(obj: JSONObject): JSONObject =

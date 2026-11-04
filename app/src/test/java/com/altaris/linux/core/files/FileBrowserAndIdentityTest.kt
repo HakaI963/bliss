@@ -37,40 +37,54 @@ class FileBrowserAndIdentityTest {
         modified = modified,
     )
 
-    /** The whole device is browsable, not only the download folder. */
+    /**
+     * Two spaces, and only two.
+     *
+     * The browser used to offer eight places — Internal storage, Downloads,
+     * All storage, /data, /system, /vendor, /etc, the filesystem root and one
+     * entry per distro — and probed every one of them on open, including an
+     * `ls` under root. Internal (the app's own root) and External (the chroot
+     * space) are the two a person actually has.
+     */
     @Test
-    fun theBrowserReachesTheWholeDevice() {
+    fun theBrowserHasTwoSpaces() {
         val source = readSource("app/src/main/kotlin/com/altaris/linux/core/files/FileBrowser.kt")
-        val places = source.substringAfter("fun places(context: Context)")
-            .substringBefore("private fun addIfReadable(")
-        for (root in listOf("/storage", "/data", "/system", "/vendor")) {
-            assertTrue("must offer $root", places.contains("\"$root\""))
-        }
+        assertTrue("must define Internal", source.contains("INTERNAL(\"Internal\""))
+        assertTrue("must define External", source.contains("EXTERNAL(\"External\""))
+        assertFalse(
+            "the eight-place list must be gone",
+            source.contains("fun places(context: Context)"),
+        )
         assertTrue(
-            "must offer the filesystem root when root is available",
-            places.contains("Place(\"root\", \"Root /\"") ||
-                places.contains("\"Root /\"") ||
-                places.contains("\"root\""),
+            "Internal is the app's own root",
+            source.contains("filesDir.absolutePath"),
+        )
+        assertTrue(
+            "External is the chroot tree",
+            source.contains("ChrootPaths.CHROOTS_DIR"),
         )
     }
 
     /**
-     * It must open on internal storage, not Downloads.
+     * Opening the tab must not fork a root shell.
      *
-     * Opening in Downloads made the browser look like it only handled
-     * downloads, which is exactly the report.
+     * The old path called places() on every listing, and places() ran `ls`
+     * under root — so the first frame waited on su. A listing must decide its
+     * backend from the space it is given, not from the path.
      */
     @Test
-    fun theBrowserOpensOnInternalStorage() {
+    fun listingDecidesTheBackendFromTheSpaceNotThePath() {
         val source = readSource("app/src/main/kotlin/com/altaris/linux/core/files/FileBrowser.kt")
-        val fn = source.substringAfter("fun defaultPath(context: Context)")
-            .substringBefore("enum class Sort")
-        val sdcard = fn.indexOf("\"sdcard\"")
-        val download = fn.indexOf("\"download\"")
-        assertTrue("must consider internal storage", sdcard >= 0)
+        val fn = source.substringAfter("suspend fun list(")
+            .substringBefore("private fun listThroughRoot(")
+        assertTrue("must take the space", fn.contains("space: Space"))
         assertTrue(
-            "internal storage must win over Downloads",
-            download < 0 || sdcard < download,
+            "must branch on the space",
+            fn.contains("if (space == Space.EXTERNAL)"),
+        )
+        assertFalse(
+            "must not resolve the space by probing the path",
+            fn.contains("placeFor("),
         )
     }
 

@@ -26,7 +26,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Build
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Terminal
@@ -62,7 +61,6 @@ fun AltarisCommandBar(
     modifier: Modifier = Modifier,
     statusLabel: String,
     live: Boolean,
-    onOpenPalette: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenTools: (() -> Unit)? = null,
     onOpenFiles: (() -> Unit)? = null,
@@ -121,13 +119,8 @@ fun AltarisCommandBar(
                 )
                 Spacer(Modifier.width(6.dp))
             }
-            BarButton(
-                icon = Icons.Default.Search,
-                contentDescription = "Jump to…",
-                onClick = onOpenPalette,
-            )
-            // Files sits in the top bar beside Tools and Settings: it is
-            // something you open while working, not a destination you live in.
+            // Files and Tools are optional: a caller that does not host them
+            // (onboarding, the file screen itself) simply does not draw them.
             if (onOpenFiles != null) {
                 BarButton(
                     icon = Icons.Default.Folder,
@@ -136,17 +129,14 @@ fun AltarisCommandBar(
                 )
                 Spacer(Modifier.width(6.dp))
             }
-            // Tools sits beside Settings in the top bar rather than in the
-            // dock: it is a maintenance surface, not a daily destination.
             if (onOpenTools != null) {
-                Spacer(Modifier.width(6.dp))
                 BarButton(
                     icon = Icons.Default.Build,
                     contentDescription = "Tools",
                     onClick = onOpenTools,
                 )
+                Spacer(Modifier.width(6.dp))
             }
-            Spacer(Modifier.width(6.dp))
             BarButton(
                 icon = Icons.Default.Settings,
                 contentDescription = "Settings",

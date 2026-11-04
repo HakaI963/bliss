@@ -28,7 +28,16 @@ android {
         // nativeLibraryDir (jniLibs) as belt-and-braces for future targetSdk bumps.
         targetSdk = 28
         versionCode = 69
-        versionName = "1.3.0"
+        // The version name must identify THIS build, not the release line.
+        //
+        // It was a constant "1.3.0" while the release tag is
+        // "v1.3.0-<commit>". The updater compared the two, saw a different
+        // suffix every time, and reported an update — then re-downloaded the
+        // same APK. CI overrides both with the commit it built; a local build
+        // falls back to the constant.
+        versionName = System.getenv("ALTARIS_VERSION_NAME")?.takeIf { it.isNotBlank() }
+            ?: "1.3.0"
+        System.getenv("ALTARIS_VERSION_CODE")?.toIntOrNull()?.let { versionCode = it }
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

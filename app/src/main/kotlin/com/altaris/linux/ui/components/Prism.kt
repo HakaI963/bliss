@@ -474,13 +474,20 @@ fun PrismSegmented(
 /**
  * The shared pulse for every status dot on screen.
  *
- * Each orb used to own an `rememberInfiniteTransition`, so a list with forty
- * active rows ran forty independent animations, each repainting its own layer
- * forever. That is the main reason scrolling felt heavy. One clock drives them
- * all, and the phase is derived from it.
+ * Each orb used to own a `rememberInfiniteTransition`. The comment here said
+ * one clock drove them all, but the function created a new transition on every
+ * call, so a screen with twenty active rows ran twenty independent animations,
+ * each invalidating its own layer forever — and each one kept the whole
+ * composition ticking even when nothing on it had changed.
+ *
+ * [PrismOrbPulseProvider] now owns the single transition. Orbs read its value;
+ * when no provider is above them (a preview, a screenshot test) they fall back
+ * to a static phase, so nothing animates where it cannot be seen anyway.
  */
+val LocalPrismOrbPhase = androidx.compose.runtime.compositionLocalOf<Float> { 0f }
+
 @Composable
-private fun orbPulse(): Float {
+fun PrismOrbPulseProvider(content: @Composable () -> Unit) {
     val pulse = rememberInfiniteTransition(label = "orbPulseShared")
     val value by pulse.animateFloat(
         initialValue = 0f,
@@ -491,7 +498,11 @@ private fun orbPulse(): Float {
         ),
         label = "orbHaloShared",
     )
-    return value
+    androidx.compose.runtime.CompositionLocalProvider(
+        LocalPrismOrbPhase provides value,
+    ) {
+        content()
+    }
 }
 
 /** A status dot — the reference's `.status-dot`. It breathes while live. */
@@ -503,7 +514,8 @@ fun PrismOrb(
 ) {
     val scheme = MaterialTheme.colorScheme
     // Only a live orb animates at all; an inactive one draws a static dot.
-    val halo = if (active) orbPulse() else 0f
+    // The phase comes from the one shared clock above, never a new transition.
+    val halo = if (active) LocalPrismOrbPhase.current else 0f
     val haloScale = if (active) 0.6f + halo * 1.4f else 0f
     Box(
         modifier = modifier.size(6.dp),

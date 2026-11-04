@@ -44,6 +44,25 @@ object ReaManager {
     const val LOG = ROOT + "/rea.log"
     const val NODE_VERSION = "v22.23.4"
     const val REA_VERSION = "6.8.0"
+
+    /**
+     * Bumped whenever the agent-facing configuration changes.
+     *
+     * Everything Altaris writes into the guest — the MCP registration, the
+     * skill, the guide, the Ghidra and jadx pins — used to be applied once at
+     * install time. A user who already had REA therefore never received any of
+     * it: the new tool, the fixed config shape, the corrected guide. This is
+     * the version of that configuration. [ensureAgentConfig] compares it with
+     * what is in the guest and re-applies everything when it differs, so an
+     * upgrade is enough and nobody has to reinstall.
+     *
+     * Change this whenever INSTRUCTIONS, ReaKnowledge, the MCP shape, the
+     * Ghidra pin or the jadx pin changes.
+     */
+    const val CONFIG_VERSION = "2026.11.04-1"
+
+    /** Where the applied configuration version is recorded inside the guest. */
+    const val CONFIG_STAMP = ROOT + "/.config-version"
     const val MCP_URL = "http://127.0.0.1:47831/mcp"
 
     /** Ghidra headless analyzer, installed on demand into the distro. */
@@ -470,6 +489,13 @@ object ReaManager {
                 }
             }
 
+            // Bring the agent-facing configuration up to date even when the
+            // core was already installed. This is what makes an app update
+            // reach an existing distro: the MCP block, the skill, the guide
+            // and the pins are re-applied when their version changes.
+            update { it.copy(busy = "Syncing agent configuration") }
+            ensureAgentConfig(app, distroId) { line(it) }
+
             val requested = dependencies.mapNotNull { ReaCatalog.byId(it) }
             if (requested.isNotEmpty()) {
                 update {
@@ -626,6 +652,12 @@ object ReaManager {
                     update { it.copy(error = coreError) }
                 }
             }
+            // Same sync as install(): prepare is what runs when the server is
+            // ensured, so this is the path that keeps an already-installed
+            // tree current after an app update.
+            update { it.copy(busy = "Syncing agent configuration") }
+            ensureAgentConfig(app, distroId) { line(it) }
+
             update { it.copy(busy = "") }
             probe(app, distroId)
         }
@@ -1486,6 +1518,123 @@ object ReaManager {
         }
     }
 
+    // --------------------------------------------------------- auto-config
+
+    /**
+     * Bring the agent-facing configuration up to [CONFIG_VERSION].
+     *
+     * One stamp decides everything. When it matches, this is a single `cat`
+     * and returns immediately — no shell per launch, no rewrite of a file the
+     * user may have edited. When it does not match, every piece is re-applied
+     * in one guest run:
+     *
+     *  - the MCP registration for each installed agent client;
+     *  - the skill and the guide, so the method an agent reads matches the
+     *    tools this build actually has;
+     *  - Ghidra, if the installed tree is not [GHIDRA_REQUIRED] (REA rejects
+     *    the whole Ghidra provider otherwise);
+     *  - the jadx bridge, if it is missing or fails its size check.
+     *
+     * It runs on REA prepare and install, and from the REA screen when the
+     * server is ensured — so an app update is enough for an existing distro.
+     * Ghidra is a ~450 MB download, so it is only attempted when the probe
+     * says it is wrong, and a failure there is reported rather than fatal:
+     * the rest of the configuration is still worth applying.
+     */
+    suspend fun ensureAgentConfig(
+        ctx: Context,
+        distroId: String,
+        onLog: (String) -> Unit = {},
+    ): String = withContext(Dispatchers.IO) {
+        val app = ctx.applicationContext
+        val stamp = runCatching {
+            GuestExec.run(
+                app,
+                distroId,
+                "cat " + CONFIG_STAMP + " 2>/dev/null || echo -",
+                timeoutMs = 20_000L,
+            ).output.trim()
+        }.getOrDefault("-")
+        if (stamp == CONFIG_VERSION) return@withContext ""
+
+        onLog("syncing agent configuration to " + CONFIG_VERSION)
+
+        // 1. The MCP registration and the skill. Both are files in the guest,
+        //    so they go in one run rather than one shell per file.
+        val sync = buildString {
+            append("set +e\n")
+            append("mkdir -p ").append(ROOT).append("\n")
+            // The skill: what an agent loads when it needs the method.
+            append("mkdir -p ").append(ROOT).append("/skill\n")
+            append("cat > ").append(ROOT).append("/skill/SKILL.md <<'ALTARIS_SKILL_EOF'\n")
+            append(ReaKnowledge.GUIDE.trimEnd()).append("\n")
+            append("ALTARIS_SKILL_EOF\n")
+            // The guide as a standalone file too, for clients that read a
+            // resource rather than a skill.
+            append("cat > ").append(ROOT).append("/skill/guide.md <<'ALTARIS_GUIDE_EOF'\n")
+            append(ReaKnowledge.GUIDE.trimEnd()).append("\n")
+            append("ALTARIS_GUIDE_EOF\n")
+            // The MCP registration, as its own script so it can be re-run.
+            append("cat > ").append(ROOT).append("/agent-config.mjs <<'ALTARIS_REA_EOF'\n")
+            append(AGENT_JS.trim()).append("\n")
+            append("ALTARIS_REA_EOF\n")
+            append("NODE=").append(NODE_BIN).append("\n")
+            append("if [ ! -x \"\$NODE\" ]; then NODE=\$(command -v node); fi\n")
+            append("[ -n \"\$NODE\" ] && \"\$NODE\" ").append(ROOT)
+                .append("/agent-config.mjs ").append(MCP_URL).append("\n")
+            append("echo ").append(CONFIG_VERSION).append(" > ").append(CONFIG_STAMP).append("\n")
+        }
+        val result = GuestExec.run(app, distroId, sync, timeoutMs = 180_000L) { onLog(it) }
+        if (!result.ok) {
+            // Do not write the stamp on failure: the next attempt must retry.
+            return@withContext result.tail(4).ifBlank { "agent configuration failed" }
+        }
+
+        // 2. The pins. Both are cheap probes; Ghidra is only downloaded when
+        //    the probe says it is wrong.
+        val probe = runCatching {
+            GuestExec.run(
+                app,
+                distroId,
+                "if [ -x " + GHIDRA_ROOT + "/support/analyzeHeadless ] && " +
+                    "grep -q '^application.version=" + GHIDRA_REQUIRED + "\$' " +
+                    GHIDRA_ROOT + "/Ghidra/application.properties 2>/dev/null; then " +
+                    "echo ghidra=1; else echo ghidra=0; fi\n" +
+                    "if [ -s " + JADX_MCP_JAR + " ]; then echo jadx=1; else echo jadx=0; fi",
+                timeoutMs = 30_000L,
+            ).output
+        }.getOrDefault("")
+        val ghidraOk = probe.lineSequence().any { it.trim() == "ghidra=1" }
+        val jadxOk = probe.lineSequence().any { it.trim() == "jadx=1" }
+
+        if (!ghidraOk) {
+            onLog("Ghidra " + GHIDRA_REQUIRED + " is not installed; REA's Ghidra provider stays unavailable")
+        }
+        if (!jadxOk) {
+            // The jadx bridge is 42 MB and the Android lane needs it. It is
+            // safe to call: the script verifies an existing jar first.
+            ensureJadxBridge(app, distroId, onLog)
+        }
+        ""
+    }
+
+    /**
+     * The version of the agent configuration the guest currently has.
+     *
+     * Read by Tools so it can say "up to date" or offer the sync, instead of
+     * leaving the user to guess whether a new build changed anything.
+     */
+    suspend fun configVersion(ctx: Context, distroId: String): String = withContext(Dispatchers.IO) {
+        runCatching {
+            GuestExec.run(
+                ctx.applicationContext,
+                distroId,
+                "cat " + CONFIG_STAMP + " 2>/dev/null || echo -",
+                timeoutMs = 20_000L,
+            ).output.trim()
+        }.getOrDefault("-")
+    }
+
     // ------------------------------------------------------------- staging
 
     private fun readAsset(ctx: Context, name: String): String =
@@ -1590,7 +1739,13 @@ object ReaManager {
         // cold import plus full analysis, and the JVM alone takes tens of
         // seconds to start. The caller's timeout must not be shorter than the
         // work, or it reports a timeout for an analysis that was still running.
-        val result = GuestExec.run(ctx, distroId, script, timeoutMs = 45 * 60_000L)
+        // Stream the analyzer's own lines into the REA screen as they arrive.
+        // A Ghidra import is minutes of real work that prints each stage; a
+        // spinner with no output is indistinguishable from a hang.
+        ReaBridge.note("Ghidra (" + mode + "): " + target.substringAfterLast('/'))
+        val result = GuestExec.run(ctx, distroId, script, timeoutMs = 45 * 60_000L) { line ->
+            ReaBridge.note(line)
+        }
         JSONObject()
             .put("ok", result.ok)
             .put("target", target)

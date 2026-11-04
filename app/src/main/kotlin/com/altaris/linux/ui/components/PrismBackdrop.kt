@@ -1,24 +1,18 @@
 package com.altaris.linux.ui.components
 
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Fill
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
@@ -29,37 +23,31 @@ import com.altaris.linux.ui.theme.LocalAltarisPalette
 /**
  * The ambient scene behind the app.
  *
- * The dark identities get a faint dot lattice, the light one a line-drawn
- * tree on the left with a few leaves drifting down. Everything is drawn
- * from one animation clock, so the whole scene costs a single transition.
+ * It used to animate: a 26-second infinite transition drove a handful of
+ * leaves across the light identity's tree. That single transition ran on every
+ * screen, for the whole life of the process, and — because Compose animations
+ * invalidate the frame — it kept the app from ever reaching a still frame.
+ * Combined with the route transition, opening a file composed two screens
+ * while a full-screen animation was already redrawing, which is the stall that
+ * was reported as "opening a file freezes".
+ *
+ * A decorative background has no business costing a frame. Both layers are
+ * now rasterised once and drawn as images. Nothing here animates.
  */
 @Composable
 fun PrismBackdrop(
     modifier: Modifier = Modifier,
     palette: AltarisPalette = LocalAltarisPalette.current,
 ) {
-    val clock = rememberInfiniteTransition(label = "ambient")
-    val phase by clock.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 26000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart,
-        ),
-        label = "ambientPhase",
-    )
-
+    // Rasterise once per identity. The lattice and the tree never change, and
+    // the leaves are now fixed positions rather than a moving field.
+    val layer = remember(palette.isDark, palette.onSurface, palette.base) {
+        drawStaticLayer(palette)
+    }
     Box(modifier = modifier.fillMaxSize().background(palette.base)) {
-        // The static half — the lattice or the tree — is drawn once into a
-        // bitmap and reused. Redrawing a full-screen lattice of a few hundred
-        // circles every frame, on every screen, was pure cost: nothing in it
-        // moves.
-        val staticLayer = remember(palette.isDark, palette.onSurface, palette.base) {
-            drawStaticLayer(palette)
-        }
-        if (staticLayer != null) {
+        if (layer != null) {
             androidx.compose.foundation.Image(
-                bitmap = staticLayer,
+                bitmap = layer,
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = androidx.compose.ui.layout.ContentScale.FillBounds,
@@ -69,22 +57,15 @@ fun PrismBackdrop(
                 if (palette.isDark) drawLattice(palette.onSurface) else drawTree(palette.onSurface)
             }
         }
-        // Only the leaves move, so only they are redrawn per frame.
-        if (!palette.isDark) {
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                drawLeaves(palette.onSurface, phase)
-            }
-        }
     }
 }
 
 /**
- * Rasterise the non-moving part of the backdrop once.
+ * Rasterise the whole backdrop once.
  *
  * Returns null when the bitmap cannot be allocated, in which case the caller
  * falls back to drawing directly — a decorative background must never crash the
- * screen. The lattice and the tree never change between recompositions, so
- * caching them removes the per-frame cost entirely.
+ * screen.
  */
 private fun drawStaticLayer(palette: AltarisPalette): androidx.compose.ui.graphics.ImageBitmap? =
     runCatching {
@@ -99,13 +80,18 @@ private fun drawStaticLayer(palette: AltarisPalette): androidx.compose.ui.graphi
             canvas = canvas,
             size = androidx.compose.ui.geometry.Size(width.toFloat(), height.toFloat()),
         ) {
-            if (palette.isDark) drawLattice(palette.onSurface) else drawTree(palette.onSurface)
+            if (palette.isDark) {
+                drawLattice(palette.onSurface)
+            } else {
+                drawTree(palette.onSurface)
+                drawLeaves(palette.onSurface)
+            }
         }
         bitmap
     }.getOrNull()
 
 /** A faint dot lattice: structure without noise. */
-private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawLattice(ink: Color) {
+private fun DrawScope.drawLattice(ink: Color) {
     val step = 44.dp.toPx()
     var y = step
     while (y < size.height) {
@@ -123,7 +109,7 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawLattice(ink: Co
 }
 
 /** A bare tree on the left edge, drawn as line work. */
-private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawTree(ink: Color) {
+private fun DrawScope.drawTree(ink: Color) {
     val w = size.width
     val h = size.height
     val stroke = 2.2.dp.toPx()
@@ -132,7 +118,7 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawTree(ink: Color
         cubicTo(w * 0.10f, h * 0.78f, w * 0.085f, h * 0.62f, w * 0.145f, h * 0.44f)
         cubicTo(w * 0.19f, h * 0.30f, w * 0.17f, h * 0.20f, w * 0.225f, h * 0.075f)
     }
-    drawPath(path = trunk, color = ink.copy(alpha = 0.045f), style = androidx.compose.ui.graphics.drawscope.Stroke(width = stroke))
+    drawPath(path = trunk, color = ink.copy(alpha = 0.045f), style = Stroke(width = stroke))
 
     val branches = listOf(
         // from-trunk, to
@@ -150,40 +136,37 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawTree(ink: Color
         drawPath(
             path = path,
             color = ink.copy(alpha = 0.038f),
-            style = androidx.compose.ui.graphics.drawscope.Stroke(width = stroke * 0.7f),
+            style = Stroke(width = stroke * 0.7f),
         )
     }
 }
 
-/** A handful of leaves drifting down from the tree. */
-private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawLeaves(ink: Color, phase: Float) {
+/**
+ * A handful of leaves hanging near the tree.
+ *
+ * They used to drift on a shared clock. A decorative motion that never stops
+ * is not worth a permanently invalidating frame, so they are placed once, at
+ * deterministic offsets, and drawn into the cached layer.
+ */
+private fun DrawScope.drawLeaves(ink: Color) {
     val count = 9
     for (i in 0 until count) {
-        val seed = i / count.toFloat()
-        // Each leaf owns a slice of the clock and repeats inside it.
-        val local = ((phase + seed) % 1f)
-        val fade = kotlin.math.sin(local * Math.PI).toFloat().coerceIn(0f, 1f)
-        val startY = size.height * (0.06f + 0.10f * ((i * 37 % 11) / 11f))
-        val y = startY + (size.height - startY) * local
-        val sway = kotlin.math.sin((local * 6.0 + i).toFloat()) * (10f + 6f * (i % 3))
-        val x = size.width * (0.03f + 0.22f * ((i * 53 % 17) / 17f)) + sway
+        val x = size.width * (0.03f + 0.22f * ((i * 53 % 17) / 17f)) +
+            kotlin.math.sin(i.toFloat() * 1.7f) * 12f
+        val y = size.height * (0.06f + 0.10f * ((i * 37 % 11) / 11f)) +
+            size.height * 0.55f * ((i * 29 % 13) / 13f)
         val scale = 0.7f + 0.5f * ((i * 29 % 7) / 7f)
-        rotate(
-            degrees = (i * 47f + local * 220f) % 360f,
-            pivot = Offset(x, y),
-        ) {
-            translate(left = x, top = y) {
-                val path = Path().apply {
-                    moveTo(0f, 0f)
-                    quadraticTo(5.4f * scale, -3.2f * scale, 10.4f * scale, 0f)
-                    quadraticTo(5.4f * scale, 3.2f * scale, 0f, 0f)
-                }
-                drawPath(
-                    path = path,
-                    color = ink.copy(alpha = 0.075f * fade),
-                    style = androidx.compose.ui.graphics.drawscope.Fill,
-                )
-            }
+        val path = Path().apply {
+            moveTo(0f, 0f)
+            quadraticTo(5.4f * scale, -3.2f * scale, 10.4f * scale, 0f)
+            quadraticTo(5.4f * scale, 3.2f * scale, 0f, 0f)
+        }
+        translate(left = x, top = y) {
+            drawPath(
+                path = path,
+                color = ink.copy(alpha = 0.06f),
+                style = Fill,
+            )
         }
     }
 }

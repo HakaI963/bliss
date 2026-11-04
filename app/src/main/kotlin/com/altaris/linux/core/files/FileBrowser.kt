@@ -1,49 +1,39 @@
 package com.altaris.linux.core.files
 
 import android.content.Context
-import android.util.Log
-import com.altaris.linux.core.install.DistroInstallProfile
+import com.altaris.linux.core.root.ChrootPaths
 import com.altaris.linux.core.root.RootShell
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 
 /**
- * The filesystem behind the Utility → Files browser.
+ * The filesystem behind Files.
  *
- * Three kinds of place are browsable, and they are not the same thing:
+ * Two spaces, and only two, because that is the model people actually have:
  *
- *  - **host** — `/sdcard`, the app's own directories, and (with root) `/data`,
- *    `/system`. Some of it is readable as the app uid, some only through `su`.
- *  - **proot guest** — a distro rootfs under `filesDir/usr/var/lib/proot-distro`.
- *    Plain files as far as this process is concerned.
- *  - **chroot guest** — a tree under `/data/local`, which is `shell_data_file`
- *    under SELinux and **unreadable** to the app uid. Every operation there has
- *    to go through root, which is why it cannot share the proot path.
+ *  - **Internal** — Altaris' own root storage, `filesDir`. It is readable by
+ *    this process directly, needs no permission and no root, and is where the
+ *    app's own data lives.
+ *  - **External** — the chroot space under `/data/local/altaris`. SELinux hides
+ *    that tree from the app uid, so every read and write there has to go
+ *    through `su`. A `File.list()` on it returns null, which is why an installed
+ *    chroot used to render as an empty folder.
  *
- * That last difference is the whole reason this is one object with two backends
- * instead of a plain `File` walk: a `File.list()` on a chroot path returns null
- * and would render an installed chroot as an empty directory.
+ * Everything is one [Space] plus a path inside it, rather than a flat list of
+ * "places": the previous version offered eight roots, most of them unreadable,
+ * and the first tap on any of them forked a root shell — which is what made
+ * opening the tab hang.
  */
 object FileBrowser {
 
-    private const val TAG = "AltarisFiles"
-
-    /** A place the browser can open. */
-    data class Place(
-        val id: String,
+    /** Which storage a path belongs to. */
+    enum class Space(
         val label: String,
-        /** Absolute path on this device. */
-        val path: String,
-        val kind: Kind,
-        /** True when every operation must go through root. */
-        val rootOnly: Boolean,
+        val id: String,
     ) {
-        enum class Kind(val label: String) {
-            HOST("Host"),
-            PROOT("proot"),
-            CHROOT("chroot"),
-        }
+        INTERNAL("Internal", "internal"),
+        EXTERNAL("External", "external"),
     }
 
     /** One directory entry. */
@@ -70,157 +60,79 @@ object FileBrowser {
         val usedRoot: Boolean = false,
     )
 
-    // ------------------------------------------------------------------ places
-
-    /**
-     * Every place the browser can open.
-     *
-     * Only what is really there: a distro that is not installed must not appear
-     * as an empty folder. Chroot entries are gated on root because without it
-     * the path cannot be read at all.
-     */
-    fun places(context: Context): List<Place> {
-        val app = context.applicationContext
-        val out = ArrayList<Place>()
-
-        // Host storage first: it is what people open most.
-        addIfReadable(out, "sdcard", "Internal storage", "/sdcard", Place.Kind.HOST, false)
-        addIfReadable(out, "download", "Downloads", "/sdcard/Download", Place.Kind.HOST, false)
-        addIfReadable(out, "app", "Altaris data", app.filesDir.absolutePath, Place.Kind.HOST, false)
-
-        // Full device access, not just the download folder.
-        //
-        // Only /sdcard, Downloads and the app's own data were listed, so the
-        // browser could not reach anything else — no DCIM, no other apps'
-        // storage, no system partition. These are the real roots.
-        addIfReadable(out, "storage", "All storage", "/storage", Place.Kind.HOST, false)
-        addIfReadable(out, "data", "App data (/data)", "/data", Place.Kind.HOST, true)
-        addIfReadable(out, "system", "System (/system)", "/system", Place.Kind.HOST, true)
-        addIfReadable(out, "vendor", "Vendor (/vendor)", "/vendor", Place.Kind.HOST, true)
-        addIfReadable(out, "etc", "Config (/etc)", "/etc", Place.Kind.HOST, true)
-
-        // The whole filesystem, last: with root this is the only entry that can
-        // reach everything else.
-        val root = RootShell.isRootAvailable()
-        if (root) {
-            out.add(Place("root", "Root /", "/", Place.Kind.HOST, true))
-        }
-
-        // Installed distros, proot and chroot.
-        val containers = File(app.filesDir, "usr/var/lib/proot-distro/containers")
-        containers.listFiles().orEmpty().sortedBy { it.name }.forEach { dir ->
-            val rootfs = File(dir, "rootfs")
-            if (!rootfs.isDirectory) return@forEach
-            val profile = DistroInstallProfile.forId(dir.name)
-            out.add(
-                Place(
-                    id = "proot:" + dir.name,
-                    label = (profile?.displayName ?: dir.name) + " (proot)",
-                    path = rootfs.absolutePath,
-                    kind = Place.Kind.PROOT,
-                    rootOnly = false,
-                )
-            )
-        }
-        if (root) {
-            val chroots = File("/data/local/altaris/chroots")
-            val names = runCatching {
-                RootShell.captureResult(
-                    "ls -1 " + quote(chroots.absolutePath) + " 2>/dev/null",
-                    20_000L,
-                ).stdout.lines().map { it.trim() }.filter { it.isNotBlank() }
-            }.getOrDefault(emptyList())
-            names.forEach { name ->
-                val profile = DistroInstallProfile.forId(name) ?: DistroInstallProfile.forId(name + "_chroot")
-                out.add(
-                    Place(
-                        id = "chroot:" + name,
-                        label = (profile?.displayName ?: name) + " (chroot)",
-                        path = chroots.absolutePath + "/" + name,
-                        kind = Place.Kind.CHROOT,
-                        rootOnly = true,
-                    )
-                )
-            }
-        }
-        return out
+    /** The root of [space] on this device. */
+    fun rootOf(context: Context, space: Space): String = when (space) {
+        Space.INTERNAL -> context.applicationContext.filesDir.absolutePath
+        Space.EXTERNAL -> ChrootPaths.CHROOTS_DIR
     }
 
-    private fun addIfReadable(
-        out: MutableList<Place>,
-        id: String,
-        label: String,
-        path: String,
-        kind: Place.Kind,
-        rootOnly: Boolean,
-    ) {
-        if (File(path).isDirectory) {
-            out.add(Place(id, label, path, kind, rootOnly))
-        }
+    /** The space a path belongs to, or null when it is outside both. */
+    fun spaceOf(context: Context, path: String): Space? {
+        val internal = rootOf(context, Space.INTERNAL)
+        if (path == internal || path.startsWith(internal + "/")) return Space.INTERNAL
+        val external = rootOf(context, Space.EXTERNAL)
+        if (path == external || path.startsWith(external + "/")) return Space.EXTERNAL
+        return null
     }
-
-    /** Find the place a path belongs to, so the kind survives navigation. */
-    fun placeFor(context: Context, path: String): Place? =
-        places(context).filter { path == it.path || path.startsWith(it.path + "/") }
-            .maxByOrNull { it.path.length }
 
     // ------------------------------------------------------------------- list
 
     /**
      * List [path].
      *
-     * A chroot path is listed through root in one `find`; everything else uses
-     * `File`. The output format is `type\tsize\tmtime\tmode\tname`, with the name
-     * last so a name containing a tab cannot shift the other fields.
+     * External paths go through root in a single `find`; internal paths use
+     * `File` directly. The root call is the expensive one, so it is only made
+     * for the external space — the old version called [places] (which itself
+     * forked `ls` under root) on every listing just to decide the backend.
      */
-    suspend fun list(context: Context, path: String, showHidden: Boolean = false): Listing =
-        withContext(Dispatchers.IO) {
-            val place = placeFor(context, path)
-            if (place != null && place.kind == Place.Kind.CHROOT) {
-                return@withContext listThroughRoot(path, showHidden)
-            }
-            val dir = File(path)
-            if (!dir.isDirectory) {
-                return@withContext Listing(path, error = "Not a directory")
-            }
-            val children = dir.listFiles()
-            if (children == null) {
-                // Unreadable as this uid. If root can reach it, use root rather
-                // than showing an empty folder.
-                if (RootShell.isRootAvailable()) return@withContext listThroughRoot(path, showHidden)
-                return@withContext Listing(path, error = "Permission denied")
-            }
-            val entries = children
-                .filter { showHidden || !it.name.startsWith(".") }
-                .map { f ->
-                    Entry(
-                        name = f.name,
-                        path = f.absolutePath,
-                        dir = f.isDirectory,
-                        size = if (f.isFile) f.length() else 0L,
-                        modified = f.lastModified(),
-                        mode = if (f.canRead()) "r" else "",
-                        needsRoot = !f.canRead(),
-                    )
-                }
-                .sortedWith(compareBy({ !it.dir }, { it.name.lowercase() }))
-            Listing(path, entries)
+    suspend fun list(
+        context: Context,
+        space: Space,
+        path: String,
+        showHidden: Boolean = false,
+    ): Listing = withContext(Dispatchers.IO) {
+        if (space == Space.EXTERNAL) {
+            return@withContext listThroughRoot(path, showHidden)
         }
+        val dir = File(path)
+        if (!dir.isDirectory) {
+            return@withContext Listing(path, error = "Not a directory")
+        }
+        val children = dir.listFiles()
+            ?: return@withContext Listing(path, error = "Cannot read this folder")
+        val entries = children
+            .filter { showHidden || !it.name.startsWith(".") }
+            .map { f ->
+                Entry(
+                    name = f.name,
+                    path = f.absolutePath,
+                    dir = f.isDirectory,
+                    size = if (f.isFile) f.length() else 0L,
+                    modified = f.lastModified(),
+                    mode = if (f.canRead()) "r" else "",
+                    needsRoot = !f.canRead(),
+                )
+            }
+            .sortedWith(compareBy({ !it.dir }, { it.name.lowercase() }))
+        Listing(path, entries)
+    }
 
     /**
      * List a directory as root.
      *
      * One `find -maxdepth 1` prints everything in a single call. `%f` gives the
      * bare name, so no path parsing is needed and a name with a space is safe.
+     * The output is capped: a directory with a hundred thousand entries must
+     * not become a hundred thousand rows of Compose state.
      */
     private fun listThroughRoot(path: String, showHidden: Boolean): Listing {
         val q = quote(path)
         val script = "find " + q + " -mindepth 1 -maxdepth 1 " +
-            "-printf '%y\\t%s\\t%T@\\t%M\\t%f\\n' 2>/dev/null | head -n 4000"
-        val result = runCatching { RootShell.captureResult(script, 45_000L) }.getOrNull()
-            ?: return Listing(path, error = "root unavailable")
+            "-printf '%y\\t%s\\t%T@\\t%M\\t%f\\n' 2>/dev/null | head -n 3000"
+        val result = runCatching { RootShell.captureResult(script, 20_000L) }.getOrNull()
+            ?: return Listing(path, error = "Root is not available")
         if (result.exitCode != 0 && result.stdout.isBlank()) {
-            return Listing(path, error = "Cannot read this directory", usedRoot = true)
+            return Listing(path, error = "Cannot read this folder", usedRoot = true)
         }
         val entries = result.stdout.lines().mapNotNull { line ->
             if (line.isBlank()) return@mapNotNull null
@@ -244,31 +156,29 @@ object FileBrowser {
 
     // ---------------------------------------------------------------- content
 
-    /** Read a text file, through root when it is a chroot path. */
-    suspend fun read(context: Context, path: String, maxBytes: Int = 512 * 1024): Result<String> =
-        withContext(Dispatchers.IO) {
-            val place = placeFor(context, path)
-            if (place != null && place.kind == Place.Kind.CHROOT) {
-                val result = runCatching {
-                    RootShell.captureResult(
-                        "head -c " + maxBytes + " " + quote(path),
-                        60_000L,
-                    )
-                }.getOrNull()
-                return@withContext if (result != null && result.exitCode == 0) {
-                    Result.success(result.stdout)
-                } else {
-                    Result.failure(IllegalStateException("Cannot read this file"))
-                }
+    /** Read a text file, through root when it is in the external space. */
+    suspend fun read(
+        context: Context,
+        path: String,
+        maxBytes: Int = 512 * 1024,
+    ): Result<String> = withContext(Dispatchers.IO) {
+        if (spaceOf(context, path) == Space.EXTERNAL) {
+            val result = runCatching {
+                RootShell.captureResult("head -c " + maxBytes + " " + quote(path), 60_000L)
+            }.getOrNull()
+            return@withContext if (result != null && result.exitCode == 0) {
+                Result.success(result.stdout)
+            } else {
+                Result.failure(IllegalStateException("Cannot read this file"))
             }
-            runCatching { File(path).readText().take(maxBytes) }
         }
+        runCatching { File(path).readText().take(maxBytes) }
+    }
 
     /** Write a text file. */
     suspend fun write(context: Context, path: String, body: String): Result<Unit> =
         withContext(Dispatchers.IO) {
-            val place = placeFor(context, path)
-            if (place != null && place.kind == Place.Kind.CHROOT) {
+            if (spaceOf(context, path) == Space.EXTERNAL) {
                 // The body goes through a heredoc with a quoted delimiter, so
                 // nothing in the file is expanded by the shell.
                 val script = buildString {
@@ -294,8 +204,7 @@ object FileBrowser {
     /** Create a directory. */
     suspend fun createDirectory(context: Context, path: String): Result<Unit> =
         withContext(Dispatchers.IO) {
-            val place = placeFor(context, path)
-            if (place != null && place.kind == Place.Kind.CHROOT) {
+            if (spaceOf(context, path) == Space.EXTERNAL) {
                 val result = runCatching {
                     RootShell.captureResult("mkdir -p " + quote(path), 30_000L)
                 }.getOrNull()
@@ -313,19 +222,22 @@ object FileBrowser {
     /**
      * Delete [path].
      *
-     * Destructive, so it is scoped: `rm -rf` runs with `-x` on a chroot so it
-     * can never cross a bind mount out of the tree, and the host/proot path
-     * refuses to delete a root-level directory.
+     * Destructive, so it is scoped: `rm -rf` runs on an external path so it can
+     * never cross out of the chroot tree, and both spaces refuse to delete the
+     * space root itself.
      */
     suspend fun delete(context: Context, path: String): Result<Unit> = withContext(Dispatchers.IO) {
         val trimmed = path.trimEnd('/')
-        if (trimmed.count { it == '/' } <= 1) {
+        val space = spaceOf(context, trimmed)
+            ?: return@withContext Result.failure(
+                IllegalStateException("That path is not in this browser"),
+            )
+        if (trimmed == rootOf(context, space)) {
             return@withContext Result.failure(
-                IllegalStateException("Refusing to delete a top-level directory"),
+                IllegalStateException("Refusing to delete the root of " + space.label),
             )
         }
-        val place = placeFor(context, trimmed)
-        if (place != null && place.kind == Place.Kind.CHROOT) {
+        if (space == Space.EXTERNAL) {
             val result = runCatching {
                 RootShell.captureResult("rm -rf " + quote(trimmed), 5 * 60_000L)
             }.getOrNull()
@@ -344,13 +256,9 @@ object FileBrowser {
     /** Rename [from] to [to] (same directory). */
     suspend fun rename(context: Context, from: String, to: String): Result<Unit> =
         withContext(Dispatchers.IO) {
-            val place = placeFor(context, from)
-            if (place != null && place.kind == Place.Kind.CHROOT) {
+            if (spaceOf(context, from) == Space.EXTERNAL) {
                 val result = runCatching {
-                    RootShell.captureResult(
-                        "mv " + quote(from) + " " + quote(to),
-                        60_000L,
-                    )
+                    RootShell.captureResult("mv " + quote(from) + " " + quote(to), 60_000L)
                 }.getOrNull()
                 return@withContext if (result != null && result.exitCode == 0) {
                     Result.success(Unit)
@@ -368,6 +276,16 @@ object FileBrowser {
     /** Copy [from] to [to]. */
     suspend fun copy(context: Context, from: String, to: String): Result<Unit> =
         withContext(Dispatchers.IO) {
+            if (spaceOf(context, from) == Space.EXTERNAL) {
+                val result = runCatching {
+                    RootShell.captureResult("cp -a " + quote(from) + " " + quote(to), 10 * 60_000L)
+                }.getOrNull()
+                return@withContext if (result != null && result.exitCode == 0) {
+                    Result.success(Unit)
+                } else {
+                    Result.failure(IllegalStateException("Cannot copy this"))
+                }
+            }
             runCatching<Unit> {
                 val source = File(from)
                 val target = File(to)
@@ -383,21 +301,27 @@ object FileBrowser {
 
     // ------------------------------------------------------------------ paths
 
-    /** Parent of [path], or null at the top of its place. */
+    /** Parent of [path], or null at the root of its space. */
     fun parent(context: Context, path: String): String? {
-        val place = placeFor(context, path) ?: return null
-        if (path == place.path) return null
+        val space = spaceOf(context, path) ?: return null
+        if (path == rootOf(context, space)) return null
         return File(path).parent
     }
 
-    /** Breadcrumb segments from the place root to [path]. */
-    fun crumbs(context: Context, path: String): List<Pair<String, String>> {
-        val place = placeFor(context, path) ?: return emptyList()
+    /**
+     * Breadcrumb segments from the space root to [path].
+     *
+     * The first crumb is the space itself ("Internal" / "External"), so the
+     * header always says where the user is even when the path is long.
+     */
+    fun crumbs(context: Context, space: Space, path: String): List<Pair<String, String>> {
+        val root = rootOf(context, space)
         val out = ArrayList<Pair<String, String>>()
-        out.add(place.label to place.path)
-        if (path == place.path) return out
-        val relative = path.removePrefix(place.path).trim('/')
-        var running = place.path
+        out.add(space.label to root)
+        if (path == root) return out
+        if (!path.startsWith(root + "/")) return out
+        val relative = path.removePrefix(root).trim('/')
+        var running = root
         relative.split('/').filter { it.isNotBlank() }.forEach { segment ->
             running = running.trimEnd('/') + "/" + segment
             out.add(segment to running)
@@ -415,18 +339,6 @@ object FileBrowser {
         !entry.dir && entry.size in 1..(2L * 1024 * 1024)
 
     private fun quote(value: String): String = "'" + value.replace("'", "'\\''") + "'"
-
-    /** The default directory when the tab opens. */
-    fun defaultPath(context: Context): String {
-        val places = places(context)
-        // Internal storage, not the download folder: the browser used to open
-        // in Downloads, which made it look like only downloads were reachable.
-        return places.firstOrNull { it.id == "sdcard" }?.path
-            ?: places.firstOrNull { it.id == "storage" }?.path
-            ?: places.firstOrNull { it.id == "download" }?.path
-            ?: places.firstOrNull()?.path
-            ?: context.filesDir.absolutePath
-    }
 
     /** How the listing is ordered. */
     enum class Sort(val label: String) {

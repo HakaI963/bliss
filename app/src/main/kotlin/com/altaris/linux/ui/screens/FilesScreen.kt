@@ -1,15 +1,14 @@
 package com.altaris.linux.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -19,7 +18,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
@@ -38,7 +36,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -55,24 +52,19 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * A dual-pane file manager.
+ * One pane, two spaces.
  *
- * Two panes, each an independent location with its own history. The active
- * pane is the one a tap acts on; the other is the destination for a copy or a
- * move, which is the whole reason to have two — dragging a file from a distro
- * rootfs into internal storage is one action instead of three.
+ * There were two panes side by side, a strip of eight location chips and a
+ * breadcrumb bar, and opening the tab took a root shell before it could draw
+ * anything. That is the freeze. A file manager needs one place at a time and
+ * two destinations:
  *
- * It browses three kinds of place, and the distinction matters:
+ *  - **Internal** — Altaris' own root storage;
+ *  - **External** — the chroot space, which is root-only.
  *
- *  - **host** — internal storage, Downloads, the app's own data, and (with
- *    root) /data, /system, /vendor and the filesystem root;
- *  - **proot guest** — a distro rootfs, which is ordinary files to this
- *    process;
- *  - **chroot guest** — a tree under /data/local, which SELinux hides from the
- *    app uid, so every operation on it runs through root.
- *
- * That is why this is not a plain directory list: a chroot that is really there
- * reads as an empty folder unless the read goes through `su`.
+ * The space is chosen once at the top. Inside it, the breadcrumb row is the
+ * only navigation, and it is drawn from the path already in hand — no call to
+ * decide what the path means.
  */
 @Composable
 fun FilesScreen(
@@ -83,53 +75,68 @@ fun FilesScreen(
     val scope = rememberCoroutineScope()
     val accent = MaterialTheme.colorScheme.primary
 
-    // One pane model, two instances. Everything per-pane lives here so the two
-    // panes cannot drift in behaviour.
-    var panes by remember { mutableStateOf(listOf(PaneState(), PaneState())) }
-    var active by remember { mutableStateOf(0) }
-    var dual by remember { mutableStateOf(true) }
-    var places by remember { mutableStateOf<List<FileBrowser.Place>>(emptyList()) }
+    var space by remember { mutableStateOf(FileBrowser.Space.INTERNAL) }
+    var path by remember { mutableStateOf("") }
+    var listing by remember { mutableStateOf(FileBrowser.Listing("")) }
+    var loading by remember { mutableStateOf(true) }
     var notice by remember { mutableStateOf("") }
-    var busy by remember { mutableStateOf("") }
+    var showHidden by remember { mutableStateOf(false) }
     var sort by remember { mutableStateOf(FileBrowser.Sort.NAME) }
     var descending by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
-    var picked by remember { mutableStateOf<Pair<Int, FileBrowser.Entry>?>(null) }
-    var pendingDelete by remember { mutableStateOf<Pair<Int, FileBrowser.Entry>?>(null) }
+    var picked by remember { mutableStateOf<FileBrowser.Entry?>(null) }
+    var pendingDelete by remember { mutableStateOf<FileBrowser.Entry?>(null) }
     var editing by remember { mutableStateOf<Pair<String, String>?>(null) }
     var creating by remember { mutableStateOf<String?>(null) }
-    var renaming by remember { mutableStateOf<Pair<Int, FileBrowser.Entry>?>(null) }
+    var renaming by remember { mutableStateOf<FileBrowser.Entry?>(null) }
 
-    suspend fun load(index: Int, target: String) {
-        panes = panes.toMutableList().also { it[index] = it[index].copy(loading = true) }
+    // Load a directory. The space is passed explicitly rather than derived from
+    // the path: deriving it used to fork a root shell on every call.
+    suspend fun load(target: String, which: FileBrowser.Space = space) {
+        loading = true
         val result = withContext(Dispatchers.IO) {
-            FileBrowser.list(context, target, panes[index].showHidden)
+            FileBrowser.list(context, which, target, showHidden)
         }
-        panes = panes.toMutableList().also {
-            it[index] = it[index].copy(
-                path = target,
-                listing = result,
-                loading = false,
-            )
-        }
+        path = target
+        listing = result
+        loading = false
     }
 
+    // One initial load, in Internal. The old screen listed every place first —
+    // eight `File` probes plus an `ls` under root — before it could show a row.
     LaunchedEffect(Unit) {
-        places = withContext(Dispatchers.IO) { FileBrowser.places(context) }
-        val start = FileBrowser.defaultPath(context)
-        load(0, start)
-        // The second pane opens on the same place: the first action is usually
-        // "copy something out of here", and starting at the top-level list
-        // would be a second navigation.
-        load(1, start)
+        val root = FileBrowser.rootOf(context, space)
+        withContext(Dispatchers.IO) { FileBrowser.list(context, space, root, false) }
+            .let {
+                path = root
+                listing = it
+                loading = false
+            }
     }
 
-    fun refreshBoth() {
-        scope.launch {
-            load(0, panes[0].path)
-            load(1, panes[1].path)
-        }
+    fun openSpace(next: FileBrowser.Space) {
+        if (next == space) return
+        space = next
+        query = ""
+        notice = ""
+        scope.launch { load(FileBrowser.rootOf(context, next), next) }
     }
+
+    fun goUp() {
+        FileBrowser.parent(context, path)?.let { parent -> scope.launch { load(parent) } }
+    }
+
+    // Android back navigates the browser before it leaves the app. This is the
+    // handler the screen owns: the activity's own handler only knows about
+    // routes, so back from a deep folder used to exit Altaris.
+    BackHandler(enabled = FileBrowser.parent(context, path) != null) {
+        goUp()
+    }
+
+    val visible = remember(listing, query, sort, descending) {
+        FileBrowser.sorted(FileBrowser.filtered(listing.entries, query), sort, descending)
+    }
+    val listState = rememberLazyListState()
 
     Column(
         modifier = modifier
@@ -138,36 +145,91 @@ fun FilesScreen(
             .padding(top = 4.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        // ---------------------------------------------------------- controls
+        // ---------------------------------------------------------- spaces
         Row(
-            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            FileBrowser.Space.entries.forEach { option ->
+                PrismChip(
+                    option.label,
+                    accent,
+                    selected = space == option,
+                    onClick = { openSpace(option) },
+                )
+            }
+            Spacer(Modifier.weight(1f))
             PrismChip(
-                if (dual) "Two panes" else "One pane",
+                if (showHidden) "Hidden on" else "Hidden off",
                 accent,
-                selected = dual,
+                selected = showHidden,
                 onClick = {
-                    dual = !dual
-                    if (!dual) active = 0
+                    showHidden = !showHidden
+                    scope.launch { load(path) }
                 },
             )
+            PrismChip("Refresh", accent) { scope.launch { load(path) } }
+        }
+
+        // ------------------------------------------------------------ location
+        // One line, not a navigator. The old screen had a scrollable strip of
+        // eight location chips plus clickable breadcrumbs; that is the "top
+        // navigator" that was removed. The path is shown for orientation, Up
+        // and Android back do the navigation, and nothing forks a shell to
+        // decide what the path means.
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (FileBrowser.parent(context, path) != null) {
+                Text(
+                    "↑",
+                    fontSize = 14.sp,
+                    color = accent,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(4.dp))
+                        .clickable { goUp() }
+                        .padding(horizontal = 7.dp, vertical = 2.dp),
+                )
+            }
+            Text(
+                path.removePrefix(FileBrowser.rootOf(context, space))
+                    .ifBlank { "/" },
+                fontSize = 9.sp,
+                fontFamily = FontFamily.Monospace,
+                color = altarisMutedText(),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+        }
+
+        // ---------------------------------------------------------- filter
+        OutlinedTextField(
+            value = query,
+            onValueChange = { query = it },
+            modifier = Modifier.fillMaxWidth().height(42.dp),
+            singleLine = true,
+            textStyle = androidx.compose.ui.text.TextStyle(fontSize = 10.sp),
+            placeholder = {
+                Text(
+                    "Filter " + path.substringAfterLast('/'),
+                    fontSize = 10.sp,
+                    color = altarisMutedText(),
+                )
+            },
+        )
+
+        // ----------------------------------------------------------- tools
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             PrismChip("New folder", accent) { creating = "dir" }
             PrismChip("New file", accent) { creating = "file" }
-            PrismChip(
-                if (panes[active].showHidden) "Hidden on" else "Hidden off",
-                accent,
-                selected = panes[active].showHidden,
-                onClick = {
-                    val next = !panes[active].showHidden
-                    panes = panes.toMutableList().also {
-                        it[active] = it[active].copy(showHidden = next)
-                    }
-                    scope.launch { load(active, panes[active].path) }
-                },
-            )
-            PrismChip("Refresh", accent) { refreshBoth() }
+            Spacer(Modifier.weight(1f))
             FileBrowser.Sort.entries.forEach { option ->
                 PrismChip(
                     option.label,
@@ -184,100 +246,78 @@ fun FilesScreen(
             )
         }
 
-        // Filter applies to the active pane only: it is a lens, not a mode.
-        OutlinedTextField(
-            value = query,
-            onValueChange = { query = it },
-            modifier = Modifier.fillMaxWidth().height(44.dp),
-            singleLine = true,
-            textStyle = androidx.compose.ui.text.TextStyle(fontSize = 10.sp),
-            placeholder = {
-                Text(
-                    "Filter " + panes[active].path.substringAfterLast('/'),
-                    fontSize = 10.sp,
-                    color = altarisMutedText(),
-                )
-            },
-        )
-
-        // The two panes, side by side — the MP/MT layout. Two stacked panes
-        // each got half the screen height and neither showed more than a few
-        // rows; side by side, both use the full height and a file list stays
-        // readable.
-        if (dual) {
-            Row(
-                modifier = Modifier.fillMaxWidth().weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-            Pane(
-                state = panes[0],
-                active = active == 0,
-                accent = accent,
-                query = if (active == 0) query else "",
-                sort = sort,
-                descending = descending,
-                places = places,
-                modifier = Modifier.weight(1f).fillMaxHeight(),
-                onActivate = { active = 0 },
-                onNavigate = { scope.launch { load(0, it) } },
-                onMore = { picked = 0 to it },
-                onTransfer = { entry, move ->
-                    scope.launch {
-                        notice = transfer(context, entry, move, panes[1].path) { busy = it }
-                        busy = ""
-                        load(1, panes[1].path)
-                    }
+        // ---------------------------------------------------------- listing
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                when {
+                    loading -> "…"
+                    query.isNotBlank() -> visible.size.toString() + " of " +
+                        listing.entries.size
+                    else -> listing.entries.size.toString() + " items"
                 },
+                fontSize = 8.5.sp,
+                color = altarisMutedText(),
             )
-            Pane(
-                state = panes[1],
-                active = active == 1,
-                accent = accent,
-                query = if (active == 1) query else "",
-                sort = sort,
-                descending = descending,
-                places = places,
-                modifier = Modifier.weight(1f).fillMaxHeight(),
-                onActivate = { active = 1 },
-                onNavigate = { scope.launch { load(1, it) } },
-                onMore = { picked = 1 to it },
-                onTransfer = { entry, move ->
-                    scope.launch {
-                        notice = transfer(context, entry, move, panes[0].path) { busy = it }
-                        busy = ""
-                        load(0, panes[0].path)
-                    }
-                },
-            )
+            if (listing.usedRoot) {
+                Spacer(Modifier.width(4.dp))
+                Text("· root", fontSize = 8.sp, color = accent)
             }
-        } else {
-            Pane(
-                state = panes[0],
-                active = true,
-                accent = accent,
-                query = query,
-                sort = sort,
-                descending = descending,
-                places = places,
-                modifier = Modifier.weight(1f).fillMaxHeight(),
-                onActivate = { active = 0 },
-                onNavigate = { scope.launch { load(0, it) } },
-                onMore = { picked = 0 to it },
-                onTransfer = { _, _ -> },
-            )
         }
 
-        if (busy.isNotBlank()) {
-            PrismNote(busy, fontSize = 9.sp)
+        if (listing.error.isNotBlank()) {
+            PrismNote(
+                listing.error,
+                color = MaterialTheme.colorScheme.error,
+                fontSize = 9.sp,
+            )
         }
         if (notice.isNotBlank()) {
             PrismNote(notice, fontSize = 9.sp)
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .clip(RoundedCornerShape(Prism.PanelRadius))
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.22f))
+                .border(
+                    1.dp,
+                    MaterialTheme.colorScheme.outline,
+                    RoundedCornerShape(Prism.PanelRadius),
+                ),
+        ) {
+            if (!loading && visible.isEmpty() && listing.error.isBlank()) {
+                Text(
+                    if (space == FileBrowser.Space.EXTERNAL) {
+                        "No chroot trees here yet. Install a distro to fill this space."
+                    } else {
+                        "Empty folder."
+                    },
+                    fontSize = 9.sp,
+                    color = altarisMutedText(),
+                    modifier = Modifier.align(Alignment.Center).padding(12.dp),
+                )
+            }
+            LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+                items(visible, key = { it.path }) { entry ->
+                    FileRow(
+                        entry = entry,
+                        accent = accent,
+                        onOpen = {
+                            if (entry.dir) scope.launch { load(entry.path) }
+                            else picked = entry
+                        },
+                        onMore = { picked = entry },
+                    )
+                }
+            }
         }
     }
 
     // ------------------------------------------------------------- dialogs
 
-    picked?.let { (index, entry) ->
+    picked?.let { entry ->
         AlertDialog(
             onDismissRequest = { picked = null },
             confirmButton = {
@@ -298,11 +338,11 @@ fun FilesScreen(
                     }
                     TextButton(onClick = {
                         picked = null
-                        renaming = index to entry
+                        renaming = entry
                     }) { Text("Rename", color = accent) }
                     TextButton(onClick = {
                         picked = null
-                        pendingDelete = index to entry
+                        pendingDelete = entry
                     }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
                 }
             },
@@ -311,7 +351,10 @@ fun FilesScreen(
                 Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     Detail(entry.path, accent)
                     if (!entry.dir) {
-                        Detail(com.altaris.linux.core.rea.ReaDistro.formatBytes(entry.size), accent)
+                        Detail(
+                            com.altaris.linux.core.rea.ReaDistro.formatBytes(entry.size),
+                            accent,
+                        )
                     }
                     if (entry.modified > 0) Detail(formatTime(entry.modified), accent)
                     if (entry.mode.isNotBlank()) Detail(entry.mode, accent)
@@ -327,7 +370,7 @@ fun FilesScreen(
         )
     }
 
-    pendingDelete?.let { (index, entry) ->
+    pendingDelete?.let { entry ->
         AlertDialog(
             onDismissRequest = { pendingDelete = null },
             confirmButton = {
@@ -337,7 +380,7 @@ fun FilesScreen(
                         withContext(Dispatchers.IO) { FileBrowser.delete(context, entry.path) }
                             .onFailure { notice = it.message ?: "delete failed" }
                             .onSuccess { notice = "Deleted " + entry.name }
-                        load(index, panes[index].path)
+                        load(path)
                     }
                 }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
             },
@@ -369,7 +412,7 @@ fun FilesScreen(
                             .onFailure { notice = it.message ?: "write failed" }
                             .onSuccess { notice = "Saved" }
                         editing = null
-                        refreshBoth()
+                        load(path)
                     }
                 }) { Text("Save", color = accent) }
             },
@@ -397,7 +440,7 @@ fun FilesScreen(
             onDismissRequest = { creating = null },
             confirmButton = {
                 TextButton(onClick = {
-                    val target = panes[active].path.trimEnd('/') + "/" + name.trim()
+                    val target = path.trimEnd('/') + "/" + name.trim()
                     if (name.isBlank()) return@TextButton
                     creating = null
                     scope.launch {
@@ -405,7 +448,7 @@ fun FilesScreen(
                             if (kind == "dir") FileBrowser.createDirectory(context, target)
                             else FileBrowser.createFile(context, target)
                         }.onFailure { notice = it.message ?: "failed" }
-                        load(active, panes[active].path)
+                        load(path)
                     }
                 }) { Text("Create", color = accent) }
             },
@@ -425,7 +468,7 @@ fun FilesScreen(
         )
     }
 
-    renaming?.let { (index, entry) ->
+    renaming?.let { entry ->
         var name by remember(entry.path) { mutableStateOf(entry.name) }
         AlertDialog(
             onDismissRequest = { renaming = null },
@@ -439,7 +482,7 @@ fun FilesScreen(
                         withContext(Dispatchers.IO) {
                             FileBrowser.rename(context, entry.path, target)
                         }.onFailure { notice = it.message ?: "rename failed" }
-                        load(index, panes[index].path)
+                        load(path)
                     }
                 }) { Text("Rename", color = accent) }
             },
@@ -459,195 +502,32 @@ fun FilesScreen(
     }
 }
 
-/** Everything one pane remembers. */
-private data class PaneState(
-    val path: String = "",
-    val listing: FileBrowser.Listing = FileBrowser.Listing(""),
-    val loading: Boolean = false,
-    val showHidden: Boolean = false,
-)
-
-/**
- * Copy or move [entry] into [destination].
- *
- * A directory can be large, so this is a suspend call the caller launches and
- * reports through [status] — never a fire-and-forget on a global scope, which
- * would outlive the screen and update state after it is gone.
- */
-private suspend fun transfer(
-    context: android.content.Context,
-    entry: FileBrowser.Entry,
-    move: Boolean,
-    destination: String,
-    status: (String) -> Unit,
-): String {
-    val target = destination.trimEnd('/') + "/" + entry.name
-    if (target == entry.path) return "That is already the destination."
-    status((if (move) "Moving " else "Copying ") + entry.name)
-    return withContext(Dispatchers.IO) {
-        val result = FileBrowser.copy(context, entry.path, target)
-        if (result.isSuccess && move) FileBrowser.delete(context, entry.path)
-        status("")
-        if (result.isFailure) {
-            (if (move) "Move" else "Copy") + " failed: " +
-                (result.exceptionOrNull()?.message ?: "unknown error")
-        } else {
-            (if (move) "Moved " else "Copied ") + entry.name
-        }
-    }
-}
-
-/** One pane: location chips, breadcrumbs and the listing. */
-@Composable
-private fun Pane(
-    state: PaneState,
-    active: Boolean,
-    accent: androidx.compose.ui.graphics.Color,
-    query: String,
-    sort: FileBrowser.Sort,
-    descending: Boolean,
-    places: List<FileBrowser.Place>,
-    modifier: Modifier = Modifier,
-    onActivate: () -> Unit,
-    onNavigate: (String) -> Unit,
-    onMore: (FileBrowser.Entry) -> Unit,
-    onTransfer: (FileBrowser.Entry, Boolean) -> Unit,
-) {
-    val listState = rememberLazyListState()
-    val context = LocalContext.current
-    val border = if (active) accent.copy(alpha = 0.55f) else MaterialTheme.colorScheme.outline
-    val visible = remember(state.listing, query, sort, descending) {
-        FileBrowser.sorted(FileBrowser.filtered(state.listing.entries, query), sort, descending)
-    }
-
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(Prism.PanelRadius))
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f))
-            .border(1.dp, border, RoundedCornerShape(Prism.PanelRadius))
-            .clickable(onClick = onActivate)
-            .padding(4.dp),
-        verticalArrangement = Arrangement.spacedBy(3.dp),
-    ) {
-        // Where this pane is.
-        Row(
-            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                if (active) "●" else "○",
-                fontSize = 7.sp,
-                color = if (active) accent else altarisMutedText(),
-            )
-            Spacer(Modifier.width(4.dp))
-            FileBrowser.crumbs(context = context, path = state.path)
-                .forEachIndexed { index, (label, target) ->
-                    if (index > 0) Text("/", fontSize = 8.sp, color = altarisMutedText())
-                    Text(
-                        label,
-                        fontSize = 8.5.sp,
-                        fontFamily = FontFamily.Monospace,
-                        color = if (index == 0) accent else altarisMutedText(),
-                        maxLines = 1,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(3.dp))
-                            .clickable { onNavigate(target) }
-                            .padding(horizontal = 2.dp, vertical = 1.dp),
-                    )
-                }
-        }
-
-        // Places, so a pane can jump to a distro or the filesystem root.
-        Row(
-            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(3.dp),
-        ) {
-            places.forEach { place ->
-                PrismChip(
-                    place.label,
-                    accent,
-                    selected = state.path == place.path || state.path.startsWith(place.path + "/"),
-                    onClick = { onNavigate(place.path) },
-                )
-            }
-        }
-
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                when {
-                    state.loading -> "…"
-                    query.isNotBlank() -> visible.size.toString() + " of " +
-                        state.listing.entries.size
-                    else -> state.listing.entries.size.toString() + " items"
-                },
-                fontSize = 8.sp,
-                color = altarisMutedText(),
-            )
-            if (state.listing.usedRoot) {
-                Spacer(Modifier.width(4.dp))
-                Text("· root", fontSize = 7.5.sp, color = accent)
-            }
-            Spacer(Modifier.weight(1f))
-            PrismChip("Up", accent) {
-                FileBrowser.parent(context, state.path)
-                    ?.let(onNavigate)
-            }
-        }
-
-        if (state.listing.error.isNotBlank()) {
-            PrismNote(state.listing.error, color = MaterialTheme.colorScheme.error, fontSize = 9.sp)
-        }
-
-        LazyColumn(state = listState, modifier = Modifier.fillMaxWidth().weight(1f)) {
-            items(visible, key = { it.path }) { entry ->
-                FileRow(
-                    entry = entry,
-                    accent = accent,
-                    onOpen = {
-                        onActivate()
-                        if (entry.dir) onNavigate(entry.path) else onMore(entry)
-                    },
-                    onMore = {
-                        onActivate()
-                        onMore(entry)
-                    },
-                    onCopy = { onTransfer(entry, false) },
-                    onMove = { onTransfer(entry, true) },
-                )
-            }
-        }
-    }
-}
-
 @Composable
 private fun FileRow(
     entry: FileBrowser.Entry,
     accent: androidx.compose.ui.graphics.Color,
     onOpen: () -> Unit,
     onMore: () -> Unit,
-    onCopy: () -> Unit,
-    onMove: () -> Unit,
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(3.dp))
             .clickable(onClick = onOpen)
-            .padding(horizontal = 3.dp, vertical = 4.dp),
+            .padding(horizontal = 6.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
             modifier = Modifier
-                .size(4.dp)
+                .size(5.dp)
                 .clip(RoundedCornerShape(2.dp))
                 .background(if (entry.dir) accent else MaterialTheme.colorScheme.outline),
         )
-        Spacer(Modifier.width(6.dp))
+        Spacer(Modifier.width(8.dp))
         Column(Modifier.weight(1f)) {
             Text(
                 entry.name,
-                fontSize = 9.5.sp,
+                fontSize = 10.sp,
                 fontFamily = FontFamily.Monospace,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -658,37 +538,19 @@ private fun FileRow(
             if (!entry.dir) {
                 Text(
                     com.altaris.linux.core.rea.ReaDistro.formatBytes(entry.size),
-                    fontSize = 7.5.sp,
+                    fontSize = 8.sp,
                     color = altarisMutedText(),
                 )
             }
         }
         Text(
-            "⇄",
-            fontSize = 11.sp,
-            color = accent,
-            modifier = Modifier
-                .clip(RoundedCornerShape(3.dp))
-                .clickable(onClick = onCopy)
-                .padding(horizontal = 5.dp, vertical = 2.dp),
-        )
-        Text(
-            "→",
-            fontSize = 11.sp,
-            color = accent,
-            modifier = Modifier
-                .clip(RoundedCornerShape(3.dp))
-                .clickable(onClick = onMove)
-                .padding(horizontal = 5.dp, vertical = 2.dp),
-        )
-        Text(
             "⋯",
-            fontSize = 11.sp,
+            fontSize = 12.sp,
             color = altarisMutedText(),
             modifier = Modifier
                 .clip(RoundedCornerShape(3.dp))
                 .clickable(onClick = onMore)
-                .padding(horizontal = 5.dp, vertical = 2.dp),
+                .padding(horizontal = 6.dp, vertical = 2.dp),
         )
     }
 }

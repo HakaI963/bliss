@@ -800,7 +800,14 @@ class ReaAssetToolsTest {
     @Test
     fun ghidraGetsAFixedHeap() {
         val script = readAsset("scripts/rea/ghidra-analyze.sh")
-        assertTrue("must set an explicit heap", script.contains("JAVA_OPTS=\"-Xmx"))
+        // The mechanism is Ghidra's own variable, not JAVA_OPTS. Ghidra's
+        // launcher builds its own JVM arguments and reads only
+        // GHIDRA_HEADLESS_MAXMEM / GHIDRA_HEADLESS_JAVA_OPTIONS — which is why
+        // the old JAVA_OPTS ceiling was never applied and the device died.
+        assertTrue(
+            "must set the heap through Ghidra's variable",
+            script.contains("GHIDRA_HEADLESS_MAXMEM"),
+        )
         assertTrue("must read the real RAM", script.contains("/proc/meminfo"))
         // The ceiling is now 2 GB and it is sized from MemAvailable, not from
         // total RAM: promising a JVM memory Android is already using is what

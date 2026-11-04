@@ -481,6 +481,10 @@ private fun LiveActivityCard(
     var now by remember { mutableStateOf(System.currentTimeMillis()) }
     val running = remember(calls) { calls.filter { it.running } }
     val finished = remember(calls) { calls.filterNot { it.running } }
+    // The tool's own output while it runs. This is the difference between
+    // "working" and "hung": Ghidra prints each analysis stage as it goes, and
+    // a decompile prints the function it is on.
+    val live by ReaBridge.live.collectAsState()
     LaunchedEffect(running.size) {
         while (running.isNotEmpty()) {
             now = System.currentTimeMillis()
@@ -531,6 +535,33 @@ private fun LiveActivityCard(
             // In flight first: these are the ones worth watching.
             running.forEach { call ->
                 CallRow(accent, call, elapsed = now - call.at, live = true)
+            }
+
+            // The running tool's own output, as it arrives. Capped and scrolled
+            // to the newest line, so a long import shows its latest stage
+            // rather than the first one it ever printed.
+            if (running.isNotEmpty() && live.isNotEmpty()) {
+                Spacer(Modifier.height(1.dp))
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(5.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f))
+                        .padding(5.dp),
+                    verticalArrangement = Arrangement.spacedBy(1.dp),
+                ) {
+                    live.takeLast(8).forEach { line ->
+                        Text(
+                            line,
+                            fontSize = 7.sp,
+                            lineHeight = 9.sp,
+                            fontFamily = FontFamily.Monospace,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            color = altarisMutedText(),
+                        )
+                    }
+                }
             }
 
             if (running.isNotEmpty() && finished.isNotEmpty()) {

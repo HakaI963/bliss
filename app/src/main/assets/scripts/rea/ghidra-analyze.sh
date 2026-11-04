@@ -1,6 +1,6 @@
 #!/bin/sh
 # ghidra-analyze.sh <target> [maxFunctions]
-# Headless Ghidra analysis: import a binary, run default analyzers, dump functions.
+# Headless Ghidra analysis: import a binary, run analyzers, dump functions.
 GH=__GHIDRA_ROOT__
 ROOT=__REA_ROOT__
 
@@ -19,18 +19,26 @@ fi
 [ -n "$JAVA_HOME" ] && export JAVA_HOME
 export _JAVA_OPTIONS="-Djava.awt.headless=true"
 
-# Size the heap from what is actually AVAILABLE, not from total RAM.
+# ---------------------------------------------------------------- the heap
 #
-# This is what froze the device. The heap was half of MemTotal — on an 8 GB
-# phone that is a 3 GB ceiling, promised to a JVM while Android itself is
-# already using most of that memory. The kernel then had to reclaim and kill,
-# and the OOM killer does not stop at our process: Altaris and the launcher go
-# with it.
+# This is the part that was wrong, and it is why the whole phone froze.
 #
-# MemAvailable is the kernel's own estimate of what can be handed out without
-# swapping. Take a conservative share of that, and leave a hard floor of free
-# memory for the rest of the system — a debugger must never be the reason the
-# phone dies.
+# The script used to export JAVA_OPTS="-Xmx…" and assume Ghidra honoured it.
+# It does not. Ghidra's launcher (support/analyzeHeadless -> launch.sh) builds
+# the JVM arguments itself and reads only its own variables:
+#
+#   GHIDRA_HEADLESS_MAXMEM   the -Xmx value, "2G" style
+#   GHIDRA_HEADLESS_JAVA_OPTIONS   extra VM arguments
+#
+# JAVA_OPTS is not in that list. So the "ceiling" was never applied, the JVM
+# fell back to its default (a quarter of *physical* RAM), and on an 8 GB phone
+# that is a 2 GB+ heap the OS had already committed elsewhere. The kernel
+# reclaimed, the OOM killer fired, and it took Altaris and the launcher with
+# it — which is exactly the reported "heap 5-6 GB, whole device crashes".
+#
+# Size from MemAvailable, not MemTotal: MemTotal counts memory Android is
+# already using. Take half of what is genuinely free, cap it at a third of
+# total RAM and at 2 GB, and hold 768 MB back for the system.
 MAXRAM_MB=0
 AVAIL_MB=0
 if [ -r /proc/meminfo ]; then
@@ -40,13 +48,10 @@ fi
 case "$MAXRAM_MB" in ''|*[!0-9]*) MAXRAM_MB=4096 ;; esac
 case "$AVAIL_MB" in ''|*[!0-9]*) AVAIL_MB=$((MAXRAM_MB / 2)) ;; esac
 
-# Half of what is available, never more than a third of total RAM.
 HEAP_MB=$((AVAIL_MB / 2))
 CAP_MB=$((MAXRAM_MB / 3))
 [ "$HEAP_MB" -gt "$CAP_MB" ] && HEAP_MB=$CAP_MB
 
-# Leave at least 768 MB free for Android. If that is not possible, refuse
-# rather than risk the device.
 RESERVE_MB=768
 if [ "$AVAIL_MB" -lt $((HEAP_MB + RESERVE_MB)) ]; then
   HEAP_MB=$((AVAIL_MB - RESERVE_MB))
@@ -57,14 +62,30 @@ if [ "$HEAP_MB" -lt 512 ]; then
   echo "Close other apps and try again, or analyse a smaller file."
   exit 8
 fi
-# A hard ceiling for a phone. More than this and the JVM's own GC work costs
-# more than it buys.
 [ "$HEAP_MB" -gt 2048 ] && HEAP_MB=2048
 
-# ParallelGC over G1: less bookkeeping, and it returns memory to the system
-# sooner — which matters when the OS is under pressure.
-export JAVA_OPTS="-Xmx${HEAP_MB}m -XX:+UseParallelGC -XX:MaxHeapFreeRatio=20 -XX:MinHeapFreeRatio=10"
+# The two variables Ghidra actually reads.
+export GHIDRA_HEADLESS_MAXMEM="${HEAP_MB}M"
+export GHIDRA_MAXMEM="${HEAP_MB}M"
+# Also keep JAVA_OPTS: harmless for Ghidra, and it covers any wrapper that
+# does read it. It is not the mechanism, though.
+export JAVA_OPTS="-Xmx${HEAP_MB}m"
+# Return heap to the OS promptly: a phone under pressure cares more about the
+# pages going back than about a slightly cheaper GC cycle.
+export GHIDRA_HEADLESS_JAVA_OPTIONS="-XX:+UseParallelGC -XX:MaxHeapFreeRatio=20 -XX:MinHeapFreeRatio=10 -Djava.awt.headless=true -Dcpu.core.limit=2"
 echo "Ghidra heap: ${HEAP_MB} MB (available ${AVAIL_MB} MB, reserve ${RESERVE_MB} MB)"
+
+# One JVM at a time. Two Ghidra imports on a phone is two heaps, which is how
+# a single analysis becomes a device-wide OOM.
+LOCK=/tmp/altaris-ghidra.lock
+if command -v flock >/dev/null 2>&1; then
+  exec 9>"$LOCK" 2>/dev/null || true
+  if ! flock -n 9; then
+    echo "ERROR: another Ghidra analysis is already running."
+    echo "Wait for it to finish — two at once is more memory than the device has."
+    exit 9
+  fi
+fi
 
 TARGET="$1"
 MAX="$2"
@@ -84,12 +105,24 @@ case "$SIZE" in ''|*[!0-9]*) SIZE=0 ;; esac
 SIZE_MB=$((SIZE / 1048576))
 echo "target: $TARGET (${SIZE_MB} MB)"
 
+# Refuse a target that cannot fit, before the JVM starts.
+#
+# The import roughly doubles the file in memory, plus the project. If the file
+# is larger than half the heap there is no point trying: it would spend twenty
+# minutes thrashing and then die, taking the device with it.
+if [ "$SIZE_MB" -gt 0 ] && [ $((SIZE_MB * 2)) -gt "$HEAP_MB" ]; then
+  echo "ERROR: $TARGET is ${SIZE_MB} MB and the heap is ${HEAP_MB} MB."
+  echo "Ghidra needs roughly twice the file size. Free memory and try again,"
+  echo "or extract the specific library you need from an archive first."
+  exit 7
+fi
+
 # Low-memory mode by default.
 #
 # The pre-script turns off Decompiler Parameter ID and the other analyzers whose
 # working set is many times the binary. That single analyzer is what took the
-# heap to its ceiling and got the app — and the device — killed. Callers can ask
-# for a full analysis, but it is opt-in because it is the mode that hurts.
+# heap to its ceiling. Callers can ask for a full analysis, but it is opt-in
+# because it is the mode that hurts.
 MODE="${GHIDRA_ANALYSIS:-low}"
 
 "$GH/support/analyzeHeadless" "$WORK" altaris-proj \
@@ -107,4 +140,3 @@ echo "--- first $MAX functions (name<TAB>address) ---"
 [ -f "$FUNCS" ] && head -n "$MAX" "$FUNCS"
 rm -rf "$WORK"
 [ "$RC" -eq 0 ] || exit "$RC"
-

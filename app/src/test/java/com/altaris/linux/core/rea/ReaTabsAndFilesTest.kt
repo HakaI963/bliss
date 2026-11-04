@@ -219,15 +219,17 @@ class ReaTabsAndFilesTest {
         )
         assertTrue("must have a root listing", source.contains("private fun listThroughRoot("))
         assertTrue(
-            "must fall back to root when a listing is unreadable",
-            source.contains("return@withContext listThroughRoot(path, showHidden)"),
+            "must list the external space through root",
+            source.contains("if (space == Space.EXTERNAL)"),
         )
-        // Every mutating operation must have a root branch.
-        for (fn in listOf("fun read(", "fun write(", "fun delete(", "fun rename(")) {
+        // Every mutating operation must have a root branch for the external
+        // space, which SELinux hides from the app uid.
+        for (fn in listOf("suspend fun read(", "suspend fun write(", "suspend fun delete(",
+                          "suspend fun rename(", "suspend fun copy(")) {
             val body = source.substringAfter(fn).substringBefore("\n    suspend fun ")
             assertTrue(
-                "$fn must handle a chroot path",
-                body.contains("Place.Kind.CHROOT"),
+                "$fn must handle the external space",
+                body.contains("Space.EXTERNAL"),
             )
         }
     }
@@ -246,21 +248,33 @@ class ReaTabsAndFilesTest {
         )
     }
 
-    /** The browser must offer every place it can really open. */
+    /**
+     * Two spaces, not eight places.
+     *
+     * The browser offered Internal storage, Downloads, All storage, /data,
+     * /system, /vendor, /etc, the filesystem root and one entry per distro.
+     * Most were unreadable, and opening the tab probed all of them — including
+     * an `ls` under root — before it could draw a row. That is what froze the
+     * screen. Internal and External are the two spaces a person actually has.
+     */
     @Test
-    fun placesCoverHostProotAndChroot() {
+    fun theBrowserHasExactlyTwoSpaces() {
         val source = readSource(
             "app/src/main/kotlin/com/altaris/linux/core/files/FileBrowser.kt"
         )
-        assertTrue("must offer host storage", source.contains("\"Internal storage\""))
-        assertTrue("must offer Downloads", source.contains("\"Downloads\""))
+        assertTrue("must define Internal", source.contains("INTERNAL(\"Internal\""))
+        assertTrue("must define External", source.contains("EXTERNAL(\"External\""))
         assertTrue(
-            "must find proot rootfs directories",
-            source.contains("usr/var/lib/proot-distro/containers"),
+            "External must be the chroot tree",
+            source.contains("ChrootPaths.CHROOTS_DIR"),
         )
         assertTrue(
-            "must find chroot trees through root",
-            source.contains("/data/local/altaris/chroots"),
+            "Internal must be the app's own root",
+            source.contains("context.applicationContext.filesDir.absolutePath"),
+        )
+        assertFalse(
+            "the eight-place list must be gone",
+            source.contains("fun places(context: Context)"),
         )
     }
 
@@ -308,23 +322,39 @@ class ReaTabsAndFilesTest {
         assertTrue("Utility takes the slot", dock.contains("UTILITY(\"Utility\""))
     }
 
-    /** The manager is dual-pane and side by side, like MT/MP. */
+    /**
+     * One pane, and no top navigator.
+     *
+     * The dual-pane layout was a copy of a desktop manager: two half-width
+     * lists, a strip of location chips and a breadcrumb bar, on a phone. Two
+     * panes meant neither list showed more than a few rows, and the navigator
+     * was a second navigation system on top of Up and back.
+     */
     @Test
-    fun theFileManagerIsDualPaneSideBySide() {
+    fun theFileManagerIsSinglePaneWithNoNavigator() {
         val screen = readSource(
             "app/src/main/kotlin/com/altaris/linux/ui/screens/FilesScreen.kt"
         )
-        assertTrue("must have two panes", screen.contains("PaneState(), PaneState()"))
-        assertTrue(
-            "panes must sit in a Row",
-            screen.contains("Row(") && screen.contains("horizontalArrangement = Arrangement.spacedBy(4.dp)"),
+        assertFalse(
+            "must not have two panes",
+            screen.contains("PaneState(), PaneState()"),
         )
-        assertTrue(
-            "each pane takes half the width",
-            screen.contains("Modifier.weight(1f).fillMaxHeight()"),
+        assertFalse(
+            "must not offer a pane toggle",
+            screen.contains("\"Two panes\""),
         )
-        assertTrue("must offer copy between panes", screen.contains("onCopy"))
-        assertTrue("must offer move between panes", screen.contains("onMove"))
+        // The space chips are the only place selector; there is no strip of
+        // location chips and no clickable breadcrumb bar.
+        assertTrue("must offer the spaces", screen.contains("FileBrowser.Space.entries"))
+        assertFalse(
+            "the location chip strip must be gone",
+            screen.contains("places.forEach { place ->"),
+        )
+        // Back navigates the browser before it leaves the app.
+        assertTrue(
+            "must handle Android back inside the tree",
+            screen.contains("BackHandler("),
+        )
     }
 
     /** The guest home must expose the phone's Downloads folder. */

@@ -51,6 +51,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Keyboard
@@ -102,6 +103,7 @@ import com.altaris.linux.ui.terminal.ShortcutBarConfig
 import com.altaris.linux.ui.terminal.ShortcutBarEditorSheet
 import com.altaris.linux.ui.terminal.ShortcutBarStore
 import com.altaris.linux.ui.terminal.ShortcutKeyEditorSheet
+import com.altaris.linux.ui.terminal.TerminalAttachSheet
 import com.altaris.linux.ui.terminal.TerminalExtraKeys
 import com.altaris.linux.ui.terminal.TerminalKeyInjector
 import com.altaris.linux.ui.terminal.TerminalModifierState
@@ -205,6 +207,9 @@ private fun TerminalScreenContent(
     // "+" opens an anchored in-place panel (no modal sheet → no dismiss/tap race).
     var showNewSessionPanel by remember { mutableStateOf(false) }
     var showToolsSheet by remember { mutableStateOf(false) }
+    // The attach sheet is separate from Tools: "send this file to the agent"
+    // is an action on the session, not a tool configuration.
+    var showAttachSheet by remember { mutableStateOf(false) }
     var shortcutConfig by remember { mutableStateOf(ShortcutBarStore.load(context)) }
     var showShortcutEditor by remember { mutableStateOf(false) }
     var showShortcutKeyEditor by remember { mutableStateOf(false) }
@@ -536,6 +541,21 @@ private fun TerminalScreenContent(
                     modifier = Modifier.size(20.dp)
                 )
             }
+            // Attach a file and send it to the agent running in this session.
+            // A paperclip, not a plus: the plus beside it already means "new
+            // session", and two identical glyphs with different meanings is
+            // how a top bar becomes unreadable.
+            IconButton(
+                onClick = { showAttachSheet = true },
+                modifier = Modifier.size(36.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.AttachFile,
+                    contentDescription = "Send a file to the agent",
+                    tint = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
             IconButton(
                 onClick = { showNewSessionPanel = !showNewSessionPanel },
                 modifier = Modifier.size(36.dp)
@@ -765,6 +785,13 @@ private fun TerminalScreenContent(
     }
 
     // Tools sheet — QoL actions bound to the existing inject/session APIs.
+    if (showAttachSheet) {
+        TerminalAttachSheet(
+            onDismissRequest = { showAttachSheet = false },
+            onSend = { text -> sendText(text) },
+        )
+    }
+
     if (showToolsSheet) {
         val activeManaged = AltarisTerminalSessionManager.activeSession
         TerminalToolsSheet(

@@ -68,6 +68,11 @@ jobs:
         run: ./gradlew assembleAltarisDebug --stacktrace
         env:
           ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_HOME }}
+          # Stamp the build identity into the APK, so the in-app updater can
+          # tell this build apart from the next one. Without it versionName was
+          # a constant and every check reported an update.
+          ALTARIS_VERSION_NAME: "1.3.0-${{ github.sha }}"
+          ALTARIS_VERSION_CODE: ${{ github.run_number }}
 
       - name: Unit tests (diagnostics)
         continue-on-error: true

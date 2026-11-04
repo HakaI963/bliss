@@ -125,6 +125,30 @@ object ReaBridge {
     /** Newest first, capped. */
     val logs: StateFlow<List<LogLine>> = _logs.asStateFlow()
 
+    /**
+     * Output from the call that is running right now.
+     *
+     * The screen could show that a call started and, minutes later, that it
+     * finished — but nothing in between. A Ghidra import prints its stages as
+     * it goes, and a decompile prints the function it is working on; showing
+     * those is the difference between "working" and "hung". This is a small
+     * ring of the newest lines, cleared when a call begins.
+     */
+    private val _live = MutableStateFlow<List<String>>(emptyList())
+    val live: StateFlow<List<String>> = _live.asStateFlow()
+
+    /** Append one line to the live feed. Called from the work itself. */
+    fun note(text: String) {
+        val line = text.trim()
+        if (line.isEmpty()) return
+        _live.value = (_live.value + line.take(300)).takeLast(120)
+    }
+
+    /** Clear the live feed when a call starts. */
+    internal fun beginLive() {
+        _live.value = emptyList()
+    }
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     /** How much result text is kept for the Decompile/Objdump views. */
@@ -298,6 +322,7 @@ object ReaBridge {
 
     /** Record a call before it runs. */
     internal fun beginCall(tool: String, arguments: String): Call {
+        beginLive()
         val call = Call(tool = tool, arguments = arguments)
         _calls.value = (listOf(call) + _calls.value).take(400)
         log(tool, LogLine.Level.CALL)

@@ -33,8 +33,21 @@ object AppUpdater {
     private const val REPO = "bliss"
     private const val API = "https://api.github.com/repos/$OWNER/$REPO/releases/latest"
 
-    /** The APK asset name the release workflow publishes. */
+    /**
+     * The APK asset name the release workflow publishes.
+     *
+     * This build only ever runs on arm64. The release carries one APK, built
+     * with `abiFilters += arm64-v8a`; installing it on anything else would
+     * fail at the native-library load, so the check refuses up front rather
+     * than downloading 186 MB of the wrong thing.
+     */
     private const val APK_ASSET = "app-altaris-debug.apk"
+
+    /** The package this build installs as. The altaris flavor, not ivarna. */
+    private const val PACKAGE = "com.altaris.linux"
+
+    /** Only this ABI is packaged (see app/build.gradle.kts). */
+    private const val REQUIRED_ABI = "arm64-v8a"
 
     data class Release(
         val tag: String,
@@ -82,6 +95,28 @@ object AppUpdater {
     private fun numbers(version: String): List<Int> =
         Regex("\\d+").findAll(version).mapNotNull { it.value.toIntOrNull() }.toList()
 
+    /**
+     * Why this device cannot install the release APK, or null when it can.
+     *
+     * Two independent reasons: the APK carries only arm64 libraries, and it is
+     * a different package than a flavour that is not `altaris` (ivarna and
+     * zenithblue both publish from this tree). Either one means "do not
+     * download".
+     */
+    fun deviceProblem(context: Context): String? {
+        val pkg = context.applicationContext.packageName
+        if (pkg != PACKAGE) {
+            return "This build installs as " + pkg + ", but the release is " + PACKAGE +
+                ". Update that build from its own source instead."
+        }
+        val abis = Build.SUPPORTED_ABIS
+        if (abis.isNotEmpty() && abis.none { it == REQUIRED_ABI }) {
+            return "This device is " + abis.joinToString(", ") +
+                ", but the release APK is " + REQUIRED_ABI + "-only."
+        }
+        return null
+    }
+
     /** Ask GitHub for the newest release. Blocking; call on IO. */
     suspend fun check(context: Context, current: String): Result = withContext(Dispatchers.IO) {
         try {
@@ -102,6 +137,15 @@ object AppUpdater {
                     return@withContext Result.Failed("the release has no tag")
                 }
                 if (!isNewer(tag, current)) return@withContext Result.UpToDate(current)
+
+                // Wrong device, wrong package: refuse before the download.
+                //
+                // The APK is arm64-only and installs as com.altaris.linux. An
+                // update that cannot install is not an update — it is a
+                // 186 MB download and a package-installer error. Say so here,
+                // where the reason is still visible.
+                val archProblem = deviceProblem(context)
+                if (archProblem != null) return@withContext Result.Failed(archProblem)
 
                 val assets = json.optJSONArray("assets")
                 var url = ""
@@ -219,6 +263,20 @@ object AppUpdater {
      * and the user must allow this app to install packages.
      */
     fun install(context: Context, apk: File): Boolean = runCatching {
+        // Refuse an APK that is not this package. A mis-matched download would
+        // otherwise install a second, parallel copy of the app — or fail with a
+        // signature error after the user already waited for 186 MB.
+        val pkg = context.applicationContext.packageName
+        val info = context.applicationContext.packageManager
+            .getPackageArchiveInfo(apk.absolutePath, 0)
+        if (info == null) {
+            Log.w(TAG, "downloaded file is not an APK")
+            return false
+        }
+        if (info.packageName != pkg) {
+            Log.w(TAG, "APK is " + info.packageName + ", not " + pkg)
+            return false
+        }
         val uri: Uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             FileProvider.getUriForFile(
                 context,

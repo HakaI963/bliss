@@ -73,7 +73,6 @@ class PrismDesignPreviewTest {
                             accent = MaterialTheme.colorScheme.primary,
                             statusLabel = "READY",
                             live = false,
-                            onOpenPalette = {},
                             onOpenSettings = {},
                         )
                         HomeHero(
