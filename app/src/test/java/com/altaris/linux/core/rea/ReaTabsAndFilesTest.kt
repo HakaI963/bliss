@@ -243,8 +243,8 @@ class ReaTabsAndFilesTest {
         val del = source.substringAfter("suspend fun delete(")
             .substringBefore("suspend fun rename(")
         assertTrue(
-            "must guard the root of a place",
-            del.contains("Refusing to delete a top-level directory"),
+            "must guard the root of the space",
+            del.contains("Refusing to delete the root of"),
         )
     }
 

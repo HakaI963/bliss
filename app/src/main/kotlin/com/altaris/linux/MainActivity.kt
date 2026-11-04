@@ -608,6 +608,10 @@ class MainActivity : ComponentActivity() {
             // its own dark surface (see TerminalScreen), which is a deliberate
             // contrast rather than a theme switch.
             AltarisTheme(themeMode = ThemeMode.LIGHT) {
+                // One animation clock for every status dot in the app. Without
+                // this each PrismOrb owned an infinite transition, and a screen
+                // with twenty live rows never let the composition go idle.
+                com.altaris.linux.ui.components.PrismOrbPulseProvider {
                 val onboardingComplete = StateManager.isOnboardingComplete(this@MainActivity)
                 val showPhantomPrompt by com.altaris.linux.core.system.PhantomProcessFixer.promptVisible.collectAsState()
                 if (showPhantomPrompt) {
@@ -1400,7 +1404,7 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 }
-
+                }
             }
         }
     }
@@ -1413,7 +1417,7 @@ class MainActivity : ComponentActivity() {
 // swaps crossfade with a small rise. AndroidView-heavy routes (terminal tab,
 // install wizard) fade only so the surface never slides/clips mid-transition.
 
-private const val AltarisNavMs = 240
+private const val AltarisNavMs = 180
 private const val AltarisTabMs = 200
 
 private val AltarisFadeOnlyRoutes = setOf(Screen.TERMINAL, Screen.INSTALL_WIZARD)
@@ -1455,15 +1459,16 @@ private fun AnimatedContentTransitionScope<Screen>.altarisRouteTransition(): Con
             (fadeIn(fadeInSpec) + slideInVertically(slideIn) { h -> h / 100 }) togetherWith
                 (fadeOut(fadeOutSpec) + slideOutVertically(slideOut) { h -> -(h / 200) })
     }
-    // Fade-only routes must not animate their bounds: with an open IME the
-    // terminal measures shorter than the home screen, and interpolating that
-    // size makes the incoming screen unfold from a corner. Clip and snap.
-    return if (fadeOnly) {
-        transform.using(SizeTransform(clip = true, sizeAnimationSpec = { _, _ -> tween(1) }))
-    } else {
-        // clip = false keeps terminal/X11 surface content from being clipped mid-slide.
-        transform.using(SizeTransform(clip = false))
-    }
+    // Never animate the size.
+    //
+    // Every route here is full-screen, so the size almost never changes — and
+    // when it does (an open IME, a status-bar difference) animating it means
+    // re-measuring and re-laying out the entire incoming screen on every frame.
+    // For a screen that is a LazyColumn of files, that is a layout pass per
+    // frame over a list that has not moved, which is exactly the stall that
+    // read as "opening a file freezes". Clip and snap the bounds instead; the
+    // fade and the slide are what the eye actually sees.
+    return transform.using(SizeTransform(clip = true, sizeAnimationSpec = { _, _ -> tween(1) }))
 }
 
 private fun AnimatedContentTransitionScope<BottomTab>.altarisTabTransition(): ContentTransform {
@@ -1471,11 +1476,14 @@ private fun AnimatedContentTransitionScope<BottomTab>.altarisTabTransition(): Co
     // small horizontal carry so a switch is clearly felt, not just a
     // near-invisible scale. Distance is deliberately tiny (1/14 of the
     // width) — visible, but never a full page slide.
-    val enterFade = tween<Float>(180, easing = FastOutSlowInEasing)
-    val enterSlide = tween<IntOffset>(230, easing = FastOutSlowInEasing)
-    val exitFade = tween<Float>(120, easing = FastOutSlowInEasing)
-    val exitSlide = tween<IntOffset>(170, easing = FastOutSlowInEasing)
+    // Shorter, and no size animation. A tab swap composes the outgoing and
+    // incoming screen at once; the longer that window is, the more a heavy tab
+    // (REA, Files) costs. 150 ms is still clearly a motion, not a cut.
+    val enterFade = tween<Float>(150, easing = FastOutSlowInEasing)
+    val enterSlide = tween<IntOffset>(180, easing = FastOutSlowInEasing)
+    val exitFade = tween<Float>(100, easing = FastOutSlowInEasing)
+    val exitSlide = tween<IntOffset>(140, easing = FastOutSlowInEasing)
     return (fadeIn(enterFade) + slideInHorizontally(enterSlide) { width -> width / 14 }) togetherWith
         (fadeOut(exitFade) + slideOutHorizontally(exitSlide) { width -> -width / 22 }) using
-        SizeTransform(clip = false)
+        SizeTransform(clip = true, sizeAnimationSpec = { _, _ -> tween(1) })
 }
