@@ -80,20 +80,45 @@ object AppUpdater {
             val y = b.getOrElse(i) { 0 }
             if (x != y) return x > y
         }
-        // Same numbers: only a different suffix means a different build.
+        // Same release numbers: is this a different build?
         //
-        // The tag carries a leading "v" and the installed version does not, so
-        // comparing the raw strings reported an update on every check — a tag
-        // of "v1.3.0" never equals "1.3.0". Normalise before comparing.
-        return normalise(remote) != normalise(current)
+        // Two normalisations matter here, and both were bugs:
+        //
+        //  - the tag carries a leading "v" and the installed version does not,
+        //    so a raw string compare reported an update on every check;
+        //  - the tag carries the SHORT commit and versionName carries the FULL
+        //    one, so an exact compare still reported an update for the build
+        //    that was already installed.
+        //
+        // A shared prefix means the same commit. Anything else is a different
+        // build, and a newly published one is by definition newer.
+        val a = buildSuffix(remote)
+        val b = buildSuffix(current)
+        if (a.isEmpty() || b.isEmpty()) return a != b
+        return !(a.startsWith(b) || b.startsWith(a))
     }
+
+    /** Everything after the release numbers: the commit, or "" when absent. */
+    private fun buildSuffix(version: String): String =
+        normalise(version).substringAfter('-', "").trim()
 
     /** Drop the "v" and surrounding space, so a tag and a version compare. */
     private fun normalise(version: String): String =
         version.trim().removePrefix("v").removePrefix("V").trim()
 
-    private fun numbers(version: String): List<Int> =
-        Regex("\\d+").findAll(version).mapNotNull { it.value.toIntOrNull() }.toList()
+    /**
+     * The numeric release part only.
+     *
+     * Everything after the first dash is the build identity, not the version:
+     * `1.3.0-7320ecd`. The commit hash is hexadecimal, but its *leading* digits
+     * are decimal too — a naive `\d+` over the whole string read `1120eac` and
+     * `7320ecd` as the numbers 1120 and 7320 and concluded the older build was
+     * newer. Cut at the dash before parsing.
+     */
+    private fun numbers(version: String): List<Int> {
+        val release = normalise(version).substringBefore('-')
+        return Regex("\\d+").findAll(release).mapNotNull { it.value.toIntOrNull() }.toList()
+    }
 
     /**
      * Why this device cannot install the release APK, or null when it can.

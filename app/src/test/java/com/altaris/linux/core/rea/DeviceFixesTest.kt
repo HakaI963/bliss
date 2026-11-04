@@ -408,13 +408,33 @@ class DeviceFixesTest {
         )
     }
 
-    /** The comparison itself must be numeric and prefix-insensitive. */
+    /**
+     * The comparison must survive the two shapes the real tag and the real
+     * versionName take.
+     *
+     * A naive `\d+` over the whole string read the commit hashes as numbers:
+     * `1120eac` and `7320ecd` became 1120 and 7320, so an older build looked
+     * newer. And the tag carries the short commit while versionName carries the
+     * full one, so an exact string compare called the installed build an update
+     * to itself.
+     */
     @Test
     fun versionComparisonHandlesTheTagShape() {
+        // The same build, tag short sha vs versionName full sha.
+        assertFalse(
+            AppUpdater.isNewer(
+                "v1.3.0-1120eac",
+                "1.3.0-1120eac2759282ea6015e3f846ec44054a4be1cb",
+            )
+        )
         assertFalse(AppUpdater.isNewer("v1.3.0", "1.3.0"))
-        assertFalse(AppUpdater.isNewer("v1.3.0-abc", "1.3.0-abc"))
+        assertFalse(AppUpdater.isNewer("v1.3.0-abc1234", "1.3.0-abc1234"))
+        // A different commit is a different build.
         assertTrue(AppUpdater.isNewer("v1.3.0-def", "1.3.0-abc"))
+        assertTrue(AppUpdater.isNewer("v1.3.0-1120eac", "1.3.0-7320ecd"))
+        // The commit's digits must not be read as the version.
         assertFalse(AppUpdater.isNewer("v1.9.0", "1.10.0"))
         assertTrue(AppUpdater.isNewer("v1.10.0", "1.9.0"))
+        assertTrue(AppUpdater.isNewer("v2.0.0", "1.99.99"))
     }
 }
