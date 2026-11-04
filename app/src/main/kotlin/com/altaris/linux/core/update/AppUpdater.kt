@@ -92,10 +92,12 @@ object AppUpdater {
         //
         // A shared prefix means the same commit. Anything else is a different
         // build, and a newly published one is by definition newer.
-        val a = buildSuffix(remote)
-        val b = buildSuffix(current)
-        if (a.isEmpty() || b.isEmpty()) return a != b
-        return !(a.startsWith(b) || b.startsWith(a))
+        val remoteBuild = buildSuffix(remote)
+        val currentBuild = buildSuffix(current)
+        if (remoteBuild.isEmpty() || currentBuild.isEmpty()) {
+            return remoteBuild != currentBuild
+        }
+        return !(remoteBuild.startsWith(currentBuild) || currentBuild.startsWith(remoteBuild))
     }
 
     /** Everything after the release numbers: the commit, or "" when absent. */
