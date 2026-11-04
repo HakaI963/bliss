@@ -221,13 +221,19 @@ class ReaAssetToolsTest {
         for (manager in listOf("apt", "apk", "dnf", "pacman")) {
             assertTrue(
                 "build tools must be named for $manager",
-                build.contains("\"$manager\" -> listOf(\"git\""),
+                Regex("\"$manager\" -> listOf\\(").containsMatchIn(build),
             )
         }
         assertTrue(
             "the toolchain install must go through the package manager",
             build.contains("ReaManager.installPackages("),
         )
+        // The toolchain must actually include the essentials: a compiler, the
+        // build system, and ld (binutils) — its absence reads as "cannot find
+        // 'ld'" and looks like a missing compiler.
+        for (tool in listOf("git", "cmake", "binutils")) {
+            assertTrue("the toolchain must include $tool", build.contains("\"$tool\""))
+        }
     }
 
     // ------------------------------------------------------- install all
