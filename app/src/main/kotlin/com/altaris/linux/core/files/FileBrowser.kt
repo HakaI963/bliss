@@ -101,7 +101,8 @@ object FileBrowser {
 
         // The whole filesystem, last: with root this is the only entry that can
         // reach everything else.
-        if (RootShell.isRootAvailable()) {
+        val root = RootShell.isRootAvailable()
+        if (root) {
             out.add(Place("root", "Root /", "/", Place.Kind.HOST, true))
         }
 
