@@ -403,10 +403,7 @@ object ReaBridge {
             if (isAlive) return
             val profile = DistroInstallProfile.forId(distroId)
                 ?: throw IllegalStateException("unknown distro: $distroId")
-            val command = "PATH=" + ReaManager.PROBE_PATH + ":\$PATH; export PATH; " +
-                "REA_MCP_INPUT_SCHEMA_PROFILE=\${REA_MCP_INPUT_SCHEMA_PROFILE:-compact}; " +
-                "export REA_MCP_INPUT_SCHEMA_PROFILE; " +
-                "exec " + ReaManager.REA_BIN + " mcp"
+            val command = ReaManager.mcpLaunchCommand()
             val proc = if (profile.method == "chroot") {
                 val path = profile.chrootPath
                     ?: throw IllegalStateException("chroot path missing for $distroId")

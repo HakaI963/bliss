@@ -57,16 +57,33 @@ RANGE=$("$NODE" -e "
 [ -n "$RANGE" ] || RANGE=latest
 
 echo "installing the frida module (rea-agents declares $RANGE)"
+NPM_LOG=$(mktemp 2>/dev/null || echo /tmp/altaris-frida-npm.log)
 if ! "$NPM" install --prefix "$BASE/npm" "frida@$RANGE" \
-    --no-audit --no-fund --loglevel=error; then
-  echo "warning: the frida module did not install; REA's runtime-hook tools will report capability_unavailable"
-  echo "warning: nothing else is affected — static analysis tools still work"
+    --no-audit --no-fund --loglevel=error >"$NPM_LOG" 2>&1; then
+  # npm's reason matters: this package runs a native install script that
+  # downloads a prebuild, so the common failures are a missing compiler, a
+  # blocked download, or an unsupported platform — and the previous version
+  # reported all of them as the same one-line warning.
+  echo "ERROR: npm could not install frida@$RANGE"
+  tail -n 8 "$NPM_LOG" 2>/dev/null | while IFS= read -r line; do
+    [ -n "$line" ] && echo "  $line"
+  done
+  rm -f "$NPM_LOG" 2>/dev/null
+  echo "warning: REA's runtime-hook tools will report capability_unavailable until this installs"
   exit 1
 fi
+rm -f "$NPM_LOG" 2>/dev/null
 
+# Import it from REA's own directory, which is where Node resolves it. If it
+# imports, the module is genuinely usable; a directory that exists but throws
+# is worse than a missing one because it looks installed.
 if importable; then
   echo "frida module ok"
 else
-  echo "warning: the frida module installed but does not import; REA's runtime-hook tools will report capability_unavailable"
+  echo "ERROR: the frida module installed but does not import from $AGENT_DIR"
+  ( cd "$AGENT_DIR" && "$NODE" --input-type=module -e "import('frida')" ) 2>&1 | tail -5 | while IFS= read -r line; do
+    [ -n "$line" ] && echo "  $line"
+  done
+  echo "warning: REA's runtime-hook tools will report capability_unavailable"
   exit 1
 fi

@@ -130,9 +130,25 @@ if [ "$JDK" -eq 0 ]; then
 fi
 
 # ------------------------------------------------------------------ Ghidra
-if [ -x "$GH/support/analyzeHeadless" ]; then
-  say "Ghidra already present at $GH"
+#
+# Presence is not enough: REA gates its Ghidra provider on one version and
+# rejects the rest. A tree left over from an older build has analyzeHeadless
+# and passes a presence check, so the upgrade never happened and every
+# decompile through REA kept failing with "provider not configured".
+INSTALLED_VERSION=""
+if [ -f "$GH/Ghidra/application.properties" ]; then
+  INSTALLED_VERSION=$(sed -n 's/^application.version=//p' \
+    "$GH/Ghidra/application.properties" 2>/dev/null | head -n 1)
+fi
+# The tag is "Ghidra_12.1.4_build"; the release inside the tree is "12.1.4".
+WANTED_VERSION=$(printf '%s' "$TAG" | sed 's/^Ghidra_//; s/_build$//')
+
+if [ -x "$GH/support/analyzeHeadless" ] && [ "$INSTALLED_VERSION" = "$WANTED_VERSION" ]; then
+  say "Ghidra $INSTALLED_VERSION already present at $GH"
 else
+  if [ -n "$INSTALLED_VERSION" ]; then
+    say "Ghidra $INSTALLED_VERSION is installed but REA needs $WANTED_VERSION; replacing it"
+  fi
   for tool in unzip curl; do
     command -v "$tool" >/dev/null 2>&1 && continue
     if command -v apt-get >/dev/null 2>&1; then

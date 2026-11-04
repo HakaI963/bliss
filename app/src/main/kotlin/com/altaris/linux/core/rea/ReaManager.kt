@@ -1244,6 +1244,23 @@ object ReaManager {
      */
     internal fun shellPathForAsset(name: String): String = shellPath(name)
 
+    /**
+     * The shell command that starts `rea mcp` inside the guest.
+     *
+     * One definition, because both MCP instances need the same environment and
+     * they had drifted: the stdio server got GHIDRA_INSTALL_DIR and the bridge
+     * — the one an agent actually connects to — did not. REA reads the value
+     * at startup and reports every decompiler engine as unconfigured without
+     * it, which is exactly the "provider_unavailable, all four engines
+     * rejected" the agent saw.
+     */
+    fun mcpLaunchCommand(): String =
+        "PATH=" + PROBE_PATH + ":\$PATH; export PATH; " +
+            "REA_MCP_INPUT_SCHEMA_PROFILE=\${REA_MCP_INPUT_SCHEMA_PROFILE:-compact}; " +
+            "export REA_MCP_INPUT_SCHEMA_PROFILE; " +
+            "GHIDRA_INSTALL_DIR=" + GHIDRA_ROOT + "; export GHIDRA_INSTALL_DIR; " +
+            "exec " + REA_BIN + " mcp"
+
     private fun coreScript(): String = "sh " + shellPath("rea-core-install.sh") + " " +
         GuestExec.shellQuote(ROOT) + " " + GuestExec.shellQuote(NODE_VERSION) + " " +
         GuestExec.shellQuote(REA_VERSION)

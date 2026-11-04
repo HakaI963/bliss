@@ -506,6 +506,110 @@ class ReaAssetToolsTest {
         )
     }
 
+    /**
+     * A mismatched Ghidra tree must be replaced, not skipped.
+     *
+     * The installer skipped whenever `analyzeHeadless` existed, so the 12.1.4
+     * pin never applied to a device that already had 11.4.3 — every decompile
+     * through REA kept failing while the analyzer looked installed.
+     */
+    @Test
+    fun ghidraUpgradesAnExistingTreeOfTheWrongVersion() {
+        val script = readAsset("scripts/rea/ghidra-install.sh")
+        assertTrue(
+            "must read the installed version, not just test for the binary",
+            script.contains("application.version="),
+        )
+        assertTrue(
+            "must compare against the requested release",
+            script.contains("WANTED_VERSION"),
+        )
+        assertTrue(
+            "must say it is replacing an older tree",
+            script.contains("is installed but REA needs"),
+        )
+        // The skip condition must require the version to match.
+        val skip = script.substringAfter("if [ -x \"\$GH/support/analyzeHeadless\" ]")
+            .substringBefore("then")
+        assertTrue(
+            "presence alone must not skip the install",
+            skip.contains("INSTALLED_VERSION") && skip.contains("WANTED_VERSION"),
+        )
+    }
+
+    /**
+     * Both MCP servers must launch with the same environment.
+     *
+     * The stdio server got GHIDRA_INSTALL_DIR and the bridge — the one an agent
+     * actually connects to — did not, so REA reported every decompiler engine
+     * as unconfigured: "provider_unavailable, all four engines rejected".
+     */
+    @Test
+    fun everyReaServerGetsTheSameEnvironment() {
+        val manager = readSource("app/src/main/kotlin/com/altaris/linux/core/rea/ReaManager.kt")
+        val command = manager.substringAfter("fun mcpLaunchCommand()")
+            .substringBefore("private fun coreScript()")
+        assertTrue("must export GHIDRA_INSTALL_DIR", command.contains("GHIDRA_INSTALL_DIR="))
+        assertTrue("must put the archive tools on PATH", command.contains("PROBE_PATH"))
+        assertTrue("must start rea mcp", command.contains("\" mcp\""))
+
+        for (path in listOf(
+            "app/src/main/kotlin/com/altaris/linux/core/rea/ReaBridge.kt",
+            "app/src/main/kotlin/com/altaris/linux/core/rea/ReaStdio.kt",
+        )) {
+            val source = readSource(path)
+            assertTrue(
+                "$path must use the shared launch command",
+                source.contains("ReaManager.mcpLaunchCommand()"),
+            )
+        }
+    }
+
+    /**
+     * A failed frida install must say why.
+     *
+     * npm runs a native install script for this package; a missing compiler, a
+     * blocked download and an unsupported platform all used to collapse into
+     * one warning line with no cause.
+     */
+    @Test
+    fun theFridaModuleReportsNpmSFailure() {
+        val script = readAsset("scripts/rea/rea-frida-module.sh")
+        assertTrue(
+            "must capture npm's own output",
+            script.contains("NPM_LOG"),
+        )
+        assertTrue(
+            "must name the failure",
+            script.contains("ERROR: npm could not install frida@"),
+        )
+        assertTrue(
+            "must report an import that fails after a successful install",
+            script.contains("installed but does not import"),
+        )
+    }
+
+    /**
+     * Install-all must be a repair path.
+     *
+     * It returned early when nothing looked missing, so a tool that failed once
+     * stayed failed with no way to retry it short of uninstalling everything.
+     */
+    @Test
+    fun installAllRetriesPreviouslyFailedTools() {
+        val source = readSource("app/src/main/kotlin/com/altaris/linux/core/rea/ReaAssetTools.kt")
+        val all = source.substringAfter("suspend fun installAll(")
+            .substringBefore("private fun append(")
+        assertTrue(
+            "must say it is retrying",
+            all.contains("retrying "),
+        )
+        assertTrue(
+            "must report what is still missing",
+            all.contains("still missing: "),
+        )
+    }
+
     private fun readAsset(path: String): String {
         val candidates = listOf(
             "app/src/main/assets/$path",

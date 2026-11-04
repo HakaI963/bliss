@@ -934,7 +934,6 @@ object ReaAssetTools {
         _state.value = _state.value.copy(running = true, percent = 0, phase = "")
         try {
             val missing = ALL.filter { it.id !in _state.value.installed }
-            if (missing.isEmpty()) return@withContext
             val manager = ReaManager.detectPackageManager(context, id)
             val packages = missing.flatMap { it.packages[manager].orEmpty() }.distinct()
             if (packages.isNotEmpty()) {
@@ -947,7 +946,18 @@ object ReaAssetTools {
             }
             refresh(context)
             // Whatever the batch did not provide takes its own route.
+            //
+            // This is also the repair path: a tool that failed before is still
+            // "missing", so pressing Install all again retries it with whatever
+            // changed (a fixed build string, a new package). It used to return
+            // early when nothing was missing, which made a stuck tool look
+            // permanent.
             val remaining = ALL.filter { it.id !in _state.value.installed }
+            if (remaining.isEmpty()) {
+                append("every tool is already installed")
+                return@withContext
+            }
+            append("retrying " + remaining.size + " tool(s) that are not installed")
             remaining.forEachIndexed { index, tool ->
                 _state.value = _state.value.copy(
                     percent = (index * 100) / remaining.size.coerceAtLeast(1),
@@ -963,6 +973,13 @@ object ReaAssetTools {
                 }
             }
             _state.value = _state.value.copy(percent = 100)
+            // Say what is still missing, so the result is a count rather than
+            // a scroll through the log.
+            val stillMissing = ALL.filter { it.id !in _state.value.installed }
+            append(
+                if (stillMissing.isEmpty()) "all tools installed"
+                else "still missing: " + stillMissing.joinToString(", ") { it.name }
+            )
         } finally {
             // The buttons must come back even when the run is cancelled or a
             // tool throws, or the tab looks permanently busy.
