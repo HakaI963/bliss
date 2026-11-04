@@ -610,7 +610,7 @@ private fun CallRow(
                 if (!live) {
                     Spacer(Modifier.width(4.dp))
                     Text(
-                        formatSize(call.bytes),
+                        com.altaris.linux.core.rea.ReaDistro.formatBytes(call.bytes),
                         fontSize = 7.5.sp,
                         fontFamily = FontFamily.Monospace,
                         color = altarisMutedText(),
@@ -660,26 +660,6 @@ private fun CallRow(
             }
         }
     }
-}
-
-/** "3.2s", "1m 12s", "4m" — a duration a person can read at a glance. */
-private fun formatDuration(ms: Long): String = when {
-    ms < 1000L -> "<1s"
-    ms < 60_000L -> (ms / 1000).toString() + "s"
-    ms < 3_600_000L -> {
-        val m = ms / 60_000
-        val s = (ms % 60_000) / 1000
-        if (s == 0L) m.toString() + "m" else m.toString() + "m " + s + "s"
-    }
-    else -> (ms / 3_600_000).toString() + "h"
-}
-
-/** Bytes as a person reads them. */
-private fun formatSize(bytes: Long): String = when {
-    bytes <= 0L -> ""
-    bytes < 1024L -> bytes.toString() + "B"
-    bytes < 1024L * 1024L -> (bytes / 1024).toString() + "K"
-    else -> (bytes / (1024 * 1024)).toString() + "M"
 }
 
 /**

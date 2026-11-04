@@ -76,6 +76,7 @@ import com.altaris.linux.ui.components.PrismRow
 import com.altaris.linux.ui.components.PrismSectionLabel
 import com.altaris.linux.ui.components.PrismSegmented
 import com.altaris.linux.ui.theme.AltarisSection
+import com.altaris.linux.ui.theme.altarisMutedText
 import com.altaris.linux.ui.theme.Prism
 import kotlinx.coroutines.launch
 import com.altaris.linux.ui.theme.rememberStaggerEntrance

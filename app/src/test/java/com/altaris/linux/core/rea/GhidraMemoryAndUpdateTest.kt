@@ -128,7 +128,7 @@ class GhidraMemoryAndUpdateTest {
         )
         assertTrue(
             "must show result size",
-            screen.contains("formatSize(call.bytes)"),
+            screen.contains("formatBytes(call.bytes)"),
         )
         assertTrue(
             "must show what was found",
