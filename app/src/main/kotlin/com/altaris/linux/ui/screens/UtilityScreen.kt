@@ -42,7 +42,6 @@ fun UtilityScreen(
     modifier: Modifier = Modifier,
     embeddedInBottomNav: Boolean = false,
 ) {
-    var tab by remember { mutableStateOf(UtilityTab.APPS) }
     val accent = MaterialTheme.colorScheme.primary
 
     Column(
@@ -52,51 +51,10 @@ fun UtilityScreen(
             .padding(top = 6.dp),
         verticalArrangement = Arrangement.spacedBy(5.dp),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            UtilityTab.entries.forEach { entry ->
-                val selected = tab == entry
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(30.dp)
-                        .clip(RoundedCornerShape(Prism.PanelRadius))
-                        .background(
-                            if (selected) accent.copy(alpha = 0.14f) else {
-                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
-                            }
-                        )
-                        .border(
-                            1.dp,
-                            if (selected) accent.copy(alpha = 0.55f) else {
-                                MaterialTheme.colorScheme.outline
-                            },
-                            RoundedCornerShape(Prism.PanelRadius),
-                        )
-                        .clickable { tab = entry },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        entry.label,
-                        fontSize = 10.sp,
-                        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-                        color = if (selected) accent else altarisMutedText(),
-                    )
-                }
-            }
-        }
         Spacer(Modifier.height(1.dp))
-        when (tab) {
-            UtilityTab.APPS -> ClonedAppsScreen()
-            UtilityTab.FILES -> FilesScreen(embeddedInBottomNav = false)
-        }
+        // Files moved to the top bar as its own full-screen destination: a
+        // dual-pane manager needs the whole screen, and a sub-tab gave it a
+        // strip. Utility is apps only now.
+        ClonedAppsScreen()
     }
-}
-
-/** The sub-tabs of Utility. */
-enum class UtilityTab(val label: String) {
-    APPS("Apps"),
-    FILES("Files"),
 }

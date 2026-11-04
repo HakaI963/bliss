@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -187,7 +188,7 @@ fun FilesScreen(
         OutlinedTextField(
             value = query,
             onValueChange = { query = it },
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().height(44.dp),
             singleLine = true,
             textStyle = androidx.compose.ui.text.TextStyle(fontSize = 10.sp),
             placeholder = {
@@ -199,9 +200,15 @@ fun FilesScreen(
             },
         )
 
-        // The two panes. In dual mode they split the height; in single mode the
-        // active one takes everything.
+        // The two panes, side by side — the MP/MT layout. Two stacked panes
+        // each got half the screen height and neither showed more than a few
+        // rows; side by side, both use the full height and a file list stays
+        // readable.
         if (dual) {
+            Row(
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
             Pane(
                 state = panes[0],
                 active = active == 0,
@@ -210,7 +217,7 @@ fun FilesScreen(
                 sort = sort,
                 descending = descending,
                 places = places,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).fillMaxHeight(),
                 onActivate = { active = 0 },
                 onNavigate = { scope.launch { load(0, it) } },
                 onMore = { picked = 0 to it },
@@ -230,7 +237,7 @@ fun FilesScreen(
                 sort = sort,
                 descending = descending,
                 places = places,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).fillMaxHeight(),
                 onActivate = { active = 1 },
                 onNavigate = { scope.launch { load(1, it) } },
                 onMore = { picked = 1 to it },
@@ -242,6 +249,7 @@ fun FilesScreen(
                     }
                 },
             )
+            }
         } else {
             Pane(
                 state = panes[0],
@@ -251,7 +259,7 @@ fun FilesScreen(
                 sort = sort,
                 descending = descending,
                 places = places,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).fillMaxHeight(),
                 onActivate = { active = 0 },
                 onNavigate = { scope.launch { load(0, it) } },
                 onMore = { picked = 0 to it },

@@ -52,6 +52,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.altaris.linux.ui.theme.Prism
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.rememberPermissionState
@@ -96,7 +97,8 @@ enum class Screen {
     CRASH_LOGS,
     INSTALL_WIZARD,
     DISTRO_SETTINGS,
-    TERMINAL
+    TERMINAL,
+    FILES
 }
 
 class MainActivity : ComponentActivity() {
@@ -942,6 +944,7 @@ class MainActivity : ComponentActivity() {
                     onOpenTools: () -> Unit,
                     onOpenSettings: () -> Unit,
                     onOpenHostShell: () -> Unit,
+                    onOpenFiles: () -> Unit = {},
                 ) {
                     AltarisCommandBar(
                         accent = MaterialTheme.colorScheme.primary,
@@ -955,6 +958,7 @@ class MainActivity : ComponentActivity() {
                         onOpenTools = onOpenTools,
                         onOpenSettings = onOpenSettings,
                         onOpenHostShell = onOpenHostShell,
+                        onOpenFiles = onOpenFiles,
                         taskButton = {
                             com.altaris.linux.ui.components.DownloadTaskButton(
                                 onOpenProgress = { distroId ->
@@ -1067,7 +1071,8 @@ class MainActivity : ComponentActivity() {
                                                     onOpenPalette = { paletteOpen = true },
                                                     onOpenTools = { currentTab = BottomTab.TOOLS },
                                                     onOpenSettings = { currentScreen = Screen.SETTINGS },
-                                                    onOpenHostShell = openHostShell
+                                                    onOpenHostShell = openHostShell,
+                                                    onOpenFiles = { currentScreen = Screen.FILES },
                                                 )
                                             }
                                         }
@@ -1125,6 +1130,40 @@ class MainActivity : ComponentActivity() {
                                         hazeState = hazeState
                                     )
                                 }
+                            }
+                        }
+                        Screen.FILES -> {
+                            // Full screen: the file manager is a workspace, not
+                            // a card inside Utility. Back returns to Home, the
+                            // same as every other top-bar destination.
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(horizontal = 12.dp)
+                                    .statusBarsPadding(),
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text(
+                                        "Files",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                    )
+                                    Spacer(Modifier.weight(1f))
+                                    Text(
+                                        "back",
+                                        fontSize = 10.sp,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier
+                                            .clickable { currentScreen = Screen.HOME }
+                                            .padding(6.dp),
+                                    )
+                                }
+                                com.altaris.linux.ui.screens.FilesScreen(
+                                    embeddedInBottomNav = true,
+                                )
                             }
                         }
                         Screen.SETTINGS -> {

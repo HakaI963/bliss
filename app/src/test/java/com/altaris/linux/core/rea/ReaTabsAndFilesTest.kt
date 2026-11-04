@@ -264,27 +264,67 @@ class ReaTabsAndFilesTest {
         )
     }
 
-    /** Utility hosts Apps and Files, and the dock has no separate Apps slot. */
+    /**
+     * Utility hosts apps only; Files is its own full-screen destination.
+     *
+     * A dual-pane manager needs the whole screen. As a sub-tab it got a strip
+     * of it, and two stacked panes showed only a few rows each.
+     */
     @Test
-    fun appsAndFilesAreSubTabsOfUtility() {
+    fun filesIsAFullScreenDestinationAndUtilityIsAppsOnly() {
         val utility = readSource(
             "app/src/main/kotlin/com/altaris/linux/ui/screens/UtilityScreen.kt"
         )
-        assertTrue("must have an Apps sub-tab", utility.contains("APPS(\"Apps\")"))
-        assertTrue("must have a Files sub-tab", utility.contains("FILES(\"Files\")"))
         assertTrue(
             "must render the clone screen",
-            utility.contains("UtilityTab.APPS -> ClonedAppsScreen()"),
+            utility.contains("ClonedAppsScreen()"),
+        )
+        assertFalse(
+            "Files must not be a Utility sub-tab",
+            utility.contains("FilesScreen("),
+        )
+
+        // Reachable from the top bar, beside Tools and Settings.
+        val header = readSource(
+            "app/src/main/kotlin/com/altaris/linux/ui/components/AltarisHeader.kt"
         )
         assertTrue(
-            "must render the file manager",
-            utility.contains("UtilityTab.FILES -> FilesScreen("),
+            "the command bar must offer Files",
+            header.contains("onOpenFiles"),
+        )
+        val activity = readSource("app/src/main/kotlin/com/altaris/linux/MainActivity.kt")
+        assertTrue(
+            "must have a Files screen",
+            activity.contains("FILES") && activity.contains("Screen.FILES"),
+        )
+        assertTrue(
+            "the top bar must open it",
+            activity.contains("onOpenFiles = { currentScreen = Screen.FILES }"),
         )
         val dock = readSource(
             "app/src/main/kotlin/com/altaris/linux/ui/components/AltarisDock.kt"
         )
         assertFalse("the Apps dock slot must be gone", dock.contains("APPS(\"Apps\")"))
         assertTrue("Utility takes the slot", dock.contains("UTILITY(\"Utility\""))
+    }
+
+    /** The manager is dual-pane and side by side, like MT/MP. */
+    @Test
+    fun theFileManagerIsDualPaneSideBySide() {
+        val screen = readSource(
+            "app/src/main/kotlin/com/altaris/linux/ui/screens/FilesScreen.kt"
+        )
+        assertTrue("must have two panes", screen.contains("PaneState(), PaneState()"))
+        assertTrue(
+            "panes must sit in a Row",
+            screen.contains("Row(") && screen.contains("horizontalArrangement = Arrangement.spacedBy(4.dp)"),
+        )
+        assertTrue(
+            "each pane takes half the width",
+            screen.contains("Modifier.weight(1f).fillMaxHeight()"),
+        )
+        assertTrue("must offer copy between panes", screen.contains("onCopy"))
+        assertTrue("must offer move between panes", screen.contains("onMove"))
     }
 
     /** The guest home must expose the phone's Downloads folder. */

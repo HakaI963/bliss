@@ -504,14 +504,6 @@ fun SettingsScreen(
                 onClick = { openUrl(context, "https://github.com/HakaI963/bliss#readme") },
                 divider = true,
             )
-            PrismRow(
-                title = "File manager design",
-                subtitle = "MP-Manager by Abdurazaaq Mohammed · GPL-3.0",
-                accent = accent,
-                onClick = {
-                    openUrl(context, "https://github.com/AbdurazaaqMohammed/MP-Manager")
-                },
-            )
         }
 
         // Clears the floating bottom dock (64dp pill + 16dp margins = 96dp

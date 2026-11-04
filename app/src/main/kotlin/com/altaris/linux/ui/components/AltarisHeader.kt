@@ -27,6 +27,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.Icon
@@ -64,6 +65,7 @@ fun AltarisCommandBar(
     onOpenPalette: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenTools: (() -> Unit)? = null,
+    onOpenFiles: (() -> Unit)? = null,
     onOpenHostShell: (() -> Unit)? = null,
     taskButton: (@Composable () -> Unit)? = null,
 ) {
@@ -124,6 +126,16 @@ fun AltarisCommandBar(
                 contentDescription = "Jump to…",
                 onClick = onOpenPalette,
             )
+            // Files sits in the top bar beside Tools and Settings: it is
+            // something you open while working, not a destination you live in.
+            if (onOpenFiles != null) {
+                BarButton(
+                    icon = Icons.Default.Folder,
+                    contentDescription = "Files",
+                    onClick = onOpenFiles,
+                )
+                Spacer(Modifier.width(6.dp))
+            }
             // Tools sits beside Settings in the top bar rather than in the
             // dock: it is a maintenance surface, not a daily destination.
             if (onOpenTools != null) {

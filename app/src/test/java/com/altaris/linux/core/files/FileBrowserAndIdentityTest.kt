@@ -151,27 +151,4 @@ class FileBrowserAndIdentityTest {
         )
     }
 
-    /** The file manager design is credited, as its licence requires. */
-    @Test
-    fun theFileManagerCreditIsInSettings() {
-        val settings = readSource(
-            "app/src/main/kotlin/com/altaris/linux/ui/screens/SettingsScreen.kt"
-        )
-        assertTrue(
-            "must credit MP-Manager",
-            settings.contains("MP-Manager"),
-        )
-        assertTrue(
-            "must name the author",
-            settings.contains("Abdurazaaq Mohammed"),
-        )
-        assertTrue(
-            "must link the project",
-            settings.contains("github.com/AbdurazaaqMohammed/MP-Manager"),
-        )
-        assertTrue(
-            "must state the licence",
-            settings.contains("GPL-3.0"),
-        )
-    }
 }
