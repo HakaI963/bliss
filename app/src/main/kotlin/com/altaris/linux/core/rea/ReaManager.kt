@@ -1502,6 +1502,7 @@ object ReaManager {
         "ghidra-install.sh",
         "ghidra-decompiler-build.sh",
         "DumpInfo.java",
+        "LowMemoryAnalysis.java",
     )
 
     /**
@@ -1564,6 +1565,8 @@ object ReaManager {
         distroId: String,
         target: String,
         max: Int = 300,
+        /** "low" skips the memory-heavy analyzers; "full" runs everything. */
+        mode: String = "low",
     ): JSONObject = withContext(Dispatchers.IO) {
         val present = GuestExec.run(
             ctx,
@@ -1579,7 +1582,9 @@ object ReaManager {
         stageHelpers(ctx, distroId)
         // JAVA_HOME and headless flags are resolved inside the wrapper, so the
         // guest's own stale JAVA_HOME cannot point Ghidra at a JRE.
-        val script = "sh " + shellPath("ghidra-analyze.sh") + " " +
+        val script = "GHIDRA_ANALYSIS=" + GuestExec.shellQuote(
+            if (mode.equals("full", ignoreCase = true)) "full" else "low",
+        ) + " sh " + shellPath("ghidra-analyze.sh") + " " +
             GuestExec.shellQuote(target) + " " + max
         // Ghidra on a large binary is minutes, not seconds: a 23 MB object is a
         // cold import plus full analysis, and the JVM alone takes tens of
@@ -1589,6 +1594,7 @@ object ReaManager {
         JSONObject()
             .put("ok", result.ok)
             .put("target", target)
+            .put("mode", if (mode.equals("full", ignoreCase = true)) "full" else "low")
             .put("exit", result.exit)
             .put("output", result.output.takeLast(8000))
             .put(

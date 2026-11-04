@@ -87,7 +87,7 @@ class ReaJadxBridgeTest {
     @Test
     fun theInstallerVerifiesAndIsIdempotent() {
         val script = readAsset("scripts/rea/rea-jadx-mcp.sh")
-        assertTrue("must check the size", script.contains("expected $BYTES"))
+        assertTrue("must check the size", script.contains("expected \$BYTES"))
         assertTrue("must check the hash", script.contains("SHA-256 mismatch"))
         assertTrue(
             "must skip when already correct",
@@ -98,7 +98,7 @@ class ReaJadxBridgeTest {
         val mismatch = script.indexOf("SHA-256 mismatch")
         assertTrue(
             "must delete the bad download",
-            script.substring(0, mismatch).contains("rm -f \"$JAR.part\""),
+            script.substring(0, mismatch).contains("rm -f \"\$JAR.part\""),
         )
     }
 

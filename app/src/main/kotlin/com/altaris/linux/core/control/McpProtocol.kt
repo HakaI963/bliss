@@ -383,11 +383,17 @@ object McpProtocol {
         put(
             tool(
                 "altaris_ghidra_analyze",
-                "Run Ghidra's headless analyzer on a file inside the distro and return its function list.",
+                "Run Ghidra's headless analyzer on a file and return its function list. " +
+                    "Defaults to low-memory mode, which skips the decompiler-based " +
+                    "analyzers: names, addresses, structure and call graphs are " +
+                    "unaffected, but parameter and return types are less precise. Use " +
+                    "full mode only for a small binary — on a large one it is what " +
+                    "exhausts the device's memory.",
                 schema(
                     "distro" to "string: optional distro id",
                     "target" to "string: guest path to a binary, APK, or library",
-                    "max" to "integer: max functions to return (default 300)"
+                    "max" to "integer: max functions to return (default 300)",
+                    "mode" to "string: low (default) or full"
                 )
             )
         )
@@ -802,7 +808,10 @@ object McpProtocol {
             val target = args.optString("target").takeIf { it.isNotBlank() }
                 ?: throw IllegalArgumentException("target path is required")
             val max = args.optInt("max", 300).coerceIn(10, 5000)
-            textResult(runBlocking { ReaManager.analyzeGhidra(ctx, distro, target, max) })
+            val mode = args.optString("mode").takeIf { it.isNotBlank() } ?: "low"
+            textResult(
+                runBlocking { ReaManager.analyzeGhidra(ctx, distro, target, max, mode) }
+            )
         }
         else -> {
             if (!ReaManager.isReaTool(name)) {

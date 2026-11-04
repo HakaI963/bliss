@@ -77,6 +77,7 @@ import com.altaris.linux.ui.components.PrismSectionLabel
 import com.altaris.linux.ui.components.PrismSegmented
 import com.altaris.linux.ui.theme.AltarisSection
 import com.altaris.linux.ui.theme.Prism
+import kotlinx.coroutines.launch
 import com.altaris.linux.ui.theme.rememberStaggerEntrance
 import com.altaris.linux.ui.theme.sectionAccent
 import com.altaris.linux.ui.theme.staggerIn
@@ -188,7 +189,14 @@ fun SettingsScreen(
     }
 
     val phantomApplicable = PhantomProcessFixer.applicable()
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
     var showPhantom by remember { mutableStateOf(false) }
+    var updateDialog by remember { mutableStateOf(false) }
+    var updateBusy by remember { mutableStateOf("") }
+    var updateRelease by remember {
+        mutableStateOf<com.altaris.linux.core.update.AppUpdater.Release?>(null)
+    }
+    var updateError by remember { mutableStateOf("") }
     var emailDialog by remember { mutableStateOf(false) }
     var emailValue by remember { mutableStateOf(com.altaris.linux.core.agent.AgentEmail.get(context)) }
     var emailError by remember { mutableStateOf("") }
@@ -493,8 +501,36 @@ fun SettingsScreen(
             )
             PrismRow(
                 title = "Version",
-                subtitle = "v${BuildConfig.VERSION_NAME}",
+                subtitle = if (updateBusy.isNotBlank()) updateBusy else {
+                    "v" + BuildConfig.VERSION_NAME + " · tap to check for updates"
+                },
                 accent = accent,
+                onClick = {
+                    if (updateBusy.isBlank()) {
+                        updateBusy = "Checking…"
+                        updateError = ""
+                        updateRelease = null
+                        scope.launch {
+                            val result = withContext(Dispatchers.IO) {
+                                com.altaris.linux.core.update.AppUpdater.check(
+                                    context,
+                                    BuildConfig.VERSION_NAME,
+                                )
+                            }
+                            updateBusy = ""
+                            when (result) {
+                                is com.altaris.linux.core.update.AppUpdater.Result.Available -> {
+                                    updateRelease = result.release
+                                    updateDialog = true
+                                }
+                                is com.altaris.linux.core.update.AppUpdater.Result.UpToDate ->
+                                    updateError = "You are on the newest build."
+                                is com.altaris.linux.core.update.AppUpdater.Result.Failed ->
+                                    updateError = "Could not check: " + result.reason
+                            }
+                        }
+                    }
+                },
                 divider = true,
             )
             PrismRow(
@@ -510,6 +546,85 @@ fun SettingsScreen(
         // footprint; the content viewport consumes the navigation-bar inset,
         // so 110dp always leaves the last row tappable).
         Spacer(Modifier.height(110.dp))
+    }
+
+    if (updateDialog) {
+        val release = updateRelease
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { updateDialog = false },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    if (release == null) return@TextButton
+                    updateDialog = false
+                    scope.launch {
+                        updateBusy = "Downloading…"
+                        val apk = withContext(Dispatchers.IO) {
+                            com.altaris.linux.core.update.AppUpdater.download(
+                                context,
+                                release,
+                            ) { done, total ->
+                                updateBusy = if (total > 0) {
+                                    "Downloading " + (done * 100 / total) + "%"
+                                } else {
+                                    "Downloading " + (done / (1024 * 1024)) + " MB"
+                                }
+                            }
+                        }
+                        updateBusy = ""
+                        if (apk == null) {
+                            updateError = "The download did not finish. Try again."
+                        } else if (!com.altaris.linux.core.update.AppUpdater.install(context, apk)) {
+                            updateError = "Android refused to open the installer. " +
+                                "Allow Altaris to install unknown apps, then retry."
+                        }
+                    }
+                }) { Text("Download & install", color = accent) }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { updateDialog = false }) {
+                    Text("Later")
+                }
+            },
+            title = { Text("Update to " + (release?.tag ?: ""), fontSize = 14.sp) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        "Downloaded from this project's GitHub release. Your distros, " +
+                            "clones and settings are not touched.",
+                        fontSize = 11.sp,
+                        lineHeight = 15.sp,
+                    )
+                    if (release != null && release.size > 0) {
+                        Text(
+                            com.altaris.linux.core.rea.ReaDistro.formatBytes(release.size),
+                            fontSize = 10.sp,
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                            color = altarisMutedText(),
+                        )
+                    }
+                    if (release?.notes?.isNotBlank() == true) {
+                        val scroll = androidx.compose.foundation.rememberScrollState()
+                        Box(
+                            Modifier
+                                .fillMaxWidth()
+                                .height(160.dp)
+                                .clip(androidx.compose.foundation.shape.RoundedCornerShape(6.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+                                .padding(6.dp)
+                        ) {
+                            Text(
+                                release.notes,
+                                fontSize = 9.sp,
+                                lineHeight = 12.sp,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .verticalScroll(scroll),
+                            )
+                        }
+                    }
+                }
+            },
+        )
     }
 
     if (emailDialog) {

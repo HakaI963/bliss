@@ -9,7 +9,9 @@ public class DumpInfo extends GhidraScript {
             return;
         }
         String outPath = getScriptArgs().length > 0 ? getScriptArgs()[0] : "/tmp/functions.txt";
-        BufferedWriter w = new BufferedWriter(new FileWriter(outPath));
+        // Append, not truncate: a staged analysis writes its findings pass by
+        // pass into the same file, and overwriting would keep only the last.
+        BufferedWriter w = new BufferedWriter(new FileWriter(outPath, true));
         Listing listing = currentProgram.getListing();
         FunctionIterator it = listing.getFunctions(true);
         int n = 0;

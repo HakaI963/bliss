@@ -445,25 +445,241 @@ private fun OverviewTab(
             ServerStatusCard(accent, distro, bridge, calls, Modifier.weight(1f).fillMaxSize())
         }
 
-        // Recent activity.
-        PrismCard(accent = accent, modifier = Modifier.weight(1f).fillMaxWidth()) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Recent activity", fontSize = 9.sp, fontWeight = FontWeight.SemiBold)
-                Spacer(Modifier.weight(1f))
-                Text(logs.size.toString(), fontSize = 8.sp, color = altarisMutedText())
+        // Live activity: what the agent is doing right now, and what it just did.
+        //
+        // This used to print the server's log lines, which said that something
+        // happened but never what it was working on, how long it had been
+        // running, or what it found. The bridge already records every call with
+        // its tool, arguments, duration, result size and extracted findings —
+        // this renders that instead.
+        LiveActivityCard(
+            accent = accent,
+            calls = calls,
+            logs = logs,
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+        )
+    }
+}
+
+/**
+ * What the agent is doing right now.
+ *
+ * Two bands: calls in flight, and the last few that finished. A running call
+ * shows its tool, its arguments, and how long it has been going — because a
+ * Ghidra import legitimately takes minutes, and a spinner that says nothing is
+ * indistinguishable from a hang. A finished call shows its duration, how much
+ * it returned, and the first line of its output.
+ */
+@Composable
+private fun LiveActivityCard(
+    accent: Color,
+    calls: List<ReaBridge.Call>,
+    logs: List<ReaBridge.LogLine>,
+    modifier: Modifier = Modifier,
+) {
+    // Re-read the clock while something is running, so the elapsed time moves.
+    var now by remember { mutableStateOf(System.currentTimeMillis()) }
+    val running = remember(calls) { calls.filter { it.running } }
+    val finished = remember(calls) { calls.filterNot { it.running } }
+    LaunchedEffect(running.size) {
+        while (running.isNotEmpty()) {
+            now = System.currentTimeMillis()
+            delay(1_000L)
+        }
+    }
+
+    PrismCard(accent = accent, modifier = modifier) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                if (running.isEmpty()) "Activity" else "Running now",
+                fontSize = 9.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = if (running.isEmpty()) MaterialTheme.colorScheme.onSurface else accent,
+            )
+            Spacer(Modifier.width(4.dp))
+            if (running.isNotEmpty()) {
+                Text(
+                    running.size.toString(),
+                    fontSize = 8.sp,
+                    fontFamily = FontFamily.Monospace,
+                    color = accent,
+                )
             }
-            Spacer(Modifier.height(3.dp))
-            Column(
-                modifier = Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(2.dp),
-            ) {
-                if (logs.isEmpty()) {
-                    Text("no activity", fontSize = 8.sp, color = altarisMutedText())
-                }
-                logs.take(40).forEach { line -> DotRow(line, accent) }
+            Spacer(Modifier.weight(1f))
+            Text(
+                finished.size.toString() + " done",
+                fontSize = 8.sp,
+                color = altarisMutedText(),
+            )
+        }
+        Spacer(Modifier.height(3.dp))
+
+        Column(
+            modifier = Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(3.dp),
+        ) {
+            if (running.isEmpty() && finished.isEmpty()) {
+                Text(
+                    "Nothing yet. Point an agent at a binary and its calls appear " +
+                        "here as they run.",
+                    fontSize = 8.5.sp,
+                    lineHeight = 11.sp,
+                    color = altarisMutedText(),
+                )
+            }
+
+            // In flight first: these are the ones worth watching.
+            running.forEach { call ->
+                CallRow(accent, call, elapsed = now - call.at, live = true)
+            }
+
+            if (running.isNotEmpty() && finished.isNotEmpty()) {
+                Spacer(Modifier.height(2.dp))
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(1.dp)
+                        .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.4f))
+                )
+                Spacer(Modifier.height(2.dp))
+            }
+
+            finished.take(12).forEach { call ->
+                CallRow(accent, call, elapsed = call.ms, live = false)
+            }
+
+            if (finished.isEmpty() && running.isEmpty() && logs.isNotEmpty()) {
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    "server: " + logs.first().text.take(80),
+                    fontSize = 7.5.sp,
+                    color = altarisMutedText(),
+                )
             }
         }
     }
+}
+
+/** One call: tool, arguments, timing and — when finished — its outcome. */
+@Composable
+private fun CallRow(
+    accent: Color,
+    call: ReaBridge.Call,
+    elapsed: Long,
+    live: Boolean,
+) {
+    val scheme = MaterialTheme.colorScheme
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.Top,
+    ) {
+        // A filled marker for a live call, a hollow one for a finished call.
+        Box(
+            modifier = Modifier
+                .padding(top = 3.dp)
+                .size(4.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .background(
+                    when {
+                        call.error.isNotBlank() -> scheme.error
+                        live -> accent
+                        else -> scheme.outline
+                    }
+                ),
+        )
+        Spacer(Modifier.width(5.dp))
+        Column(Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    call.tool,
+                    fontSize = 8.5.sp,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = if (live) FontWeight.SemiBold else FontWeight.Normal,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                    color = if (call.error.isNotBlank()) scheme.error else scheme.onSurface,
+                )
+                Spacer(Modifier.width(4.dp))
+                Text(
+                    formatDuration(elapsed),
+                    fontSize = 7.5.sp,
+                    fontFamily = FontFamily.Monospace,
+                    color = if (live) accent else altarisMutedText(),
+                )
+                if (!live) {
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        formatSize(call.bytes),
+                        fontSize = 7.5.sp,
+                        fontFamily = FontFamily.Monospace,
+                        color = altarisMutedText(),
+                    )
+                }
+            }
+            // The arguments, trimmed: enough to recognise the target.
+            val args = call.arguments.trim().take(90)
+            if (args.isNotBlank() && args != "{}") {
+                Text(
+                    args,
+                    fontSize = 7.sp,
+                    fontFamily = FontFamily.Monospace,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    color = altarisMutedText(),
+                )
+            }
+            if (call.error.isNotBlank()) {
+                Text(
+                    call.error.lineSequence().firstOrNull().orEmpty().take(120),
+                    fontSize = 7.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    color = scheme.error,
+                )
+            } else if (!live) {
+                // What it found, not just that it finished.
+                val summary = call.findings.take(2).joinToString(" · ") { it.name }
+                if (summary.isNotBlank()) {
+                    Text(
+                        summary,
+                        fontSize = 7.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        color = accent.copy(alpha = 0.8f),
+                    )
+                } else if (call.preview.isNotBlank()) {
+                    Text(
+                        call.preview.lineSequence().firstOrNull().orEmpty().take(90),
+                        fontSize = 7.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        color = altarisMutedText(),
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** "3.2s", "1m 12s", "4m" — a duration a person can read at a glance. */
+private fun formatDuration(ms: Long): String = when {
+    ms < 1000L -> "<1s"
+    ms < 60_000L -> (ms / 1000).toString() + "s"
+    ms < 3_600_000L -> {
+        val m = ms / 60_000
+        val s = (ms % 60_000) / 1000
+        if (s == 0L) m.toString() + "m" else m.toString() + "m " + s + "s"
+    }
+    else -> (ms / 3_600_000).toString() + "h"
+}
+
+/** Bytes as a person reads them. */
+private fun formatSize(bytes: Long): String = when {
+    bytes <= 0L -> ""
+    bytes < 1024L -> bytes.toString() + "B"
+    bytes < 1024L * 1024L -> (bytes / 1024).toString() + "K"
+    else -> (bytes / (1024 * 1024)).toString() + "M"
 }
 
 /**
