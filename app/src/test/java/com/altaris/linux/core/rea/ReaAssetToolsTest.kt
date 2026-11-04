@@ -802,10 +802,14 @@ class ReaAssetToolsTest {
         val script = readAsset("scripts/rea/ghidra-analyze.sh")
         assertTrue("must set an explicit heap", script.contains("JAVA_OPTS=\"-Xmx"))
         assertTrue("must read the real RAM", script.contains("/proc/meminfo"))
+        // The ceiling is now 2 GB and it is sized from MemAvailable, not from
+        // total RAM: promising a JVM memory Android is already using is what
+        // got the app and the launcher killed.
         assertTrue(
             "must clamp the heap to a phone-sized window",
-            script.contains("-gt 3072"),
+            script.contains("-gt 2048 ] && HEAP_MB=2048"),
         )
+        assertTrue("must size from available memory", script.contains("MemAvailable"))
         val manager = readSource("app/src/main/kotlin/com/altaris/linux/core/rea/ReaManager.kt")
         val ghidra = manager.substringAfter("suspend fun analyzeGhidra(")
             .substringBefore("// ------------------------------------------------------------- server")
