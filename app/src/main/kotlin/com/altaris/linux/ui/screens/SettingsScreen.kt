@@ -189,6 +189,10 @@ fun SettingsScreen(
 
     val phantomApplicable = PhantomProcessFixer.applicable()
     var showPhantom by remember { mutableStateOf(false) }
+    var emailDialog by remember { mutableStateOf(false) }
+    var emailValue by remember { mutableStateOf(com.altaris.linux.core.agent.AgentEmail.get(context)) }
+    var emailError by remember { mutableStateOf("") }
+    val savedEmail = remember(emailDialog) { com.altaris.linux.core.agent.AgentEmail.get(context) }
     val phantomState = remember(showPhantom) {
         runCatching { PhantomProcessFixer.state(context) }
             .getOrDefault(PhantomProcessFixer.State.UNKNOWN)
@@ -424,6 +428,30 @@ fun SettingsScreen(
             )
         }
 
+        // Agent identity
+        SettingsGroup("Agent", accent, Modifier.staggerIn(6, entrance)) {
+            PrismRow(
+                title = "Agent email",
+                subtitle = if (savedEmail.isBlank()) {
+                    "Not set · the agent will ask instead of inventing one"
+                } else {
+                    savedEmail
+                },
+                accent = accent,
+                onClick = {
+                    emailValue = com.altaris.linux.core.agent.AgentEmail.get(context)
+                    emailError = ""
+                    emailDialog = true
+                },
+                divider = true,
+            )
+            PrismRow(
+                title = "Browser",
+                subtitle = "Chromium · the agent drives it on the clone's display",
+                accent = accent,
+            )
+        }
+
         // System & About
         SettingsGroup("System & About", accent, Modifier.staggerIn(7, entrance)) {
             if (onNavigateToOnboarding != null) {
@@ -474,6 +502,15 @@ fun SettingsScreen(
                 subtitle = "Setup guides and tutorials",
                 accent = accent,
                 onClick = { openUrl(context, "https://github.com/HakaI963/bliss#readme") },
+                divider = true,
+            )
+            PrismRow(
+                title = "File manager design",
+                subtitle = "MP-Manager by Abdurazaaq Mohammed · GPL-3.0",
+                accent = accent,
+                onClick = {
+                    openUrl(context, "https://github.com/AbdurazaaqMohammed/MP-Manager")
+                },
             )
         }
 
@@ -481,6 +518,55 @@ fun SettingsScreen(
         // footprint; the content viewport consumes the navigation-bar inset,
         // so 110dp always leaves the last row tappable).
         Spacer(Modifier.height(110.dp))
+    }
+
+    if (emailDialog) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { emailDialog = false },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    if (!com.altaris.linux.core.agent.AgentEmail.looksValid(emailValue)) {
+                        emailError = "That does not look like an email address."
+                    } else {
+                        com.altaris.linux.core.agent.AgentEmail.set(context, emailValue)
+                        emailDialog = false
+                    }
+                }) { Text("Save", color = accent) }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    com.altaris.linux.core.agent.AgentEmail.clear(context)
+                    emailValue = ""
+                    emailDialog = false
+                }) { Text("Clear", color = MaterialTheme.colorScheme.error) }
+            },
+            title = { Text("Agent email", fontSize = 14.sp) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        "The address the agent may type into a sign-in form. Stored " +
+                            "on this device only, and never sent anywhere else. It is " +
+                            "not a password — leave it empty and the agent will ask.",
+                        fontSize = 11.sp,
+                        lineHeight = 15.sp,
+                    )
+                    androidx.compose.material3.OutlinedTextField(
+                        value = emailValue,
+                        onValueChange = {
+                            emailValue = it
+                            emailError = ""
+                        },
+                        singleLine = true,
+                        isError = emailError.isNotBlank(),
+                        label = { Text("you@example.com", fontSize = 11.sp) },
+                        textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp),
+                    )
+                    if (emailError.isNotBlank()) {
+                        Text(emailError, fontSize = 10.sp, color = MaterialTheme.colorScheme.error)
+                    }
+                }
+            },
+        )
     }
 
     if (showPhantom) {

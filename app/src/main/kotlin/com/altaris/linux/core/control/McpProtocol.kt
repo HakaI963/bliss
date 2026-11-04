@@ -104,6 +104,16 @@ object McpProtocol {
         )
         put(
             tool(
+                "altaris_identity",
+                "The email address the user allows you to use when a site asks you to " +
+                    "sign in. Returns { email } or an empty string when the user has not " +
+                    "set one. Use it only for sign-in forms; never invent an address, and " +
+                    "never send it anywhere else.",
+                JSONObject()
+            )
+        )
+        put(
+            tool(
                 "altaris_launch_clone",
                 "Launch a clone on its own virtual display. Other running clones are not touched " +
                     "and keep their displays, so different agents can drive different clones at once.",
@@ -461,6 +471,22 @@ object McpProtocol {
 
     private fun callTool(name: String, args: JSONObject): JSONObject = when (name) {
         "altaris_status" -> textResult(runBlocking { HeadlessCloneEngine.apiStatus() })
+        "altaris_identity" -> {
+            val ctx = ControlServer.context() ?: throw IllegalStateException("App context unavailable")
+            val email = com.altaris.linux.core.agent.AgentEmail.get(ctx)
+            textResult(
+                JSONObject()
+                    .put("ok", true)
+                    .put("email", email)
+                    .put(
+                        "note",
+                        if (email.isBlank())
+                            "The user has not set an email. Do not invent one: ask, or stop."
+                        else
+                            "Use this only in sign-in forms. It is not a password."
+                    )
+            )
+        }
         "altaris_clones" -> textResult(runBlocking { HeadlessCloneEngine.apiClones() })
         "altaris_apps" -> textResult(runBlocking { HeadlessCloneEngine.apiApps() })
         "altaris_install_apk" -> textResult(
@@ -862,6 +888,14 @@ object McpProtocol {
         recognition per step. `altaris_tap` / `altaris_swipe` / `altaris_key`
         take raw coordinates and are the last resort. When a step fails,
         re-read the tree instead of guessing a coordinate.
+
+        ## Signing in to a site
+
+        The browser you drive is Chromium, on the clone's display. When a site
+        asks for an email, call `altaris_identity` and use the address it
+        returns. If it returns an empty string, the user has not set one: ask
+        them, or stop and say why. Never invent an address, and never put it
+        anywhere except a sign-in form.
     """.trimIndent()
 
     /** The debugger state as an agent can read it. */

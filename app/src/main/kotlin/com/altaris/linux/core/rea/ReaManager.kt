@@ -1347,6 +1347,12 @@ object ReaManager {
      * cannot find a prebuild it falls back to compiling, which needs a
      * compiler, make and python3 — and a minimal rootfs has none of them,
      * so the install fails silently and the module stays absent.
+     *
+     * Called from [install] and [prepare] **while they hold [mutex]**, so it
+     * must not call [installPackages]: that takes the same mutex, and Kotlin's
+     * Mutex is not reentrant. Doing so deadlocked the whole install at 0% with
+     * the button stuck on "Working…", which is what "Reinstall is stuck" was.
+     * The packages are installed through [GuestExec] directly instead.
      */
     private suspend fun ensureFridaModule(
         app: Context,
@@ -1363,8 +1369,14 @@ object ReaManager {
                 else -> emptyList()
             }
             if (toolchain.isNotEmpty()) {
+                line("installing the frida module build tools")
                 runCatching {
-                    installPackages(app, distroId, toolchain) { line(it) }
+                    GuestExec.run(
+                        app,
+                        distroId,
+                        packageInstallScript(manager, toolchain),
+                        timeoutMs = 15 * 60_000L,
+                    ) { line(it) }
                 }
             }
         }

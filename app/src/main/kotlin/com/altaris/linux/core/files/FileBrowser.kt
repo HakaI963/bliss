@@ -88,10 +88,21 @@ object FileBrowser {
         addIfReadable(out, "download", "Downloads", "/sdcard/Download", Place.Kind.HOST, false)
         addIfReadable(out, "app", "Altaris data", app.filesDir.absolutePath, Place.Kind.HOST, false)
 
-        val root = RootShell.isRootAvailable()
-        if (root) {
-            addIfReadable(out, "data", "System /data", "/data", Place.Kind.HOST, true)
-            addIfReadable(out, "system", "System /system", "/system", Place.Kind.HOST, true)
+        // Full device access, not just the download folder.
+        //
+        // Only /sdcard, Downloads and the app's own data were listed, so the
+        // browser could not reach anything else — no DCIM, no other apps'
+        // storage, no system partition. These are the real roots.
+        addIfReadable(out, "storage", "All storage", "/storage", Place.Kind.HOST, false)
+        addIfReadable(out, "data", "App data (/data)", "/data", Place.Kind.HOST, true)
+        addIfReadable(out, "system", "System (/system)", "/system", Place.Kind.HOST, true)
+        addIfReadable(out, "vendor", "Vendor (/vendor)", "/vendor", Place.Kind.HOST, true)
+        addIfReadable(out, "etc", "Config (/etc)", "/etc", Place.Kind.HOST, true)
+
+        // The whole filesystem, last: with root this is the only entry that can
+        // reach everything else.
+        if (RootShell.isRootAvailable()) {
+            out.add(Place("root", "Root /", "/", Place.Kind.HOST, true))
         }
 
         // Installed distros, proot and chroot.
@@ -407,9 +418,40 @@ object FileBrowser {
     /** The default directory when the tab opens. */
     fun defaultPath(context: Context): String {
         val places = places(context)
-        return places.firstOrNull { it.id == "download" }?.path
-            ?: places.firstOrNull { it.id == "sdcard" }?.path
+        // Internal storage, not the download folder: the browser used to open
+        // in Downloads, which made it look like only downloads were reachable.
+        return places.firstOrNull { it.id == "sdcard" }?.path
+            ?: places.firstOrNull { it.id == "storage" }?.path
+            ?: places.firstOrNull { it.id == "download" }?.path
             ?: places.firstOrNull()?.path
             ?: context.filesDir.absolutePath
+    }
+
+    /** How the listing is ordered. */
+    enum class Sort(val label: String) {
+        NAME("Name"),
+        SIZE("Size"),
+        DATE("Date"),
+    }
+
+    /** Order a listing: directories first, then the chosen key. */
+    fun sorted(entries: List<Entry>, by: Sort, descending: Boolean = false): List<Entry> {
+        val comparator: Comparator<Entry> = when (by) {
+            Sort.NAME -> compareBy { it.name.lowercase() }
+            Sort.SIZE -> compareBy { it.size }
+            Sort.DATE -> compareBy { it.modified }
+        }
+        val ordered = entries.sortedWith(comparator)
+        val result = if (descending) ordered.reversed() else ordered
+        // Directories stay on top in name order; that is what every file
+        // manager does and what makes a deep tree navigable.
+        return result.sortedByDescending { it.dir }
+    }
+
+    /** Filter a listing by a substring of the name, case-insensitively. */
+    fun filtered(entries: List<Entry>, query: String): List<Entry> {
+        val q = query.trim()
+        if (q.isEmpty()) return entries
+        return entries.filter { it.name.contains(q, ignoreCase = true) }
     }
 }

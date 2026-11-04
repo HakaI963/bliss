@@ -88,6 +88,9 @@ fun FilesScreen(
     var renaming by remember { mutableStateOf<FileBrowser.Entry?>(null) }
     var places by remember { mutableStateOf<List<FileBrowser.Place>>(emptyList()) }
     var notice by remember { mutableStateOf("") }
+    var sort by remember { mutableStateOf(FileBrowser.Sort.NAME) }
+    var descending by remember { mutableStateOf(false) }
+    var query by remember { mutableStateOf("") }
 
     suspend fun load(target: String) {
         loading = true
@@ -187,13 +190,47 @@ fun FilesScreen(
                 PrismChip("New folder", accent) { creating = "dir" }
                 PrismChip("Refresh", accent) { scope.launch { load(path) } }
             }
+            Spacer(Modifier.height(3.dp))
+            OutlinedTextField(
+                value = query,
+                onValueChange = { query = it },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                textStyle = androidx.compose.ui.text.TextStyle(fontSize = 10.sp),
+                placeholder = {
+                    Text("Filter this folder", fontSize = 10.sp, color = altarisMutedText())
+                },
+            )
+            Spacer(Modifier.height(3.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                FileBrowser.Sort.entries.forEach { option ->
+                    PrismChip(
+                        option.label,
+                        accent,
+                        selected = sort == option,
+                        onClick = { sort = option },
+                    )
+                }
+                PrismChip(
+                    if (descending) "Z→A" else "A→Z",
+                    accent,
+                    selected = descending,
+                    onClick = { descending = !descending },
+                )
+            }
         }
 
         // The listing.
         PrismCard(accent = accent, modifier = Modifier.fillMaxWidth().weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    listing.entries.size.toString() + " items",
+                    if (query.isBlank()) listing.entries.size.toString() + " items"
+                    else FileBrowser.filtered(listing.entries, query).size.toString() +
+                        " of " + listing.entries.size,
                     fontSize = 8.5.sp,
                     color = altarisMutedText(),
                 )
@@ -210,8 +247,11 @@ fun FilesScreen(
                 return@PrismCard
             }
             Spacer(Modifier.height(2.dp))
+            val visible = remember(listing, query, sort, descending) {
+                FileBrowser.sorted(FileBrowser.filtered(listing.entries, query), sort, descending)
+            }
             LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f)) {
-                items(listing.entries, key = { it.path }) { entry ->
+                items(visible, key = { it.path }) { entry ->
                     FileRow(
                         entry = entry,
                         accent = accent,

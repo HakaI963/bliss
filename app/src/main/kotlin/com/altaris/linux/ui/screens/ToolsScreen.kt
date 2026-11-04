@@ -751,6 +751,13 @@ private fun ReaCard(context: Context, accent: Color) {
                 if (chosenInstalled && !chosenActive) {
                     // Already there: switching must never re-download anything.
                     ReaDistro.select(context, chosen)
+                } else if (chosenInstalled) {
+                    // "Reinstall" means repair, not a full wipe: re-run the
+                    // toolchain install, which re-probes every tool and
+                    // installs only what is actually missing. Wiping first
+                    // would throw away a working Ghidra and a 570 MB download
+                    // to fix one broken tool.
+                    ReaDistro.installMissingTools(context)
                 } else {
                     // Not launched from the screen's scope: a multi-gigabyte
                     // install outlives any composition, and launching it here is
@@ -814,6 +821,15 @@ private fun ReaCard(context: Context, accent: Color) {
             ) {
                 ReaDistro.installMissingTools(context)
             }
+        }
+        // Always offer the removal.
+        //
+        // It was inside `if (state.installed)`, so a half-finished or stuck
+        // install — the exact case where you want to start over — showed no
+        // button at all: no remove, and the install button disabled by the
+        // stuck "Working…" state. The only way out was clearing app data.
+        if (state.installed || state.busy.isNotBlank() || state.error.isNotBlank()) {
+            Spacer(Modifier.height(Prism.Tight))
             PrismSecondaryButton(
                 text = if (state.busy.isNotBlank()) "Removing…" else "Remove REA toolchain",
                 accent = MaterialTheme.colorScheme.error,
