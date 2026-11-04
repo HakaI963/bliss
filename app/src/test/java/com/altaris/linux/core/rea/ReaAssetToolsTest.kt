@@ -755,7 +755,11 @@ class ReaAssetToolsTest {
             .substringBefore("    /** Stop frida-server.")
         assertTrue("must iterate /proc", kill.contains("for p in /proc/[0-9]*"))
         assertTrue("must read the process name", kill.contains("/comm"))
-        assertTrue("must compare by exact string", kill.contains("[ \"\$c\" = \""))
+        assertTrue(
+            "must compare by exact string",
+            kill.contains("[ \"\$c\" = ") && kill.contains(" SERVER_NAME") ||
+                kill.contains("[ \"\$c\" = " + " SERVER_NAME")),
+        )
         assertTrue("must kill the pid it matched", kill.contains("kill -TERM"))
         assertTrue("must reference the server name", kill.contains("SERVER_NAME"))
     }
