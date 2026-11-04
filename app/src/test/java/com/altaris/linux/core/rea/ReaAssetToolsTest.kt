@@ -750,8 +750,10 @@ class ReaAssetToolsTest {
         )
         assertTrue(
             "must match the process name exactly",
-            frida.contains("do c=$(cat \"\$p/comm\" 2>/dev/null); " +
-                "[ \"\$c\" = " + SERVER_NAME),
+            frida.contains(
+                "do c=$(cat \"\$p/comm\" 2>/dev/null); [ \"\$c\" = " +
+                    SERVER_NAME
+            ),
         )
         assertTrue(
             "must read /proc",
