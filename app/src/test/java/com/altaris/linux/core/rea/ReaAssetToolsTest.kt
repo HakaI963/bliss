@@ -318,6 +318,119 @@ class ReaAssetToolsTest {
         assertNotNull(byId("wwise"))
     }
 
+    /**
+     * Tools with no working ARM64 route must be gone, not shown as dead buttons.
+     *
+     * Each was verified against its upstream release: AssetRipper's tarball
+     * really ships `AssetRipper.GUI.Free` (the catalog had a launcher name that
+     * matched nothing, so a good 26 MB download was thrown away), UnityPy has
+     * no linux-aarch64 wheels past 1.10.18, no ARM64 QuickBMS exists anywhere
+     * and its source does not compile on a modern toolchain, and UE4SS does
+     * not support native Linux at all.
+     */
+    @Test
+    fun assetripperUsesTheRealLauncher() {
+        val assetripper = byId("assetripper")
+        assertEquals(
+            "the launcher must be the binary the archive actually contains",
+            "AssetRipper.GUI.Free",
+            assetripper.archive?.launcher,
+        )
+    }
+
+    @Test
+    fun unityPyIsPinnedToAVersionWithAnArm64Wheel() {
+        val unityPy = byId("unitypy")
+        assertTrue(
+            "must pin a version that has cp313 manylinux-aarch64 wheels",
+            unityPy.pip == "UnityPy==1.10.18",
+        )
+    }
+
+    @Test
+    fun toolsWithNoWorkingArm64RouteAreNotListed() {
+        // QuickBMS: 32-bit x86 only anywhere upstream; source does not build
+        // on GNU 16; Debian ships nothing. UE4SS: Windows-only upstream.
+        for (id in listOf("quickbms", "ue4ss", "unrealpak")) {
+            assertTrue(
+                "$id has no working ARM64 route and must not be a dead button",
+                tools.none { it.id == id },
+            )
+        }
+    }
+
+    /**
+     * GodotPckTool vendors json in a git submodule; a plain shallow clone
+     * fails on \"nlohmann/json.hpp: No such file or directory\". The clone
+     * must recurse submodules, or the build is another guaranteed failure.
+     */
+    @Test
+    fun theGodotPckToolCloneRecursesSubmodules() {
+        val godot = byId("godot")
+        assertTrue(
+            "the clone must recurse submodules",
+            godot.build.contains("--recurse-submodules"),
+        )
+    }
+
+    /**
+     * Every source build's toolchain must include pkg-config: vgmstream's
+     * cmake died with \"Could NOT find PkgConfig\" on a minimal rootfs.
+     */
+    @Test
+    fun theBuildToolchainIncludesPkgConfig() {
+        val source = readSource("app/src/main/kotlin/com/altaris/linux/core/rea/ReaAssetTools.kt")
+        val build = source.substringAfter("// 4. Build from source")
+        assertTrue("apt must get pkg-config", build.contains("\"pkg-config\""))
+        assertTrue("zlib must come along", build.contains("zlib1g-dev"))
+        // A source build needs Python headers for pip-built siblings.
+        assertTrue("apt must get python3-dev", build.contains("python3-dev"))
+    }
+
+    /**
+     * The Other tab used to launch installs on the screen's own
+     * rememberCoroutineScope(), so leaving the tab cancelled the build and
+     * logged \"The coroutine scope left the composition\". Installs now belong
+     * to the app.
+     */
+    @Test
+    fun theOtherTabDoesNotLaunchInstallsOnTheScreenScope() {
+        val screen = readSource("app/src/main/kotlin/com/altaris/linux/ui/screens/ReaScreen.kt")
+        val other = screen.substringAfter("private fun OtherTab(")
+        assertFalse(
+            "installs must not run on the composition scope",
+            other.contains("rememberCoroutineScope()"),
+        )
+        assertTrue("install-all runs app-owned", other.contains("ReaAssetTools.installAllAsync("))
+        assertTrue("one-tool install runs app-owned", other.contains("ReaAssetTools.installOneAsync("))
+        val debugger = screen.substringAfter("private fun DebuggerTab(")
+        assertTrue(
+            "the frida install belongs to the app too",
+            debugger.contains("ReaDebugger.installFridaAsync("),
+        )
+        assertTrue(
+            "the gadget download belongs to the app too",
+            debugger.contains("ReaDebugger.prepareGadgetAsync("),
+        )
+    }
+
+    /** A .tar.xz must install xz on the fly, not fail with \"launcher missing\". */
+    @Test
+    fun tarXzInstallsXzOnTheFly() {
+        val script = readAsset("scripts/rea/install-archive.sh")
+        val txz = script.indexOf("*.tar.xz|*.txz)")
+        assertTrue("the tar.xz branch must exist", txz >= 0)
+        val branch = script.substring(txz)
+        assertTrue(
+            "xz must be ensured before extraction",
+            branch.contains("xz-utils") || branch.contains("xz-\"e") || branch.contains("pkg_run dnf install -y xz") || branch.contains("pkg_run apk add --no-cache xz"),
+        )
+        assertTrue(
+            "and must be installed through the lock helper",
+            branch.contains("pkg_run"),
+        )
+    }
+
     private fun readAsset(path: String): String {
         val candidates = listOf(
             "app/src/main/assets/$path",

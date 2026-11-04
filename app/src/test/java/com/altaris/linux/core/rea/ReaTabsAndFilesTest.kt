@@ -110,7 +110,7 @@ class ReaTabsAndFilesTest {
     fun everyAssetToolCarriesItsCommand() {
         val tools = ReaAssetTools.ALL
         assertTrue("must cover Unity", tools.any { it.id == "assetripper" })
-        assertTrue("must cover Unreal", tools.any { it.id == "quickbms" })
+        assertTrue("must cover Unreal decline honestly", tools.none { it.id == "quickbms" })
         assertTrue("must cover Android assets", tools.any { it.id == "obb" })
         assertTrue("must cover Godot", tools.any { it.id == "godot" })
         assertTrue("must cover audio", tools.any { it.id == "vgmstream" })

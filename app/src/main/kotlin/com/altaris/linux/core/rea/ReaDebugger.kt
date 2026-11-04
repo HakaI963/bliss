@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
 
 /**
  * A live debugger attached to the app running in the clone.
@@ -178,6 +179,34 @@ object ReaDebugger {
      * the console talks to. Done in one action because a half-installed frida
      * looks like a broken debugger.
      */
+    /**
+     * Run a long install on the app's own scope.
+     *
+     * These used to run on the Debugger tab's rememberCoroutineScope(), so
+     * switching tabs cancelled the download mid-flight and the next visit
+     * showed a half-installed or missing frida-server. Installs belong to the
+     * app, not to a screen.
+     */
+    fun installFridaAsync(context: Context) { runBlockingJob(context, "installFrida") }
+
+    fun prepareGadgetAsync(context: Context) { runBlockingJob(context, "prepareGadget") }
+
+    private var job: kotlinx.coroutines.Job? = null
+    private val scope = kotlinx.CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.IO)
+
+    private fun runBlockingJob(context: Context, what: String) {
+        if (job?.isActive == true) return
+        val app = context.applicationContext
+        job = scope.launch {
+            runCatching {
+                when (what) {
+                    "installFrida" -> installFrida(app)
+                    "prepareGadget" -> prepareGadget(app)
+                }
+            }.onFailure { Log.w(TAG, "$what failed", it) }
+        }
+    }
+
     suspend fun installFrida(context: Context) = withContext(Dispatchers.IO) {
         _state.value = _state.value.copy(fridaBusy = "Downloading frida-server")
         val server = ReaFrida.installServer(context)

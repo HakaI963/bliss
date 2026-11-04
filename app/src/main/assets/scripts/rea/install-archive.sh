@@ -144,13 +144,26 @@ case "$FILE" in
     command -v unzip >/dev/null 2>&1 || fail "unzip is required to extract $FILE"
     unzip -oq "$TMP" -d "$DIR" || { rm -f "$TMP"; fail "cannot extract $FILE"; }
     ;;
+  *.tar.xz|*.txz)
+    # A .tar.xz needs xz, and a minimal rootfs ships none. tar's failure —
+    # "tar (child): xz: Cannot exec" — surfaced later as "launcher missing",
+    # which names the wrong problem, so the tool is provided up front.
+    command -v xz >/dev/null 2>&1 || {
+      if command -v apt-get >/dev/null 2>&1; then
+        pkg_run apt-get install -y --no-install-recommends xz-utils >/dev/null 2>&1
+      elif command -v dnf >/dev/null 2>&1; then
+        pkg_run dnf install -y xz >/dev/null 2>&1
+      elif command -v apk >/dev/null 2>&1; then
+        pkg_run apk add --no-cache xz >/dev/null 2>&1
+      elif command -v pacman >/dev/null 2>&1; then
+        pkg_run pacman -S --noconfirm --needed xz >/dev/null 2>&1
+      fi
+    }
+    command -v xz >/dev/null 2>&1 || fail "xz is required to extract $FILE"
+    tar -xJf "$TMP" -C "$DIR" || { rm -f "$TMP"; fail "cannot extract $FILE"; }
+    ;;
   *.tar.gz|*.tgz)
     tar -xzf "$TMP" -C "$DIR" || { rm -f "$TMP"; fail "cannot extract $FILE"; }
-    ;;
-  *.tar.xz|*.txz)
-    # AssetRipper publishes .tar.xz for linux arm64; tar handles it on its own
-    # in every distro that ships xz support, but say so plainly if it does not.
-    tar -xJf "$TMP" -C "$DIR" || { rm -f "$TMP"; fail "cannot extract $FILE (is xz installed?)"; }
     ;;
   *.jar)
     # A jar is the program; keep it under its own name.

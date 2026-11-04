@@ -1151,16 +1151,14 @@ private fun DebuggerTab(accent: Color) {
                     selected = session.fridaRunning,
                     onClick = {
                         if (session.fridaBusy.isNotBlank()) return@PrismChip
-                        // These are long (a download, a pip install), so they
-                        // run on a scope rather than blocking the click.
-                        scope.launch {
-                            withContext(Dispatchers.IO) {
-                                if (session.fridaRunning) {
-                                    ReaDebugger.stopFrida(context)
-                                } else {
-                                    ReaDebugger.installFrida(context)
-                                }
+                        // A running server stops inline; installing one is a
+                        // long download that belongs to the app, not the tab.
+                        if (session.fridaRunning) {
+                            scope.launch {
+                                withContext(Dispatchers.IO) { ReaDebugger.stopFrida(context) }
                             }
+                        } else {
+                            ReaDebugger.installFridaAsync(context)
                         }
                     },
                 )
@@ -1188,9 +1186,7 @@ private fun DebuggerTab(accent: Color) {
                         null
                     } else {
                         ({
-                            scope.launch {
-                                withContext(Dispatchers.IO) { ReaDebugger.prepareGadget(context) }
-                            }
+                            ReaDebugger.prepareGadgetAsync(context)
                         })
                     },
                 )
@@ -1292,7 +1288,6 @@ private fun DebuggerTab(accent: Color) {
 @Composable
 private fun OtherTab(accent: Color) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
     val state by ReaAssetTools.state.collectAsState()
 
     LaunchedEffect(Unit) {
@@ -1319,9 +1314,9 @@ private fun OtherTab(accent: Color) {
                 modifier = Modifier.fillMaxWidth(),
                 enabled = !state.running,
             ) {
-                scope.launch {
-                    withContext(Dispatchers.IO) { ReaAssetTools.installAll(context) }
-                }
+                // App-owned scope: leaving the tab must not cancel a build that
+                // has already run for minutes.
+                ReaAssetTools.installAllAsync(context)
             }
             // Live progress: which tool, and how far through the batch. Without
             // it a long install looks frozen — the report was that nothing
@@ -1392,11 +1387,7 @@ private fun OtherTab(accent: Color) {
                                     null
                                 } else {
                                     ({
-                                        scope.launch {
-                                            withContext(Dispatchers.IO) {
-                                                ReaAssetTools.install(context, tool)
-                                            }
-                                        }
+                                        ReaAssetTools.installOneAsync(context, tool)
                                     })
                                 },
                             )

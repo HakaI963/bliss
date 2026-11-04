@@ -2,7 +2,10 @@ package com.altaris.linux.core.rea
 
 import android.content.Context
 import android.util.Log
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -110,6 +113,40 @@ object ReaAssetTools {
     private val _state = MutableStateFlow(State())
     val state: StateFlow<State> = _state.asStateFlow()
 
+    // App-lifetime scope for installs.
+    //
+    // These used to launch on the *screen's* rememberCoroutineScope(), so
+    // leaving the tab cancelled the install mid-flight — the logs show it as
+    // "The coroutine scope left the composition" after a build had already run
+    // for minutes. Installs belong to the app, not to whichever screen started
+    // them.
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    private var job: kotlinx.coroutines.Job? = null
+
+    /** True while any asset install is in flight. */
+    fun isInstalling(): Boolean = job?.isActive == true
+
+    /** Start installing everything missing; returns immediately. */
+    fun installAllAsync(context: Context) {
+        if (isInstalling()) return
+        val app = context.applicationContext
+        job = scope.launch {
+            runCatching { installAll(app) }
+                .onFailure { append("ERROR: install all: " + (it.message ?: it.javaClass.simpleName)) }
+        }
+    }
+
+    /** Start installing one tool; returns immediately. */
+    fun installOneAsync(context: Context, tool: Tool) {
+        if (isInstalling()) return
+        val app = context.applicationContext
+        job = scope.launch {
+            runCatching { install(app, tool) }
+                .onFailure { append("ERROR: " + tool.name + ": " + (it.message ?: it.javaClass.simpleName)) }
+        }
+    }
+
     /**
      * The toolkit, grouped the way the work is done.
      *
@@ -141,7 +178,10 @@ object ReaAssetTools {
                         url = "https://github.com/AssetRipper/AssetRipper/releases/download/2.0.0/AssetRipper_linux_arm64.tar.xz",
                         fileName = "AssetRipper_linux_arm64.tar.xz",
                         dir = ReaCatalog.ARCHIVE_ROOT + "/assetripper",
-                        launcher = "AssetRipper",
+                        // The binary in the archive is the GUI one; the old
+                        // name here matched nothing, so a 26 MB download was
+                        // unpacked and then thrown away as "launcher missing".
+                        launcher = "AssetRipper.GUI.Free",
                     ),
                 ),
                 Tool(
@@ -152,7 +192,11 @@ object ReaAssetTools {
                     command = "python3 -c 'import UnityPy; UnityPy.load(\"data.unity3d\")'",
                     probe = "unitypy",
                     // Pure Python: installable everywhere through pip.
-                    pip = "UnityPy",
+                    // Pinned: UnityPy stopped publishing linux-aarch64 wheels
+                    // after 1.10.18, so anything newer makes pip compile its
+                    // C++ UnityPyBoost on the phone — which fails. 1.10.18 has
+                    // the cp313 manylinux-aarch64 wheel this platform needs.
+                    pip = "UnityPy==1.10.18",
                     packages = mapOf(
                         "apt" to listOf("python3-pip"),
                         "apk" to listOf("py3-pip"),
@@ -208,38 +252,15 @@ object ReaAssetTools {
         Group(
             "Unreal Engine",
             listOf(
-                Tool(
-                    id = "quickbms",
-                    name = "QuickBMS + UE scripts",
-                    use = "Open .pak, .ucas, .utoc and the many custom containers built on them",
-                    size = "~2 MB",
-                    command = "quickbms <script.bms> <archive> <outdir>",
-                    probe = "quickbms",
-                    packages = mapOf(
-                        "apt" to listOf("quickbms"),
-                        "apk" to emptyList(),
-                        "dnf" to emptyList(),
-                        "pacman" to listOf("quickbms"),
-                    ),
-                    // Alpine/Fedora ship nothing: build the binary from source
-                    // rather than leave a dead button.
-                    build = "rm -rf QuickBMS && git clone --depth 1 https://github.com/Little-Byte/QuickBMS.git && cd QuickBMS/src && make",
-                ),
-                Tool(
-                    id = "ue4ss",
-                    name = "UE4SS (UE object dump)",
-                    use = "Dump UObjects, names and blueprints from a running Unreal game",
-                    size = "~5 MB",
-                    command = "ue4ss — deploy, then read UE4SS.log",
-                    probe = "ue4ss",
-                    packages = mapOf(
-                        "apt" to listOf("git", "cmake", "build-essential"),
-                        "apk" to listOf("git", "cmake", "build-base"),
-                        "dnf" to listOf("git", "cmake", "gcc", "gcc-c++", "make"),
-                        "pacman" to listOf("git", "cmake", "base-devel"),
-                    ),
-                    build = "rm -rf RE-UE4SS && git clone --depth 1 https://github.com/UE4SS-RE/RE-UE4SS.git && cmake -S RE-UE4SS -B RE-UE4SS/build -DCMAKE_BUILD_TYPE=Release",
-                ),
+                // QuickBMS is gone on purpose: aluigi publishes 32-bit x86
+                // only, no ARM64 build exists anywhere, Debian ships nothing,
+                // and the source does not compile on a modern toolchain — it
+                // is K&R-era C against an OpenSSL that removed the symbols it
+                // uses.
+                // UE4SS is gone on purpose: upstream supports Windows natively
+                // and cross-compiles Windows binaries from Linux — native
+                // Linux builds are not supported at all, so the source build
+                // was a guaranteed failure. No ARM64 build is published.
                 // The Unreal .pak extractor is gone on purpose: repak (the
                 // maintained CLI) publishes x86_64 Linux only, building Rust on
                 // a phone is not a reasonable route, and the pip package this
@@ -312,7 +333,11 @@ object ReaAssetTools {
                         "pacman" to listOf("git", "cmake", "gcc", "make"),
                     ),
                     // The published linux binary is x86_64 only, so build it.
-                    build = "rm -rf GodotPckTool && git clone --depth 1 https://github.com/hhyyrylainen/GodotPckTool.git && cd GodotPckTool && make",
+                    // Its nlohmann json lives in a git submodule — the old
+                    // plain clone produced "nlohmann/json.hpp: No such file or
+                    // directory" every time. Submodules are the dependency, not
+                    // a package manager for it.
+                    build = "rm -rf GodotPckTool && git clone --depth 1 --recurse-submodules --shallow-submodules https://github.com/hhyyrylainen/GodotPckTool.git && cd GodotPckTool && make",
                 ),
                 Tool(
                     id = "gamemaker",
@@ -664,15 +689,17 @@ object ReaAssetTools {
         if (tool.build.isNotBlank()) {
             tried.add("source build")
             append("building " + tool.name + " from source (no arm64 binary is published)")
-            // A source build needs git, a compiler and cmake, and a minimal
-            // rootfs has none of them. Best-effort: the build may still work
-            // with what is installed, and a missing dep is reported by the
-            // build itself rather than assumed here.
+            // A source build needs git, a compiler, cmake, pkg-config and the
+            // python headers; a minimal rootfs has none of them. pkg-config is
+            // what vgmstream's cmake died on ("Could NOT find PkgConfig") even
+            // for a build with no optional libraries. Best-effort: the build
+            // may still work with what is installed, and a missing dep is
+            // reported by the build itself rather than assumed here.
             val deps = when (manager) {
-                "apt" -> listOf("git", "cmake", "build-essential")
-                "apk" -> listOf("git", "cmake", "g++", "make")
-                "dnf" -> listOf("git", "cmake", "gcc-c++", "make")
-                "pacman" -> listOf("git", "cmake", "base-devel")
+                "apt" -> listOf("git", "cmake", "build-essential", "pkg-config", "zlib1g-dev", "python3-dev")
+                "apk" -> listOf("git", "cmake", "g++", "make", "pkgconf", "zlib-dev", "python3-dev")
+                "dnf" -> listOf("git", "cmake", "gcc-c++", "make", "pkgconf-pkg-config", "zlib-devel", "python3-devel")
+                "pacman" -> listOf("git", "cmake", "base-devel", "pkgconf", "zlib", "python")
                 else -> emptyList()
             }
             if (deps.isNotEmpty() && manager != "none") {
