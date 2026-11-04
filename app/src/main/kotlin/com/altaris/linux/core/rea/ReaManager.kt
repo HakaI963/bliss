@@ -372,9 +372,21 @@ object ReaManager {
                 update { it.copy(busy = "", error = "Install a distro first") }
                 return@withLock _status.value
             }
-            // Must be read before the status copy below: that copy rewrites
-            // distroId, which would make a fresh distro look installed.
-            val alreadyInstalled = _status.value.distroId == distroId && _status.value.installed
+            // Decide from the filesystem, not from in-memory state.
+            //
+            // This used to be `_status.distroId == distroId && _status.installed`,
+            // which is false whenever the app was restarted (the flow resets)
+            // — so a tree the user already had was treated as absent and the
+            // frida-module repair inside the "already installed" branch never
+            // ran. That is why Node's frida package stayed missing.
+            val alreadyInstalled = runCatching {
+                GuestExec.run(
+                    app,
+                    distroId,
+                    "test -x " + REA_BIN + " && echo YES || echo NO",
+                    timeoutMs = 30_000L,
+                ).output.contains("YES")
+            }.getOrDefault(false)
             update {
                 it.copy(
                     distroId = distroId,
@@ -528,7 +540,17 @@ object ReaManager {
                 update { it.copy(busy = "", error = "Install a distro first") }
                 return@withLock _status.value
             }
-            val alreadyInstalled = _status.value.distroId == distroId && _status.value.installed
+            // Same rule as [install]: probe the filesystem. In-memory state is
+            // empty after an app restart, which used to make an existing REA
+            // look absent and skip the frida-module repair.
+            val alreadyInstalled = runCatching {
+                GuestExec.run(
+                    app,
+                    distroId,
+                    "test -x " + REA_BIN + " && echo YES || echo NO",
+                    timeoutMs = 30_000L,
+                ).output.contains("YES")
+            }.getOrDefault(false)
             update {
                 it.copy(
                     distroId = distroId,
@@ -1320,12 +1342,32 @@ object ReaManager {
      * of the install would keep failing with capability_unavailable forever.
      * The script is idempotent: it exits immediately when the module imports,
      * so calling it on every prepare costs one node invocation.
+     *
+     * The build toolchain comes first. `frida` is a native binding; when npm
+     * cannot find a prebuild it falls back to compiling, which needs a
+     * compiler, make and python3 — and a minimal rootfs has none of them,
+     * so the install fails silently and the module stays absent.
      */
     private suspend fun ensureFridaModule(
         app: Context,
         distroId: String,
         line: (String) -> Unit,
     ) {
+        val manager = detectPackageManager(app, distroId)
+        if (manager.isNotBlank() && manager != "none") {
+            val toolchain = when (manager) {
+                "apt" -> listOf("build-essential", "python3")
+                "apk" -> listOf("build-base", "python3")
+                "dnf" -> listOf("gcc-c++", "make", "python3")
+                "pacman" -> listOf("base-devel", "python")
+                else -> emptyList()
+            }
+            if (toolchain.isNotEmpty()) {
+                runCatching {
+                    installPackages(app, distroId, toolchain) { line(it) }
+                }
+            }
+        }
         val script = "sh " + shellPath("rea-frida-module.sh") + " " + GuestExec.shellQuote(ROOT)
         val result = GuestExec.run(app, distroId, script, timeoutMs = 10 * 60_000L)
         for (raw in result.output.lines()) {

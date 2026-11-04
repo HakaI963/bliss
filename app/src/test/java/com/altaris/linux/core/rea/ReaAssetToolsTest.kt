@@ -733,6 +733,73 @@ class ReaAssetToolsTest {
         )
     }
 
+    /**
+     * Stopping frida must not kill REA or the user's shell.
+     *
+     * `pkill -f frida-server` is a substring match over every command line —
+     * and REA's own argv contains that string (its launch command names the
+     * server binary). Stopping one thing killed the analysis worker and
+     * SIGTERM'd unrelated shells, taking REA down for two minutes.
+     */
+    @Test
+    fun stoppingFridaOnlyKillsTheServer() {
+        val frida = readSource("app/src/main/kotlin/com/altaris/linux/core/rea/ReaFrida.kt")
+        assertFalse(
+            "must not run a substring process match as a command",
+            frida.contains("RootShell.captureResult(\"pkill -f frida-server"),
+        )
+        assertTrue(
+            "must match the process name exactly",
+            frida.contains("do c=$(cat \"\$p/comm\" 2>/dev/null); " +
+                "[ \"\$c\" = " + SERVER_NAME),
+        )
+        assertTrue(
+            "must read /proc",
+            frida.contains("for p in /proc/[0-9]*"),
+        )
+        assertTrue(
+            "must kill the pid it matched",
+            frida.contains("kill -TERM"),
+        )
+    }
+
+    /**
+     * An installed REA must be detected from the filesystem.
+     *
+     * The check was in-memory state, which is empty after an app restart — so
+     * a tree the user already had looked absent, and the frida-module repair
+     * inside the "already installed" branch never ran.
+     */
+    @Test
+    fun anExistingReaIsDetectedFromTheDiskIfNeeded() {
+        val manager = readSource("app/src/main/kotlin/com/altaris/linux/core/rea/ReaManager.kt")
+        for (fn in listOf("suspend fun install(", "suspend fun prepare(")) {
+            val body = manager.substringAfter(fn)
+                .substringBefore("alreadyInstalled) {")
+            assertTrue(
+                "$fn must probe the filesystem, not in-memory state",
+                body.contains("test -x "),
+            )
+        }
+        assertFalse(
+            "must not trust the status flow for this",
+            manager.contains("_status.value.distroId == distroId && _status.value.installed"),
+        )
+    }
+
+    /** The frida module install must have a compiler to fall back on. */
+    @Test
+    fun theFridaModuleInstallsItsBuildToolchain() {
+        val manager = readSource("app/src/main/kotlin/com/altaris/linux/core/rea/ReaManager.kt")
+        val fn = manager.substringAfter("private suspend fun ensureFridaModule(")
+            .substringBefore("private fun coreScript()")
+        assertTrue(
+            "must install a compiler before npm runs",
+            fn.contains("installPackages(app, distroId, toolchain)"),
+        )
+        assertTrue("must name them per manager", fn.contains("build-essential"))
+    }
+
     private fun readAsset(path: String): String {
         val candidates = listOf(
             "app/src/main/assets/$path",

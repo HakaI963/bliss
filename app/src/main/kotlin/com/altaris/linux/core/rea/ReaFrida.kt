@@ -162,10 +162,24 @@ object ReaFrida {
         )
     }
 
+    /**
+     * The frida-server command, matched exactly.
+     *
+     * `pkill -f frida-server` is a substring match over every command line —
+     * and REA's own argv contains that string (its launch command names the
+     * server binary), as do shells that merely mention it. Stopping frida
+     * killed REA mid-analysis and the user's own shell with it. An anchored
+     * match against the binary name only ever hits the server itself.
+     */
+    private const val SERVER_NAME = "frida-server"
+    private const val KILL_SCRIPT =
+        "for p in /proc/[0-9]*; do c=$(cat \"\$p/comm\" 2>/dev/null); " +
+            "[ \"\$c\" = " + SERVER_NAME + " ] && kill -TERM \"\${p#/proc/}\" 2>/dev/null; done"
+
     /** Stop frida-server. */
     suspend fun stopServer(): State = withContext(Dispatchers.IO) {
         runCatching {
-            RootShell.captureResult("pkill -f frida-server 2>/dev/null; echo done", 30_000L)
+            RootShell.captureResult(KILL_SCRIPT + "; echo done", 30_000L)
         }
         lastUseAt = 0L
         State(serverInstalled = isServerInstalled(), serverRunning = false)
@@ -217,7 +231,7 @@ object ReaFrida {
                 if (System.currentTimeMillis() - used < IDLE_STOP_MS) continue
                 Log.i(TAG, "frida-server idle, stopping")
                 runCatching {
-                    RootShell.captureResult("pkill -f frida-server 2>/dev/null", 20_000L)
+                    RootShell.captureResult(KILL_SCRIPT, 20_000L)
                 }
                 lastUseAt = 0L
                 break
