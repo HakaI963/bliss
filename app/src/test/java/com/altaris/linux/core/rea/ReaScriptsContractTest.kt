@@ -275,11 +275,14 @@ class ReaScriptsContractTest {
 
     @Test
     fun reaRunsWithItsDocumentedPrerequisites() {
-        val stdio = repoFile("src/main/kotlin/com/altaris/linux/core/rea/ReaStdio.kt").readText()
         // REA refuses several analysis families without a procps-compatible ps
-        // and documents the compact schema profile for large tool lists.
-        assertTrue(stdio.contains("PROBE_PATH"))
-        assertTrue(stdio.contains("REA_MCP_INPUT_SCHEMA_PROFILE"))
+        // and documents the compact schema profile for large tool lists. Both
+        // live in the shared launch command so every server gets them.
+        val manager = repoFile("src/main/kotlin/com/altaris/linux/core/rea/ReaManager.kt").readText()
+        val command = manager.substringAfter("fun mcpLaunchCommand()")
+            .substringBefore("private fun coreScript()")
+        assertTrue(command.contains("PROBE_PATH"))
+        assertTrue(command.contains("REA_MCP_INPUT_SCHEMA_PROFILE"))
     }
 
     @Test

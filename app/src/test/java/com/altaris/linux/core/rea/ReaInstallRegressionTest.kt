@@ -146,8 +146,12 @@ class ReaInstallRegressionTest {
         // A missing frida must not fail the whole core install: static analysis
         // tools do not need it, and a hard failure would leave REA uninstalled.
         assertTrue(
-            "must warn rather than abort",
-            module.contains("warning: the frida module did not install"),
+            "must name npm's failure",
+            module.contains("ERROR: npm could not install frida@"),
+        )
+        assertTrue(
+            "must warn what stops working",
+            module.contains("will report capability_unavailable"),
         )
         // A partial install must be replaced, not left broken.
         assertTrue(
@@ -186,17 +190,31 @@ class ReaInstallRegressionTest {
      */
     @Test
     fun theReaChildIsGivenTheGhidraPath() {
-        val stdio = readSource(
-            "app/src/main/kotlin/com/altaris/linux/core/rea/ReaStdio.kt"
+        // The environment lives in one place now: both servers use it, so the
+        // bridge — the one an agent actually connects to — cannot be missing
+        // GHIDRA_INSTALL_DIR while the stdio server has it.
+        val manager = readSource(
+            "app/src/main/kotlin/com/altaris/linux/core/rea/ReaManager.kt"
         )
+        val command = manager.substringAfter("fun mcpLaunchCommand()")
+            .substringBefore("private fun coreScript()")
         assertTrue(
             "must export GHIDRA_INSTALL_DIR",
-            stdio.contains("GHIDRA_INSTALL_DIR="),
+            command.contains("GHIDRA_INSTALL_DIR="),
         )
         assertTrue(
             "must point at the tree the app installs",
-            stdio.contains("ReaManager.GHIDRA_ROOT"),
+            command.contains("GHIDRA_ROOT"),
         )
+        for (path in listOf(
+            "app/src/main/kotlin/com/altaris/linux/core/rea/ReaStdio.kt",
+            "app/src/main/kotlin/com/altaris/linux/core/rea/ReaBridge.kt",
+        )) {
+            assertTrue(
+                "$path must use the shared launch command",
+                readSource(path).contains("ReaManager.mcpLaunchCommand()"),
+            )
+        }
     }
 
     /**
