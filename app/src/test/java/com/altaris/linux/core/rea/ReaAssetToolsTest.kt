@@ -748,19 +748,16 @@ class ReaAssetToolsTest {
             "must not run a substring process match as a command",
             frida.contains("RootShell.captureResult(\"pkill -f frida-server"),
         )
-        assertTrue(
-            "must match the process name exactly",
-            frida.contains("do c=$(cat \"\$p/comm\" 2>/dev/null); " +
-                "[ \"\$c\" = " + " SERVER_NAME"),
-        )
-        assertTrue(
-            "must read /proc",
-            frida.contains("for p in /proc/[0-9]*"),
-        )
-        assertTrue(
-            "must kill the pid it matched",
-            frida.contains("kill -TERM"),
-        )
+
+        // The shape of the fix: read /proc/<pid>/comm and compare the whole
+        // string, never a substring of a command line.
+        val kill = frida.substringAfter("private const val KILL_SCRIPT =")
+            .substringBefore("    /** Stop frida-server.")
+        assertTrue("must iterate /proc", kill.contains("for p in /proc/[0-9]*"))
+        assertTrue("must read the process name", kill.contains("/comm"))
+        assertTrue("must compare by exact string", kill.contains("[ \"\$c\" = "))
+        assertTrue("must kill the pid it matched", kill.contains("kill -TERM"))
+        assertTrue("must reference the server name", kill.contains("SERVER_NAME"))
     }
 
     /**
