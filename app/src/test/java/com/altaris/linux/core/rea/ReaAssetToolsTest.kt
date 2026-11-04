@@ -757,8 +757,8 @@ class ReaAssetToolsTest {
         assertTrue("must read the process name", kill.contains("/comm"))
         assertTrue(
             "must compare by exact string",
-            kill.substringAfter("c=").substringBefore(";") != "",
-            kill.contains("[ \"\$c\" = " + "SERVER_NAME"),
+            (kill.substringAfter("c=").substringBefore(";") != "") &&
+                kill.contains("[ \"\$c\" = " + "SERVER_NAME"),
         )
         assertTrue("must kill the pid it matched", kill.contains("kill -TERM"))
         assertTrue("must reference the server name", kill.contains("SERVER_NAME"))
