@@ -1143,6 +1143,23 @@ object ReaManager {
         if (pid == null) {
             return@withContext GuestExec.Result(-1, "Not attached.")
         }
+        // Never inject into anything but a clone.
+        //
+        // frida-server runs as root, so it will happily attach to a system
+        // process if a command names one — and injecting into SystemUI or a
+        // running system app is what made the device crash: the agent crashed
+        // the UI process, screenshots and downloads stopped, and the whole
+        // phone looked broken. The PID is checked on every command, not only at
+        // attach, because a script can enumerate and spawn other processes.
+        if (!isAttachedPidAClone(pid)) {
+            _attachedPid = null
+            return@withContext GuestExec.Result(
+                -1,
+                "Refusing to run a command against pid " + pid +
+                    ": it is not a clone. The debugger only touches apps running " +
+                    "in a clone, never a real app on this device.",
+            )
+        }
         ReaFrida.touch()
         if (ReaFrida.isServerRunning()) {
             // A `$` prefix means "this is JavaScript"; anything else is a gdb
@@ -1169,6 +1186,36 @@ object ReaManager {
 
     @Volatile
     private var _attachedPid: Int? = null
+
+    /**
+     * True when [pid] is a process belonging to a clone.
+     *
+     * The attach path already refuses a non-clone target, but the *server* is
+     * root and will inject into whatever it is pointed at. Checking the live
+     * PID on every command is what stops a script — or a stale attach — from
+     * touching SystemUI, the launcher, or any real app on the device. Those
+     * injections are not recoverable: the process crashes, and with it go
+     * screenshots, downloads and the UI.
+     */
+    private fun isAttachedPidAClone(pid: Int): Boolean {
+        if (pid <= 0) return false
+        // Which package does this PID belong to?
+        val name = runCatching {
+            val raw = RootShell.captureResult(
+                "cat /proc/" + pid + "/cmdline 2>/dev/null",
+                10_000L,
+            ).stdout
+            firstArg(raw.toByteArray(Charsets.UTF_8))
+        }.getOrNull().orEmpty()
+        if (name.isBlank() || !isPackageName(name)) return false
+        val pkg = name.substringBefore(':')
+        // A clone, by registry or by the engine's prefix.
+        if (clonePackages().any { it == pkg }) return true
+        return pkg.startsWith(CLONE_PACKAGE_PREFIX)
+    }
+
+    /** Prefix the clone engine gives every clone it installs. */
+    private const val CLONE_PACKAGE_PREFIX = "com.altaris.apps."
 
     /** Record the attached PID, so the console commands reach the same process. */
     fun rememberAttachedPid(pid: Int?) {

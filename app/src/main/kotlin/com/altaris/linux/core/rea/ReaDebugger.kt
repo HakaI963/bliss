@@ -265,6 +265,21 @@ object ReaDebugger {
         _state.value = _state.value.copy(fridaRunning = state.serverRunning)
     }
 
+    /**
+     * End the whole session: detach, then stop the server.
+     *
+     * One button, because "stop" means the same thing to a user whether the
+     * process is attached or the daemon is merely resident — and leaving the
+     * daemon up after a detach was the battery drain in the first place.
+     */
+    suspend fun stopAll(context: Context) = withContext(Dispatchers.IO) {
+        if (_state.value.attachedPid != null) {
+            runCatching { detach(context) }
+        }
+        stopFrida(context)
+        _state.value = _state.value.copy(attachedPid = null, target = "")
+    }
+
     /** Clear the console. */
     fun clear() {
         _state.value = _state.value.copy(transcript = "", error = "")

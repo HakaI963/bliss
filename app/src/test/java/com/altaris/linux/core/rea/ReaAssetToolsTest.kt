@@ -610,6 +610,129 @@ class ReaAssetToolsTest {
         )
     }
 
+    /**
+     * The Frida CLI install must report pip's real error.
+     *
+     * The probe appended "CLIENT_MISSING" to the log, and the failure message
+     * reported the last line — so every failure read "tried: pip. Last line:
+     * CLIENT_MISSING" and the actual cause was discarded.
+     */
+    @Test
+    fun theFridaClientFailureNamesItsCause() {
+        val frida = readSource("app/src/main/kotlin/com/altaris/linux/core/rea/ReaFrida.kt")
+        val client = frida.substringAfter("suspend fun installClient(")
+            .substringBefore("suspend fun state(")
+        assertTrue(
+            "the probe must not append its own status to the log",
+            !client.contains("fun present(): Boolean =\n                run("),
+        )
+        assertTrue(
+            "must not report the probe's word as the reason",
+            !client.contains("\"Last line: \""),
+        )
+        assertTrue(
+            "must filter the probe's marker out of the reason",
+            client.contains("CLIENT_MISSING"),
+        )
+        // frida-tools is an sdist with no build-system table, so pip's legacy
+        // path needs setuptools and wheel; a minimal rootfs has neither.
+        assertTrue(
+            "must install the legacy sdist build requirements",
+            client.contains("python3-setuptools") && client.contains("python3-wheel"),
+        )
+    }
+
+    /**
+     * The gadget must not block app startup.
+     *
+     * `on_load: wait` freezes the app until a client connects — a clone built
+     * with the gadget sat on a black screen, which is the "no-root frida is
+     * broken" report. `resume` lets the app start and waits in the background.
+     */
+    @Test
+    fun theGadgetDoesNotBlockAppStartup() {
+        val gadget = readSource("app/src/main/kotlin/com/altaris/linux/core/rea/FridaGadget.kt")
+        assertTrue("must listen on loopback", gadget.contains("\"address\": \"127.0.0.1\""))
+        assertTrue(
+            "must resume rather than wait on load",
+            gadget.contains("\"on_load\": \"resume\""),
+        )
+        assertTrue(
+            "wait would hang the app",
+            !gadget.contains("\"on_load\": \"wait\""),
+        )
+    }
+
+    /**
+     * A console command must never be run against a non-clone.
+     *
+     * frida-server is root, so it will inject into SystemUI or any real app if
+     * pointed at one — which crashed the device's UI and took screenshots and
+     * downloads with it. The guard is checked per command, not only at attach.
+     */
+    @Test
+    fun everyDebuggerCommandRechecksThatTheTargetIsAClone() {
+        val manager = readSource("app/src/main/kotlin/com/altaris/linux/core/rea/ReaManager.kt")
+        val command = manager.substringAfter("suspend fun debuggerCommand(")
+            .substringBefore("@Volatile")
+        assertTrue(
+            "must verify the attached pid is a clone",
+            command.contains("isAttachedPidAClone(pid)"),
+        )
+        assertTrue(
+            "must refuse and detach rather than inject",
+            command.contains("Refusing to run a command against pid"),
+        )
+        val guard = manager.substringAfter("private fun isAttachedPidAClone(")
+            .substringBefore("/** Prefix the clone engine")
+        assertTrue("must resolve the pid's package", guard.contains("/cmdline"))
+        assertTrue("must accept registry clones", guard.contains("clonePackages()"))
+        assertTrue("must accept the engine prefix", guard.contains("CLONE_PACKAGE_PREFIX"))
+    }
+
+    /**
+     * The Debugger tab must show live state and offer a Stop.
+     *
+     * It refreshed once on open, so the Frida row could read "Install" while
+     * the server was running, and there was no way to stop a session from the
+     * UI at all.
+     */
+    @Test
+    fun theDebuggerTabPollsAndOffersStop() {
+        val screen = readSource("app/src/main/kotlin/com/altaris/linux/ui/screens/ReaScreen.kt")
+        val tab = screen.substringAfter("private fun DebuggerTab(")
+            .substringBefore("// --------------------------------------------------------------------- other")
+        assertTrue(
+            "must poll so the state stays honest",
+            tab.contains("delay(2_000L)"),
+        )
+        assertTrue(
+            "must offer a Stop control",
+            tab.contains("ReaDebugger.stopAll("),
+        )
+        assertTrue(
+            "must show the backend state",
+            tab.contains("\"Backend\""),
+        )
+    }
+
+    /** REA tools start the server instead of dead-ending on "not running". */
+    @Test
+    fun theReaToolsStartTheServerThemselves() {
+        val mcp = readSource("app/src/main/kotlin/com/altaris/linux/core/control/McpProtocol.kt")
+        assertTrue("must have an auto-start helper", mcp.contains("private fun ensureReaRunning("))
+        val call = mcp.substringAfter("\"altaris_rea_call\" ->")
+            .substringBefore("\"altaris_rea_agents\" ->")
+        assertTrue(
+            "a tool call must start REA rather than refuse",
+            call.contains("ensureReaRunning()"),
+        )
+        assertTrue(
+            "must not tell the agent to start it",
+            !call.contains("throw IllegalStateException(\"REA is not running"),
+        )
+    }
+
     private fun readAsset(path: String): String {
         val candidates = listOf(
             "app/src/main/assets/$path",

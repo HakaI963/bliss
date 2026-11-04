@@ -58,8 +58,14 @@ object FridaGadget {
     /**
      * The gadget config written next to the library.
      *
-     * `listen` makes it wait for a client on a Unix socket owned by the app, so
-     * the CLI reaches it without a network port and without root.
+     * `listen` makes it wait for a client on loopback, so the CLI reaches it
+     * without a network port and without root.
+     *
+     * `on_load` must be **resume**, not `wait`. With `wait` the gadget blocks
+     * the app's startup until a client connects — so a clone built with the
+     * gadget hangs on a black screen until someone attaches, which is exactly
+     * "no-root frida is broken, the app just sits there". `resume` lets the app
+     * start normally and the gadget waits for a session in the background.
      */
     val CONFIG_JSON: String = """
         {
@@ -67,7 +73,7 @@ object FridaGadget {
             "type": "listen",
             "address": "127.0.0.1",
             "port": 27043,
-            "on_load": "wait"
+            "on_load": "resume"
           }
         }
     """.trimIndent()

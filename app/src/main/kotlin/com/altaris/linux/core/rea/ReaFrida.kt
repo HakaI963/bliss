@@ -246,11 +246,24 @@ object ReaFrida {
                     .getOrNull()
                     .also { log.append(it?.output.orEmpty()) }
 
+            // Only a command check: the result is the answer, not a log line.
+            //
+            // This used to run through [run], so every probe appended its own
+            // "CLIENT_MISSING" to the log — and the failure message reported
+            // the *last* line, which was always that word. The real pip error
+            // was thrown away, which is why the report said only
+            // "tried: pip. Last line: CLIENT_MISSING".
             fun present(): Boolean =
-                run("command -v frida >/dev/null 2>&1 && echo CLIENT_OK || echo CLIENT_MISSING",
-                    60_000L)?.output?.contains("CLIENT_OK") == true
+                runCatching {
+                    GuestExec.run(
+                        app,
+                        distroId,
+                        "command -v frida >/dev/null 2>&1 && echo CLIENT_OK || echo CLIENT_MISSING",
+                        60_000L,
+                    )
+                }.getOrNull()?.output?.contains("CLIENT_OK") == true
 
-            // 1. pip, installing it first if the distro ships python3 without it.
+            // pip, installing it first if the distro ships python3 without it.
             //
             // "No module named pip" is normal on a minimal rootfs: python3 is
             // there, pip is a separate package. The first version called
@@ -274,7 +287,37 @@ object ReaFrida {
             if (present()) {
                 return@withContext State(clientInstalled = true)
             }
+
+            // frida-tools is an sdist with no build-system table, so pip takes
+            // its legacy path and needs setuptools and wheel. A minimal Debian
+            // rootfs has neither — python3-pip no longer pulls them — and the
+            // install then fails with a message that names neither package.
+            // They are cheap and needed for any legacy sdist, so provide them.
+            if (manager.isNotBlank() && manager != "none") {
+                val buildPkgs = when (manager) {
+                    "apt" -> listOf("python3-setuptools", "python3-wheel")
+                    "apk" -> listOf("py3-setuptools", "py3-wheel")
+                    "dnf" -> listOf("python3-setuptools", "python3-wheel")
+                    "pacman" -> listOf("python-setuptools", "python-wheel")
+                    else -> emptyList()
+                }
+                if (buildPkgs.isNotEmpty()) {
+                    run(
+                        ReaManager.packageInstallScript(manager, buildPkgs),
+                        15 * 60_000L,
+                    )
+                }
+            }
             run("python3 -m pip install --break-system-packages --root-user-action=ignore -q frida-tools 2>&1 | tail -8")
+            if (present()) {
+                return@withContext State(clientInstalled = true)
+            }
+            // The CLI is only a wrapper around the binding; install the binding
+            // alone when the tools package cannot be built. `frida -H host:port`
+            // is then reached through `python3 -m frida_tools` if that exists,
+            // but the binary check above needs the console script, so a bare
+            // binding is reported honestly as missing rather than pretended.
+            run("python3 -m pip install --break-system-packages --root-user-action=ignore -q frida 2>&1 | tail -5")
             if (present()) {
                 return@withContext State(clientInstalled = true)
             }
@@ -296,21 +339,31 @@ object ReaFrida {
                 }
             }
 
-            // Name what was tried. "CLIENT MISSING" alone says nothing about
-            // whether pip was absent, the network failed, or the distro simply
-            // has no frida package.
+            // Name what was tried, and show pip's own error.
+            //
+            // "Last line" used to be the last line of the whole log — which the
+            // probe itself appended ("CLIENT_MISSING"), so the real cause was
+            // always overwritten by the word that meant "not found yet".
             val tried = buildList {
                 add("pip")
                 if (distroPackage.isNotBlank()) add(distroPackage)
             }.joinToString(" or ")
+            val reason = log.toString().lines()
+                .map { it.trim() }
+                .filter { it.isNotEmpty() }
+                .filterNot { it == "CLIENT_MISSING" || it == "CLIENT_OK" }
+                .lastOrNull { line ->
+                    line.contains("ERROR", ignoreCase = true) ||
+                        line.contains("error:", ignoreCase = true) ||
+                        line.contains("No module", ignoreCase = true) ||
+                        line.contains("Could not", ignoreCase = true)
+                }
+                .orEmpty()
             State(
                 clientInstalled = false,
                 error = "could not install the frida CLI in " + distroId +
-                    " (tried: " + tried + "). Last line: " +
-                    log.toString().trim().lines()
-                        .lastOrNull { it.isNotBlank() }
-                        .orEmpty()
-                        .ifBlank { "no output" },
+                    " (tried: " + tried + ")." +
+                    (if (reason.isBlank()) "" else " Reason: " + reason.take(200)),
             )
         }
 

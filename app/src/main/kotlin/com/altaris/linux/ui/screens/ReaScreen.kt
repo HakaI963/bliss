@@ -80,6 +80,7 @@ import com.altaris.linux.ui.theme.Prism
 import com.altaris.linux.ui.theme.altarisMutedText
 import com.altaris.linux.ui.theme.sectionAccent
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -1098,8 +1099,17 @@ private fun DebuggerTab(accent: Color) {
     val scope = rememberCoroutineScope()
     val session by ReaDebugger.state.collectAsState()
 
+    // Poll, do not read once.
+    //
+    // This was a single refresh on open, so every row kept whatever the state
+    // was when the tab appeared: the Frida row could say "Install" while the
+    // server was running, and nothing ever showed it stopping. A two-second
+    // poll is cheap (two root process checks) and makes the tab honest.
     LaunchedEffect(Unit) {
-        withContext(Dispatchers.IO) { ReaDebugger.refresh(context) }
+        while (true) {
+            withContext(Dispatchers.IO) { ReaDebugger.refresh(context) }
+            delay(2_000L)
+        }
     }
 
     PrismCard(accent = accent, modifier = Modifier.fillMaxSize()) {
@@ -1117,6 +1127,51 @@ private fun DebuggerTab(accent: Color) {
         PrismNote(
             "The agent attaches, inspects and detaches. This tab shows its session.",
             fontSize = 9.sp,
+        )
+        Spacer(Modifier.height(4.dp))
+
+        // The backend, at a glance, with the control that matters.
+        //
+        // The old tab only showed a row per backend, and the chip's label was
+        // the only indicator — it went stale because the tab read the state
+        // once. This line says what is running right now, and carries an
+        // explicit Stop, so a session can be ended from the UI instead of only
+        // from an agent call.
+        val backendLabel = when {
+            session.fridaBusy.isNotBlank() -> session.fridaBusy
+            session.fridaRunning -> "frida-server running on 127.0.0.1:" +
+                com.altaris.linux.core.rea.ReaFrida.PORT
+            session.gadgetReady -> "Gadget ready (no root)"
+            session.available -> "Backend available"
+            else -> session.reason.ifBlank { "No debugger backend" }
+        }
+        PrismRow(
+            title = "Backend",
+            subtitle = backendLabel,
+            accent = accent,
+            leading = {
+                PrismOrb(
+                    active = session.fridaRunning || session.attachedPid != null,
+                    accent = accent,
+                )
+            },
+            trailing = {
+                if (session.fridaRunning || session.attachedPid != null) {
+                    PrismChip(
+                        "Stop",
+                        accent,
+                        selected = true,
+                        onClick = {
+                            if (session.fridaBusy.isNotBlank()) return@PrismChip
+                            scope.launch {
+                                withContext(Dispatchers.IO) { ReaDebugger.stopAll(context) }
+                            }
+                        },
+                    )
+                } else {
+                    null
+                }
+            },
         )
         Spacer(Modifier.height(4.dp))
 

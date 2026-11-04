@@ -618,8 +618,11 @@ object McpProtocol {
         }
         "altaris_rea_stop" -> textResult(reaStatusJson(runBlocking { ReaManager.stop() }))
         "altaris_rea_tools" -> {
-            val tools = ReaManager.cachedTools()
-                ?: throw IllegalStateException("REA is not running. Call altaris_rea_start first.")
+            val tools = runBlocking { ensureReaRunning() }?.let { ReaManager.cachedTools() }
+                ?: throw IllegalStateException(
+                    "REA is not running and could not be started. Install it from " +
+                        "Tools → Reverse engineering first."
+                )
             textResult(JSONObject().put("ok", true).put("count", tools.length()).put("tools", tools))
         }
         "altaris_rea_call" -> {
@@ -627,6 +630,13 @@ object McpProtocol {
                 ?: throw IllegalArgumentException("name is required")
             val arguments = args.optJSONObject("arguments") ?: JSONObject()
             val timeout = args.optLong("timeoutMs", 600_000L).coerceIn(5_000L, 3_600_000L)
+            // Start REA rather than telling the agent to.
+            //
+            // "REA is not running. Call altaris_rea_start first" is a dead end
+            // for an agent that was told to analyse something: it is one call
+            // away, exactly like launching a clone. An explicit start is still
+            // available; this only removes the pointless failure.
+            ensureReaRunning()
             runBlocking { ReaManager.call(tool, arguments, timeout) }
         }
         "altaris_rea_agents" -> {
@@ -811,6 +821,23 @@ object McpProtocol {
 
     private fun reaTargetDistro(ctx: android.content.Context): String? =
         com.altaris.linux.core.rea.ReaDistro.activeTarget(ctx)?.id
+
+    /**
+     * Make sure REA's stdio server is up, starting it when it is not.
+     *
+     * An agent told to analyse something should not have to be told to start
+     * the server first — it is one call away, and the alternative is the dead
+     * end "REA is not running. Call altaris_rea_start first", which reads as
+     * "this does not work here". Returns the status, or null when there is no
+     * distro to start it in.
+     */
+    private fun ensureReaRunning(): ReaManager.Status? {
+        val ctx = ControlServer.context() ?: return null
+        if (ReaManager.status.value.running) return ReaManager.status.value
+        val distro = reaTargetDistro(ctx) ?: return null
+        return runCatching { runBlocking { ReaManager.start(ctx, distro) } }.getOrNull()
+            ?.takeIf { it.running }
+    }
 
     private fun reaStatusJson(status: ReaManager.Status): JSONObject {
         val available = JSONArray()
