@@ -117,19 +117,14 @@ class ReaCatalogTest {
                 "$id on dnf must be routed to the archive installer",
                 ReaCatalog.usesArchive(dep, "dnf"),
             )
-            // The package path must win only where the distro actually ships
-            // it. jadx is absent from Debian 13 (bookworm/bullseye/sid only),
-            // so it is archive-routed on apt as well; apktool is packaged.
-            when (id) {
-                "jadx" -> assertTrue(
-                    "jadx is not in Debian 13, so apt must route to the archive",
-                    ReaCatalog.usesArchive(dep, "apt"),
-                )
-                else -> assertFalse(
-                    "$id is packaged on Debian, so apt must not use the archive",
-                    ReaCatalog.usesArchive(dep, "apt"),
-                )
-            }
+            // apktool is archive-routed on every manager now, on purpose:
+            // distro packages are older than 2.9.2 (CVE-2024-21633) and
+            // Debian's is a "dirty" build. jadx is absent from Debian 13, so
+            // it was already archive-routed there.
+            assertTrue(
+                "$id must route to the archive on apt",
+                ReaCatalog.usesArchive(dep, "apt"),
+            )
         }
     }
 

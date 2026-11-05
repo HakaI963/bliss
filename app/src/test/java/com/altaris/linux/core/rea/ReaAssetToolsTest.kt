@@ -579,13 +579,20 @@ class ReaAssetToolsTest {
             "must capture npm's own output",
             script.contains("NPM_LOG"),
         )
+        // The failure text was rewritten: the old one assumed npm's exit code
+        // told the truth. It does not — npm exits 0 with no native binding —
+        // so the message now names the binding and the import error instead.
         assertTrue(
             "must name the failure",
-            script.contains("ERROR: npm could not install frida@"),
+            script.contains("ERROR: the frida Node binding could not be installed"),
         )
         assertTrue(
-            "must report an import that fails after a successful install",
-            script.contains("installed but does not import"),
+            "must report the native binding state",
+            script.contains("native binding"),
+        )
+        assertTrue(
+            "must show the import error",
+            script.contains("import error"),
         )
     }
 

@@ -133,7 +133,12 @@ class ReaInstallRegressionTest {
         // Its own script, because an installed core is never re-run: the fix
         // has to be callable for a tree that predates it.
         val module = readAsset("scripts/rea/rea-frida-module.sh")
-        assertTrue("must install into the REA tree", module.contains("--prefix \"\$BASE/npm\""))
+        // Installed from REA's own directory now, so Node resolves it from the
+        // place the server actually imports it.
+        assertTrue(
+            "must install into REA's tree",
+            module.contains("cd \"\$AGENT_DIR\""),
+        )
         assertTrue(
             "must prefer the version REA declares",
             module.contains("optionalDependencies"),
@@ -146,12 +151,12 @@ class ReaInstallRegressionTest {
         // A missing frida must not fail the whole core install: static analysis
         // tools do not need it, and a hard failure would leave REA uninstalled.
         assertTrue(
-            "must name npm's failure",
-            module.contains("ERROR: npm could not install frida@"),
+            "must name the binding failure",
+            module.contains("ERROR: the frida Node binding could not be installed"),
         )
         assertTrue(
-            "must warn what stops working",
-            module.contains("will report capability_unavailable"),
+            "must say static analysis still works",
+            module.contains("static tools are unaffected"),
         )
         // A partial install must be replaced, not left broken.
         assertTrue(
