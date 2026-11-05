@@ -254,24 +254,24 @@ class ReaChrootRootfsAndOwnershipTest {
         val rea = readSource(
             "app/src/main/kotlin/com/altaris/linux/ui/screens/ReaScreen.kt"
         )
-        val poll = rea.substringAfter("LaunchedEffect(Unit) {")
-            .substringBefore("Column(")
+        // The poll loop is lifecycle-aware now (PollEffect) and always
+        // shallow; the single deep read lives in its own LaunchedEffect.
+        // Stop at the closing of the poll block, before the deep-read effect.
+        val poll = rea.substringAfter("PollEffect(intervalMs = 15_000L)")
+            .substringBefore("// One deep read")
         assertTrue(
             "the REA poll must refresh",
-            poll.contains("ReaDistro.refresh(context, deep = first)"),
+            poll.contains("ReaDistro.refresh(context, deep = false)"),
         )
         // Exactly one deep read, on open; every later tick must be shallow or
         // the poll walks the rootfs and forks su again.
         assertTrue(
             "the first read is deep",
-            poll.contains("var first = true"),
+            rea.contains("ReaDistro.refresh(context, deep = true)"),
         )
-        assertTrue(
-            "the deep read is switched off after the first tick",
-            poll.contains("first = false"),
-        )
+        // The poll never asks for a deep read: that is a separate effect.
         assertFalse(
-            "a tick must never re-request the deep read unconditionally",
+            "a tick must never re-request the deep read",
             poll.contains("deep = true"),
         )
     }

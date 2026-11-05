@@ -70,7 +70,7 @@ class ReaServerAlwaysOnTest {
             "the Tools card must ensure the server",
             tools.contains("ReaBridge.ensureRunning(context)"),
         )
-        assertTrue("it must keep polling", tools.contains("while (true)"))
+        assertTrue("it must keep polling", tools.contains("PollEffect("))
 
         val rea = readSource(
             "app/src/main/kotlin/com/altaris/linux/ui/screens/ReaScreen.kt"
@@ -79,7 +79,7 @@ class ReaServerAlwaysOnTest {
             "the REA screen must ensure the server",
             rea.contains("ReaBridge.ensureRunning(context)"),
         )
-        assertTrue("it must keep polling too", rea.contains("while (true)"))
+        assertTrue("it must keep polling too", rea.contains("PollEffect("))
     }
 
     /**

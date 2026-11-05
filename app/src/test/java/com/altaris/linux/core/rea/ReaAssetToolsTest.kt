@@ -704,7 +704,7 @@ class ReaAssetToolsTest {
             .substringBefore("// --------------------------------------------------------------------- other")
         assertTrue(
             "must poll so the state stays honest",
-            tab.contains("delay(2_000L)"),
+            tab.contains("PollEffect(") && tab.contains("2_000L"),
         )
         assertTrue(
             "must offer a Stop control",

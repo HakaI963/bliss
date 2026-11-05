@@ -76,7 +76,7 @@ class FileBrowserAndIdentityTest {
     fun listingDecidesTheBackendFromTheSpaceNotThePath() {
         val source = readSource("app/src/main/kotlin/com/altaris/linux/core/files/FileBrowser.kt")
         val fn = source.substringAfter("suspend fun list(")
-            .substringBefore("private fun listThroughRoot(")
+            .substringBefore("private fun listExternal(")
         assertTrue("must take the space", fn.contains("space: Space"))
         assertTrue(
             "must branch on the space",

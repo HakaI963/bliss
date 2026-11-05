@@ -217,7 +217,10 @@ class ReaTabsAndFilesTest {
         val source = readSource(
             "app/src/main/kotlin/com/altaris/linux/core/files/FileBrowser.kt"
         )
-        assertTrue("must have a root listing", source.contains("private fun listThroughRoot("))
+        assertTrue(
+            "must have a root listing",
+            source.contains("private fun listExternal("),
+        )
         assertTrue(
             "must list the external space through root",
             source.contains("if (space == Space.EXTERNAL)"),

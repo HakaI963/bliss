@@ -72,11 +72,16 @@ class ReaChrootDetectionAndKeyRepeatTest {
         val screen = readSource(
             "app/src/main/kotlin/com/altaris/linux/ui/screens/ReaScreen.kt"
         )
+        // The single deep read is its own effect now; the poll is always
+        // shallow and lifecycle-aware.
         assertTrue(
             "must do one deep read when the screen opens",
-            screen.contains("ReaDistro.refresh(context, deep = first)"),
+            screen.contains("ReaDistro.refresh(context, deep = true)"),
         )
-        assertTrue("must only do it once", screen.contains("first = false"))
+        assertTrue(
+            "the poll must stay shallow",
+            screen.contains("ReaDistro.refresh(context, deep = false)"),
+        )
     }
 
     // ---------------------------------------------------------- key repeat

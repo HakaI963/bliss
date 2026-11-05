@@ -144,7 +144,8 @@ class ReaCoreAndArchiveTest {
             "the screen must keep ensuring the server",
             screen.contains("ReaBridge.ensureRunning(context)"),
         )
-        assertTrue("it must loop", screen.contains("while (true)"))
+        // It keeps retrying, through the lifecycle-aware poll.
+        assertTrue("it must loop", screen.contains("PollEffect("))
         assertFalse(
             "there must be no Start button",
             screen.contains("\"Start\""),
