@@ -321,7 +321,7 @@ object AltarisDoctor {
      */
     private suspend fun fridaEntry(context: Context): JSONObject {
         val state = ReaDebugger.state.value
-        val node = ReaManager.fridaNodeStatus()
+        val node = ReaManager.fridaNodeStatus(context)
         val parts = ArrayList<String>()
         if (state.fridaRunning) parts.add("server running") else parts.add("server stopped")
         if (state.fridaClient) parts.add("CLI present") else parts.add("CLI missing")
