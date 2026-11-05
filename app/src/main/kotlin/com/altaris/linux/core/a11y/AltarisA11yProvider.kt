@@ -5,6 +5,7 @@ import android.content.ContentValues
 import android.database.Cursor
 import android.net.Uri
 import android.os.Bundle
+import android.view.Display
 import org.json.JSONObject
 
 /**
@@ -73,6 +74,11 @@ class AltarisA11yProvider : ContentProvider() {
                 "scroll" -> service.scrollDetailed(
                     arg.orEmpty(),
                     extras?.getBoolean("forward", true) ?: true,
+                )
+                "screenshot" -> service.captureScreenshot(
+                    extras?.getInt("display", Display.DEFAULT_DISPLAY)
+                        ?: Display.DEFAULT_DISPLAY,
+                    extras?.getString("path").orEmpty(),
                 )
                 "gesture" -> service.gestureDetailed(
                     extras?.getInt("display", -1) ?: -1,

@@ -187,6 +187,24 @@ object A11yBridge {
     }
 
     /**
+     * Capture the physical display through the accessibility service.
+     *
+     * The clone engine can only capture a clone's virtual display; this is the
+     * path for the phone's own screen. Returns the service's JSON, which on
+     * success carries `file`, `width`, `height`, `display` and `method`.
+     */
+    fun screenshot(context: Context, displayId: Int, outPath: String): String =
+        call(
+            context,
+            "screenshot",
+            null,
+            Bundle().apply {
+                putInt("display", displayId)
+                putString("path", outPath)
+            },
+        )
+
+    /**
      * Enable the Altaris accessibility service.
      *
      * The privileged write is done by [A11yAutoEnable]: Shizuku first (it

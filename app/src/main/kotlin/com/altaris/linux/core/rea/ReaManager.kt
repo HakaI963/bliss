@@ -59,7 +59,7 @@ object ReaManager {
      * Change this whenever INSTRUCTIONS, ReaKnowledge, the MCP shape, the
      * Ghidra pin or the jadx pin changes.
      */
-    const val CONFIG_VERSION = "2026.11.05-1"
+    const val CONFIG_VERSION = "2026.11.05-2"
 
     /** Where the applied configuration version is recorded inside the guest. */
     const val CONFIG_STAMP = ROOT + "/.config-version"
@@ -799,7 +799,9 @@ object ReaManager {
             GuestExec.shellQuote(archive.fileName) + " " +
             GuestExec.shellQuote(archive.dir) + " " +
             GuestExec.shellQuote(probes) + " " +
-            GuestExec.shellQuote(launcher)
+            GuestExec.shellQuote(launcher) + " " +
+            archive.minBytes + " " +
+            GuestExec.shellQuote(archive.sha256)
         val result = GuestExec.run(app, distroId, script, timeoutMs = 30 * 60_000L) { line(it) }
         val detail = result.output.lines()
             .map { it.trim() }
@@ -1517,6 +1519,93 @@ object ReaManager {
             line("warning: REA's runtime-hook tools may report capability_unavailable until the frida module installs")
         }
     }
+
+    // --------------------------------------------------------------- frida
+
+    /**
+     * The Node `frida` binding, as REA's own tree sees it.
+     *
+     * This is the thing that actually decides whether REA's hook tools work,
+     * and it is not the same as "frida is installed":
+     *
+     *  - the **server** is a host binary run as root;
+     *  - the **CLI** is a Python package inside the distro;
+     *  - the **binding** is an optional npm dependency inside rea-agents.
+     *
+     * The first two can both be present while the third is missing, and then
+     * every hook tool answers `capability_unavailable` with no hint why. This
+     * probes the binding directly by importing it from the directory Node
+     * resolves from.
+     */
+    data class FridaNode(
+        val installed: Boolean = false,
+        val importable: Boolean = false,
+        val version: String = "",
+        val declared: String = "",
+        val nodeVersion: String = "",
+        val platform: String = "",
+        val arch: String = "",
+        val detail: String = "",
+        val repair: String = "",
+    )
+
+    /** Probe the Node binding. Cheap enough to call from a diagnostic. */
+    suspend fun fridaNodeStatus(ctx: Context, distroId: String? = null): FridaNode =
+        withContext(Dispatchers.IO) {
+            val app = ctx.applicationContext
+            val distro = distroId
+                ?: runCatching { ReaDistro.distroId(app) }.getOrNull()
+                ?: return@withContext FridaNode(detail = "no distro selected for REA")
+            val script = listOf(
+                "set +e",
+                "BASE=" + ROOT,
+                "NODE=\"\$BASE/node/bin/node\"",
+                "[ -x \"\$NODE\" ] || NODE=\$(command -v node 2>/dev/null)",
+                "[ -n \"\$NODE\" ] || { echo node=; exit 0; }",
+                "echo node=\$(\"\$NODE\" -v 2>/dev/null)",
+                "echo platform=\$(\"\$NODE\" -p \"process.platform + ' ' + process.arch\" 2>/dev/null)",
+                "AGENT=\"\$BASE/npm/lib/node_modules/rea-agents\"",
+                "if [ -d \"\$AGENT\" ]; then echo agent=1; else echo agent=0; fi",
+                "echo declared=\$(\"\$NODE\" -e \"try{const p=require('\$AGENT/package.json');const d=p.dependencies||{},o=p.optionalDependencies||{},pe=p.peerDependencies||{};console.log(o.frida||d.frida||pe.frida||'')}catch(e){console.log('')}\" 2>/dev/null | tail -n1)",
+                "if [ -d \"\$BASE/npm/lib/node_modules/frida\" ]; then echo present=1; else echo present=0; fi",
+                "if ( cd \"\$AGENT\" 2>/dev/null && \"\$NODE\" --input-type=module -e \"import('frida')\" ) >/dev/null 2>&1; then echo importable=1; else echo importable=0; fi",
+                "V=\$( cd \"\$AGENT\" 2>/dev/null && \"\$NODE\" -p \"try{require('frida/package.json').version}catch(e){''}\" 2>/dev/null )",
+                "echo version=\$V",
+            ).joinToString("\n")
+            val result = runCatching {
+                GuestExec.run(app, distro, script, timeoutMs = 60_000L)
+            }.getOrNull() ?: return@withContext FridaNode(detail = "could not run the probe")
+            val values = HashMap<String, String>()
+            for (line in result.output.lines()) {
+                val t = line.trim()
+                if (!t.contains('=')) continue
+                values[t.substringBefore('=')] = t.substringAfter('=').trim()
+            }
+            val present = values["present"] == "1"
+            val importable = values["importable"] == "1"
+            val node = values["node"].orEmpty()
+            val platform = values["platform"].orEmpty()
+            val detail = when {
+                values["agent"] != "1" -> "REA is not installed in " + distro
+                importable -> "the binding imports from REA's own tree"
+                present -> "the module directory exists but 'import frida' fails"
+                else -> "the module is not installed"
+            }
+            FridaNode(
+                installed = present,
+                importable = importable,
+                version = values["version"].orEmpty(),
+                declared = values["declared"].orEmpty(),
+                nodeVersion = node,
+                platform = platform.substringBefore(' '),
+                arch = platform.substringAfter(' ', ""),
+                detail = detail,
+                repair = if (importable) "" else {
+                    "altaris_frida_install reinstalls it with optional dependencies " +
+                        "included and falls back to a source build."
+                },
+            )
+        }
 
     // --------------------------------------------------------- auto-config
 

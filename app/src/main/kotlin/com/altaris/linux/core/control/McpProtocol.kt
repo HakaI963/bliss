@@ -5,7 +5,9 @@ import android.util.Base64
 import com.altaris.linux.core.a11y.A11yBridge
 import com.altaris.linux.core.clone.HeadlessCloneEngine
 import com.altaris.linux.core.rea.ReaManager
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -74,6 +76,45 @@ object McpProtocol {
 
     private fun tools(): JSONArray = JSONArray().apply {
         put(tool("altaris_status", "Get shell/display/clone engine status.", JSONObject()))
+        put(
+            tool(
+                "altaris_plan",
+                "Classify a request and return the tool sequence that answers it. Call this " +
+                    "FIRST for anything non-trivial: it says whether the task is navigation, " +
+                    "inspection, a UI test, APK analysis, reverse engineering, runtime " +
+                    "debugging, clone testing or a multi-step investigation, and which tools " +
+                    "to use in which order. A request to open or move through an app is " +
+                    "navigation even when the app is a game.",
+                schema(
+                    "request" to "string: the user's request, verbatim",
+                    "package" to "string: target package, when already known (optional)"
+                )
+            )
+        )
+        put(
+            tool(
+                "altaris_device_screenshot",
+                "Capture the PHYSICAL device screen as a PNG file. This is not the clone " +
+                    "display — use altaris_screenshot for a running clone. Returns the file " +
+                    "path, width, height, display id and which backend was used. " +
+                    "FLAG_SECURE windows are reported, never bypassed.",
+                schema(
+                    "display" to "integer: display id (default 0, the main screen)"
+                )
+            )
+        )
+        put(
+            tool(
+                "altaris_doctor",
+                "What this build can actually do right now: device, root, Shizuku, " +
+                    "accessibility, physical screenshot, clone engine, REA, analysis tools, " +
+                    "the Frida Node binding, storage and image handoff. Each entry is " +
+                    "AVAILABLE_AND_TESTED, AVAILABLE_NOT_TESTED, MISSING_DEPENDENCY, " +
+                    "PERMISSION_REQUIRED, TARGET_UNAVAILABLE, TRANSPORT_UNAVAILABLE, " +
+                    "UNSUPPORTED or TEMPORARY_FAILURE, with the fix when something is missing.",
+                schema("deep" to "boolean: also read a real accessibility tree (default false)")
+            )
+        )
         put(
             tool(
                 "altaris_sessions",
@@ -488,6 +529,32 @@ object McpProtocol {
 
     private fun callTool(name: String, args: JSONObject): JSONObject = when (name) {
         "altaris_status" -> textResult(runBlocking { HeadlessCloneEngine.apiStatus() })
+        "altaris_plan" -> {
+            val request = args.optString("request").ifBlank {
+                throw IllegalArgumentException("request is required")
+            }
+            val plan = TaskRouter.classify(request)
+            textResult(planJson(plan, args.optString("package").takeIf { it.isNotBlank() }))
+        }
+        "altaris_device_screenshot" -> {
+            val ctx = ControlServer.context() ?: throw IllegalStateException("App context unavailable")
+            textResult(
+                runBlocking {
+                    withContext(Dispatchers.IO) {
+                        com.altaris.linux.core.system.DeviceScreenshot.capture(
+                            ctx,
+                            args.optInt("display", 0),
+                        )
+                    }
+                }
+            )
+        }
+        "altaris_doctor" -> {
+            val ctx = ControlServer.context() ?: throw IllegalStateException("App context unavailable")
+            textResult(
+                runBlocking { AltarisDoctor.report(ctx, args.optBoolean("deep", false)) }
+            )
+        }
         "altaris_identity" -> {
             val ctx = ControlServer.context() ?: throw IllegalStateException("App context unavailable")
             val email = com.altaris.linux.core.agent.AgentEmail.get(ctx)
@@ -886,6 +953,34 @@ object McpProtocol {
      * device here, and the screen-based tools are the slow path.
      */
     private val INSTRUCTIONS = """
+        ## Classify the task before you act: altaris_plan
+
+        `altaris_plan { "request": "<the user's request>" }` returns the task
+        kind, whether the target is the physical device or a clone, and the
+        tool sequence in order. Call it first for anything that is not a
+        one-line question, then follow its steps.
+
+        The kind is decided by the **verb and the intended outcome**, never by
+        what sort of app the target is. That distinction is the fix for the
+        refusals: a request to "open the game and go to the shop" was being
+        read as autonomous gameplay and refused, when it is three taps and a
+        screenshot.
+
+        - Open an app, move through screens, reach a menu -> **navigation**.
+          Accessibility tree and semantic taps. No Frida, no APK analysis.
+        - Read what is on screen -> **inspection**. `altaris_ui_tree`, and
+          `altaris_device_screenshot` for appearance.
+        - Tap a button and confirm the result -> **UI test**. The confirmation
+          step is what makes it a test rather than a tap.
+        - Inspect an APK, its manifest or its classes -> **APK analysis** (REA).
+        - Find the code behind a button -> **reverse engineering** (REA).
+        - Observe a value while it runs -> **runtime debugging**.
+        - Instrument a method -> **Frida**, and only when logs and static
+          analysis cannot answer the question.
+        - Test a build in isolation -> **clone testing**.
+
+        A game is an app. Playing a level when the user asks is navigation.
+
         ## You have a device. It is this one.
 
         You are running inside Altaris on an Android device, and you can drive
@@ -901,6 +996,23 @@ object McpProtocol {
         There is no folder to search. Do not look in /sdcard, /data or anywhere
         else for an app: `altaris_clones` lists the clones, `altaris_apps` lists
         the installed apps you can clone, and `altaris_launch_clone` starts one.
+
+        ### Before you say something is impossible
+
+        1. `altaris_plan` — what kind of task is this, and which tools answer it.
+        2. `altaris_doctor` — what can this build actually do right now, and why
+           not when something is missing.
+        3. Then act on the tools that are available.
+
+        Do not claim the physical device is unreachable: `altaris_ui_tree` reads
+        its accessibility hierarchy, and `altaris_device_screenshot` captures its
+        screen. Do not require Frida for navigation. Do not require adb for
+        anything Shizuku already does. Do not stop an investigation because one
+        optional backend is missing — continue with UI, logs and static analysis,
+        and say which part you could not do and why.
+
+        A missing capability is not a failed task. It is one sentence in the
+        report.
 
         ### The test loop
 
@@ -1059,6 +1171,54 @@ object McpProtocol {
         runCatching { runBlocking { ReaManager.ensureAgentConfig(ctx, distro) } }
         return runCatching { runBlocking { ReaManager.start(ctx, distro) } }.getOrNull()
             ?.takeIf { it.running }
+    }
+
+    /**
+     * A [TaskRouter.Plan] as the agent reads it.
+     *
+     * The wording matters as much as the fields. `refused` is always false
+     * unless no tool covers the request, and the guidance says so explicitly —
+     * the refusals this replaces were not "the tool is missing", they were
+     * "the agent decided the request was something else".
+     */
+    private fun planJson(plan: TaskRouter.Plan, overridePackage: String?): JSONObject {
+        val steps = JSONArray()
+        plan.steps.forEachIndexed { index, step ->
+            steps.put(
+                JSONObject()
+                    .put("order", index + 1)
+                    .put("tool", step.tool)
+                    .put("why", step.why)
+                    .put("optional", step.optional)
+            )
+        }
+        val signals = JSONArray()
+        plan.signals.forEach { signals.put(it) }
+        val degraded = JSONArray()
+        plan.degradedBy.forEach { degraded.put(it) }
+        return JSONObject()
+            .put("ok", true)
+            .put("task", plan.kind.label)
+            .put("target", plan.target.label)
+            .put("package", overridePackage ?: plan.packageName.orEmpty())
+            .put("steps", steps)
+            .put("signals", signals)
+            .put("refused", plan.blocked)
+            .put("reason", plan.blockedReason)
+            .put(
+                "guidance",
+                if (plan.blocked) {
+                    plan.blockedReason
+                } else {
+                    plan.kind.rule + " Follow the steps in order; skip a step marked " +
+                        "optional if its capability is missing and continue with the rest."
+                },
+            )
+            .put(
+                "canProceed",
+                !plan.blocked,
+            )
+            .put("degradedBy", degraded)
     }
 
     private fun reaStatusJson(status: ReaManager.Status): JSONObject {

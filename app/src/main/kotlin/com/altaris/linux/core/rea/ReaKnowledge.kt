@@ -141,6 +141,21 @@ object ReaKnowledge {
            itself if it is not running, then attaches.
            Then `altaris_debug_command`, and `altaris_debug_detach` when done.
 
+        ## 3b.1. Looking at the screen
+
+        `altaris_ui_tree` gives structure: labels, resource ids, bounds. Use it
+        to find an element and to confirm a screen changed.
+
+        `altaris_device_screenshot` captures the **physical** display to a PNG
+        and returns the path — that is the phone's own screen. `altaris_screenshot`
+        captures a running **clone**. They are different displays; asking the
+        wrong one is why a screenshot can come back "No display frame".
+
+        Prefer the tree for deciding what to tap. Use the screenshot when the
+        question is visual (layout, an image, whether something rendered).
+        A FLAG_SECURE window cannot be captured by any tool; say so and use the
+        tree instead.
+
         ## 3c. Stop and clean up when the test is over
 
         A clone is a full installed app: it costs disk and a launcher entry.

@@ -1,6 +1,8 @@
 package com.altaris.linux.core.a11y
 
 import android.accessibilityservice.AccessibilityService
+import android.accessibilityservice.AccessibilityService.ScreenshotResult
+import android.accessibilityservice.AccessibilityService.TakeScreenshotCallback
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.accessibilityservice.GestureDescription
 import android.content.Intent
@@ -100,6 +102,104 @@ class AltarisAccessibilityService : AccessibilityService() {
             .put("windows", windowsFor(-1).size)
             .toString()
     }.getOrElse { errorJson("status failed: ${it.message}") }
+
+    /**
+     * Capture the physical display through the accessibility service.
+     *
+     * This is the API 30+ `takeScreenshot` path. It needs no root, no shell and
+     * no Shizuku — the service is already bound and the manifest declares
+     * `canTakeScreenshot`. It is also the only capture path that *respects*
+     * FLAG_SECURE: a protected window comes back blank rather than leaking
+     * pixels, which is the correct behaviour and not something to work around.
+     *
+     * Synchronous by design: the provider call is synchronous, so the callback
+     * is latched and the caller gets one JSON reply. Returns
+     * `{"ok":true,"file":path,"width":w,"height":h,"display":id,"method":"accessibility"}`
+     * or an error with the reason.
+     */
+    fun captureScreenshot(displayId: Int, outPath: String): String = runCatching {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            return@runCatching errorJson(
+                "accessibility screenshot needs Android 11 or newer (this is API " +
+                    Build.VERSION.SDK_INT + ")"
+            )
+        }
+        val latch = CountDownLatch(1)
+        var result: String? = null
+        takeScreenshot(
+            displayId,
+            mainExecutor,
+            object : TakeScreenshotCallback {
+                override fun onSuccess(screenshot: ScreenshotResult) {
+                    result = runCatching {
+                        val bitmap = android.graphics.Bitmap.wrapHardwareBuffer(
+                            screenshot.hardwareBuffer,
+                            screenshot.colorSpace,
+                        ) ?: throw IllegalStateException("the captured buffer was unreadable")
+                        val width = bitmap.width
+                        val height = bitmap.height
+                        val file = java.io.File(outPath)
+                        file.parentFile?.mkdirs()
+                        file.outputStream().use { out ->
+                            if (!bitmap.compress(
+                                    android.graphics.Bitmap.CompressFormat.PNG,
+                                    100,
+                                    out,
+                                )
+                            ) {
+                                throw IllegalStateException("PNG encoding failed")
+                            }
+                        }
+                        // A hardware bitmap holds a reference to the buffer;
+                        // releasing both is what keeps repeated captures from
+                        // exhausting the graphics allocator.
+                        bitmap.recycle()
+                        screenshot.hardwareBuffer.close()
+                        if (!file.isFile || file.length() == 0L) {
+                            throw IllegalStateException("the screenshot file is empty")
+                        }
+                        JSONObject()
+                            .put("ok", true)
+                            .put("file", file.absolutePath)
+                            .put("width", width)
+                            .put("height", height)
+                            .put("display", displayId)
+                            .put("method", "accessibility")
+                            .put("bytes", file.length())
+                            .put("at", System.currentTimeMillis())
+                            .toString()
+                    }.getOrElse { errorJson("screenshot write failed: ${it.message}") }
+                    latch.countDown()
+                }
+
+                override fun onFailure(errorCode: Int) {
+                    result = errorJson(
+                        "accessibility screenshot failed: " + screenshotError(errorCode)
+                    )
+                    latch.countDown()
+                }
+            },
+        )
+        if (!latch.await(8, TimeUnit.SECONDS)) {
+            return@runCatching errorJson("accessibility screenshot timed out")
+        }
+        result ?: errorJson("accessibility screenshot returned nothing")
+    }.getOrElse { errorJson("screenshot failed: ${it.message ?: it.javaClass.simpleName}") }
+
+    /** Human-readable reason for a `takeScreenshot` failure code. */
+    private fun screenshotError(code: Int): String = when (code) {
+        AccessibilityService.ERROR_TAKE_SCREENSHOT_INTERNAL_ERROR ->
+            "internal error in the accessibility service"
+        AccessibilityService.ERROR_TAKE_SCREENSHOT_NO_ACCESSIBILITY_ACCESS ->
+            "no accessibility access"
+        AccessibilityService.ERROR_TAKE_SCREENSHOT_INTERVAL_TIME_SHORT ->
+            "too soon after the previous capture"
+        AccessibilityService.ERROR_TAKE_SCREENSHOT_INVALID_DISPLAY ->
+            "invalid display id"
+        AccessibilityService.ERROR_TAKE_SCREENSHOT_SECURE_WINDOW ->
+            "the window is secure (FLAG_SECURE); Android does not allow capturing it"
+        else -> "error code $code"
+    }
 
     /**
      * JSON snapshot of the UI tree of [displayId].

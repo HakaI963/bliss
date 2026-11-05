@@ -23,6 +23,7 @@ LAUNCHER="$5"
 # captive-portal page through or rejects a real zipapp.
 MIN_BYTES="$6"
 case "$MIN_BYTES" in ''|*[!0-9]*) MIN_BYTES=100000 ;; esac
+EXPECTED_SHA="$7"
 
 if [ -z "$URL" ] || [ -z "$FILE" ] || [ -z "$DIR" ]; then
   echo "usage: install-archive.sh <url> <file> <dir> <probes> [launcher] [min-bytes]"
@@ -126,6 +127,21 @@ if [ "$SIZE" -lt "$MIN_BYTES" ]; then
   head -c 200 "$TMP" 2>/dev/null
   rm -f "$TMP"
   fail "download is only ${SIZE} bytes — not a release archive"
+fi
+
+# A size floor cannot catch a bit flip inside a complete file. When the caller
+# pins a digest, verify it before anything is unpacked or executed.
+if [ -n "$EXPECTED_SHA" ]; then
+  if command -v sha256sum >/dev/null 2>&1; then
+    ACTUAL=$(sha256sum "$TMP" 2>/dev/null | cut -d' ' -f1)
+    if [ "$ACTUAL" != "$EXPECTED_SHA" ]; then
+      rm -f "$TMP"
+      fail "SHA-256 mismatch for $FILE (expected $EXPECTED_SHA, got ${ACTUAL:-none})"
+    fi
+    say "sha256 verified"
+  else
+    say "warning: sha256sum is unavailable, so $FILE was only size-checked"
+  fi
 fi
 
 case "$FILE" in
