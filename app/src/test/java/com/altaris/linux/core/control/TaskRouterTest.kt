@@ -265,11 +265,19 @@ class TaskRouterTest {
         )
     }
 
+    /**
+     * Find a source file from either working directory.
+     *
+     * Gradle runs unit tests with the module directory (`app/`) as the working
+     * directory, so "app/src/..." does not resolve there while
+     * "src/main/..." does. Both forms are tried rather than assuming one.
+     */
     private fun readSource(path: String): String {
-        for (candidate in listOf(path, "../$path", "../../$path")) {
+        val relative = path.removePrefix("app/")
+        for (candidate in listOf(path, relative, "../$path", "../$relative", "../../$path")) {
             val file = File(candidate)
             if (file.isFile) return file.readText()
         }
-        throw AssertionError("source not found: $path")
+        throw AssertionError("source not found: $path (cwd=" + File(".").absolutePath + ")")
     }
 }
