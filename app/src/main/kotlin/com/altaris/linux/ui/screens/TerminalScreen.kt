@@ -15,6 +15,10 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import android.net.Uri
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.BorderStroke
@@ -77,6 +81,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -210,6 +218,7 @@ private fun TerminalScreenContent(
     // The attach sheet is separate from Tools: "send this file to the agent"
     // is an action on the session, not a tool configuration.
     var showAttachSheet by remember { mutableStateOf(false) }
+
     var shortcutConfig by remember { mutableStateOf(ShortcutBarStore.load(context)) }
     var showShortcutEditor by remember { mutableStateOf(false) }
     var showShortcutKeyEditor by remember { mutableStateOf(false) }
@@ -287,6 +296,39 @@ private fun TerminalScreenContent(
             toast("Write failed")
         }
     }
+
+    // The pickers are registered HERE, not inside the sheet.
+    //
+    // They used to be created in the sheet's composable, and opening the system
+    // picker dismisses the sheet — which unregisters the launcher before its
+    // result comes back. The callback never ran, so picking a file did nothing
+    // at all: the "import button does not work" report. A launcher must live in
+    // a composable that outlives the picker.
+    val attachScope = rememberCoroutineScope()
+    fun onAttachResult(uri: Uri?) {
+        if (uri == null) return
+        attachScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                com.altaris.linux.core.files.Attachments.save(context, uri)
+            }
+            result.onSuccess { saved ->
+                // The path is typed into the input line, not sent: the user
+                // adds the question and presses enter.
+                sendText(com.altaris.linux.core.files.Attachments.reference(saved) + " ")
+            }.onFailure {
+                toast(it.message ?: "Could not read that file")
+            }
+        }
+    }
+    val attachImagePicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia(),
+    ) { uri -> onAttachResult(uri) }
+    val attachVideoPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia(),
+    ) { uri -> onAttachResult(uri) }
+    val attachFilePicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri -> onAttachResult(uri) }
 
     fun openCard(
         type: String,
@@ -788,9 +830,22 @@ private fun TerminalScreenContent(
     if (showAttachSheet) {
         TerminalAttachSheet(
             onDismissRequest = { showAttachSheet = false },
-            // The path is typed into the shell's input line, not sent. The user
-            // adds the question and presses enter when they are ready.
-            onPicked = { path -> sendText(path + " ") },
+            onPickImage = {
+                showAttachSheet = false
+                attachImagePicker.launch(
+                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                )
+            },
+            onPickVideo = {
+                showAttachSheet = false
+                attachVideoPicker.launch(
+                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)
+                )
+            },
+            onPickFile = {
+                showAttachSheet = false
+                attachFilePicker.launch(arrayOf("*/*"))
+            },
         )
     }
 

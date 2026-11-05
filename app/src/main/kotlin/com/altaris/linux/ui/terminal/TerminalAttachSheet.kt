@@ -1,10 +1,5 @@
 package com.altaris.linux.ui.terminal
 
-import android.content.Context
-import android.net.Uri
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -13,13 +8,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.Movie
@@ -30,22 +25,13 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.altaris.linux.core.files.Attachments
-import com.altaris.linux.ui.theme.TextMuted
-import com.altaris.linux.ui.theme.TextPrimary
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 /**
  * Pick a file for the agent.
@@ -55,59 +41,32 @@ import kotlinx.coroutines.withContext
  * input line. There is no message box and no "what should the agent do" field —
  * the user types the question themselves, exactly as if they had pasted a path.
  *
- * The previous version wrapped this in its own form with a text field and a
- * Send button. That put the app between the user and their agent: the message
- * was composed for them and sent in one step, so they could not add to it or
- * edit it before it ran. A file picker should end when the file is picked.
- *
- * Three rows, because the Android picker does not have one entry point: the
- * photo picker is the right surface for images and video (it has no permission
- * prompt and shows thumbnails), and the document picker is the only thing that
- * can reach arbitrary files.
+ * Every colour comes from `MaterialTheme.colorScheme`, never from the global
+ * Frost tokens. Those tokens mirror the *app* identity, which is a white
+ * workspace with near-black ink; this sheet is drawn inside the terminal, which
+ * is dark in every identity. Using the global ink here put black text on a
+ * near-black sheet — the "text is black, we cannot even see it" report.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TerminalAttachSheet(
     onDismissRequest: () -> Unit,
-    onPicked: (text: String) -> Unit,
+    onPickImage: () -> Unit,
+    onPickVideo: () -> Unit,
+    onPickFile: () -> Unit,
 ) {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-
-    fun handle(uri: Uri?) {
-        if (uri == null) {
-            // The user backed out of the system picker; nothing to do, and the
-            // sheet should not sit there pretending something happened.
-            onDismissRequest()
-            return
-        }
-        onDismissRequest()
-        scope.launch {
-            val result = withContext(Dispatchers.IO) { Attachments.save(context, uri) }
-            result.onSuccess { onPicked(Attachments.reference(it)) }
-                .onFailure { showToast(context, it.message ?: "Could not read that file") }
-        }
-    }
-
-    val imagePicker = rememberLauncherForActivityResult(
-        ActivityResultContracts.PickVisualMedia(),
-    ) { uri -> handle(uri) }
-    val videoPicker = rememberLauncherForActivityResult(
-        ActivityResultContracts.PickVisualMedia(),
-    ) { uri -> handle(uri) }
-    val filePicker = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocument(),
-    ) { uri -> handle(uri) }
+    val scheme = MaterialTheme.colorScheme
 
     ModalBottomSheet(
         onDismissRequest = onDismissRequest,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = MaterialTheme.colorScheme.surface,
+        containerColor = scheme.surface,
+        contentColor = scheme.onSurface,
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(max = 260.dp)
+                .heightIn(max = 300.dp)
                 .padding(horizontal = 16.dp)
                 .padding(bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -116,21 +75,23 @@ fun TerminalAttachSheet(
                 "Attach a file",
                 fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = TextPrimary,
-                modifier = Modifier.padding(bottom = 4.dp),
+                color = scheme.onSurface,
+                modifier = Modifier.padding(bottom = 6.dp),
             )
+            // Dismiss before opening the picker: the sheet must not be on
+            // screen behind a system activity, and the launcher that receives
+            // the result lives in the terminal, which outlives both.
             PickerRow(Icons.Default.Image, "Image") {
-                imagePicker.launch(
-                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                )
+                onDismissRequest()
+                onPickImage()
             }
             PickerRow(Icons.Default.Movie, "Video") {
-                videoPicker.launch(
-                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)
-                )
+                onDismissRequest()
+                onPickVideo()
             }
             PickerRow(Icons.Default.InsertDriveFile, "File") {
-                filePicker.launch(arrayOf("*/*"))
+                onDismissRequest()
+                onPickFile()
             }
         }
     }
@@ -142,13 +103,14 @@ private fun PickerRow(
     label: String,
     onClick: () -> Unit,
 ) {
+    val scheme = MaterialTheme.colorScheme
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f))
+            .background(scheme.onSurface.copy(alpha = 0.06f))
             .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 12.dp),
+            .padding(horizontal = 12.dp, vertical = 13.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
@@ -158,19 +120,22 @@ private fun PickerRow(
             Icon(
                 icon,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
+                tint = scheme.primary,
                 modifier = Modifier.size(19.dp),
             )
         }
         Spacer(Modifier.width(10.dp))
-        Text(label, fontSize = 12.5.sp, color = TextPrimary)
+        Text(
+            label,
+            fontSize = 12.5.sp,
+            color = scheme.onSurface,
+        )
         Spacer(Modifier.weight(1f))
-        Text("›", fontSize = 15.sp, color = TextMuted)
-    }
-}
-
-private fun showToast(context: Context, message: String) {
-    android.os.Handler(context.mainLooper).post {
-        android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
+        Icon(
+            Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            contentDescription = null,
+            tint = scheme.onSurfaceVariant,
+            modifier = Modifier.size(16.dp),
+        )
     }
 }

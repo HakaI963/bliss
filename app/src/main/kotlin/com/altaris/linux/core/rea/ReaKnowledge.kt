@@ -111,8 +111,13 @@ object ReaKnowledge {
 
         ## 3b. The target is a clone, never a file you go looking for
 
-        Every app on this device is an Android app running in a clone. There is
-        no separate physical device and no folder you need to search.
+        **You have a device — this one.** There is no separate physical device
+        and no USB cable, and you never need either. Never answer "no device
+        connected": you can install, launch and drive an app yourself, on the
+        phone Altaris is running on.
+
+        Every app on this device is an Android app running in a clone: an
+        isolated copy with its own package, storage and virtual display.
 
         **Do not search the filesystem.** Do not look in /sdcard, /data, or
         anywhere else for a package name. If you find yourself listing
@@ -120,16 +125,36 @@ object ReaKnowledge {
 
         To work on an app:
 
-        1. `altaris_clones` — lists the clones. Pick the package from it.
+        1. `altaris_apps` — the installed apps you can clone.
+           `altaris_install_apk { "path": "/sdcard/Download/x.apk" }` installs a
+           new clone. `altaris_clones` lists the ones that already exist.
         2. `altaris_launch_clone { "package": "<pkg>" }` — starts it. You do not
            need the user to start it first, and "not running" is not a reason to
            give up: launching it is one call.
         3. `altaris_rea_clone_apk { "package": "<pkg>" }` — writes its APKs and
            native libraries somewhere known and returns the paths. Analyse those.
-        4. For runtime questions, attach:
+        4. Drive it like a tester: `altaris_screenshot`, `altaris_ui_tree`,
+           `altaris_tap`, `altaris_swipe`, `altaris_text`, `altaris_ui_tap_text`,
+           `altaris_logs`. Real input and real output on the running clone.
+        5. For runtime questions, attach:
            `altaris_debug_attach { "target": "<pkg>" }` — this starts the clone
            itself if it is not running, then attaches.
            Then `altaris_debug_command`, and `altaris_debug_detach` when done.
+
+        ## 3c. Stop and clean up when the test is over
+
+        A clone is a full installed app: it costs disk and a launcher entry.
+
+        - `altaris_stop_clone { "package": "<pkg>" }` when you finish testing.
+          Do not leave it running.
+        - `altaris_uninstall_clone { "package": "<pkg>" }` for a clone **you**
+          installed for this task. That is the normal end of the loop.
+        - A clone the user already had is theirs: stop it if you started it, but
+          do not uninstall it unless they ask.
+        - If you installed several builds while iterating, remove the older ones.
+
+        Say what you installed, what you observed, and that you stopped or
+        removed it.
 
         The debugger is the right tool when the question is about behaviour —
         what a method returns, what a value is at an address, which library is

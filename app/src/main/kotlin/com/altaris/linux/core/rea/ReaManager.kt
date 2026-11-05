@@ -59,7 +59,7 @@ object ReaManager {
      * Change this whenever INSTRUCTIONS, ReaKnowledge, the MCP shape, the
      * Ghidra pin or the jadx pin changes.
      */
-    const val CONFIG_VERSION = "2026.11.04-1"
+    const val CONFIG_VERSION = "2026.11.05-1"
 
     /** Where the applied configuration version is recorded inside the guest. */
     const val CONFIG_STAMP = ROOT + "/.config-version"

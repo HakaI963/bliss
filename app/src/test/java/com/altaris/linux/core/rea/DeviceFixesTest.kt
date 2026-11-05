@@ -301,14 +301,11 @@ class DeviceFixesTest {
         assertTrue("must open the sheet", screen.contains("TerminalAttachSheet("))
         assertTrue(
             "the path must be typed into the input line, not sent",
-            screen.contains("onPicked = { path -> sendText(path + \" \") }"),
+            screen.contains("Attachments.reference(saved) + \" \""),
         )
         val sheet = readSource(
             "app/src/main/kotlin/com/altaris/linux/ui/terminal/TerminalAttachSheet.kt"
         )
-        assertTrue("must pick an image", sheet.contains("ImageOnly"))
-        assertTrue("must pick a video", sheet.contains("VideoOnly"))
-        assertTrue("must pick any file", sheet.contains("arrayOf(\"*/*\")"))
         // No message field, no Send button: the picker ends when a file is
         // picked.
         assertFalse(
@@ -319,6 +316,94 @@ class DeviceFixesTest {
         assertFalse(
             "must not carry a message field",
             sheet.contains("OutlinedTextField"),
+        )
+        assertTrue("must offer an image row", sheet.contains("onPickImage"))
+        assertTrue("must offer a video row", sheet.contains("onPickVideo"))
+        assertTrue("must offer a file row", sheet.contains("onPickFile"))
+    }
+
+    /**
+     * The picker launchers must outlive the sheet.
+     *
+     * They were registered inside the sheet's composable. Opening the system
+     * picker dismisses the sheet, which unregisters the launcher before its
+     * result arrives — so the callback never ran and picking a file did
+     * nothing at all. That is the "import button does not work" report.
+     */
+    @Test
+    fun thePickersOutliveTheSheet() {
+        val screen = readSource(
+            "app/src/main/kotlin/com/altaris/linux/ui/screens/TerminalScreen.kt"
+        )
+        // The launchers are in the screen, above the sheet's if-block.
+        val beforeSheet = screen.substringBefore("if (showAttachSheet)")
+        assertTrue(
+            "the launchers must be registered in the terminal",
+            beforeSheet.contains("rememberLauncherForActivityResult("),
+        )
+        // The launcher objects are created there; the request type is passed
+        // to .launch() from the row that was tapped, which is fine — what must
+        // not live in the sheet is the registration itself.
+        assertTrue(
+            "must register a photo-picker launcher",
+            beforeSheet.contains("ActivityResultContracts.PickVisualMedia()"),
+        )
+        assertTrue(
+            "must register a document-picker launcher",
+            beforeSheet.contains("ActivityResultContracts.OpenDocument()"),
+        )
+        val sheet = readSource(
+            "app/src/main/kotlin/com/altaris/linux/ui/terminal/TerminalAttachSheet.kt"
+        )
+        assertFalse(
+            "the sheet must not register a launcher itself",
+            sheet.contains("rememberLauncherForActivityResult"),
+        )
+    }
+
+    /**
+     * The attach sheet must take its colours from the local scheme.
+     *
+     * It used the global Frost tokens, which mirror the app identity: a white
+     * workspace with near-black ink. The terminal is dark in every identity, so
+     * those tokens painted black text on a near-black sheet.
+     */
+    @Test
+    fun theAttachSheetUsesTheTerminalPalette() {
+        val sheet = readSource(
+            "app/src/main/kotlin/com/altaris/linux/ui/terminal/TerminalAttachSheet.kt"
+        )
+        assertTrue(
+            "must read the local scheme",
+            sheet.contains("MaterialTheme.colorScheme"),
+        )
+        assertFalse(
+            "must not use the app-identity text tokens",
+            sheet.contains("TextPrimary") || sheet.contains("TextMuted"),
+        )
+        assertTrue(
+            "the sheet surface must set its content colour",
+            sheet.contains("contentColor = scheme.onSurface"),
+        )
+    }
+
+    /**
+     * `TextMuted` must be legible text, not a border colour.
+     *
+     * It was `palette.border` — a hairline grey — and used as a text colour in
+     * 94 places. On the white page that is nearly invisible; on the terminal's
+     * dark sheet it is black on black.
+     */
+    @Test
+    fun theMutedTextTokenIsText() {
+        val theme = readSource("app/src/main/kotlin/com/altaris/linux/ui/theme/Theme.kt")
+        assertTrue(
+            "muted text must derive from a text colour",
+            theme.contains("TextMuted = palette.onSurfaceVariant"),
+        )
+        assertFalse(
+            "muted text must not be the border colour",
+            theme.contains("TextMuted = palette.border"),
         )
     }
 
@@ -383,6 +468,91 @@ class DeviceFixesTest {
         assertTrue("must name the analyzer", flat.contains("Decompiler Parameter ID"))
         assertTrue("must warn about full mode", flat.contains("\"mode\": \"full\""))
         assertTrue("must say configuration self-applies", flat.contains("re-applied automatically"))
+    }
+
+    // ------------------------------------------------------- clone workflow
+
+    /**
+     * The agent must know it has a device and a way to test on it.
+     *
+     * The report was that it answers "no device connected" and asks for a
+     * physical phone. There is no phone and no adb; clones are the test target,
+     * and the tools to install, drive and remove one already exist.
+     */
+    @Test
+    fun theInstructionsSayTheCloneIsTheDevice() {
+        val protocol = readSource(
+            "app/src/main/kotlin/com/altaris/linux/core/control/McpProtocol.kt"
+        )
+        val instructions = protocol.substringAfter("private val INSTRUCTIONS")
+            .substringBefore("private fun ensureReaRunning")
+            .replace(Regex("\\s+"), " ")
+        assertTrue(
+            "must say there is a device here",
+            instructions.contains("You have a device"),
+        )
+        assertTrue(
+            "must forbid the no-device answer",
+            instructions.contains("no device is connected"),
+        )
+        assertTrue(
+            "must name the test loop",
+            instructions.contains("altaris_install_apk") &&
+                instructions.contains("altaris_launch_clone"),
+        )
+        assertTrue(
+            "must include driving the clone",
+            instructions.contains("altaris_ui_tree") &&
+                instructions.contains("altaris_screenshot"),
+        )
+    }
+
+    /** The agent must stop the clone and remove what it installed. */
+    @Test
+    fun theInstructionsSayToCleanUpClones() {
+        val protocol = readSource(
+            "app/src/main/kotlin/com/altaris/linux/core/control/McpProtocol.kt"
+        )
+        val instructions = protocol.substringAfter("private val INSTRUCTIONS")
+            .substringBefore("private fun ensureReaRunning")
+            .replace(Regex("\\s+"), " ")
+        assertTrue(
+            "must stop the clone",
+            instructions.contains("altaris_stop_clone"),
+        )
+        assertTrue(
+            "must uninstall the clone it installed",
+            instructions.contains("altaris_uninstall_clone"),
+        )
+        assertTrue(
+            "must not remove the user's own clone",
+            instructions.contains("A clone the **user** already had is theirs"),
+        )
+    }
+
+    /** REA's own guide must say the same, since that is what it serves. */
+    @Test
+    fun theReaGuideKnowsTheCloneWorkflow() {
+        val guide = readSource(
+            "app/src/main/kotlin/com/altaris/linux/core/rea/ReaKnowledge.kt"
+        )
+        val flat = guide.replace(Regex("\\s+"), " ")
+        assertTrue(
+            "must say the device is this one",
+            flat.contains("You have a device — this one"),
+        )
+        assertTrue(
+            "must cover installing a clone",
+            flat.contains("altaris_install_apk"),
+        )
+        assertTrue(
+            "must cover stopping it",
+            flat.contains("altaris_stop_clone"),
+        )
+        assertTrue(
+            "must cover removing it",
+            flat.contains("altaris_uninstall_clone"),
+        )
     }
 
     // ---------------------------------------------------------------- updates

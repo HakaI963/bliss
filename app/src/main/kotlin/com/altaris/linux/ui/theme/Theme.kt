@@ -89,7 +89,16 @@ private fun applyLegacyTokens(palette: AltarisPalette) {
     FrostTopSheen = palette.onSurface.copy(alpha = 0.10f)
     TextPrimary = palette.onSurface
     TextSecondary = palette.onSurfaceVariant
-    TextMuted = palette.border
+    // Muted text, not a border colour.
+    //
+    // This was `palette.border` — a hairline grey meant to separate two
+    // surfaces. It was then used as a *text* colour in 94 places, which on a
+    // white page is nearly invisible and on the terminal's dark sheet is
+    // literally black-on-black. A text token must be legible text.
+    //
+    // The palette's secondary text is already the "quieter than primary" ink;
+    // muted sits between it and the background, so hierarchy still reads.
+    TextMuted = palette.onSurfaceVariant.copy(alpha = 0.75f)
     PrimaryAction = primary
     OnPrimaryAction = onPrimary
     StatusDot = primary

@@ -57,10 +57,16 @@ object Attachments {
             name = sanitise(name)
             if (name.isBlank()) name = fallbackName
 
-            val dir = File(HOST_DIR)
-            if (!dir.isDirectory && !dir.mkdirs()) {
-                throw IllegalStateException("Cannot create " + HOST_DIR)
-            }
+            // Shared storage first: it is the one path the host shell, a
+            // proot guest and a chroot guest can all read. If the device
+            // refuses it (all-files access not granted), fall back to the
+            // app's own cache — the host shell can still read that, and a
+            // failed copy is worse than a path only one shell sees.
+            val dir = writableDir(context)
+                ?: throw IllegalStateException(
+                    "No writable folder for the attachment. Grant Altaris " +
+                        "all-files access in Settings, then try again."
+                )
             // Never overwrite: two files with the same name are common when
             // picking from a chat app, and silently replacing the first one
             // would make the agent read the wrong bytes.
@@ -79,8 +85,16 @@ object Attachments {
                 target.delete()
                 throw IllegalStateException("That file is empty")
             }
+            // The path handed to the shell must be the one the file is
+            // actually at: shared storage normally, the app cache when
+            // all-files access was refused.
+            val guestPath = if (dir.absolutePath == HOST_DIR) {
+                GUEST_DIR + "/" + target.name
+            } else {
+                target.absolutePath
+            }
             Saved(
-                guestPath = GUEST_DIR + "/" + target.name,
+                guestPath = guestPath,
                 name = target.name,
                 bytes = target.length(),
                 mime = mime,
@@ -104,6 +118,25 @@ object Attachments {
         } else {
             saved.guestPath
         }
+
+    /**
+     * The first folder the attachment can actually be written to.
+     *
+     * Returns null when none works, so the caller can say why instead of
+     * throwing a bare "cannot create" after the user already picked a file.
+     */
+    private fun writableDir(context: Context): File? {
+        val candidates = listOf(
+            File(HOST_DIR),
+            File(context.applicationContext.cacheDir, "attach"),
+        )
+        for (dir in candidates) {
+            if (dir.isDirectory) return dir
+            if (dir.mkdirs()) return dir
+            Log.w(TAG, "cannot create " + dir.absolutePath)
+        }
+        return null
+    }
 
     private fun displayName(context: Context, uri: Uri): String? = runCatching {
         context.applicationContext.contentResolver

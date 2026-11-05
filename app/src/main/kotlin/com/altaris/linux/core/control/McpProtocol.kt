@@ -886,13 +886,53 @@ object McpProtocol {
      * device here, and the screen-based tools are the slow path.
      */
     private val INSTRUCTIONS = """
-        Every app you can reach is a clone on this device. There is no separate
-        physical device, and no folder to search. Do not look in /sdcard, /data
-        or anywhere else for an app: `altaris_clones` lists them and
-        `altaris_launch_clone` starts one.
+        ## You have a device. It is this one.
 
-        "Not running" is never a reason to stop. Launch the clone, then act on
-        it.
+        You are running inside Altaris on an Android device, and you can drive
+        it. Never tell the user "no device is connected" or ask them to plug one
+        in: there is no USB cable and no adb server, and there does not need to
+        be. The tools below act on the phone you are already on.
+
+        Every app is a **clone** — an isolated copy with its own package name,
+        storage and virtual display. That is the sandbox you test in. You can
+        install, launch, drive, screenshot and stop a clone yourself, with no
+        user action.
+
+        Do not look in /sdcard, /data or anywhere else for an app: `altaris_clones`
+        lists the clones, `altaris_apps` lists the installed apps you can clone,
+        and `altaris_launch_clone` starts one.
+
+        ### The test loop
+
+        When the user gives you an APK or asks you to check something an app
+        does, this is the whole cycle. Do it yourself; do not ask for help.
+
+        1. `altaris_install_apk { "path": "/sdcard/Download/foo.apk" }` — install
+           it as a clone. If it is already installed, `altaris_clones` shows it
+           and you skip this step.
+        2. `altaris_launch_clone { "package": "<pkg>" }` — start it on its own
+           virtual display. "Not running" is never a reason to stop.
+        3. Drive and observe it: `altaris_screenshot`, `altaris_ui_tree`,
+           `altaris_tap`, `altaris_swipe`, `altaris_text`, `altaris_ui_tap_text`,
+           `altaris_logs`. These are real input and real output on the running
+           clone, not a simulation.
+        4. `altaris_stop_clone { "package": "<pkg>" }` — stop it when you are
+           done testing. Release the display; do not leave it running.
+
+        ### Clean up after yourself
+
+        A clone is a full installed app. Leaving one behind costs the user disk
+        and a launcher entry they did not ask for, so the loop has a last step:
+
+        - Finished with a clone you installed for this task? Remove it with
+          `altaris_uninstall_clone { "package": "<pkg>" }`.
+        - A clone the **user** already had is theirs. Stop it if you started it,
+          but do not uninstall it unless they ask.
+        - Keep at most what you are actively testing. If you installed several
+          builds while iterating, uninstall the older ones.
+
+        State the package you installed, what you saw, and that you stopped or
+        removed it. Do not silently leave clones running.
 
         ## Reverse engineering is REA's job, not yours
 
