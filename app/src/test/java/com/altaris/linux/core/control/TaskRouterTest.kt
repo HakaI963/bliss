@@ -112,7 +112,9 @@ class TaskRouterTest {
             assertEquals(kind, plan.kind)
             for (step in plan.steps) {
                 assertTrue(
-                    "step ${step.tool} in ${kind.label} is not a declared tool",
+                    "step ${step.tool} in ${kind.label} is not a declared tool " +
+                        "(read ${declared.size} names from " + text.length +
+                        " chars; sample=" + declared.take(5).joinToString(",") + ")",
                     step.tool in declared,
                 )
             }
