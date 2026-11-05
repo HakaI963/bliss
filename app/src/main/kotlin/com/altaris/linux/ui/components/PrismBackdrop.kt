@@ -158,8 +158,8 @@ private fun DrawScope.drawLeaves(ink: Color) {
         val scale = 0.7f + 0.5f * ((i * 29 % 7) / 7f)
         val path = Path().apply {
             moveTo(0f, 0f)
-            quadraticTo(5.4f * scale, -3.2f * scale, 10.4f * scale, 0f)
-            quadraticTo(5.4f * scale, 3.2f * scale, 0f, 0f)
+            quadraticBezierTo(5.4f * scale, -3.2f * scale, 10.4f * scale, 0f)
+            quadraticBezierTo(5.4f * scale, 3.2f * scale, 0f, 0f)
         }
         translate(left = x, top = y) {
             drawPath(

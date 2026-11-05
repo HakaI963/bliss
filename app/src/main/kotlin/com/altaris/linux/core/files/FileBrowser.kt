@@ -212,7 +212,10 @@ object FileBrowser {
             append("for f in ")
             names.forEach { append(quote(it)).append(' ') }
             append("; do ")
-            append("stat -c '%s|%Y|%A|%n' \"\\$f\" 2>/dev/null; ")
+            // The shell variable must reach the shell, not be interpolated by
+            // Kotlin: \$f in a normal string is an escaped backslash followed
+            // by an interpolation of `f`, which does not exist here.
+            append("stat -c '%s|%Y|%A|%n' \"\$f\" 2>/dev/null; ")
             append("done\n")
         }
         val result = runCatching { RootShell.captureResult(script, 25_000L) }.getOrNull()
