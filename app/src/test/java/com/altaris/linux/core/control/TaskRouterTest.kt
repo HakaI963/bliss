@@ -98,7 +98,13 @@ class TaskRouterTest {
         // directory, so a bare "app/src/..." path does not resolve there and
         // the assertion would fail for a tool that is in fact declared.
         val text = readSource("app/src/main/kotlin/com/altaris/linux/core/control/McpProtocol.kt")
-        val declared = Regex("\"altaris_[a-z_]+\"").findAll(text).map { it.value }.toSet()
+        // `.toSet()` on a Sequence yields another Sequence, which is
+        // single-use — membership after the first scan fails. Materialise it.
+        val declared = Regex("\"altaris_[a-z_]+\"")
+            .findAll(text)
+            .map { it.value }
+            .toList()
+            .toSet()
 
         val kinds = TaskRouter.Kind.entries
         for (kind in kinds) {
