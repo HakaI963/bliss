@@ -94,9 +94,10 @@ class TaskRouterTest {
     /** Every plan names real tools from this app. */
     @Test
     fun everyStepNamesAToolThatExists() {
-        val source = File("app/src/main/kotlin/com/altaris/linux/core/control/McpProtocol.kt")
-        val text = if (source.isFile) source.readText()
-        else File("../app/src/main/kotlin/com/altaris/linux/core/control/McpProtocol.kt").readText()
+        // Use the shared resolver: Gradle runs with `app/` as the working
+        // directory, so a bare "app/src/..." path does not resolve there and
+        // the assertion would fail for a tool that is in fact declared.
+        val text = readSource("app/src/main/kotlin/com/altaris/linux/core/control/McpProtocol.kt")
         val declared = Regex("\"altaris_[a-z_]+\"").findAll(text).map { it.value }.toSet()
 
         val kinds = TaskRouter.Kind.entries
