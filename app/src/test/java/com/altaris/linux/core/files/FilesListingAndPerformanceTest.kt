@@ -52,7 +52,7 @@ class FilesListingAndPerformanceTest {
         assertTrue("must read metadata with stat", source.contains("stat -c"))
         assertTrue(
             "must read the type from the mode string, not %F",
-            source.contains("mode.startsWith(\\"d\\")"),
+            source.contains("mode.startsWith(\"d\")"),
         )
         assertFalse(
             "toybox has no %F in the stat format",
