@@ -92,7 +92,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import com.altaris.linux.R
 import com.altaris.linux.core.terminal.AltarisTerminalSessionManager
 import com.altaris.linux.core.terminal.AltarisTerminalSessionManager.SessionOpenResult

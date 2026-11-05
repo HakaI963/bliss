@@ -258,9 +258,6 @@ for (flavorName in flavorAppIds.keys) {
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
-    // LocalLifecycleOwner. It used to arrive transitively through the
-    // haze dependency; now that haze is gone it must be explicit.
-    implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.ui)
