@@ -319,7 +319,7 @@ object AltarisDoctor {
      * so a running server with no binding still answers
      * capability_unavailable — which is the confusion this entry removes.
      */
-    private fun fridaEntry(context: Context): JSONObject {
+    private suspend fun fridaEntry(context: Context): JSONObject {
         val state = ReaDebugger.state.value
         val node = ReaManager.fridaNodeStatus()
         val parts = ArrayList<String>()
