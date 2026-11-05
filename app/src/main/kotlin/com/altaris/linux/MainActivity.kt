@@ -62,10 +62,6 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
-import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.HazeStyle
-import dev.chrisbanes.haze.hazeChild
-import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 
 // Screen navigation enum
 enum class Screen {
@@ -593,7 +589,7 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
     }
 
-    @OptIn(ExperimentalPermissionsApi::class, ExperimentalHazeMaterialsApi::class)
+    @OptIn(ExperimentalPermissionsApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         requestHighRefreshRate()
@@ -733,10 +729,11 @@ class MainActivity : ComponentActivity() {
                 // Selected target id for Chroot/PRoot storage detail
                 var storageTargetId by remember { mutableStateOf<String?>(null) }
                 
-                // Refresh key to force UI update on resume
-                // Collected from StateManager for remote triggers too
-                val refreshKey by com.altaris.linux.core.utils.StateManager.refreshTrigger.collectAsState()
-                
+                // React to Lifecycle. The StateManager refresh trigger is
+                // collected inside the Home tab, not here: reading a StateFlow
+                // at the root of the composition means every install and every
+                // remote refresh recomposes the entire app — every screen, the
+                // dock, the top bar — for a counter only Home uses.
                 // ALSO react to Lifecycle
                 var lifecycleRefreshKey by remember { mutableStateOf(0) }
                 val lifecycleOwner = LocalLifecycleOwner.current
@@ -850,7 +847,6 @@ class MainActivity : ComponentActivity() {
                 @Composable
                 fun MainScreenContent(
                     tab: BottomTab,
-                    hazeState: HazeState
                 ) {
                     // Tab motion: fade + a short horizontal carry; the Terminal tab
                     // is a fade-only AndroidView surface. The dock springs on its own.
@@ -862,9 +858,10 @@ class MainActivity : ComponentActivity() {
                     ) { activeTab ->
                         when (activeTab) {
                             BottomTab.HOME -> {
+                                val refreshKey by com.altaris.linux.core.utils.StateManager
+                                    .refreshTrigger.collectAsState()
                                 com.altaris.linux.ui.screens.HomeScreen(
                                     permissionState = permissionState,
-                                    hazeState = hazeState,
                                     scriptRefreshTrigger = refreshKey + lifecycleRefreshKey,
                                     onStartService = onStartServiceStub,
                                     onStartActivity = onStartActivityStub,
@@ -882,7 +879,6 @@ class MainActivity : ComponentActivity() {
                             BottomTab.DISTROS -> {
                                 com.altaris.linux.ui.screens.DistroScreen(
                                     permissionState = permissionState,
-                                    hazeState = hazeState,
                                     onStartService = onStartServiceStub,
                                     onStartActivity = onStartActivityStub,
                                     onNavigateToInstall = onNavigateToInstall
@@ -1006,7 +1002,6 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                         Screen.HOME -> {
-                            val hazeState = remember { HazeState() }
                             val desktopUi by com.altaris.linux.core.desktop.DesktopLauncher.uiState.collectAsState()
                             val stateRefresh by com.altaris.linux.core.utils.StateManager.refreshTrigger.collectAsState()
                             val session = remember(desktopUi, stateRefresh) {
@@ -1036,15 +1031,10 @@ class MainActivity : ComponentActivity() {
                             }
 
                             GlassScaffold(
-                                hazeState = hazeState,
                                 // The dock floats over the content, so the content
                                 // has to reserve its height. Without this the last
                                 // row of every scrolling tab sat underneath it.
                                 bottomBarInset = Prism.NavBarHeight + 14.dp,
-                                // No per-tab blur toggle: the haze source must stay
-                                // mounted while the TopBar/dock hazeChild nodes are up
-                                // (see GlassScaffold) — leaving HOME used to unmount it
-                                // mid-session, which is the tab-switch crash class.
                                 topBar = {
                                     if (showChrome) {
                                         Column {
@@ -1117,7 +1107,6 @@ class MainActivity : ComponentActivity() {
                                 ) {
                                     MainScreenContent(
                                         tab = currentTab,
-                                        hazeState = hazeState
                                     )
                                 }
                             }
@@ -1299,14 +1288,12 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                         Screen.INSTALL_WIZARD -> {
-                             val hazeState = remember { HazeState() }
                              if (selectedDistro != null) {
                                  // Shared runner with onboarding: rootfs + XFCE + customization
                                  // for both proot and chroot (no feature modules).
                                  com.altaris.linux.ui.screens.InstallConfigScreen(
                                      distro = selectedDistro!!,
                                      onBack = { currentScreen = Screen.HOME },
-                                     hazeState = hazeState,
                                      onInstallComplete = {
                                          currentScreen = Screen.HOME
                                          currentTab = BottomTab.HOME
@@ -1317,12 +1304,10 @@ class MainActivity : ComponentActivity() {
                              }
                         }
                         Screen.DISTRO_SETTINGS -> {
-                             val hazeState = remember { HazeState() }
                              if (selectedDistro != null) {
                                   com.altaris.linux.ui.screens.DistroSettingsScreen(
                                       distro = selectedDistro!!,
                                       onBack = { currentScreen = Screen.HOME },
-                                      hazeState = hazeState,
                                        onInstallComponent = { component, extraEnv ->
                                            // Embedded: run component script inside the guest via
                                            // the same terminal component as the parent distro.

@@ -7,7 +7,6 @@ import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,7 +27,6 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -178,12 +176,10 @@ fun ToolsScreen() {
     var running by remember { mutableStateOf(ControlServer.isRunning()) }
     var error by remember { mutableStateOf(ControlServer.error()) }
 
-    LaunchedEffect(Unit) {
-        while (true) {
-            running = ControlServer.isRunning()
-            error = ControlServer.error()
-            delay(1800)
-        }
+    // Paused while the app is in the background — this used to tick forever.
+    com.altaris.linux.ui.util.PollEffect(intervalMs = 1_800L) {
+        running = ControlServer.isRunning()
+        error = ControlServer.error()
     }
 
     BackHandler(enabled = page != ToolsPage.HOME) { page = ToolsPage.HOME }
@@ -914,12 +910,9 @@ private fun ReaMcpCard(context: Context, accent: Color) {
 
     // The bridge starts with the app and is kept alive here, exactly like the
     // clone control server: no button, and it recovers on its own.
-    LaunchedEffect(distro.ready) {
-        while (true) {
-            if (distro.ready && !ReaBridge.state.value.running) {
-                withContext(Dispatchers.IO) { ReaBridge.ensureRunning(context) }
-            }
-            kotlinx.coroutines.delay(5000L)
+    com.altaris.linux.ui.util.PollEffect(intervalMs = 5_000L, key = distro.ready) {
+        if (distro.ready && !ReaBridge.state.value.running) {
+            withContext(Dispatchers.IO) { ReaBridge.ensureRunning(context) }
         }
     }
 

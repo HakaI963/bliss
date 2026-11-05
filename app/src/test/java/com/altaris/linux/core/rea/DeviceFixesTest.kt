@@ -150,15 +150,22 @@ class DeviceFixesTest {
             "must provide the shared phase",
             source.contains("PrismOrbPulseProvider"),
         )
-        assertTrue(
-            "orbs must read the shared phase",
-            source.contains("LocalPrismOrbPhase.current"),
-        )
         // One transition, inside the provider.
         assertEquals(
             "exactly one infinite transition for orbs",
             1,
             Regex("rememberInfiniteTransition\\(").findAll(source).count(),
+        )
+        // The phase must be a State read in the draw phase. Providing a plain
+        // Float made every frame recompose the whole app subtree.
+        assertTrue(
+            "the local must carry a State, not a value",
+            source.contains("staticCompositionLocalOf<") &&
+                source.contains("State<Float>"),
+        )
+        assertTrue(
+            "orbs must read the phase inside graphicsLayer",
+            source.contains("phase.value"),
         )
         val activity = readSource("app/src/main/kotlin/com/altaris/linux/MainActivity.kt")
         assertTrue(

@@ -1,16 +1,8 @@
 package com.altaris.linux.ui.screens
 
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,7 +12,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -31,7 +22,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -45,9 +35,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -65,7 +53,6 @@ import com.altaris.linux.core.rea.Findings
 import com.altaris.linux.core.rea.ReaAssetTools
 import com.altaris.linux.core.rea.ReaBridge
 import com.altaris.linux.core.rea.ReaDebugger
-import com.altaris.linux.core.rea.ReaDiagnosis
 import com.altaris.linux.core.rea.ReaDistro
 import com.altaris.linux.core.rea.ReaManager
 import com.altaris.linux.core.rea.ReaToolInstaller
@@ -117,22 +104,20 @@ fun ReaScreen(modifier: Modifier = Modifier) {
     // ensure the server, and keep retrying while it is down. It also keeps
     // watching after a successful start, so an install that finishes while this
     // screen is open brings the server up without any interaction.
-    LaunchedEffect(Unit) {
-        var first = true
-        while (true) {
-            withContext(Dispatchers.IO) {
-                // The first read is deep: it is what proves the environment is
-                // really there and fills the cache the polls then read. Every
-                // later tick is shallow, so a poll never walks the rootfs or
-                // forks a root shell.
-                ReaDistro.refresh(context, deep = first)
-                first = false
-                if (ReaDistro.state.value.ready) ReaBridge.ensureRunning(context)
-            }
-            // Poll faster while waiting for an install, slower when healthy.
-            val healthy = ReaBridge.state.value.running
-            kotlinx.coroutines.delay(if (healthy) 15_000L else 4_000L)
+    // Polls only while the screen is visible. The loop used to run forever,
+    // including in the background, forking a guest shell every fifteen seconds.
+    com.altaris.linux.ui.util.PollEffect(intervalMs = 15_000L) {
+        withContext(Dispatchers.IO) {
+            // Shallow: the deep read happens once, in the effect below, so a
+            // poll never walks the rootfs or forks a root shell.
+            ReaDistro.refresh(context, deep = false)
+            if (ReaDistro.state.value.ready) ReaBridge.ensureRunning(context)
         }
+    }
+    // One deep read when the screen opens: it proves the environment is really
+    // there and fills the cache the shallow polls then read.
+    LaunchedEffect(Unit) {
+        withContext(Dispatchers.IO) { ReaDistro.refresh(context, deep = true) }
     }
 
     Column(
@@ -706,16 +691,10 @@ private fun BinaryChunkMap(
     chunks: BinaryChunks.Map,
     modifier: Modifier = Modifier,
 ) {
-    val transition = rememberInfiniteTransition(label = "chunks")
-    val pulse by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(2200, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart,
-        ),
-        label = "chunkPulse",
-    )
+    // No sweep. This was a 2.2-second infinite pulse that repainted the whole
+    // chunk map forever while any analysis was live — on the screen that is
+    // open the entire time an agent is working. The chunk's own state already
+    // says what it is doing; a moving band adds nothing and costs a frame.
     val scheme = MaterialTheme.colorScheme
 
     Row(modifier = modifier) {
@@ -741,14 +720,6 @@ private fun BinaryChunkMap(
                     horizontalArrangement = Arrangement.spacedBy(2.dp),
                 ) {
                     row.chunks.forEach { chunk ->
-                        // A live sweep: chunks lighten in a moving band.
-                        val wave = if (chunk.state == ChunkState.PROCESSING) {
-                            0.15f + 0.25f * kotlin.math.abs(
-                                kotlin.math.sin((pulse + chunk.index * 0.15f) * Math.PI).toFloat()
-                            )
-                        } else {
-                            0f
-                        }
                         val base = chunk.state.alpha
                         Box(
                             modifier = Modifier
@@ -760,11 +731,11 @@ private fun BinaryChunkMap(
                                         ChunkState.UNTOUCHED ->
                                             scheme.outline.copy(alpha = 0.22f)
                                         ChunkState.PROCESSING ->
-                                            accent.copy(alpha = (base + wave).coerceIn(0f, 0.9f))
+                                            accent.copy(alpha = base.coerceIn(0f, 0.9f))
                                         ChunkState.VERIFIED ->
                                             accent.copy(alpha = 0.16f)
                                         ChunkState.MISMATCH ->
-                                            scheme.error.copy(alpha = (base + wave).coerceIn(0f, 0.9f))
+                                            scheme.error.copy(alpha = base.coerceIn(0f, 0.9f))
                                         ChunkState.FAILED ->
                                             scheme.error.copy(alpha = 0.85f)
                                     }
@@ -1332,13 +1303,13 @@ private fun DebuggerTab(accent: Color) {
     // that every two seconds is what made the app laggy whenever this tab was
     // open. The loop now does a light refresh (cached state only) and a full one
     // every fifth tick, so the rows stay honest without a shell per second.
-    LaunchedEffect(Unit) {
-        var tick = 0
-        while (true) {
-            withContext(Dispatchers.IO) { ReaDebugger.refresh(context, light = tick % 5 != 0) }
-            tick += 1
-            delay(2_000L)
-        }
+    // Only while this tab is actually visible: a full refresh forks a guest
+    // shell and two root process checks, and this loop used to run in the
+    // background too.
+    var tick = 0
+    com.altaris.linux.ui.util.PollEffect(intervalMs = 2_000L) {
+        withContext(Dispatchers.IO) { ReaDebugger.refresh(context, light = tick % 5 != 0) }
+        tick += 1
     }
 
     PrismCard(accent = accent, modifier = Modifier.fillMaxSize()) {
@@ -1761,8 +1732,15 @@ private fun ToolBar(tool: ReaToolInstaller.ToolState, accent: Color) {
 @Composable
 private fun NotInstalled(accent: Color) {
     Box(modifier = Modifier.fillMaxSize()) {
+        // No backdrop blur.
+        //
+        // This blurred a full-screen placeholder to make the overlay card on
+        // top of it read better. A 6 dp blur over the whole window is one of
+        // the most expensive things a phone GPU can be asked to do, and it ran
+        // on the empty state of the screen an agent user sits on the longest.
+        // The card already has a solid surface; the blur was decoration.
         Column(
-            modifier = Modifier.fillMaxSize().blur(6.dp),
+            modifier = Modifier.fillMaxSize(),
             verticalArrangement = Arrangement.spacedBy(5.dp),
         ) {
             PrismCard(accent = accent) {

@@ -60,7 +60,6 @@ import com.altaris.linux.ui.theme.altarisMutedText
 import com.altaris.linux.ui.theme.rememberStaggerEntrance
 import com.altaris.linux.ui.theme.sectionAccent
 import com.altaris.linux.ui.theme.staggerIn
-import dev.chrisbanes.haze.HazeState
 import androidx.compose.foundation.border
 
 private enum class DistroCategory(val label: String) {
@@ -123,7 +122,6 @@ private fun distroBadgeLabels(distro: Distro): List<String> = buildList {
 @Composable
 fun DistroScreen(
     permissionState: PermissionState,
-    hazeState: HazeState,
     onStartService: (android.content.Intent) -> Unit,
     onStartActivity: (android.content.Intent) -> Unit,
     onNavigateToInstall: (com.altaris.linux.core.data.Distro) -> Unit

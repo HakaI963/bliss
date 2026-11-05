@@ -67,10 +67,6 @@ import com.altaris.linux.ui.theme.AltarisDanger
 import com.altaris.linux.ui.theme.TextMuted
 import com.altaris.linux.ui.theme.TextPrimary
 import com.altaris.linux.ui.theme.TextSecondary
-import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.hazeChild
-import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
-import dev.chrisbanes.haze.materials.HazeMaterials
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -85,11 +81,10 @@ import kotlinx.coroutines.withContext
  * (otherwise on the next session; the guest script is hash-guarded).
  * Monochrome frost chrome; swatches are the only colored elements.
  */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DistroAppearanceScreen(
     distro: Distro,
-    hazeState: HazeState,
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
@@ -214,7 +209,6 @@ fun DistroAppearanceScreen(
     }
 
     GlassScaffold(
-        hazeState = hazeState,
         topBar = {
             Row(
                 modifier = Modifier

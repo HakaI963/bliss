@@ -78,7 +78,6 @@ import com.altaris.linux.ui.theme.Prism
 import com.altaris.linux.ui.theme.rememberStaggerEntrance
 import com.altaris.linux.ui.theme.sectionAccent
 import com.altaris.linux.ui.theme.staggerIn
-import dev.chrisbanes.haze.HazeState
 
 /**
  * Thin install wizard: desktop toggles (XFCE4 / KDE Plasma — any combination,
@@ -97,7 +96,6 @@ fun InstallConfigScreen(
     distro: Distro,
     onBack: () -> Unit,
     onInstallComplete: () -> Unit,
-    hazeState: HazeState
 ) {
     val context = LocalContext.current
     val appCtx = context.applicationContext
@@ -334,7 +332,6 @@ fun InstallConfigScreen(
     }
 
     GlassScaffold(
-        hazeState = hazeState,
         topBar = {
             WizardTopBar(
                 title = when (phase) {

@@ -1,11 +1,6 @@
 package com.altaris.linux.ui.components
 
 import android.graphics.BitmapFactory
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -38,7 +33,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -81,16 +75,12 @@ fun HomeHero(
             }.getOrNull()
         }
     }
-    val drift = rememberInfiniteTransition(label = "heroDrift")
-    val scale by drift.animateFloat(
-        initialValue = 1f,
-        targetValue = 1.06f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 16000),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "heroScale",
-    )
+    // No Ken-Burns drift.
+    //
+    // This was a 16-second infinite scale on the hero image. It is the first
+    // thing on the first screen, so it kept the entire home composition
+    // invalidating for as long as the app was open — the single most expensive
+    // animation in the app, for a 6% zoom nobody asked for.
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -99,12 +89,7 @@ fun HomeHero(
             .background(scheme.surfaceVariant)
             .border(1.dp, scheme.outline, shape),
     ) {
-        val artModifier = Modifier
-            .fillMaxSize()
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-            }
+        val artModifier = Modifier.fillMaxSize()
         if (customBitmap != null) {
             Image(
                 bitmap = customBitmap,

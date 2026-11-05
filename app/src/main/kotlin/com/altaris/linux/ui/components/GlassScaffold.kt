@@ -12,11 +12,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import dev.chrisbanes.haze.HazeState
 
 /**
- * The Altaris shell: layered backdrop, transparent scaffold and a floating
- * dock. The backdrop reacts to touches through [spotlight].
+ * The Altaris shell: static backdrop, transparent scaffold and a floating dock.
  *
  * [bottomBarInset] is how much vertical room the floating dock occupies. The
  * dock is drawn *over* the content rather than in the scaffold's bottomBar
@@ -28,8 +26,6 @@ import dev.chrisbanes.haze.HazeState
  */
 @Composable
 fun GlassScaffold(
-    hazeState: HazeState,
-    blurContent: Boolean = true,
     topBar: @Composable () -> Unit = {},
     bottomBar: @Composable () -> Unit = {},
     bottomBarInset: Dp = 0.dp,

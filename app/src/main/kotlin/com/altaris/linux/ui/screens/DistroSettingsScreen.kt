@@ -53,10 +53,6 @@ import com.altaris.linux.ui.theme.AltarisDanger
 import com.altaris.linux.ui.theme.TextMuted
 import com.altaris.linux.ui.theme.TextPrimary
 import com.altaris.linux.ui.theme.TextSecondary
-import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.hazeChild
-import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
-import dev.chrisbanes.haze.materials.HazeMaterials
 
 private val desktopHardwareIds = setOf(
     "xfce4_desktop",
@@ -74,7 +70,7 @@ private fun isUninstallable(c: DistroComponent): Boolean {
     return true
 }
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DistroSettingsScreen(
     distro: Distro,
@@ -90,7 +86,6 @@ fun DistroSettingsScreen(
     onLaunchKde: (() -> Unit)? = null,
     onStopKde: (() -> Unit)? = null,
     onLaunchCli: (() -> Unit)? = null,
-    hazeState: HazeState
 ) {
     @Suppress("UNUSED_PARAMETER")
     val _keep1 = onNavigateToStart
@@ -179,14 +174,12 @@ fun DistroSettingsScreen(
     if (showAppearanceEditor) {
         DistroAppearanceScreen(
             distro = distro,
-            hazeState = hazeState,
             onBack = { showAppearanceEditor = false }
         )
         return
     }
 
     GlassScaffold(
-        hazeState = hazeState,
         topBar = {
             Row(
                 modifier = Modifier

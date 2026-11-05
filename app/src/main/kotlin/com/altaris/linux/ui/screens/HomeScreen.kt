@@ -110,14 +110,12 @@ import com.altaris.linux.ui.theme.altarisMutedText
 import com.altaris.linux.ui.theme.rememberStaggerEntrance
 import com.altaris.linux.ui.theme.sectionAccent
 import com.altaris.linux.ui.theme.staggerIn
-import dev.chrisbanes.haze.HazeState
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
 fun HomeScreen(
     permissionState: PermissionState,
-    hazeState: HazeState,
     scriptRefreshTrigger: Int = 0,
     onStartService: (android.content.Intent) -> Unit,
     onStartActivity: (android.content.Intent) -> Unit,
@@ -133,8 +131,6 @@ fun HomeScreen(
 ) {
     @Suppress("UNUSED_PARAMETER")
     val _permissionState = permissionState
-    @Suppress("UNUSED_PARAMETER")
-    val _hazeState = hazeState
     @Suppress("UNUSED_PARAMETER")
     val _onStartService = onStartService
     @Suppress("UNUSED_PARAMETER")

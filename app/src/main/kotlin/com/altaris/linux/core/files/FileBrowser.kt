@@ -13,17 +13,26 @@ import java.io.File
  * Two spaces, and only two, because that is the model people actually have:
  *
  *  - **Internal** — Altaris' own root storage, `filesDir`. It is readable by
- *    this process directly, needs no permission and no root, and is where the
- *    app's own data lives.
- *  - **External** — the chroot space under `/data/local/altaris`. SELinux hides
- *    that tree from the app uid, so every read and write there has to go
- *    through `su`. A `File.list()` on it returns null, which is why an installed
- *    chroot used to render as an empty folder.
+ *    this process directly, needs no permission and no root.
+ *  - **External** — the chroot space under `/data/local/altaris/chroots`.
+ *    SELinux hides that tree from the app uid, so every read and write there
+ *    has to go through `su`. A `File.list()` on it returns null, which is why
+ *    an installed chroot used to render as an empty folder.
  *
- * Everything is one [Space] plus a path inside it, rather than a flat list of
- * "places": the previous version offered eight roots, most of them unreadable,
- * and the first tap on any of them forked a root shell — which is what made
- * opening the tab hang.
+ * Listing is the only thing that has to be careful, and it was wrong twice:
+ *
+ *  - `find -printf` is a GNU extension. Android's toybox `find` does not
+ *    implement it, so the command failed, printed nothing, and the failure was
+ *    swallowed by the pipe to `head`. The result was an empty list that looked
+ *    like a valid empty directory.
+ *  - even without the pipe, a pipeline's exit status is the *last* command's.
+ *    `find … | head` exits 0 when `find` fails, so the "cannot read" branch
+ *    never ran.
+ *
+ * The listing now uses `ls -la` plus `stat`, which every Android shell has,
+ * checks the exit status of the command that actually ran, and falls back to
+ * a plain name list if the metadata read fails. A directory that cannot be
+ * read now says so instead of looking empty.
  */
 object FileBrowser {
 
@@ -80,10 +89,9 @@ object FileBrowser {
     /**
      * List [path].
      *
-     * External paths go through root in a single `find`; internal paths use
-     * `File` directly. The root call is the expensive one, so it is only made
-     * for the external space — the old version called [places] (which itself
-     * forked `ls` under root) on every listing just to decide the backend.
+     * External paths go through root; internal paths use `File` directly. The
+     * space is a parameter, never derived from the path — deriving it used to
+     * fork a root shell on every listing just to decide the backend.
      */
     suspend fun list(
         context: Context,
@@ -92,7 +100,7 @@ object FileBrowser {
         showHidden: Boolean = false,
     ): Listing = withContext(Dispatchers.IO) {
         if (space == Space.EXTERNAL) {
-            return@withContext listThroughRoot(path, showHidden)
+            return@withContext listExternal(path, showHidden)
         }
         val dir = File(path)
         if (!dir.isDirectory) {
@@ -118,40 +126,115 @@ object FileBrowser {
     }
 
     /**
-     * List a directory as root.
+     * List an external directory as root.
      *
-     * One `find -maxdepth 1` prints everything in a single call. `%f` gives the
-     * bare name, so no path parsing is needed and a name with a space is safe.
-     * The output is capped: a directory with a hundred thousand entries must
-     * not become a hundred thousand rows of Compose state.
+     * Three facts decide this design:
+     *
+     *  - `find -printf` is GNU-only. Android's toybox `find` has no `-printf`,
+     *    so it failed silently and every chroot listed as empty.
+     *  - `ls -l` has a *different field layout* on toybox (date and time are two
+     *    fields, not month/day/time) — parsing it by field count works on a
+     *    desktop and breaks on the phone.
+     *  - a pipeline's exit status is the last command's, so `find … | head`
+     *    exits 0 when `find` fails and the error branch never ran.
+     *
+     * So names come from `ls -a1` — one per line, no columns, POSIX — and all
+     * metadata comes from one `stat -c` call. Both are toybox commands. A
+     * directory that cannot be read reports its error instead of looking empty.
      */
-    private fun listThroughRoot(path: String, showHidden: Boolean): Listing {
+    private fun listExternal(path: String, showHidden: Boolean): Listing {
         val q = quote(path)
-        val script = "find " + q + " -mindepth 1 -maxdepth 1 " +
-            "-printf '%y\\t%s\\t%T@\\t%M\\t%f\\n' 2>/dev/null | head -n 3000"
-        val result = runCatching { RootShell.captureResult(script, 20_000L) }.getOrNull()
-            ?: return Listing(path, error = "Root is not available")
-        if (result.exitCode != 0 && result.stdout.isBlank()) {
-            return Listing(path, error = "Cannot read this folder", usedRoot = true)
+        val names = runCatching {
+            RootShell.captureResult("ls -a1 " + q + " 2>&1", 20_000L)
+        }.getOrNull() ?: return Listing(path, error = "Root is not available")
+
+        val first = names.stdout.lineSequence().firstOrNull().orEmpty()
+        if (names.exitCode != 0 ||
+            first.contains("No such file", ignoreCase = true) ||
+            first.contains("Permission denied", ignoreCase = true) ||
+            first.contains("Not a directory", ignoreCase = true)
+        ) {
+            return Listing(
+                path,
+                error = first.ifBlank { "Cannot read this folder" }.take(160),
+                usedRoot = true,
+            )
         }
-        val entries = result.stdout.lines().mapNotNull { line ->
-            if (line.isBlank()) return@mapNotNull null
-            val parts = line.split('\t')
-            if (parts.size < 5) return@mapNotNull null
-            val name = parts[4]
-            if (!showHidden && name.startsWith(".")) return@mapNotNull null
-            val dir = parts[0] == "d"
+
+        val visible = names.stdout.lines()
+            .map { it.trim() }
+            .filter { it.isNotEmpty() && it != "." && it != ".." }
+            .filter { showHidden || !it.startsWith(".") }
+        if (visible.isEmpty()) return Listing(path, emptyList(), usedRoot = true)
+
+        val meta = readMetadata(path, visible)
+        val entries = visible.map { name ->
+            val m = meta[name]
             Entry(
                 name = name,
                 path = path.trimEnd('/') + "/" + name,
-                dir = dir,
-                size = parts[1].toLongOrNull() ?: 0L,
-                // `%T@` is "seconds.fraction"; keep the seconds.
-                modified = (parts[2].toDoubleOrNull()?.toLong() ?: 0L) * 1000L,
-                mode = parts[3],
+                dir = m?.dir ?: false,
+                size = m?.size ?: 0L,
+                modified = m?.modified ?: 0L,
+                mode = m?.mode.orEmpty(),
             )
         }.sortedWith(compareBy({ !it.dir }, { it.name.lowercase() }))
         return Listing(path, entries, usedRoot = true)
+    }
+
+    /** Metadata for one entry. */
+    private data class Meta(
+        val size: Long,
+        val modified: Long,
+        val dir: Boolean,
+        val mode: String,
+    )
+
+    /**
+     * One `stat` call for every entry.
+     *
+     * The format is `size|mtime|mode|name`, split with a limit so a `|` inside
+     * a filename cannot shift the fields — the name is last and absorbs the
+     * rest. A tab separator was the first attempt; `\t` is not interpreted
+     * consistently by `stat -c` across GNU and toybox, so it arrived literally.
+     *
+     * The type comes from the mode string's first character, which both
+     * implementations always print: `d` is a directory, `-` a file, `l` a
+     * symlink. `%F` was the first attempt and is not in toybox.
+     *
+     * One invocation, not one per file: a distro root has dozens of entries
+     * and a shell each would be seconds.
+     */
+    private fun readMetadata(dir: String, names: List<String>): Map<String, Meta> {
+        if (names.isEmpty()) return emptyMap()
+        val script = buildString {
+            append("cd ").append(quote(dir)).append(" || exit 3\n")
+            append("for f in ")
+            names.forEach { append(quote(it)).append(' ') }
+            append("; do ")
+            append("stat -c '%s|%Y|%A|%n' \"\\$f\" 2>/dev/null; ")
+            append("done\n")
+        }
+        val result = runCatching { RootShell.captureResult(script, 25_000L) }.getOrNull()
+            ?: return emptyMap()
+        val out = HashMap<String, Meta>()
+        for (line in result.stdout.lines()) {
+            if (line.isBlank()) continue
+            // Limit 4: everything after the third separator is the name.
+            val parts = line.split('|', limit = 4)
+            if (parts.size < 4) continue
+            val size = parts[0].toLongOrNull() ?: continue
+            val seconds = parts[1].toLongOrNull() ?: 0L
+            val mode = parts[2]
+            val name = parts[3]
+            out[name] = Meta(
+                size = size,
+                modified = seconds * 1000L,
+                dir = mode.startsWith("d"),
+                mode = mode,
+            )
+        }
+        return out
     }
 
     // ---------------------------------------------------------------- content
@@ -308,12 +391,7 @@ object FileBrowser {
         return File(path).parent
     }
 
-    /**
-     * Breadcrumb segments from the space root to [path].
-     *
-     * The first crumb is the space itself ("Internal" / "External"), so the
-     * header always says where the user is even when the path is long.
-     */
+    /** Breadcrumb segments from the space root to [path]. */
     fun crumbs(context: Context, space: Space, path: String): List<Pair<String, String>> {
         val root = rootOf(context, space)
         val out = ArrayList<Pair<String, String>>()

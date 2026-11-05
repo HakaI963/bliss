@@ -267,8 +267,6 @@ dependencies {
     implementation(libs.androidx.material.icons.extended)
     
     // Glassmorphism FX
-    implementation(libs.haze)
-    implementation(libs.haze.materials)
     
     // Permissions
     implementation(libs.accompanist.permissions)

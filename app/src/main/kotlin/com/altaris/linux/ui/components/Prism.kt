@@ -474,22 +474,27 @@ fun PrismSegmented(
 /**
  * The shared pulse for every status dot on screen.
  *
- * Each orb used to own a `rememberInfiniteTransition`. The comment here said
- * one clock drove them all, but the function created a new transition on every
- * call, so a screen with twenty active rows ran twenty independent animations,
- * each invalidating its own layer forever — and each one kept the whole
- * composition ticking even when nothing on it had changed.
+ * Two mistakes were made here before this version, and both were expensive:
  *
- * [PrismOrbPulseProvider] now owns the single transition. Orbs read its value;
- * when no provider is above them (a preview, a screenshot test) they fall back
- * to a static phase, so nothing animates where it cannot be seen anyway.
+ *  1. Each orb owned its own `rememberInfiniteTransition`, so twenty live rows
+ *     ran twenty animations.
+ *  2. The fix provided the *animated value* through a CompositionLocal. That
+ *     is worse: a value read in a composable body invalidates the composition,
+ *     so every frame of the 1.8-second loop recomposed **the entire app** —
+ *     sixty times a second, forever, for a 6 dp dot.
+ *
+ * The phase is now a `State<Float>` passed down once and read only inside a
+ * `graphicsLayer` block. That is the draw phase: the animation invalidates
+ * one layer, not the composition, and nothing above it recomposes.
  */
-val LocalPrismOrbPhase = androidx.compose.runtime.compositionLocalOf<Float> { 0f }
+val LocalPrismOrbPhase = androidx.compose.runtime.staticCompositionLocalOf<
+    androidx.compose.runtime.State<Float>
+> { androidx.compose.runtime.mutableStateOf(0f) }
 
 @Composable
 fun PrismOrbPulseProvider(content: @Composable () -> Unit) {
     val pulse = rememberInfiniteTransition(label = "orbPulseShared")
-    val value by pulse.animateFloat(
+    val value = pulse.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
@@ -514,9 +519,9 @@ fun PrismOrb(
 ) {
     val scheme = MaterialTheme.colorScheme
     // Only a live orb animates at all; an inactive one draws a static dot.
-    // The phase comes from the one shared clock above, never a new transition.
-    val halo = if (active) LocalPrismOrbPhase.current else 0f
-    val haloScale = if (active) 0.6f + halo * 1.4f else 0f
+    // The phase is read inside graphicsLayer, so the animation invalidates
+    // this one layer instead of recomposing anything.
+    val phase = LocalPrismOrbPhase.current
     Box(
         modifier = modifier.size(6.dp),
         contentAlignment = Alignment.Center,
@@ -526,6 +531,8 @@ fun PrismOrb(
                 modifier = Modifier
                     .size(6.dp)
                     .graphicsLayer {
+                        val halo = phase.value
+                        val haloScale = 0.6f + halo * 1.4f
                         scaleX = haloScale
                         scaleY = haloScale
                         alpha = (1f - halo) * 0.45f

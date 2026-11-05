@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -206,18 +207,47 @@ fun FilesScreen(
         }
 
         // ---------------------------------------------------------- filter
-        OutlinedTextField(
+        // A plain BasicTextField in a bordered box, not OutlinedTextField.
+        //
+        // The outlined variant reserves space for a floating label and its own
+        // internal padding. Forcing it to a 42 dp height made it measure
+        // smaller than its minimum, and the text ended up clipped and shifted
+        // off its own baseline — the "broken text" report. This has no label
+        // to reserve, so the baseline is where it is drawn.
+        BasicTextField(
             value = query,
             onValueChange = { query = it },
-            modifier = Modifier.fillMaxWidth().height(42.dp),
-            singleLine = true,
-            textStyle = androidx.compose.ui.text.TextStyle(fontSize = 10.sp),
-            placeholder = {
-                Text(
-                    "Filter " + path.substringAfterLast('/'),
-                    fontSize = 10.sp,
-                    color = altarisMutedText(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(36.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .border(
+                    1.dp,
+                    MaterialTheme.colorScheme.outline,
+                    RoundedCornerShape(8.dp),
                 )
+                .padding(horizontal = 9.dp),
+            singleLine = true,
+            textStyle = androidx.compose.ui.text.TextStyle(
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurface,
+            ),
+            cursorBrush = androidx.compose.ui.graphics.SolidColor(accent),
+            decorationBox = { inner ->
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.CenterStart,
+                ) {
+                    if (query.isEmpty()) {
+                        Text(
+                            "Filter " + path.substringAfterLast('/'),
+                            fontSize = 11.sp,
+                            color = altarisMutedText(),
+                            maxLines = 1,
+                        )
+                    }
+                    inner()
+                }
             },
         )
 
