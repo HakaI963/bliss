@@ -1,5 +1,6 @@
 package com.altaris.linux.ui.terminal
 
+import android.content.Context
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -19,7 +20,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.Movie
@@ -27,16 +27,11 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -46,53 +41,51 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.altaris.linux.core.files.Attachments
-import com.altaris.linux.ui.theme.FrostHairline
 import com.altaris.linux.ui.theme.TextMuted
 import com.altaris.linux.ui.theme.TextPrimary
-import com.altaris.linux.ui.theme.TextSecondary
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * Attach a file to the running agent.
+ * Pick a file for the agent.
  *
- * Three entry points, because the Android picker does not have one: an image,
- * a video, or any file. Each copies into shared storage and hands the shell a
- * line naming the path — the agent reads it like any other file, and the user
- * can still edit the message before it is sent.
+ * This is only a chooser: tapping a row opens the system picker, the chosen
+ * file is copied into shared storage, and its path is written into the shell's
+ * input line. There is no message box and no "what should the agent do" field —
+ * the user types the question themselves, exactly as if they had pasted a path.
  *
- * The copy happens off the main thread and the sheet stays open while it runs;
- * a 40 MB video is not instantaneous and a silent pause would read as a hang.
+ * The previous version wrapped this in its own form with a text field and a
+ * Send button. That put the app between the user and their agent: the message
+ * was composed for them and sent in one step, so they could not add to it or
+ * edit it before it ran. A file picker should end when the file is picked.
+ *
+ * Three rows, because the Android picker does not have one entry point: the
+ * photo picker is the right surface for images and video (it has no permission
+ * prompt and shows thumbnails), and the document picker is the only thing that
+ * can reach arbitrary files.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TerminalAttachSheet(
     onDismissRequest: () -> Unit,
-    onSend: (text: String) -> Unit,
+    onPicked: (text: String) -> Unit,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var message by remember { mutableStateOf("") }
-    var status by remember { mutableStateOf("") }
-    var busy by remember { mutableStateOf(false) }
-    var saved by remember { mutableStateOf<Attachments.Saved?>(null) }
 
     fun handle(uri: Uri?) {
-        if (uri == null) return
-        busy = true
-        status = "Copying…"
+        if (uri == null) {
+            // The user backed out of the system picker; nothing to do, and the
+            // sheet should not sit there pretending something happened.
+            onDismissRequest()
+            return
+        }
+        onDismissRequest()
         scope.launch {
-            val result = withContext(Dispatchers.IO) {
-                Attachments.save(context, uri)
-            }
-            busy = false
-            result.onSuccess {
-                saved = it
-                status = it.name + " · " + humanSize(it.bytes)
-            }.onFailure {
-                status = it.message ?: "Could not read that file"
-            }
+            val result = withContext(Dispatchers.IO) { Attachments.save(context, uri) }
+            result.onSuccess { onPicked(Attachments.reference(it)) }
+                .onFailure { showToast(context, it.message ?: "Could not read that file") }
         }
     }
 
@@ -114,146 +107,70 @@ fun TerminalAttachSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(max = 460.dp)
+                .heightIn(max = 260.dp)
                 .padding(horizontal = 16.dp)
                 .padding(bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Text(
-                "Send a file to the agent",
-                fontSize = 14.sp,
+                "Attach a file",
+                fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = TextPrimary,
+                modifier = Modifier.padding(bottom = 4.dp),
             )
-            Text(
-                "The file is copied to " + Attachments.GUEST_DIR +
-                    ", which every shell can read. The agent gets its path.",
-                fontSize = 10.sp,
-                lineHeight = 14.sp,
-                color = TextSecondary,
-            )
-
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                AttachTile(
-                    icon = Icons.Default.Image,
-                    label = "Image",
-                    enabled = !busy,
-                ) {
-                    imagePicker.launch(
-                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                    )
-                }
-                AttachTile(
-                    icon = Icons.Default.Movie,
-                    label = "Video",
-                    enabled = !busy,
-                ) {
-                    videoPicker.launch(
-                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)
-                    )
-                }
-                AttachTile(
-                    icon = Icons.Default.InsertDriveFile,
-                    label = "File",
-                    enabled = !busy,
-                ) {
-                    filePicker.launch(arrayOf("*/*"))
-                }
+            PickerRow(Icons.Default.Image, "Image") {
+                imagePicker.launch(
+                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                )
             }
-
-            if (status.isNotBlank()) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (saved != null) {
-                        Icon(
-                            Icons.Default.AttachFile,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(14.dp),
-                        )
-                        Spacer(Modifier.width(5.dp))
-                    }
-                    Text(
-                        status,
-                        fontSize = 10.sp,
-                        color = if (saved != null) TextPrimary else TextSecondary,
-                    )
-                }
+            PickerRow(Icons.Default.Movie, "Video") {
+                videoPicker.launch(
+                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)
+                )
             }
-
-            OutlinedTextField(
-                value = message,
-                onValueChange = { message = it },
-                modifier = Modifier.fillMaxWidth().height(90.dp),
-                textStyle = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
-                placeholder = {
-                    Text(
-                        "What should the agent do with it?",
-                        fontSize = 11.sp,
-                        color = TextMuted,
-                    )
-                },
-            )
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
-            ) {
-                TextButton(onClick = onDismissRequest) { Text("Cancel") }
-                TextButton(
-                    enabled = saved != null && !busy,
-                    onClick = {
-                        val attachment = saved ?: return@TextButton
-                        onSend(Attachments.prompt(attachment, message))
-                        onDismissRequest()
-                    },
-                ) {
-                    Text(
-                        "Send",
-                        color = if (saved != null) MaterialTheme.colorScheme.primary
-                        else TextMuted,
-                    )
-                }
+            PickerRow(Icons.Default.InsertDriveFile, "File") {
+                filePicker.launch(arrayOf("*/*"))
             }
         }
     }
 }
 
 @Composable
-private fun AttachTile(
+private fun PickerRow(
     icon: ImageVector,
     label: String,
-    enabled: Boolean,
     onClick: () -> Unit,
 ) {
-    val shape = RoundedCornerShape(11.dp)
-    Column(
+    Row(
         modifier = Modifier
-            .width(84.dp)
-            .height(66.dp)
-            .clip(shape)
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-            .clickable(enabled = enabled, onClick = onClick)
-            .padding(6.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(
-            icon,
-            contentDescription = label,
-            tint = if (enabled) MaterialTheme.colorScheme.primary else TextMuted,
-            modifier = Modifier.size(20.dp),
-        )
-        Spacer(Modifier.height(3.dp))
-        Text(
-            label,
-            fontSize = 9.5.sp,
-            color = if (enabled) TextPrimary else TextMuted,
-        )
+        Box(
+            modifier = Modifier.size(28.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(19.dp),
+            )
+        }
+        Spacer(Modifier.width(10.dp))
+        Text(label, fontSize = 12.5.sp, color = TextPrimary)
+        Spacer(Modifier.weight(1f))
+        Text("›", fontSize = 15.sp, color = TextMuted)
     }
 }
 
-private fun humanSize(bytes: Long): String = when {
-    bytes < 1024 -> bytes.toString() + " B"
-    bytes < 1024 * 1024 -> (bytes / 1024).toString() + " KB"
-    else -> (bytes / (1024 * 1024)).toString() + " MB"
+private fun showToast(context: Context, message: String) {
+    android.os.Handler(context.mainLooper).post {
+        android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
+    }
 }

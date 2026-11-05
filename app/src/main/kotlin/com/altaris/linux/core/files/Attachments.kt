@@ -88,25 +88,22 @@ object Attachments {
         }.onFailure { Log.w(TAG, "cannot save attachment", it) }
     }
 
-    /** What the agent should be told. */
-    fun prompt(saved: Saved, message: String): String {
-        val note = message.trim()
-        return buildString {
-            append("I attached a file: ")
-            append(saved.guestPath)
-            append(" (")
-            append(if (saved.mime.isBlank()) "unknown type" else saved.mime)
-            append(", ")
-            append(formatBytes(saved.bytes))
-            append(")")
-            if (note.isNotEmpty()) {
-                append(". ")
-                append(note)
-            } else {
-                append(". Please take a look.")
-            }
+    /**
+     * The line to type into the shell, as if the file had been pasted.
+     *
+     * A bare path, quoted only if it needs it. Nothing else: no "I attached a
+     * file", no size, no instruction. This goes into the agent's prompt box the
+     * same way a typed path would, so the user writes the question themselves
+     * and the agent sees a normal path — which is what it already knows how to
+     * read. The previous version composed a whole sentence and sent it, which
+     * took the message out of the user's hands.
+     */
+    fun reference(saved: Saved): String =
+        if (saved.guestPath.any { it.isWhitespace() || it in "\"'()[]{}&;|<>*?\$`" }) {
+            "'" + saved.guestPath.replace("'", "'\\''") + "'"
+        } else {
+            saved.guestPath
         }
-    }
 
     private fun displayName(context: Context, uri: Uri): String? = runCatching {
         context.applicationContext.contentResolver

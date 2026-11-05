@@ -788,7 +788,9 @@ private fun TerminalScreenContent(
     if (showAttachSheet) {
         TerminalAttachSheet(
             onDismissRequest = { showAttachSheet = false },
-            onSend = { text -> sendText(text) },
+            // The path is typed into the shell's input line, not sent. The user
+            // adds the question and presses enter when they are ready.
+            onPicked = { path -> sendText(path + " ") },
         )
     }
 

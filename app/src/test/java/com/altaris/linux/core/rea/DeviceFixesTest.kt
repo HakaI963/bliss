@@ -263,34 +263,45 @@ class DeviceFixesTest {
         assertTrue("must reject an empty file", source.contains("That file is empty"))
     }
 
-    /** The message handed to the shell must name the real path and size. */
+    /**
+     * A picked file becomes its path, nothing more.
+     *
+     * The first version composed a whole sentence — "I attached a file: … (2
+     * KB). Please take a look." — and sent it in one step. That took the
+     * message out of the user's hands: they could not say what they wanted
+     * done, and the agent received prose instead of a path. It is a plain path
+     * now, the same as if they had typed it.
+     */
     @Test
-    fun theAttachmentPromptNamesThePath() {
+    fun aPickedFileBecomesItsPath() {
         val saved = Attachments.Saved(
             guestPath = "/sdcard/Download/Altaris/attach/crash.log",
             name = "crash.log",
             bytes = 2048,
             mime = "text/plain",
         )
-        val prompt = Attachments.prompt(saved, "what failed?")
-        assertTrue("must name the path", prompt.contains(saved.guestPath))
-        assertTrue("must carry the message", prompt.contains("what failed?"))
-        assertTrue("must state the size", prompt.contains("2 KB"))
-        // With no message it still has to be a request, not a bare path.
-        val bare = Attachments.prompt(saved, "")
-        assertTrue("must ask for something", bare.contains("Please take a look"))
+        assertEquals(saved.guestPath, Attachments.reference(saved))
+        // A path with spaces must survive the shell.
+        val spaced = saved.copy(guestPath = "/sdcard/Download/Altaris/attach/my file.bin")
+        assertEquals("'/sdcard/Download/Altaris/attach/my file.bin'", Attachments.reference(spaced))
     }
 
-    /** The terminal must offer the three pickers and send the result. */
+    /**
+     * Attaching is a picker, not a form.
+     *
+     * The user asked for the system picker to open, the file to be added to the
+     * agent's input, and nothing else — no app-composed message, no "what
+     * should the agent do" field.
+     */
     @Test
-    fun theTerminalCanAttachAnImageVideoOrFile() {
+    fun theTerminalAttachIsAPlainPicker() {
         val screen = readSource(
             "app/src/main/kotlin/com/altaris/linux/ui/screens/TerminalScreen.kt"
         )
         assertTrue("must open the sheet", screen.contains("TerminalAttachSheet("))
         assertTrue(
-            "must send through the one pty path",
-            screen.contains("onSend = { text -> sendText(text) }"),
+            "the path must be typed into the input line, not sent",
+            screen.contains("onPicked = { path -> sendText(path + \" \") }"),
         )
         val sheet = readSource(
             "app/src/main/kotlin/com/altaris/linux/ui/terminal/TerminalAttachSheet.kt"
@@ -298,6 +309,17 @@ class DeviceFixesTest {
         assertTrue("must pick an image", sheet.contains("ImageOnly"))
         assertTrue("must pick a video", sheet.contains("VideoOnly"))
         assertTrue("must pick any file", sheet.contains("arrayOf(\"*/*\")"))
+        // No message field, no Send button: the picker ends when a file is
+        // picked.
+        assertFalse(
+            "must not ask what the agent should do",
+            sheet.contains("What should the agent do"),
+        )
+        assertFalse("must not have a Send button", sheet.contains("\"Send\""))
+        assertFalse(
+            "must not carry a message field",
+            sheet.contains("OutlinedTextField"),
+        )
     }
 
     // ---------------------------------------------------------- configuration
