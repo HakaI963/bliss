@@ -110,7 +110,10 @@ class TaskRouterTest {
             .toList()
             .toSet()
 
-        val kinds = TaskRouter.Kind.entries
+        // MULTI_STEP is a routing outcome the caller chooses when a request
+        // contains several distinct kinds; it is not produced by the keyword
+        // classifier, so it has no sample sentence.
+        val kinds = TaskRouter.Kind.entries.filter { it != TaskRouter.Kind.MULTI_STEP }
         for (kind in kinds) {
             val plan = TaskRouter.classify(sampleFor(kind))
             assertEquals(kind, plan.kind)
