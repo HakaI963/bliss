@@ -893,14 +893,14 @@ object McpProtocol {
         in: there is no USB cable and no adb server, and there does not need to
         be. The tools below act on the phone you are already on.
 
-        Every app is a **clone** — an isolated copy with its own package name,
-        storage and virtual display. That is the sandbox you test in. You can
-        install, launch, drive, screenshot and stop a clone yourself, with no
-        user action.
+        Every app you can reach is a clone — an isolated copy with its own
+        package name, storage and virtual display. That is the sandbox you test
+        in. You can install, launch, drive, screenshot and stop a clone
+        yourself, with no user action.
 
-        Do not look in /sdcard, /data or anywhere else for an app: `altaris_clones`
-        lists the clones, `altaris_apps` lists the installed apps you can clone,
-        and `altaris_launch_clone` starts one.
+        There is no folder to search. Do not look in /sdcard, /data or anywhere
+        else for an app: `altaris_clones` lists the clones, `altaris_apps` lists
+        the installed apps you can clone, and `altaris_launch_clone` starts one.
 
         ### The test loop
 
