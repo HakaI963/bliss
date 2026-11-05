@@ -201,7 +201,7 @@ class DeviceScreenshotAndFridaTest {
         val script = readSource("app/src/main/assets/scripts/rea/rea-frida-module.sh")
         assertTrue("must accept --diagnose", script.contains("--diagnose"))
         // And it must not install in that mode.
-        val diagnose = script.substringAfter("if [ \"$MODE\" = \"--diagnose\" ]")
+        val diagnose = script.substringAfter("if [ \"\$MODE\" = \"--diagnose\" ]")
             .substringBefore("exit 0")
         assertTrue("diagnose must not run npm install", !diagnose.contains("install_once"))
     }
@@ -258,7 +258,7 @@ class DeviceScreenshotAndFridaTest {
         val script = readSource("app/src/main/assets/scripts/rea/install-archive.sh")
         assertTrue("must accept a digest argument", script.contains("EXPECTED_SHA"))
         assertTrue("must compare", script.contains("SHA-256 mismatch"))
-        assertTrue("must refuse before unpacking", script.contains("rm -f \"$TMP\""))
+        assertTrue("must refuse before unpacking", script.contains("rm -f \"\$TMP\""))
     }
 
     // ------------------------------------------------------------- doctor
