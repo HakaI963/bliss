@@ -361,6 +361,16 @@ class ReaSchemaTest {
             "must name the integrity error",
             instructions.contains("evidence_integrity_mismatch"),
         )
+        // Verified against REA 6.8.0: the receipt's own evidence_id is rejected
+        // with unsupported_target; only the parent id can be paged.
+        assertTrue(
+            "must say to use the parent, not the receipt",
+            instructions.contains("use the parent, not the receipt"),
+        )
+        assertTrue(
+            "must warn that the receipt id is rejected",
+            instructions.contains("unsupported_target"),
+        )
         assertTrue(
             "must forbid repeating an unchanged call",
             instructions.contains("Do not repeat an unchanged call"),

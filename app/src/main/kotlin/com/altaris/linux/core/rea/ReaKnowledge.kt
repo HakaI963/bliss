@@ -64,15 +64,25 @@ object ReaKnowledge {
         the field it objected to — read that, fix it, and call once more rather
         than repeating the unchanged call.
 
-        ### Evidence ids belong to one session
+        ### Evidence ids: use the parent, not the receipt
 
-        An `ev_...` id is valid only for the REA session that produced it. When
-        a summary comes back, the id you want is
-        `normalized_result.parent_evidence_id` from that reply. If REA answers
-        `evidence_integrity_mismatch`, the id is stale or from another source:
-        re-run the producer and use its fresh id, or pass the Evidence inline
-        with `source: { "kind": "inline", "evidence": ... }`. Retrying the same
-        id cannot succeed.
+        A summary reply carries two ids and they are not interchangeable:
+
+            "evidence_id"                     <- the summary receipt itself
+            "normalized_result": {
+              "parent_evidence_id": "ev_..."  <- the record you can page
+            }
+
+        `inspect_analysis_view` rejects the receipt id with `unsupported_target`
+        ("Parent Evidence operation inspect_analysis_view does not support
+        analysis views"). Always page with `normalized_result.parent_evidence_id`.
+
+        An `ev_...` id is also valid only for the REA session that produced it.
+        If REA answers `evidence_integrity_mismatch`, the id is stale or from
+        another source: re-run the producer and take the parent id from its
+        fresh reply, or pass the Evidence inline with
+        `source: { "kind": "inline", "evidence": ... }`. Retrying the same id
+        cannot succeed.
 
         **The Android lane needs a bridge jar.** REA does not ship the jadx MCP
         bridge and refuses `inspect_android_package`, `search_android_classes`,

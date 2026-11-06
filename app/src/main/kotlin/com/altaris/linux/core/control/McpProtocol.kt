@@ -1190,18 +1190,29 @@ object McpProtocol {
         Read `altaris_rea_schema` first and copy its example. Every REA tool
         rejects unknown keys, so do not add fields the schema does not list.
 
-        ### Evidence ids are session-scoped
+        ### Evidence ids: use the parent, not the receipt
 
-        An `ev_...` id is only valid for the REA session that produced it. When
-        a call returns a summary, the id you want is
-        `normalized_result.parent_evidence_id` from **that reply**, in **this**
-        session — not an id remembered from earlier, and not one from a
-        different tool or a previous run.
+        A summary reply carries **two** ids and they are not interchangeable.
+        Verified against REA 6.8.0:
+
+            "evidence_id"                     <- the summary receipt itself
+            "normalized_result": {
+              "parent_evidence_id": "ev_..."  <- the record you can page
+            }
+
+        `inspect_analysis_view` rejects the receipt id with
+        `unsupported_target` ("Parent Evidence operation inspect_analysis_view
+        does not support analysis views"), so always use
+        `normalized_result.parent_evidence_id`.
+
+        An `ev_...` id is also only valid for the REA session that produced it.
+        Never reuse one from earlier, from another tool, or from a previous run.
 
         If REA answers `evidence_integrity_mismatch`, the id is stale or
         belongs to another source. Do not retry it. Re-run the tool that
-        produced the evidence and use the id from its fresh reply, or pass the
-        Evidence inline through `source: { "kind": "inline", "evidence": ... }`.
+        produced the evidence and take the parent id from its fresh reply, or
+        pass the Evidence inline through
+        `source: { "kind": "inline", "evidence": ... }`.
 
         ### When a call is rejected
 
