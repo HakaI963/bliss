@@ -59,7 +59,7 @@ object ReaManager {
      * Change this whenever INSTRUCTIONS, ReaKnowledge, the MCP shape, the
      * Ghidra pin or the jadx pin changes.
      */
-    const val CONFIG_VERSION = "2026.11.05-2"
+    const val CONFIG_VERSION = "2026.11.05-3"
 
     /** Where the applied configuration version is recorded inside the guest. */
     const val CONFIG_STAMP = ROOT + "/.config-version"
@@ -189,6 +189,15 @@ object ReaManager {
     @Volatile private var active: ReaStdio? = null
     @Volatile private var toolsCache: JSONArray? = null
 
+    /**
+     * The slimmed catalog, rebuilt only when [toolsCache] changes.
+     *
+     * `tools/list` is answered on every MCP connection, and slimming 229
+     * definitions is a megabyte of JSON copying. Caching it keeps that off the
+     * request path; [setTools] clears it whenever the real catalog is replaced.
+     */
+    @Volatile private var slimCache: JSONArray? = null
+
     /** Installed distro ids, cheapest source the app already maintains. */
     /**
      * Distros the user may install REA into.
@@ -279,14 +288,93 @@ object ReaManager {
             File(rootfs, REA_BIN.removePrefix("/")).isFile
         }
 
-    fun cachedTools(): JSONArray? = toolsCache
+    /**
+     * The catalog as advertised in `tools/list`.
+     *
+     * `outputSchema` is dropped. It is 3.47 MB of the 3.79 MB catalog — an
+     * agent does not need REA's reply shape to make a call, and shipping it
+     * drowns the input schemas that it *does* need. What remains is the name,
+     * the description and the real (full-profile) input schema.
+     */
+    fun cachedTools(): JSONArray? {
+        val source = toolsCache ?: return null
+        slimCache?.let { return it }
+        val slim = slimCatalog(source)
+        // Only publish the derived copy if the source it came from is still the
+        // current one. A restart can swap `toolsCache` while this is building,
+        // and caching a slim catalog for a dead session would serve stale tools.
+        if (toolsCache === source) slimCache = slim
+        return slim
+    }
 
-    fun isReaTool(name: String): Boolean {
-        val tools = toolsCache ?: return false
+    /** Replace the catalog and drop the derived copy in one place. */
+    private fun setTools(tools: JSONArray?) {
+        toolsCache = tools
+        slimCache = null
+    }
+
+    /** One tool definition exactly as REA published it, for schema lookup. */
+    fun toolDefinition(name: String): JSONObject? {
+        val tools = toolsCache ?: return null
         for (i in 0 until tools.length()) {
-            if (tools.optJSONObject(i)?.optString("name") == name) return true
+            val tool = tools.optJSONObject(i) ?: continue
+            if (tool.optString("name") == name) return tool
         }
-        return false
+        return null
+    }
+
+    /** Every published tool name, in REA's order. */
+    fun toolNames(): List<String> {
+        val tools = toolsCache ?: return emptyList()
+        val out = ArrayList<String>(tools.length())
+        for (i in 0 until tools.length()) {
+            tools.optJSONObject(i)?.optString("name")?.takeIf { it.isNotBlank() }?.let { out.add(it) }
+        }
+        return out
+    }
+
+    fun isReaTool(name: String): Boolean = toolDefinition(name) != null
+
+    /**
+     * A compact index for `altaris_rea_tools`.
+     *
+     * The full catalog is megabytes; the agent needs to find a name, then ask
+     * for that one schema. One sentence per tool is enough to choose.
+     */
+    fun toolIndex(): JSONArray {
+        val tools = toolsCache ?: return JSONArray()
+        return JSONArray().apply {
+            for (i in 0 until tools.length()) {
+                val tool = tools.optJSONObject(i) ?: continue
+                val name = tool.optString("name")
+                if (name.isBlank()) continue
+                put(
+                    JSONObject()
+                        .put("name", name)
+                        .put("summary", firstSentence(tool.optString("description")))
+                        .put("required", tool.optJSONObject("inputSchema")?.optJSONArray("required"))
+                )
+            }
+        }
+    }
+
+    /** First sentence of [text], capped so one description cannot dominate. */
+    private fun firstSentence(text: String): String {
+        val clean = text.trim()
+        if (clean.isEmpty()) return ""
+        val stop = clean.indexOf(". ")
+        val sentence = if (stop in 1 until 200) clean.substring(0, stop + 1) else clean
+        return if (sentence.length <= 200) sentence else sentence.take(197) + "…"
+    }
+
+    /** Strip `outputSchema` from every entry, preserving the rest verbatim. */
+    private fun slimCatalog(tools: JSONArray): JSONArray = JSONArray().apply {
+        for (i in 0 until tools.length()) {
+            val tool = tools.optJSONObject(i) ?: continue
+            val copy = JSONObject(tool.toString())
+            copy.remove("outputSchema")
+            put(copy)
+        }
     }
 
     // ------------------------------------------------------------- probe
@@ -1389,7 +1477,22 @@ object ReaManager {
      */
     fun mcpLaunchCommand(): String =
         "PATH=" + PROBE_PATH + ":\$PATH; export PATH; " +
-            "REA_MCP_INPUT_SCHEMA_PROFILE=\${REA_MCP_INPUT_SCHEMA_PROFILE:-compact}; " +
+            // `full`, not `compact`.
+            //
+            // REA defaults to the compact input-schema profile, which replaces
+            // every nested object with a bare `{type: object}` and labels the
+            // result "Advertised in reduced form". An agent reading that sees
+            // `source: object, view: object` and has no way to know the real
+            // shape, so it guesses `source: "jadx"` and gets
+            //   Invalid arguments: source: Expected object
+            // which is what every failed REA call looked like.
+            //
+            // The full profile carries the discriminated unions, so
+            //   source: {kind: "retained-evidence", evidence_id: "ev_..."}
+            //   view:   {kind: "summary"}
+            // are visible before the call. Verified against REA 6.8.0: 229/229
+            // tools, same catalog digest, `rea mcp doctor` healthy.
+            "REA_MCP_INPUT_SCHEMA_PROFILE=full; " +
             "export REA_MCP_INPUT_SCHEMA_PROFILE; " +
             "GHIDRA_INSTALL_DIR=" + GHIDRA_ROOT + "; export GHIDRA_INSTALL_DIR; " +
             // Only when the bridge is actually there: REA treats the variable
@@ -1861,7 +1964,7 @@ object ReaManager {
             update { it.copy(distroId = distroId, method = GuestExec.methodOf(distroId), busy = "Starting REA", error = "") }
             active?.stop()
             active = null
-            toolsCache = null
+            setTools(null)
             // Agents in the distro reach REA through this endpoint, so it has
             // to be listening before the catalog is published.
             runCatching { ControlServer.start(ctx.applicationContext) }
@@ -1880,7 +1983,7 @@ object ReaManager {
                 client.start()
                 val tools = client.listTools()
                 active = client
-                toolsCache = tools
+                setTools(tools)
                 update {
                     it.copy(
                         busy = "",
@@ -1903,7 +2006,7 @@ object ReaManager {
         mutex.withLock {
             active?.stop()
             active = null
-            toolsCache = null
+            setTools(null)
             update { it.copy(running = false, toolCount = 0, busy = "") }
             _status.value
         }

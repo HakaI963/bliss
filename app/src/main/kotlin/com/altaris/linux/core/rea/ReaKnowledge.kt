@@ -35,11 +35,44 @@ object ReaKnowledge {
         ## 0. Start here, every time
 
         1. `altaris_rea_status` — is it installed and running.
-        2. `altaris_rea_tools` — the real catalog (~229 tools).
-        3. `altaris_rea_call { "name": "<tool>", "arguments": { ... } }`.
+        2. `altaris_rea_tools` — an index of REA's ~229 tools: name, one-line
+           summary, required arguments.
+        3. `altaris_rea_schema { "name": "<tool>" }` — that tool's real input
+           schema and a minimal example. Do this before the first call to any
+           tool you have not used in this session.
+        4. `altaris_rea_call { "name": "<tool>", "arguments": { ... } }` — with
+           the arguments in exactly the shape the schema showed.
 
         These start REA themselves; you never need to start it first. If it is
         not installed, say so and stop rather than analysing by hand.
+
+        ### Arguments are objects, not names
+
+        The most expensive mistake is writing a tool name where a structured
+        object belongs. `source` and `view` are the common cases:
+
+            // rejected: Expected object
+            { "source": "jadx", "view": "decompiled" }
+
+            // accepted
+            { "source": { "kind": "retained-evidence", "evidence_id": "ev_..." },
+              "view":   { "kind": "summary" } }
+
+        Each nested object is discriminated by a `kind` field. REA rejects
+        unknown keys on nearly every tool, so do not add fields the schema does
+        not list. `altaris_rea_call` validates against the real schema and names
+        the field it objected to — read that, fix it, and call once more rather
+        than repeating the unchanged call.
+
+        ### Evidence ids belong to one session
+
+        An `ev_...` id is valid only for the REA session that produced it. When
+        a summary comes back, the id you want is
+        `normalized_result.parent_evidence_id` from that reply. If REA answers
+        `evidence_integrity_mismatch`, the id is stale or from another source:
+        re-run the producer and use its fresh id, or pass the Evidence inline
+        with `source: { "kind": "inline", "evidence": ... }`. Retrying the same
+        id cannot succeed.
 
         **The Android lane needs a bridge jar.** REA does not ship the jadx MCP
         bridge and refuses `inspect_android_package`, `search_android_classes`,

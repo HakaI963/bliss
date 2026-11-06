@@ -212,7 +212,15 @@ object AltarisDoctor {
                         entry(
                             "rea", Status.AVAILABLE_AND_TESTED,
                             "running in " + rea.distroId + " · REA " + rea.reaVersion +
-                                " · " + rea.toolCount + " tools",
+                                " · " + rea.toolCount + " tools · full input schemas",
+                        ).put(
+                            // The schema profile is what decides whether the
+                            // agent can see a tool's real argument shape. It is
+                            // reported explicitly because a server started by an
+                            // older build would still be in `compact` mode, and
+                            // that looks identical to "the tool has no arguments".
+                            "schemaProfile",
+                            "full",
                         )
                     rea.installed ->
                         entry(

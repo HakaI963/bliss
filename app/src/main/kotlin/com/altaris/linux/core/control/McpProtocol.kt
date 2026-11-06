@@ -5,6 +5,7 @@ import android.util.Base64
 import com.altaris.linux.core.a11y.A11yBridge
 import com.altaris.linux.core.clone.HeadlessCloneEngine
 import com.altaris.linux.core.rea.ReaManager
+import com.altaris.linux.core.rea.ReaSchema
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
@@ -369,11 +370,25 @@ object McpProtocol {
         )
         put(
             tool(
+                "altaris_rea_schema",
+                "The real input schema for one REA tool, plus a minimal example. Call this " +
+                    "before altaris_rea_call for any tool you have not called in this " +
+                    "session: REA validates strictly and nested arguments are objects " +
+                    "discriminated by a \"kind\" field, not bare strings. With no name it " +
+                    "returns the index of every REA tool.",
+                schema("name" to "string: REA tool name (optional; omit for the index)")
+            )
+        )
+        put(
+            tool(
                 "altaris_rea_call",
-                "Call any REA tool by name (analyze APK, inspect binary, Android resources, live device, …).",
+                "Call any REA tool by name (analyze APK, inspect binary, Android resources, live device, …). " +
+                    "Arguments are checked against the tool's real schema first, so a shape " +
+                    "mistake comes back as the exact field and what it expected instead of a " +
+                    "generic invalid_request.",
                 schema(
                     "name" to "string: REA tool name from altaris_rea_tools",
-                    "arguments" to "object: tool arguments",
+                    "arguments" to "object: tool arguments, in the shape altaris_rea_schema returns",
                     "timeoutMs" to "integer: optional, default 600000"
                 )
             )
@@ -480,6 +495,9 @@ object McpProtocol {
             "Start the REA reverse-engineering server. Most REA tools need it.",
         "altaris_rea_tools" to
             "List every REA tool available once the server is up.",
+        "altaris_rea_schema" to
+            "One REA tool's real input schema and a minimal example. Call this before " +
+            "altaris_rea_call; nested arguments are objects with a \"kind\" field.",
         "altaris_rea_call" to
             "Call any REA tool by name with its arguments.",
         "altaris_rea_clone_apk" to
@@ -790,12 +808,57 @@ object McpProtocol {
             )
         }
         "altaris_rea_tools" -> {
-            val tools = runBlocking { ensureReaRunning() }?.let { ReaManager.cachedTools() }
-                ?: throw IllegalStateException(
-                    "REA is not running and could not be started. Install it from " +
-                        "Tools → Reverse engineering first."
+            ensureReaRunning() ?: throw IllegalStateException(
+                "REA is not running and could not be started. Install it from " +
+                    "Tools → Reverse engineering first."
+            )
+            val index = ReaManager.toolIndex()
+            textResult(
+                JSONObject()
+                    .put("ok", true)
+                    .put("count", index.length())
+                    .put("tools", index)
+                    .put(
+                        "note",
+                        "An index, not the full catalog. Call altaris_rea_schema " +
+                            "with one name to get its real input schema and an example " +
+                            "before calling it.",
+                    )
+            )
+        }
+        "altaris_rea_schema" -> {
+            val name = args.optString("name").takeIf { it.isNotBlank() }
+            if (name == null) {
+                val index = ReaManager.toolIndex()
+                textResult(
+                    JSONObject().put("ok", true).put("count", index.length()).put("tools", index)
                 )
-            textResult(JSONObject().put("ok", true).put("count", tools.length()).put("tools", tools))
+            } else {
+                val tool = ReaManager.toolDefinition(name)
+                    ?: throw IllegalArgumentException(
+                        "No REA tool named \"" + name + "\". Call altaris_rea_schema " +
+                            "with no name to list all of them."
+                    )
+                val inputSchema = tool.optJSONObject("inputSchema")
+                textResult(
+                    JSONObject()
+                        .put("ok", true)
+                        .put("name", name)
+                        .put("description", tool.optString("description"))
+                        .put("inputSchema", inputSchema ?: JSONObject())
+                        .put(
+                            "required",
+                            inputSchema?.optJSONArray("required") ?: JSONArray()
+                        )
+                        .put("example", ReaSchema.example(inputSchema) ?: JSONObject())
+                        .put(
+                            "note",
+                            "Pass arguments exactly in this shape. Nested objects are " +
+                                "discriminated by a \"kind\" field; a bare string where an " +
+                                "object is expected is rejected.",
+                        )
+                )
+            }
         }
         "altaris_rea_call" -> {
             val tool = args.optString("name").takeIf { it.isNotBlank() }
@@ -809,7 +872,43 @@ object McpProtocol {
             // away, exactly like launching a clone. An explicit start is still
             // available; this only removes the pointless failure.
             ensureReaRunning()
-            runBlocking { ReaManager.call(tool, arguments, timeout) }
+            // Check the arguments against the tool's real schema first.
+            //
+            // REA's own rejection is one generic sentence, which is why an
+            // agent retries the same guess. This names the field and the shape
+            // it wanted instead. A call that passes is forwarded unchanged —
+            // the validator only ever reports a missing required key, a wrong
+            // type, or an unknown top-level key.
+            val definition = ReaManager.toolDefinition(tool)
+                ?: throw IllegalArgumentException(
+                    "REA has no tool named \"" + tool + "\". Call altaris_rea_tools " +
+                        "for the list, or altaris_rea_schema for one tool's shape."
+                )
+            val schema = definition.optJSONObject("inputSchema")
+            val problems = ReaSchema.validate(schema, arguments)
+            // An expression-bodied function cannot `return`, so the rejection
+            // is the value of this branch rather than an early exit.
+            if (problems.isNotEmpty()) {
+                val details = JSONArray()
+                problems.forEach { details.put(it.toString()) }
+                textResult(
+                    JSONObject()
+                        .put("ok", false)
+                        .put("error", "Arguments do not match " + tool + "'s input schema.")
+                        .put("tool", tool)
+                        .put("problems", details)
+                        .put("required", schema?.optJSONArray("required") ?: JSONArray())
+                        .put("example", ReaSchema.example(schema) ?: JSONObject())
+                        .put(
+                            "hint",
+                            "Call altaris_rea_schema { \"name\": \"" + tool + "\" } for " +
+                                "the full shape. A nested object needs a \"kind\" field; " +
+                                "it is not a bare string.",
+                        )
+                )
+            } else {
+                runBlocking { ReaManager.call(tool, arguments, timeout) }
+            }
         }
         "altaris_rea_agents" -> {
             val ctx = ControlServer.context() ?: throw IllegalStateException("App context unavailable")
@@ -1057,17 +1156,59 @@ object McpProtocol {
         Start here, every time:
 
         1. `altaris_rea_status` — is REA installed and running.
-        2. `altaris_rea_tools` — the real catalog. REA exposes ~229 tools; call
-           `altaris_rea_call { "name": "<tool>", "arguments": { ... } }` with
-           the one that matches the question.
-        3. `altaris_rea_clone_apk` — export a clone's APKs and .so files, which
+        2. `altaris_rea_tools` — the index of REA's ~229 tools: name, one-line
+           summary, required arguments. Find the one that matches the question.
+        3. `altaris_rea_schema { "name": "<tool>" }` — that tool's **real input
+           schema** and a minimal example. Do this before the first call to any
+           tool you have not already used in this session.
+        4. `altaris_rea_call { "name": "<tool>", "arguments": { ... } }` — with
+           arguments in exactly the shape the schema showed.
+        5. `altaris_rea_clone_apk` — export a clone's APKs and .so files, which
            returns the paths to analyse.
-        4. `altaris_debug_attach` — for runtime behaviour (what a method
+        6. `altaris_debug_attach` — for runtime behaviour (what a method
            returns, what an address holds, what the process maps).
 
         These calls start REA themselves; you do not need to start it first.
         If `altaris_rea_status` says it is not installed, say so and stop —
         do not fall back to reading the file by hand.
+
+        ### REA's arguments are not strings
+
+        The mistake that wastes the most calls: a nested argument is an
+        **object discriminated by a `kind` field**, not a name. If you write
+
+            inspect_analysis_view { "source": "jadx", "view": "decompiled" }
+
+        you get `source: expected object, view: expected object`, because that
+        is not the shape. The real one is
+
+            inspect_analysis_view {
+              "source": { "kind": "retained-evidence", "evidence_id": "ev_..." },
+              "view":   { "kind": "summary" }
+            }
+
+        Read `altaris_rea_schema` first and copy its example. Every REA tool
+        rejects unknown keys, so do not add fields the schema does not list.
+
+        ### Evidence ids are session-scoped
+
+        An `ev_...` id is only valid for the REA session that produced it. When
+        a call returns a summary, the id you want is
+        `normalized_result.parent_evidence_id` from **that reply**, in **this**
+        session — not an id remembered from earlier, and not one from a
+        different tool or a previous run.
+
+        If REA answers `evidence_integrity_mismatch`, the id is stale or
+        belongs to another source. Do not retry it. Re-run the tool that
+        produced the evidence and use the id from its fresh reply, or pass the
+        Evidence inline through `source: { "kind": "inline", "evidence": ... }`.
+
+        ### When a call is rejected
+
+        `altaris_rea_call` checks your arguments against the tool's real schema
+        and names the field it objected to. Read that, fix that field, and call
+        once more. Do not repeat an unchanged call: REA's own message is generic
+        and will not change either.
 
         If an REA Android tool answers `capability_unavailable` naming
         REA_JADX_MCP_JAR, call `altaris_jadx_bridge_install`. REA does not ship

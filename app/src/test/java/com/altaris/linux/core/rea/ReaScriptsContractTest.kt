@@ -275,9 +275,10 @@ class ReaScriptsContractTest {
 
     @Test
     fun reaRunsWithItsDocumentedPrerequisites() {
-        // REA refuses several analysis families without a procps-compatible ps
-        // and documents the compact schema profile for large tool lists. Both
-        // live in the shared launch command so every server gets them.
+        // REA refuses several analysis families without a procps-compatible ps,
+        // and its input-schema profile decides whether nested argument shapes
+        // are advertised at all. Both live in the shared launch command so every
+        // server gets them.
         val manager = repoFile("src/main/kotlin/com/altaris/linux/core/rea/ReaManager.kt").readText()
         val command = manager.substringAfter("fun mcpLaunchCommand()")
             .substringBefore("private fun coreScript()")
