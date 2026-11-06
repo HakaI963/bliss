@@ -350,8 +350,8 @@ class ReaSchemaTest {
             instructions.contains("altaris_rea_schema"),
         )
         assertTrue(
-            "must say evidence ids are session-scoped",
-            instructions.contains("session-scoped"),
+            "must say an evidence id belongs to the session that produced it",
+            instructions.contains("only valid for the REA session that produced it"),
         )
         assertTrue(
             "must name the parent_evidence_id field",
