@@ -259,9 +259,10 @@ object ReaKnowledge {
 
         ## The device is this one
 
-        There is no separate physical device and no USB cable, and you never need
-        either. Never answer "no device connected": you can install, launch and
-        drive an app yourself, on the phone Altaris runs on.
+        You have a device — this one. There is no separate physical device and no
+        USB cable, and you never need either. Never answer "no device connected":
+        you can install, launch and drive an app yourself, on the phone Altaris
+        runs on.
 
         The target is a clone: an isolated copy with its own package, storage
         and virtual display. Do not search the filesystem — do not look in
