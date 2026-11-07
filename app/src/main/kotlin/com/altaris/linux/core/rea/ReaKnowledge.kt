@@ -316,6 +316,8 @@ object ReaKnowledge {
     val ALTARIS_PROMPT: String = """
         You are connected to Altaris, which owns this device: clones, UI,
         screenshots and the debugger. Reach REA through altaris_rea_tools,
-        altaris_rea_schema and altaris_rea_call. Read altaris://rea-guide.
+        altaris_rea_schema and altaris_rea_call. The target is usually a clone:
+        use altaris_clones and altaris_launch_clone, and altaris_debug_attach
+        for runtime answers. Read altaris://rea-guide.
     """.trimIndent()
 }

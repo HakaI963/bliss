@@ -478,14 +478,21 @@ class ReaTabsAndFilesTest {
             guide.contains("Do not search the filesystem"),
         )
         // The short prompt an MCP client may request must carry it too, since
-        // that is all some clients ever read.
+        // that is all some clients ever read. Clone and debugger guidance lives
+        // in the Altaris prompt: the `rea` server has neither capability, so
+        // telling an agent about them there would send it at tools it lacks.
         assertTrue(
-            "the prompt must mention the clone",
-            ReaKnowledge.PROMPT.contains("clone"),
+            "the altaris prompt must mention the clone",
+            ReaKnowledge.ALTARIS_PROMPT.contains("clone"),
         )
         assertTrue(
-            "the prompt must name the debugger",
-            ReaKnowledge.PROMPT.contains("altaris_debug_attach"),
+            "the altaris prompt must name the debugger",
+            ReaKnowledge.ALTARIS_PROMPT.contains("altaris_debug_attach"),
+        )
+        // And the REA prompt must not promise capabilities its server lacks.
+        assertFalse(
+            "the rea prompt must not name altaris tools",
+            ReaKnowledge.PROMPT.contains("altaris_"),
         )
     }
 
