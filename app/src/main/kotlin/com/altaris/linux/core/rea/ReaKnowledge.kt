@@ -62,9 +62,9 @@ object ReaKnowledge {
         schema. Do not call `rea_tools`, `list_tools`, `help` or any other
         invented name — they do not exist, and the failure costs a round trip.
 
-        Tool names use **underscores**: `inspect_artifact`, not
-        `inspect-artifact`. The dashed form is REA's *CLI*, not its MCP surface.
-        If a name you tried was rejected as unknown, retry it with underscores
+        Tool names use **underscores** everywhere. The dashed spelling belongs to
+        REA's command-line tool, not to this server, and a client that sends it
+        gets "unknown tool". If a name was rejected, retry it with underscores
         before concluding the capability is missing.
 
         ## 0b. Start an analysis
@@ -226,6 +226,11 @@ object ReaKnowledge {
         `rea://guide` there. **Tool names use underscores, never dashes** — the
         dashed form is REA's CLI, not its MCP surface.
 
+        REA's Android lane needs a jadx bridge jar. If an REA tool answers
+        `capability_unavailable` naming `REA_JADX_MCP_JAR`, call
+        `altaris_jadx_bridge_install` here: REA does not ship or fetch the jar,
+        so that whole lane stays blocked until it is installed.
+
         ### Nested arguments are objects
 
         A nested argument is an object discriminated by a `kind` field, not a
@@ -258,9 +263,10 @@ object ReaKnowledge {
         either. Never answer "no device connected": you can install, launch and
         drive an app yourself, on the phone Altaris runs on.
 
-        Every app is a clone: an isolated copy with its own package, storage and
-        virtual display. Do not search /sdcard or /data for a package — use
-        `altaris_apps`, `altaris_clones`, `altaris_install_apk`.
+        The target is a clone: an isolated copy with its own package, storage
+        and virtual display. Do not search the filesystem — do not look in
+        /sdcard or /data for a package. Use `altaris_apps`, `altaris_clones`,
+        `altaris_install_apk` instead.
 
         ## The loop
 
@@ -278,9 +284,11 @@ object ReaKnowledge {
            `altaris_text`. Prefer the semantic tools; use coordinates only when
            nothing else fits. Re-read `altaris_ui_tree` afterwards to confirm.
         6. Runtime: `altaris_debug_attach { "target": "<pkg>" }` starts the clone
-           if needed, then attaches. `altaris_debug_command`, then
-           `altaris_debug_detach`. A command starting with `$` is JavaScript run
-           by Frida; anything else is a gdb command.
+           if needed, then attaches. Use it for runtime questions — what a method
+           returns, what a value is at an address, what the process maps.
+           `altaris_debug_command`, then `altaris_debug_detach`. A command
+           starting with `$` is JavaScript run by Frida; anything else is a gdb
+           command.
         7. Clean up: `altaris_stop_clone`. Uninstall a clone **you** installed
            with `altaris_uninstall_clone`; a clone the user already had is theirs.
 
