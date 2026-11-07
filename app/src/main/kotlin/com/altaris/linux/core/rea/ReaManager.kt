@@ -1759,12 +1759,12 @@ object ReaManager {
             // The skill: what an agent loads when it needs the method.
             append("mkdir -p ").append(ROOT).append("/skill\n")
             append("cat > ").append(ROOT).append("/skill/SKILL.md <<'ALTARIS_SKILL_EOF'\n")
-            append(ReaKnowledge.GUIDE.trimEnd()).append("\n")
+            append(ReaKnowledge.ALTARIS_GUIDE.trimEnd()).append("\n")
             append("ALTARIS_SKILL_EOF\n")
             // The guide as a standalone file too, for clients that read a
             // resource rather than a skill.
             append("cat > ").append(ROOT).append("/skill/guide.md <<'ALTARIS_GUIDE_EOF'\n")
-            append(ReaKnowledge.GUIDE.trimEnd()).append("\n")
+            append(ReaKnowledge.ALTARIS_GUIDE.trimEnd()).append("\n")
             append("ALTARIS_GUIDE_EOF\n")
             // The MCP registration, as its own script so it can be re-run.
             append("cat > ").append(ROOT).append("/agent-config.mjs <<'ALTARIS_REA_EOF'\n")

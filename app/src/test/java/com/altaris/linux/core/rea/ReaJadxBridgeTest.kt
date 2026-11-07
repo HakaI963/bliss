@@ -145,8 +145,12 @@ class ReaJadxBridgeTest {
         )
         // And the guide REA serves must say it too.
         assertTrue(
-            "the guide must explain the bridge",
-            ReaKnowledge.GUIDE.contains("REA_JADX_MCP_JAR"),
+            "the REA guide must explain the bridge",
+            ReaKnowledge.REA_GUIDE.contains("REA_JADX_MCP_JAR"),
+        )
+        assertTrue(
+            "the Altaris guide must say which server installs it",
+            ReaKnowledge.ALTARIS_GUIDE.contains("altaris_jadx_bridge_install"),
         )
     }
 }

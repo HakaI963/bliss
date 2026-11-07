@@ -142,20 +142,28 @@ class ReaKnowledgeTest {
 
     @Test
     fun theGuideNamesRealToolFamilies() {
-        val guide = ReaKnowledge.GUIDE
-        // The tool names an agent will actually see in tools/list.
+        // The `rea` guide is served by the REA server, so every tool it names
+        // must be an MCP tool there — spelled with underscores. The dashed form
+        // is REA's CLI, and 18 of the 23 names the old guide gave were CLI
+        // spellings that no MCP client accepts.
+        val guide = ReaKnowledge.REA_GUIDE
         for (tool in listOf(
-            "inspect-artifact", "inspect-managed-members", "inspect-pe-imports",
-            "compare-artifacts", "extract-artifact", "inspect-sqlite-database",
+            "inspect_artifact", "inspect_managed_members", "inspect_pe_imports",
+            "compare_artifacts", "extract_artifact", "inspect_sqlite_database",
         )) {
             assertTrue("guide must mention $tool", guide.contains(tool))
+        }
+        for (dash in listOf(
+            "inspect-artifact", "inspect-managed-members", "compare-artifacts",
+            "extract-artifact", "inspect-sqlite-database",
+        )) {
+            assertFalse("guide must not use the CLI spelling $dash", guide.contains(dash))
         }
     }
 
     @Test
     fun theGuideTeachesMethodNotTrivia() {
-        val guide = ReaKnowledge.GUIDE
-        // The three rules that stop an agent wasting a run.
+        val guide = ReaKnowledge.REA_GUIDE
         assertTrue(guide.contains("Identify the artifact first"))
         assertTrue(guide.contains("Do not guess a format from the file name"))
         assertTrue(guide.contains("Never invent addresses"))

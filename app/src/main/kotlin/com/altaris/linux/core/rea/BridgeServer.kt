@@ -277,6 +277,37 @@ internal class BridgeServer(
                 .toString()
         }
 
+        // The synthetic index tool. Answered here, never forwarded: REA has no
+        // such tool, and an agent that asks for it has already been confused
+        // once. Naming it `rea_tools` matches what an agent reaches for after
+        // seeing the `rea` server name, so the guess lands somewhere useful
+        // instead of failing with "unknown tool".
+        if (method == "tools/call" && params?.optString("name") == INDEX_TOOL) {
+            val arguments = params?.optJSONObject("arguments")?.toString() ?: "{}"
+            val call = ReaBridge.beginCall(INDEX_TOOL, arguments)
+            val started = System.currentTimeMillis()
+            val body = indexResult(session.toolDefinitions())
+            ReaBridge.finishCall(
+                call.id, body, "", System.currentTimeMillis() - started,
+            )
+            return withClientId(
+                JSONObject()
+                    .put("jsonrpc", "2.0")
+                    .put(
+                        "result",
+                        JSONObject()
+                            .put("isError", false)
+                            .put(
+                                "content",
+                                JSONArray().put(
+                                    JSONObject().put("type", "text").put("text", body)
+                                )
+                            ),
+                    ),
+                id,
+            ).toString()
+        }
+
         if (method == "tools/call") {
             val name = params?.optString("name").orEmpty()
             val arguments = params?.optJSONObject("arguments")?.toString() ?: "{}"
@@ -333,6 +364,29 @@ internal class BridgeServer(
     private fun decorate(method: String, reply: JSONObject): JSONObject {
         val result = reply.optJSONObject("result") ?: return reply
         when (method) {
+            // Strip `outputSchema`, and append the synthetic index tool.
+            //
+            // REA publishes a reply schema for all 229 tools, and it is the
+            // bulk of the catalog: 4.58 MB becomes 1.10 MB without it. An agent
+            // does not need REA's reply shape to make a call, and a catalog
+            // that large gets truncated — which is indistinguishable from a
+            // missing tool. The input schemas, which *are* needed, are kept in
+            // full, including their nested shapes.
+            "tools/list" -> {
+                val tools = result.optJSONArray("tools") ?: JSONArray()
+                for (i in 0 until tools.length()) {
+                    tools.optJSONObject(i)?.remove("outputSchema")
+                }
+                var present = false
+                for (i in 0 until tools.length()) {
+                    if (tools.optJSONObject(i)?.optString("name") == INDEX_TOOL) {
+                        present = true
+                        break
+                    }
+                }
+                if (!present) tools.put(indexToolDefinition())
+                result.put("tools", tools)
+            }
             "resources/list" -> {
                 val resources = result.optJSONArray("resources") ?: JSONArray()
                 var present = false
@@ -347,7 +401,7 @@ internal class BridgeServer(
                         JSONObject()
                             .put("uri", ReaKnowledge.URI)
                             .put("name", "REA guide")
-                            .put("description", "How to work with REA's tools on a real artifact")
+                            .put("description", "How to work with this server's tools on a real artifact")
                             .put("mimeType", "text/markdown")
                     )
                 }
@@ -362,7 +416,7 @@ internal class BridgeServer(
                             JSONObject()
                                 .put("uri", ReaKnowledge.URI)
                                 .put("mimeType", "text/markdown")
-                                .put("text", ReaKnowledge.GUIDE)
+                                .put("text", ReaKnowledge.REA_GUIDE)
                         )
                     )
                 }
@@ -387,6 +441,65 @@ internal class BridgeServer(
             }
         }
         return reply
+    }
+
+    /**
+     * The synthetic index tool, as advertised.
+     *
+     * Deliberately tiny: the point is to answer "what can this server do"
+     * without shipping the catalog twice.
+     */
+    private fun indexToolDefinition(): JSONObject = JSONObject()
+        .put("name", INDEX_TOOL)
+        .put(
+            "description",
+            "Index of this server's tools: name, one-line summary and required " +
+                "arguments. Call it when you do not know which tool you need. It " +
+                "is answered by the bridge; it is not one of REA's own tools.",
+        )
+        .put(
+            "inputSchema",
+            JSONObject()
+                .put("type", "object")
+                .put("properties", JSONObject())
+                .put("required", JSONArray())
+                .put("additionalProperties", false),
+        )
+
+    /** The body of a [INDEX_TOOL] call. */
+    private fun indexResult(tools: JSONArray): String {
+        val entries = JSONArray()
+        for (i in 0 until tools.length()) {
+            val tool = tools.optJSONObject(i) ?: continue
+            val name = tool.optString("name")
+            if (name.isBlank() || name == INDEX_TOOL) continue
+            entries.put(
+                JSONObject()
+                    .put("name", name)
+                    .put("summary", firstSentence(tool.optString("description")))
+                    .put("required", tool.optJSONObject("inputSchema")?.optJSONArray("required"))
+            )
+        }
+        return JSONObject()
+            .put("ok", true)
+            .put("count", entries.length())
+            .put("tools", entries)
+            .put(
+                "note",
+                "Names use underscores. There is no other index tool: do not call " +
+                    "rea_schema, list_tools or help. Read a tool's inputSchema from " +
+                    "tools/list for its exact argument shape.",
+            )
+            .toString()
+    }
+
+    /** First sentence of [text], capped so one description cannot dominate. */
+    private fun firstSentence(text: String): String {
+        val clean = text.trim()
+        if (clean.isEmpty()) return ""
+        val stop = clean.indexOf(". ")
+        val sentence = if (stop in 1 until 200) clean.substring(0, stop + 1) else clean
+        return if (sentence.length <= 200) sentence else sentence.take(197) + "…"
     }
 
     /**
@@ -446,6 +559,8 @@ internal class BridgeServer(
 
     private companion object {
         const val TAG = "ReaBridgeServer"
+        /** The one tool the bridge answers itself. */
+        const val INDEX_TOOL = "rea_tools"
         const val TOOL_TIMEOUT_MS = 30 * 60_000L
         const val REQUEST_TIMEOUT_MS = 5 * 60_000L
     }

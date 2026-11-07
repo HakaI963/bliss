@@ -552,6 +552,35 @@ object ReaBridge {
             return out
         }
 
+        /**
+         * Every tool definition, cached for the session.
+         *
+         * `tools/list` is fetched once and reused: the synthetic index tool
+         * needs the summaries, and asking REA for 1.1 MB of catalog on every
+         * `rea_tools` call would make a cheap lookup expensive. The cache is
+         * per-session, so a restart always re-reads the real catalog.
+         */
+        @Volatile private var definitions: JSONArray? = null
+
+        fun toolDefinitions(): JSONArray {
+            definitions?.let { return it }
+            val all = JSONArray()
+            var cursor: String? = null
+            var guard = 0
+            do {
+                val params = cursor?.let { JSONObject().put("cursor", it) }
+                val result = runCatching { request("tools/list", params, 120_000L) }.getOrNull()
+                    ?: break
+                result.optJSONArray("tools")?.let { page ->
+                    for (i in 0 until page.length()) all.put(page.get(i))
+                }
+                cursor = result.optString("nextCursor").takeIf { it.isNotBlank() }
+                guard += 1
+            } while (cursor != null && guard < 50)
+            definitions = all
+            return all
+        }
+
         /** Call a tool. Throws when REA reports an error. */
         fun callTool(name: String, arguments: JSONObject, timeoutMs: Long): JSONObject {
             val params = JSONObject()

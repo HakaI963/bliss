@@ -1172,6 +1172,23 @@ object McpProtocol {
         If `altaris_rea_status` says it is not installed, say so and stop —
         do not fall back to reading the file by hand.
 
+        ### Two servers, two namespaces
+
+        `altaris` (this one) has the `altaris_*` tools: clones, UI, screenshots,
+        the debugger and the REA lifecycle. `rea` is a separate server with
+        REA's own ~229 tools under their **bare names** — `open_binary`,
+        `inspect_artifact`, `search_strings`, `inspect_analysis_view`.
+
+        Do not call an `altaris_*` tool on the `rea` server or the reverse: the
+        name will not exist and the round trip is wasted. If you are on `rea`,
+        read `rea://guide`. If you are here, use `altaris_rea_call`.
+
+        REA's MCP tool names use **underscores**. The dashed form
+        (`inspect-artifact`) is REA's CLI and no MCP client accepts it. If a name
+        is rejected as unknown, retry it with underscores before concluding the
+        capability is missing. There is no `rea_tools`, `list_tools` or `help`
+        tool on the `rea` server: its catalog *is* `tools/list`.
+
         ### REA's arguments are not strings
 
         The mistake that wastes the most calls: a nested argument is an

@@ -452,7 +452,11 @@ class ReaTabsAndFilesTest {
      */
     @Test
     fun theGuidePointsAtTheCloneAndTheDebugger() {
-        val guide = ReaKnowledge.GUIDE
+        // Clone and debugger guidance belongs to the `altaris` server, because
+        // that is the server which owns those tools. The `rea` server has none
+        // of them, so naming them there would teach the agent to call tools it
+        // cannot reach.
+        val guide = ReaKnowledge.ALTARIS_GUIDE
         assertTrue(
             "must say the target is a clone",
             guide.contains("The target is a clone"),
@@ -599,7 +603,7 @@ class ReaTabsAndFilesTest {
     /** The guide must say how to make runtime changes, not just read state. */
     @Test
     fun theGuideExplainsFridaForRuntimeChanges() {
-        val guide = ReaKnowledge.GUIDE
+        val guide = ReaKnowledge.ALTARIS_GUIDE
         assertTrue(
             "must explain the $ prefix",
             guide.contains("starting with `$` is JavaScript"),
@@ -835,7 +839,7 @@ class ReaTabsAndFilesTest {
      */
     @Test
     fun theGuideForbidsSearchingAndRequiresLaunching() {
-        val guide = ReaKnowledge.GUIDE
+        val guide = ReaKnowledge.ALTARIS_GUIDE
         assertTrue(
             "must say not to search the filesystem",
             guide.contains("Do not search the filesystem"),
