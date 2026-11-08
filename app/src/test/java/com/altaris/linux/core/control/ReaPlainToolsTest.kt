@@ -456,8 +456,8 @@ class ReaPlainToolsTest {
         assertTrue("must fill a device", plain.contains("fillDeviceId("))
         assertTrue("must use REA's own value", plain.contains("\"local\""))
         assertTrue(
-            "must only do it when the schema declares the field",
-            plain.contains("props.has(\"device_id\")"),
+            "must only do it when the schema declares the either/or pair",
+            plain.contains("props.has(\"device_id\")") && plain.contains("props.has(\"remote\")"),
         )
     }
 }

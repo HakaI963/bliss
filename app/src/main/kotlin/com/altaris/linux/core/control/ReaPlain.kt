@@ -119,16 +119,22 @@ object ReaPlain {
     }
 
     /**
-     * Put `device_id: "local"` on a tool that requires a device and has none.
+     * Put `device_id: "local"` on a tool that offers an either/or device choice.
      *
-     * Only when the schema actually declares `device_id` — a tool without one
-     * would reject the extra key under `additionalProperties: false`, and
-     * inventing a field is worse than leaving the error to name it.
+     * The trigger is the *shape*, not the word "device": the tool must declare
+     * both `device_id` and `remote`, which is how REA spells "pick one of
+     * these" for its Frida tools. Requiring `device_id` in `required` would not
+     * work — `list_frida_processes` requires neither, and still rejects a call
+     * that names neither.
+     *
+     * A tool without both properties is left alone: adding a field it does not
+     * declare would be rejected under `additionalProperties: false`, and
+     * inventing an argument is worse than letting the error name it.
      */
     private fun fillDeviceId(schema: JSONObject, values: JSONObject) {
         if (values.has("device_id") || values.has("remote")) return
         val props = schema.optJSONObject("properties") ?: return
-        if (!props.has("device_id")) return
+        if (!props.has("device_id") || !props.has("remote")) return
         values.put("device_id", "local")
     }
 
