@@ -261,9 +261,18 @@ class ReaPlainToolsTest {
             .substringBefore("Kind.CLONE_TEST ->")
         assertTrue("frida must use attach", frida.contains("altaris_frida_attach"))
         assertTrue("and run", frida.contains("altaris_frida_run"))
-        assertFalse(
-            "frida must not start with install",
-            frida.contains("altaris_frida_install"),
+        // Starting the server is a legitimate first step, but it must be
+        // optional and must not replace the attach.
+        val installStep = frida.lines().firstOrNull { it.contains("altaris_frida_install") }
+        if (installStep != null) {
+            assertTrue(
+                "starting frida-server must be optional, not a required step: $installStep",
+                installStep.contains("optional = true"),
+            )
+        }
+        assertTrue(
+            "attach must come before run",
+            frida.indexOf("altaris_frida_attach") < frida.indexOf("altaris_frida_run"),
         )
     }
 
@@ -300,5 +309,155 @@ class ReaPlainToolsTest {
             if (file.isFile) return file.readText()
         }
         throw AssertionError("source not found: $path (cwd=" + File(".").absolutePath + ")")
+    }
+
+    // ------------------------------------------------- the transport, not the schema
+
+    /**
+     * `arguments` may arrive as a one-element array.
+     *
+     * This is the shape the reported session actually sent, and it is why
+     * `altaris_frida_attach { "package": … }` answered
+     *
+     *     {"ok":false,"error":"Give a package or a pid."}
+     *
+     * for a call that plainly carried a package. `params.arguments` is
+     * specified as an object, `optJSONObject` returns null for an array, and
+     * the old parser then fell through to the inline branch — where the only
+     * key left was `name`, which it had already removed. The arguments were
+     * dropped silently, so the tool saw `{}`.
+     *
+     * A server can read this shape, so it must.
+     */
+    @Test
+    fun anArgumentsArrayIsUnwrapped() {
+        val mcp = readSource("app/src/main/kotlin/com/altaris/linux/core/control/McpProtocol.kt")
+        val fn = mcp.substringAfter("private fun argumentsOf(")
+            .substringBefore("private fun isFridaBindingError(")
+        assertTrue(
+            "must read the array form, not only the object form",
+            fn.contains("optJSONArray(\"arguments\")"),
+        )
+        assertTrue("must unwrap a single element", fn.contains("unwrapSingleObject()"))
+    }
+
+    /**
+     * A failed attach must not report `ok: true`.
+     *
+     * The reported session shows
+     *
+     *     {"ok":true,"pid":5624,"output":"Failed to attach: unable to connect
+     *      to remote frida-server"}
+     *
+     * — a success envelope around a failure, so every later script ran against
+     * nothing and reported "Not attached". The attach now inspects what Frida
+     * actually said.
+     */
+    @Test
+    fun aFailedAttachIsNotASuccess() {
+        val mcp = readSource("app/src/main/kotlin/com/altaris/linux/core/control/McpProtocol.kt")
+        val fn = mcp.substringAfter("private suspend fun fridaAttach(")
+            .substringBefore("private suspend fun fridaRun(")
+        assertTrue(
+            "must detect the failure text",
+            fn.contains("Failed to attach") || fn.contains("unable to connect"),
+        )
+        // And the failure must come before the success return.
+        val failure = fn.indexOf("could not attach")
+        val success = fn.indexOf(".put(\"ok\", true)")
+        assertTrue("must have a failure branch", failure >= 0)
+        assertTrue("failure must precede success", failure < success)
+    }
+
+    /**
+     * Attaching must record the pid the console reads.
+     *
+     * `debuggerCommand` reads `_attachedPid`, and only `altaris_debug_attach`
+     * filled it. A caller using the flat tools attached successfully and then
+     * had every script fail with "Not attached."
+     */
+    @Test
+    fun attachingRecordsThePid() {
+        val mcp = readSource("app/src/main/kotlin/com/altaris/linux/core/control/McpProtocol.kt")
+        val fn = mcp.substringAfter("private suspend fun fridaAttach(")
+            .substringBefore("private suspend fun fridaRun(")
+        assertTrue(
+            "attach must record the pid for later commands",
+            fn.contains("ReaManager.rememberAttachedPid(attached.pid)"),
+        )
+        val detach = mcp.substringAfter("private suspend fun fridaDetach(")
+            .substringBefore("private fun unwrap(")
+        assertTrue(
+            "detach must clear it",
+            detach.contains("rememberAttachedPid(null)"),
+        )
+    }
+
+    /**
+     * A script that did not run must not return gdb output as its result.
+     *
+     * `debuggerCommand` falls back to gdb, which prints
+     * "warning: section .bss not found in .gnu_debugdata" for any pid. The old
+     * `out.output.isNotBlank()` test treated that as a successful evaluation.
+     */
+    @Test
+    fun aScriptThatDidNotRunIsAFailure() {
+        val mcp = readSource("app/src/main/kotlin/com/altaris/linux/core/control/McpProtocol.kt")
+        val fn = mcp.substringAfter("private suspend fun fridaRun(")
+            .substringBefore("private suspend fun fridaList(")
+        assertTrue("must detect the not-attached state", fn.contains("Not attached"))
+        assertTrue("must detect a gdb-only fallback", fn.contains("gnu_debugdata") || fn.contains("gdbOnly"))
+        assertTrue("must report failure", fn.contains("\"no Frida session is attached\""))
+    }
+
+    /**
+     * Frida must not route through REA.
+     *
+     * REA's Frida provider imports the Node `frida` binding; Frida publishes no
+     * android-arm64 prebuild and the source build fails on device. Altaris has
+     * its own frida-server, which works, so the flat tools use it and the list
+     * comes from the clone registry.
+     */
+    @Test
+    fun fridaDoesNotDependOnRea() {
+        val mcp = readSource("app/src/main/kotlin/com/altaris/linux/core/control/McpProtocol.kt")
+        val list = mcp.substringAfter("private suspend fun fridaList(")
+            .substringBefore("private suspend fun fridaDetach(")
+        assertFalse(
+            "the list must not call REA's frida provider",
+            list.contains("list_frida_processes"),
+        )
+        assertTrue("it must report the server state", list.contains("ReaFrida.isServerRunning()"))
+        // The instructions must say so, or the model will try REA anyway.
+        val instructions = mcp.substringAfter("private val INSTRUCTIONS = \"\"\"")
+            .substringBefore("\"\"\".trimIndent()")
+            .replace(Regex("\\s+"), " ")
+        assertTrue(
+            "must say Frida is Altaris's, not REA's",
+            instructions.contains("Altaris's own frida-server"),
+        )
+        assertTrue(
+            "must forbid the REA frida tools",
+            instructions.contains("start_frida_session") &&
+                instructions.contains("never call"),
+        )
+    }
+
+    /**
+     * A tool that requires a device gets `device_id: "local"`.
+     *
+     * `list_frida_processes {}` answers "Select a device_id or a remote
+     * endpoint", and `start_frida_session` says "Select one device". Neither
+     * names the value, and REA's own example for this host is `local`.
+     */
+    @Test
+    fun aToolThatNeedsADeviceGetsOne() {
+        val plain = readSource("app/src/main/kotlin/com/altaris/linux/core/control/ReaPlain.kt")
+        assertTrue("must fill a device", plain.contains("fillDeviceId("))
+        assertTrue("must use REA's own value", plain.contains("\"local\""))
+        assertTrue(
+            "must only do it when the schema declares the field",
+            plain.contains("props.has(\"device_id\")"),
+        )
     }
 }

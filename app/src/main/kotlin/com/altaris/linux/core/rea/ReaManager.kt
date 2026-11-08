@@ -1209,6 +1209,9 @@ object ReaManager {
             // is asking for exactly that isolation.
             val hasRoot = RootShell.isRootAvailable()
             val mode = ReaDistro.effectiveDebugMode(ctx, hasRoot)
+            // Why Frida refused, when it did. Carried to the final reply so a
+            // gdb fallback does not hide it.
+            var fridaFailure = ""
             if (mode == ReaDistro.DebugMode.GADGET && FridaGadget.isCached(ctx)) {
                 val viaGadget = runCatching {
                     GuestExec.run(
@@ -1240,29 +1243,58 @@ object ReaManager {
             // Preferred: frida on the host. Start it for this session rather
             // than keeping a resident root process alive all day — that idle
             // server is what drained the battery.
-            if (mode == ReaDistro.DebugMode.ROOT && !ReaFrida.isServerRunning()) {
+            //
+            // This runs whenever root is available, not only when the mode is
+            // ROOT. A Gadget-instrumented clone needs the gadget built into the
+            // APK, so a clone created before the gadget was downloaded has none
+            // — and the old `mode == ROOT` test meant that failure fell through
+            // to gdb with root sitting right there. That is why an attach
+            // answered "Failed to attach: unable to connect to remote
+            // frida-server" for a device that could attach perfectly.
+            if (hasRoot && !ReaFrida.isServerRunning()) {
                 runCatching { ReaFrida.ensureRunningForSession() }
             }
             ReaFrida.touch()
             if (ReaFrida.isServerRunning()) {
+                // The real exit status, not `head`'s.
+                //
+                // The command used to end in `2>&1 | head -40`, so the shell
+                // reported `head`'s status — always 0 — and a failed attach was
+                // indistinguishable from a good one. That is how
+                // "Failed to attach: unable to connect to remote frida-server"
+                // came back as a success with a pid. The output now goes to a
+                // file, the status is captured, and the file is printed.
                 val result = runCatching {
                     GuestExec.run(
                         ctx.applicationContext,
                         distroId,
-                        guestFrida(
-                            "-p " + pid + " -q -e 'console.log(Process.arch); " +
-                                "console.log(JSON.stringify(Process.enumerateModules().slice(0,8).map(m=>m.name)))' " +
-                                "2>&1 | head -40",
-                        ),
+                        "set +e; out=/tmp/.altaris-attach.$$; " +
+                            guestFrida(
+                                "-p " + pid + " -q -e 'console.log(Process.arch); " +
+                                    "console.log(JSON.stringify(Process.enumerateModules().slice(0,8).map(m=>m.name)))' " +
+                                    ">\"\$out\" 2>&1",
+                            ) + "; ec=\$?; head -40 \"\$out\"; rm -f \"\$out\"; echo FRIDA_EXIT=\$ec",
                         timeoutMs = 90_000L,
                         asRoot = true,
                     )
                 }.getOrNull()
                 val out = result?.output.orEmpty()
-                if (result != null && result.exit == 0 && out.isNotBlank()) {
-                    return@withContext Attach(pid = pid, output = out)
+                val exit = Regex("FRIDA_EXIT=(\\d+)").find(out)
+                    ?.groupValues?.getOrNull(1)?.toIntOrNull()
+                val failed = out.contains("Failed to attach", ignoreCase = true) ||
+                    out.contains("unable to connect", ignoreCase = true) ||
+                    out.contains("Failed to spawn", ignoreCase = true)
+                if (result != null && exit == 0 && !failed && out.isNotBlank()) {
+                    return@withContext Attach(
+                        pid = pid,
+                        output = out.replace(Regex("FRIDA_EXIT=\\d+"), "").trim(),
+                    )
                 }
-                // Fall through to gdb rather than reporting a bare failure.
+                // Fall through to gdb rather than reporting a bare failure, but
+                // keep what frida said so the reason is not lost.
+                fridaFailure = out.lines()
+                    .firstOrNull { it.contains("Failed", true) || it.contains("unable", true) }
+                    .orEmpty()
             }
             val script = buildString {
                 append("set +e\n")
@@ -1276,9 +1308,26 @@ object ReaManager {
                 timeoutMs = 60_000L,
                 asRoot = true,
             )
+            // A gdb listing is not a Frida attach, and reporting it as one is
+            // what let the agent believe it had a JS runtime. The pid is only
+            // reported when gdb genuinely read the process *and* frida did not
+            // say why it could not attach.
+            val gdbWorked = result.output.contains("0x")
+            if (!gdbWorked) {
+                return@withContext Attach(
+                    pid = null,
+                    output = fridaFailure.ifBlank { result.tail(20) },
+                )
+            }
             Attach(
-                pid = if (result.output.contains("0x")) pid else null,
-                output = result.tail(40),
+                pid = null,
+                output = buildString {
+                    if (fridaFailure.isNotBlank()) append(fridaFailure).append('\n')
+                    append("gdb can inspect pid ").append(pid).append(" but Frida is not attached, ")
+                    append("so JavaScript cannot run. Start frida-server with ")
+                    append("altaris_frida_install, then attach again.\n")
+                    append(result.tail(20))
+                },
             )
         }
 
@@ -1480,6 +1529,27 @@ object ReaManager {
      * the registry is the authoritative list and it also covers clones created
      * before the prefix was fixed.
      */
+    /**
+     * The package name owning [pid], for a caller that only has a pid.
+     *
+     * `altaris_frida_list` reports pids, so a caller naturally passes one back
+     * to `altaris_frida_attach`. The debugger needs a package to apply the
+     * clone rule and to know which process to start, so the pid is translated
+     * here rather than being rejected as "not a package".
+     *
+     * Returns null for a pid that is not a running app — the caller reports
+     * that rather than attaching to whatever the number happens to be.
+     */
+    fun packageForPid(pid: Int): String? {
+        if (pid <= 0) return null
+        val raw = runCatching {
+            RootShell.captureResult("cat /proc/$pid/cmdline 2>/dev/null", 10_000L).stdout
+        }.getOrNull().orEmpty()
+        val name = firstArg(raw.toByteArray(Charsets.UTF_8))
+        if (name.isBlank() || !isPackageName(name)) return null
+        return name.substringBefore(':')
+    }
+
     /**
      * The host pid of a clone, for the flat tools.
      *
@@ -2189,6 +2259,15 @@ object ReaManager {
                     // having to list the directory again.
                     append("for f in \"\$libs\"/*.so; do [ -f \"\$f\" ] && echo \"\$f\"; done\n")
                 }
+                // End with an explicit success.
+                //
+                // The script used to end on the `for` loop above, whose exit
+                // status is the last `[ -f "$f" ]` test — so a package with no
+                // native libraries exited 1 after copying the APK perfectly,
+                // and the tool reported ok:false with the APK path as the
+                // "error". An agent reads that as "export failed" and never
+                // analyses the file it was just given.
+                append("exit 0\n")
             }
             val app = ctx.applicationContext
             val env = HostCommandBuilder.envMap(app, includeTerm = false)

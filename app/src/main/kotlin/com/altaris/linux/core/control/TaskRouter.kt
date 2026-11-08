@@ -385,8 +385,9 @@ object TaskRouter {
         )
 
         Kind.FRIDA_INSTRUMENTATION -> listOf(
-            Step("altaris_frida_list", "what can be targeted"),
-            Step("altaris_frida_attach", "package or pid; the mode is chosen for you"),
+            Step("altaris_frida_list", "the clones and their pids"),
+            Step("altaris_frida_install", "start frida-server, if it is not running", optional = true),
+            Step("altaris_frida_attach", "package or pid; a pid is resolved to its package"),
             Step("altaris_frida_run", "JavaScript in the clone's own runtime"),
             Step("altaris_frida_detach", "close the session"),
         )

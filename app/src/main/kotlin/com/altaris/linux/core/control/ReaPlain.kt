@@ -95,6 +95,17 @@ object ReaPlain {
             if (out.optString(key).isBlank()) out.put(key, value)
         }
 
+        // Select this host when the tool insists on a device.
+        //
+        // REA's Frida tools take `device_id` or `remote` and reject a call that
+        // names neither — `list_frida_processes {}` answers "Select a device_id
+        // or a remote endpoint", and `start_frida_session` says "Select one
+        // device". Both are describing the same missing field, and neither
+        // says which value to use. REA's own example for this host is
+        // `device_id: "local"`, so that is filled in when the tool asks for a
+        // device and the caller did not pick one.
+        fillDeviceId(schema, out)
+
         // Add the required fields of the selected branch that have an obvious
         // source, and leave the rest for the caller.
         val branchRequired = requiredFor(schema, out)
@@ -105,6 +116,20 @@ object ReaPlain {
             // left absent on purpose: `problems()` then names it.
         }
         return out
+    }
+
+    /**
+     * Put `device_id: "local"` on a tool that requires a device and has none.
+     *
+     * Only when the schema actually declares `device_id` — a tool without one
+     * would reject the extra key under `additionalProperties: false`, and
+     * inventing a field is worse than leaving the error to name it.
+     */
+    private fun fillDeviceId(schema: JSONObject, values: JSONObject) {
+        if (values.has("device_id") || values.has("remote")) return
+        val props = schema.optJSONObject("properties") ?: return
+        if (!props.has("device_id")) return
+        values.put("device_id", "local")
     }
 
     /** The `required` list that applies to [values], following `if`/`then`. */

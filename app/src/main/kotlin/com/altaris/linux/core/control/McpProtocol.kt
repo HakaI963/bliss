@@ -8,6 +8,7 @@ import com.altaris.linux.core.clone.HeadlessCloneEngine
 import com.altaris.linux.core.rea.GuestExec
 import com.altaris.linux.core.rea.ReaDistro
 import com.altaris.linux.core.rea.ReaManager
+import com.altaris.linux.core.rea.ReaFrida
 import com.altaris.linux.core.rea.ReaSchema
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
@@ -460,10 +461,11 @@ object McpProtocol {
         put(
             tool(
                 "altaris_frida_attach",
-                "Attach Frida to a running clone. Give the package name or the pid; the " +
-                    "right REA tool and mode are chosen for you. This is the call that " +
-                    "works — start_frida_session and instrument_with_frida need a mode " +
-                    "plus different fields per mode, and guessing at them is what fails.",
+                "Attach Frida to a running clone, using Altaris's own frida-server. " +
+                    "Give the package name or the pid; a pid is resolved to its package. " +
+                    "Returns the pid it actually connected to, and ok:false when the " +
+                    "attach did not happen. This does not use REA: REA's Frida provider " +
+                    "needs the Node frida binding, which cannot build on android-arm64.",
                 schema(
                     "package" to "string: optional clone package",
                     "pid" to "integer: optional host pid",
@@ -476,15 +478,17 @@ object McpProtocol {
                 "altaris_frida_run",
                 "Run JavaScript inside the attached clone and return its output. Use " +
                     "Java.perform(...) to hook, Interceptor.attach(...) to trace, or plain " +
-                    "expressions to read values.",
+                    "expressions to read values. Requires a successful " +
+                    "altaris_frida_attach first; it reports ok:false rather than " +
+                    "returning unrelated output when nothing is attached.",
                 schema("script" to "string: JavaScript to evaluate")
             )
         )
         put(
             tool(
                 "altaris_frida_list",
-                "List the processes Frida can see on this device, so you can pick a target " +
-                    "instead of guessing a pid.",
+                "List the clones and their host pids, so you can pick a target instead of " +
+                    "guessing a pid. Also reports whether frida-server is running.",
                 JSONObject()
             )
         )
@@ -741,8 +745,11 @@ object McpProtocol {
         // fields somewhere else", and returning it early is what produced
         // `Received: {}` for a call that plainly named a tool.
         val resolved = params.optJSONObject("arguments")
+            ?: params.optJSONArray("arguments")?.unwrapSingleObject()
             ?: params.optString("arguments").takeIf { it.isNotBlank() }
                 ?.let { runCatching { JSONObject(it) }.getOrNull() }
+                ?: params.optString("arguments").takeIf { it.isNotBlank() }
+                    ?.let { runCatching { JSONArray(it).unwrapSingleObject() }.getOrNull() }
         if (resolved != null && resolved.length() > 0) return resolved
 
         // Inline: every key except the envelope. This runs when `arguments` is
@@ -760,6 +767,32 @@ object McpProtocol {
         inline.remove("name")
         if (inline.length() > 0) return inline
         return resolved ?: JSONObject()
+    }
+
+    /**
+     * The arguments object inside an `arguments` **array**.
+     *
+     * `params.arguments` is specified as a JSON object, and every server-side
+     * example assumes that. Two client shapes in the wild send an array
+     * instead, and both used to arrive here as `{}` — the same empty-arguments
+     * bug that made `altaris_frida_attach { "package": … }` answer
+     * "Give a package or a pid" for a call that plainly carried one:
+     *
+     *  - `"arguments": [ { … } ]`, a single-element array, which is what an
+     *    MCP client that models a call as a list of parts produces;
+     *  - `"arguments": []`, an empty array, which is a call that really does
+     *    take no arguments.
+     *
+     * The first element is the object; anything else is treated as "no
+     * arguments" rather than as an error, because the server can read it and a
+     * shape the server can read should not be a failure. A multi-element array
+     * is *not* merged: two objects with the same key would silently pick one,
+     * and guessing which is worse than reporting nothing.
+     */
+    private fun JSONArray.unwrapSingleObject(): JSONObject? {
+        if (length() == 0) return JSONObject()
+        if (length() > 1) return null
+        return optJSONObject(0)
     }
 
     /**
@@ -991,12 +1024,17 @@ object McpProtocol {
     }
 
     /**
-     * Attach Frida to a clone, choosing REA's tool and mode for the caller.
+     * Attach Frida to a clone with Altaris's own frida-server.
      *
-     * `start_frida_session` and `instrument_with_frida` both take a `mode` plus
-     * a *different* required field per mode. The caller has a package or a pid;
-     * which REA tool and which mode that implies is this function's job, and
-     * `ReaPlain.build` fills the branch.
+     * This deliberately does not go through REA. REA's Frida tools import the
+     * Node `frida` binding, Frida publishes no android-arm64 prebuild, and the
+     * source build fails on device — verified with
+     * `meson.build:87:20: ERROR: File package-lock.json does not exist`. Altaris
+     * runs `frida-server` as root on the host with a frida CLI in the distro,
+     * which works, so that is the path.
+     *
+     * The caller supplies what it knows — a package, or a pid from
+     * `altaris_frida_list` — and the rest is resolved here.
      */
     private suspend fun fridaAttach(
         ctx: Context,
@@ -1010,69 +1048,90 @@ object McpProtocol {
                 .put("error", "Give a package or a pid.")
                 .put("hint", "Call altaris_frida_list to see what is running.")
         }
-        // Resolve the pid from the package when only a package was given, so the
-        // call carries the field REA's attach mode actually wants.
-        val resolvedPid = pid ?: packageName?.let { runCatching { resolveClonePidPublic(ctx, it) }.getOrNull() }
+        // A bare pid is still a valid target, but it has to become a package
+        // before the debugger can apply the clone rule and start the server.
+        // Resolving it here means `{ "pid": 5624 }` behaves exactly like
+        // `{ "package": "com.altaris.apps.…" }`, which is what a caller that
+        // read the pid from `altaris_frida_list` expects.
+        val effectivePackage = packageName
+            ?: pid?.let { runCatching { ReaManager.packageForPid(it) }.getOrNull() }
         val distro = reaTargetDistro(ctx)
             ?: return JSONObject().put("ok", false).put("error", "no installed distro")
 
         // Preferred: Altaris's own debugger, which already knows the modes and
         // the clone rule. It also starts the clone when it is not running.
-        if (packageName != null) {
-            val attached = ReaManager.attachDebugger(ctx, distro, packageName)
+        if (effectivePackage != null) {
+            val attached = ReaManager.attachDebugger(ctx, distro, effectivePackage)
             if (attached.pid != null) {
+                // An attach can "succeed" at finding a pid and still fail to
+                // connect. The old code returned ok:true here and put
+                // "Failed to attach: unable to connect to remote frida-server"
+                // in `output`, so the caller believed it was attached and every
+                // later script ran against nothing. Only a real connection is
+                // a success.
+                val output = attached.output
+                val failed = output.contains("Failed to attach", ignoreCase = true) ||
+                    output.contains("unable to connect", ignoreCase = true) ||
+                    output.contains("Failed to spawn", ignoreCase = true) ||
+                    output.contains("not found", ignoreCase = true) ||
+                    output.contains("not a clone", ignoreCase = true)
+                if (failed) {
+                    return JSONObject()
+                        .put("ok", false)
+                        .put("pid", attached.pid)
+                        .put("package", effectivePackage)
+                        .put("backend", "altaris")
+                        .put("output", output.takeLast(4000))
+                        .put("error", "the debugger found the process but could not attach")
+                        .put(
+                            "hint",
+                            "Check altaris_debug_state: fridaRunning must be true. " +
+                                "altaris_frida_install starts the server, and " +
+                                "altaris_debug_mode decides root versus gadget.",
+                        )
+                }
                 if (script != null) {
                     ReaManager.debuggerCommand(ctx, distro, "${'$'} " + script)
                 }
+                // Record the pid, or every later `altaris_frida_run` answers
+                // "Not attached" for a session that is plainly attached.
+                //
+                // `debuggerCommand` reads the pid from this slot, and only
+                // `altaris_debug_attach` used to fill it. A caller that used
+                // the flat tools alone therefore attached successfully and
+                // then had every script fail — the exact sequence in the
+                // report, where attach returned a pid and run said
+                // "Not attached."
+                ReaManager.rememberAttachedPid(attached.pid)
                 return JSONObject()
                     .put("ok", true)
                     .put("pid", attached.pid)
-                    .put("package", packageName)
+                    .put("package", effectivePackage)
                     .put("backend", "altaris")
-                    .put("output", attached.output.takeLast(4000))
+                    .put("output", output.takeLast(4000))
             }
-            // Fall through to REA's own tools, which may reach a device Altaris
-            // does not own.
-        }
-
-        val tool = ReaPlain.resolve(
-            "instrument_with_frida",
-            "start_frida_session",
-            "attach_frida",
-        ) ?: return JSONObject()
-            .put("ok", false)
-            .put("error", "REA publishes no Frida attach tool")
-            .put("hint", "Call altaris_doctor to check the frida provider.")
-
-        val supplied = JSONObject()
-        resolvedPid?.let { supplied.put("pid", it) }
-        packageName?.let {
-            supplied.put("package", it)
-            supplied.put("program", it)
-        }
-        if (script != null) {
-            supplied.put("source_kind", "inline")
-            supplied.put("source", script)
-            supplied.put("script", script)
-        }
-        val built = ReaPlain.build(tool, supplied)
-        val missing = ReaPlain.problems(tool, built)
-        if (missing.isNotEmpty()) {
+            // The attach was attempted and refused. Report that rather than
+            // falling through to REA, whose frida provider cannot start here.
             return JSONObject()
                 .put("ok", false)
-                .put("error", "REA's " + tool + " needs more than that.")
-                .put("tool", tool)
-                .put("missing", JSONArray().also { a -> missing.forEach { a.put(it) } })
-                .put("sent", built)
-                .put("example", ReaSchema.example(ReaManager.toolDefinition(tool)?.optJSONObject("inputSchema")) ?: JSONObject())
+                .put("package", effectivePackage)
+                .put("backend", "altaris")
+                .put("error", "could not attach")
+                .put("output", attached.output.takeLast(2000))
+                .put(
+                    "hint",
+                    "altaris_debug_state shows fridaRunning and fridaClient. " +
+                        "altaris_frida_install starts the server; a clone built before " +
+                        "the gadget was downloaded needs rebuilding to use gadget mode.",
+                )
         }
-        val reply = ReaManager.call(tool, built, 300_000L)
-        val failed = reply.optJSONObject("error") != null
+        // A pid that is not a running app cannot be attached to, and saying so
+        // is better than reporting an empty success.
         return JSONObject()
-            .put("ok", !failed)
-            .put("tool", tool)
-            .put("sent", built)
-            .put("result", unwrap(reply))
+            .put("ok", false)
+            .put("pid", pid ?: JSONObject.NULL)
+            .put("error", "no running app owns pid " + pid)
+            .put("hint", "Call altaris_frida_list for the clones and their pids.")
     }
 
     /** Run JavaScript in the attached clone. */
@@ -1082,18 +1141,36 @@ object McpProtocol {
         // Altaris's console speaks Frida with a `$` prefix and already holds the
         // attached pid, so this needs no REA session at all.
         val out = ReaManager.debuggerCommand(ctx, distro, "${'$'} " + script)
-        if (out.ok || out.output.isNotBlank()) {
+        // "Not attached" and a gdb fallback are both failures for a script.
+        //
+        // `debuggerCommand` returns gdb's output when no Frida session is up,
+        // and gdb prints warnings for *any* pid it is pointed at — so the old
+        // `out.output.isNotBlank()` test treated "warning: section .bss not
+        // found" as a successful evaluation and returned it as the script's
+        // result. A script that was never run must say so.
+        val notAttached = out.output.contains("Not attached", ignoreCase = true)
+        val gdbOnly = out.output.contains("gdb", ignoreCase = true) ||
+            out.output.contains(".gnu_debugdata", ignoreCase = true) ||
+            out.output.contains("section .bss", ignoreCase = true)
+        if (!notAttached && !gdbOnly && out.ok && out.output.isNotBlank()) {
             return JSONObject()
-                .put("ok", out.ok)
+                .put("ok", true)
                 .put("backend", "altaris")
                 .put("output", out.output.takeLast(8000))
         }
-        // Otherwise try REA's own loader.
+        // Otherwise try REA's own loader, which needs a REA Frida session.
         val tool = ReaPlain.resolve("load_frida_script", "evaluate_frida_script", "run_frida_script")
             ?: return JSONObject()
                 .put("ok", false)
-                .put("error", out.output.ifBlank { "no Frida session is attached" })
-                .put("hint", "Call altaris_frida_attach first.")
+                .put("backend", "altaris")
+                .put("output", out.output.takeLast(2000))
+                .put(
+                    "error",
+                    if (notAttached || gdbOnly) "no Frida session is attached"
+                    else out.output.lines().lastOrNull { it.isNotBlank() }.orEmpty()
+                        .ifBlank { "the script did not run" },
+                )
+                .put("hint", "Call altaris_frida_attach first; it reports the pid it attached to.")
         val built = ReaPlain.build(
             tool,
             JSONObject().put("source_kind", "inline").put("source", script).put("script", script),
@@ -1117,9 +1194,10 @@ object McpProtocol {
     /** Processes Frida can see. */
     private suspend fun fridaList(ctx: Context): JSONObject {
         val distro = reaTargetDistro(ctx)
-        val tool = ReaPlain.resolve("list_frida_processes", "list_frida_applications")
         val out = JSONObject().put("ok", true)
-        // Altaris knows its own clones and their pids directly.
+        // Altaris knows its own clones and their pids directly. This is the
+        // answer the caller needs, and it comes from the clone registry rather
+        // than from REA — whose frida provider cannot start on this platform.
         out.put("clones", HeadlessCloneEngine.clones.value.let { list ->
             JSONArray().also { arr ->
                 list.forEach { clone ->
@@ -1133,15 +1211,12 @@ object McpProtocol {
                 }
             }
         })
-        if (tool != null) {
-            val built = ReaPlain.build(tool, JSONObject())
-            val reply = ReaManager.call(tool, built, 120_000L)
-            out.put("frida", unwrap(reply))
-            if (reply.optJSONObject("error") != null) {
-                out.put("ok", false)
-                out.put("frida_error", reply.optJSONObject("error")?.optString("message").orEmpty())
-            }
-        }
+        out.put("frida_server", ReaFrida.isServerRunning())
+        out.put(
+            "use",
+            "altaris_frida_attach { \"package\": \"…\" } — Altaris attaches with its " +
+                "own frida-server, so no REA session is involved.",
+        )
         return out
     }
 
@@ -1151,6 +1226,9 @@ object McpProtocol {
         if (distro != null) {
             runCatching { ReaManager.detachDebugger(ctx, distro) }
         }
+        // Clear the slot the console reads, or a later `altaris_frida_run`
+        // runs against a pid that is no longer attached.
+        ReaManager.rememberAttachedPid(null)
         val tool = ReaPlain.resolve("close_frida_session", "detach_frida")
         if (tool != null) {
             runCatching { ReaManager.call(tool, ReaPlain.build(tool, JSONObject()), 60_000L) }
@@ -1771,43 +1849,39 @@ object McpProtocol {
                     }
                     val result = runBlocking { ReaManager.call(reaTool, safeArguments, timeout) }
                     // A `capability_unavailable` from the frida provider is the
-                    // Node binding, and it is repairable. Retrying cannot help;
-                    // repairing can, and doing it here is the difference
-                    // between an agent that completes a runtime task and one
-                    // that reports Frida as broken.
+                    // Node binding, and on this platform it cannot be built:
+                    // frida publishes no prebuild for android-arm64, so npm
+                    // falls back to compiling frida-core, which needs meson, a
+                    // git checkout of frida-core and frida-gum, and a toolchain
+                    // — verified failing on device with
+                    // "meson.build:87:20: ERROR: File package-lock.json does
+                    // not exist". Retrying it cost ten minutes per call and
+                    // never once succeeded.
+                    //
+                    // Altaris has its own frida-server, which does work. So
+                    // this reports the working route instead of launching a
+                    // build that cannot finish.
                     if (reaTool.contains("frida") && isFridaBindingError(result)) {
-                        val distro = ctx?.let { reaTargetDistro(it) }
-                        if (ctx != null && distro != null) {
-                            val lines = StringBuilder()
-                            val repair = runBlocking {
-                                ReaManager.repairFridaBinding(ctx, distro) {
-                                    lines.append(it).append('\n')
-                                }
-                            }
-                            runBlocking { ReaManager.stop() }
-                            val restarted = runBlocking { ReaManager.start(ctx, distro) }.running
-                            textResult(
-                                JSONObject()
-                                    .put("ok", repair.isBlank() && restarted)
-                                    .put("repaired", repair.isBlank())
-                                    .put("restarted", restarted)
-                                    .put("tool", reaTool)
-                                    .put("log", lines.toString().takeLast(3000))
-                                    .put(
-                                        "error",
-                                        if (repair.isBlank()) "" else repair,
-                                    )
-                                    .put(
-                                        "note",
-                                        "The frida provider needs the Node `frida` binding, " +
-                                            "an optional npm dependency npm can skip silently. " +
-                                            "It was just installed and REA restarted; call the " +
-                                            "tool again.",
-                                    )
-                            )
-                        } else {
-                            textResult(withPathHint(result, safeArguments))
-                        }
+                        textResult(
+                            JSONObject()
+                                .put("ok", false)
+                                .put("tool", reaTool)
+                                .put("error", "REA's Frida provider is unavailable on this platform")
+                                .put(
+                                    "why",
+                                    "REA imports the Node `frida` binding, an optional npm " +
+                                        "dependency. Frida ships no android-arm64 prebuild, so " +
+                                        "npm tries to compile frida-core and fails.",
+                                )
+                                .put(
+                                    "use",
+                                    "altaris_frida_attach — Altaris runs its own frida-server " +
+                                        "and does not need REA for runtime instrumentation. " +
+                                        "altaris_frida_attach { \"package\": \"…\" } then " +
+                                        "altaris_frida_run { \"script\": \"…\" }.",
+                                )
+                                .put("provider", unwrap(result))
+                        )
                     } else {
                         textResult(withPathHint(result, safeArguments))
                     }
@@ -1879,6 +1953,15 @@ object McpProtocol {
                     .put("restarted", restarted)
                     .put("log", lines.toString().takeLast(4000))
                     .put("error", error)
+                    // The binding needs a native compile that cannot succeed
+                    // here, so say where the working path is rather than
+                    // leaving the caller to try this again.
+                    .put(
+                        "use",
+                        "altaris_frida_attach works without REA: Altaris runs its own " +
+                            "frida-server on the host and a frida CLI inside the distro. " +
+                            "REA's Node binding is only needed by REA's own frida tools.",
+                    )
             )
         }
         "altaris_gadget_prepare" -> {
@@ -2179,6 +2262,30 @@ object McpProtocol {
         These calls start REA themselves; you do not need to start it first.
         If `altaris_rea_status` says it is not installed, say so and stop —
         do not fall back to reading the file by hand.
+
+        ### Frida is Altaris's, not REA's
+
+        `altaris_frida_attach` and `altaris_frida_run` use **Altaris's own
+        frida-server**, which runs as root on the host with a frida CLI inside
+        the distro. They do not go through REA and they do not need a REA
+        session. That is deliberate: REA's own Frida tools import the Node
+        `frida` binding, Frida publishes no android-arm64 prebuild, and the
+        source build fails on device. It is not fixable by retrying.
+
+        So never call `start_frida_session`, `instrument_with_frida`,
+        `list_frida_processes` or `load_frida_script` directly, and do not try
+        to repair REA's Frida provider. Use:
+
+        - `altaris_frida_list` — the clones and their pids.
+        - `altaris_frida_attach { "package": "…" }` or `{ "pid": … }` — attach.
+          It reports the pid it actually connected to, and `ok: false` when it
+          could not.
+        - `altaris_frida_run { "script": "…" }` — evaluate JavaScript in the
+          attached process. This only works after a successful attach.
+        - `altaris_frida_detach` — close the session.
+
+        If attach fails, read `altaris_debug_state`: `fridaRunning` must be
+        true. `altaris_frida_install` starts the server.
 
         ### Do not call REA's Frida tools directly
 
