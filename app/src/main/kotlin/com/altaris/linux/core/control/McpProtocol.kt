@@ -1,9 +1,11 @@
 package com.altaris.linux.core.control
 
+import android.content.Context
 import android.graphics.BitmapFactory
 import android.util.Base64
 import com.altaris.linux.core.a11y.A11yBridge
 import com.altaris.linux.core.clone.HeadlessCloneEngine
+import com.altaris.linux.core.rea.GuestExec
 import com.altaris.linux.core.rea.ReaDistro
 import com.altaris.linux.core.rea.ReaManager
 import com.altaris.linux.core.rea.ReaSchema
@@ -722,7 +724,7 @@ object McpProtocol {
             append("; do [ -e \"\$p\" ] && { echo \"\$p\"; exit 0; }; done; exit 1")
         }
         val found = runCatching {
-            runBlocking { GuestExec.run(ctx.applicationContext, distro, script, timeoutMs = 15_000L) }
+            GuestExec.run(ctx.applicationContext, distro, script, timeoutMs = 15_000L)
         }.getOrNull() ?: return null
         if (!found.ok) return null
         val resolved = found.output.lines().map { it.trim() }.firstOrNull { it.startsWith("/") }
