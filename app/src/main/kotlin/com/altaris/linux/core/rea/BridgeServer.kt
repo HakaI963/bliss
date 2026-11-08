@@ -367,6 +367,49 @@ internal class BridgeServer(
                 ).toString()
             }
 
+            // A process-instrumenting tool aimed at a non-clone is refused
+            // here too.
+            //
+            // The `rea` bridge is the path the in-distro agent uses, and it
+            // forwards straight to REA — so it never passes through
+            // `ReaManager.call`, where the other half of this guard lives.
+            // Without this, `start_frida_session` on a system package reaches
+            // root frida-server and crashes the process it was pointed at.
+            val guard = ReaManager.cloneGuardProblem(context, name, arguments)
+            if (guard.isNotBlank()) {
+                val body = JSONObject()
+                    .put("ok", false)
+                    .put("error", guard)
+                    .put("tool", name)
+                    .put(
+                        "hint",
+                        "Only a clone package (com.altaris.apps.*) can be " +
+                            "instrumented. altaris_clones lists them.",
+                    )
+                ReaBridge.finishCall(
+                    call.id,
+                    body.toString(),
+                    "refused: not a clone",
+                    System.currentTimeMillis() - started,
+                )
+                return withClientId(
+                    JSONObject()
+                        .put("jsonrpc", "2.0")
+                        .put(
+                            "result",
+                            JSONObject()
+                                .put("isError", true)
+                                .put(
+                                    "content",
+                                    JSONArray().put(
+                                        JSONObject().put("type", "text").put("text", body.toString())
+                                    ),
+                                ),
+                        ),
+                    id,
+                ).toString()
+            }
+
             return try {
                 val reply = session.forward(method, params, TOOL_TIMEOUT_MS)
                 val result = reply.optJSONObject("result")

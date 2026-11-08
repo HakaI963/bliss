@@ -333,6 +333,59 @@ object ReaDistro {
         "altaris_rea_settings", Context.MODE_PRIVATE,
     )
 
+    // ----------------------------------------------------------- debug mode
+
+    /** Preference: how the debugger instruments a clone. */
+    private const val KEY_DEBUG_MODE = "debug_mode"
+
+    /**
+     * How Frida reaches a clone.
+     *
+     * The two paths are structurally different, and picking one is a real
+     * decision rather than a preference:
+     *
+     *  - [ROOT] — `frida-server` runs as root on the host and attaches from
+     *    outside. It works on clones that already exist, but a root daemon
+     *    will attach to *anything* it is pointed at, so it is the mode that
+     *    can crash a system app if a command names one.
+     *  - [GADGET] — the library is baked into the clone's APK and loads inside
+     *    the clone's own process. No root, no ptrace, and it structurally
+     *    cannot touch another app because it only ever runs in the UID of the
+     *    app it was built into. It only applies to clones built after the
+     *    gadget was downloaded.
+     *
+     * [AUTO] picks Gadget when root is unavailable and root when it is.
+     */
+    enum class DebugMode(val id: String, val label: String) {
+        AUTO("auto", "Automatic"),
+        ROOT("root", "Root (frida-server)"),
+        GADGET("gadget", "No root (Gadget)"),
+    }
+
+    fun debugMode(context: Context): DebugMode {
+        val raw = prefs(context.applicationContext).getString(KEY_DEBUG_MODE, "") ?: ""
+        return DebugMode.entries.firstOrNull { it.id == raw } ?: DebugMode.AUTO
+    }
+
+    fun setDebugMode(context: Context, mode: DebugMode) {
+        prefs(context.applicationContext).edit()
+            .putString(KEY_DEBUG_MODE, mode.id)
+            .apply()
+    }
+
+    /**
+     * The mode actually in effect, resolving [DebugMode.AUTO].
+     *
+     * Callers use this rather than [debugMode] so a decision never has to be
+     * repeated: with AUTO and no root, the answer is Gadget; with AUTO and
+     * root, it is the server.
+     */
+    fun effectiveDebugMode(context: Context, hasRoot: Boolean): DebugMode =
+        when (debugMode(context)) {
+            DebugMode.AUTO -> if (hasRoot) DebugMode.ROOT else DebugMode.GADGET
+            else -> debugMode(context)
+        }
+
     // ----------------------------------------------------------- clone-only
 
     /** Preference: the debugger may only ever touch clones. */

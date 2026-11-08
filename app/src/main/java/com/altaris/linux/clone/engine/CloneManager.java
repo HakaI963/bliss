@@ -768,26 +768,40 @@ final class CloneManager {
     }
 
     /**
-     * Bake Frida Gadget into the clone when root is not available.
+     * Bake Frida Gadget into the clone when the chosen mode needs it.
      *
      * Root is the default because it can attach to any process, including
      * clones that already exist. Without root, ptrace across UIDs is refused by
      * the kernel, and the only place instrumentation can run is inside the
      * clone's own process — which means the library has to be part of the APK.
      *
+     * **Gadget is not only the no-root fallback.** The user picks a mode in
+     * Tools → Reverse engineering, and "No root (Gadget)" on a rooted device
+     * is a deliberate choice: Gadget runs inside the clone's UID, so it
+     * structurally cannot attach to SystemUI or a real app. The previous
+     * version returned early whenever root existed, which made that choice
+     * impossible — the clone was built without the gadget and the no-root path
+     * could never work, whatever the setting said.
+     *
      * A failure here is logged and the clone is still built: an undebuggable
      * clone is better than no clone, and the caller is told which it got.
      */
     private void injectGadgetIfNeeded(File apk) {
-        // Kotlin objects expose their members through INSTANCE, not statically.
-        if (com.altaris.linux.core.root.RootShell.INSTANCE.isRootAvailable()) {
-            return;
-        }
         try {
+            // Kotlin objects expose their members through INSTANCE, not statically.
+            boolean hasRoot =
+                    com.altaris.linux.core.root.RootShell.INSTANCE.isRootAvailable();
+            com.altaris.linux.core.rea.ReaDistro.DebugMode mode =
+                    com.altaris.linux.core.rea.ReaDistro.INSTANCE
+                            .effectiveDebugMode(context, hasRoot);
+            if (mode != com.altaris.linux.core.rea.ReaDistro.DebugMode.GADGET) {
+                engine.log("debug mode: root (frida-server), clone is not gadget-injected");
+                return;
+            }
             File gadget = com.altaris.linux.core.rea.FridaGadget.INSTANCE.cacheFile(context);
             if (!gadget.isFile() || gadget.length() < 1000000L) {
-                engine.log("gadget: not downloaded yet, clone will not be debuggable "
-                        + "without root");
+                engine.log("gadget: not downloaded yet, so this clone cannot be "
+                        + "debugged without root. Download it in Tools → Reverse engineering.");
                 return;
             }
             boolean ok = com.altaris.linux.core.rea.FridaGadgetInjector.INSTANCE

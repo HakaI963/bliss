@@ -2,6 +2,7 @@ package com.altaris.linux.core.rea
 
 import android.content.Context
 import android.util.Log
+import com.altaris.linux.core.root.RootShell
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -228,6 +229,22 @@ object ReaDebugger {
     }
 
     suspend fun installFrida(context: Context) = withContext(Dispatchers.IO) {
+        // A user who chose Gadget does not want a root daemon downloaded and
+        // started behind that choice. Install the gadget instead.
+        val hasRoot = RootShell.isRootAvailable()
+        if (ReaDistro.effectiveDebugMode(context, hasRoot) == ReaDistro.DebugMode.GADGET) {
+            _state.value = _state.value.copy(fridaBusy = "Downloading Frida Gadget")
+            val gadget = FridaGadget.ensure(context)
+            _state.value = _state.value.copy(fridaBusy = "")
+            if (gadget.error.isNotBlank()) {
+                append("gadget: " + gadget.error)
+                _state.value = _state.value.copy(error = gadget.error)
+            } else {
+                append("gadget ready: new clones are debuggable without root")
+                _state.value = _state.value.copy(gadgetReady = gadget.cached)
+            }
+            return@withContext
+        }
         _state.value = _state.value.copy(fridaBusy = "Downloading frida-server")
         val server = ReaFrida.installServer(context)
         if (server.error.isNotBlank()) {

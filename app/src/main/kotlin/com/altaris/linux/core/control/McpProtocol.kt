@@ -478,9 +478,30 @@ object McpProtocol {
             )
         )
         put(tool("altaris_frida_install", "Install and start frida-server on the host and the frida CLI in the REA distro. Needed once, before runtime instrumentation. Requires root.", JSONObject()))
+        put(
+            tool(
+                "altaris_frida_repair",
+                "Repair REA's Node `frida` binding. Call this when a REA frida tool " +
+                    "answers capability_unavailable: the binding is an optional npm " +
+                    "dependency that npm skips silently, and nothing else retries it. " +
+                    "Safe to call when it already works — the script verifies the " +
+                    "import first — and it restarts REA so the provider picks it up.",
+                JSONObject()
+            )
+        )
         put(tool("altaris_frida_stop", "Stop frida-server.", JSONObject()))
         put(tool("altaris_gadget_prepare", "Download Frida Gadget so new clones are debuggable without root. Root attaches from outside; Gadget runs inside the clone.", JSONObject()))
         put(tool("altaris_debug_state", "Debugger state: attached pid, target, backend, and the transcript.", JSONObject()))
+        put(
+            tool(
+                "altaris_debug_mode",
+                "Which path instruments a clone: root (frida-server) or Gadget " +
+                    "(no root, runs inside the clone's own UID). Call with no argument " +
+                    "to read it. Gadget only applies to clones built after it was " +
+                    "downloaded, but it cannot reach another app — the root daemon can.",
+                schema("mode" to "string: optional: auto, root or gadget")
+            )
+        )
         put(tool("altaris_debug_detach", "Detach the debugger and leave the cloned app running.", JSONObject()))
         put(
             tool(
@@ -1115,6 +1136,30 @@ object McpProtocol {
             runBlocking { com.altaris.linux.core.rea.ReaDebugger.installFrida(ctx) }
             textResult(debugStateJson())
         }
+        "altaris_frida_repair" -> {
+            val ctx = ControlServer.context() ?: throw IllegalStateException("App context unavailable")
+            val distro = reaTargetDistro(ctx)
+                ?: throw IllegalStateException("no installed distro")
+            val lines = StringBuilder()
+            val error = runBlocking {
+                ReaManager.repairFridaBinding(ctx, distro) { lines.append(it).append('\n') }
+            }
+            // REA reads the module at startup, so a running server has to be
+            // restarted before the provider stops reporting unavailable.
+            var restarted = false
+            if (error.isBlank()) {
+                runBlocking { ReaManager.stop() }
+                restarted = runBlocking { ReaManager.start(ctx, distro) }.running
+            }
+            textResult(
+                JSONObject()
+                    .put("ok", error.isBlank())
+                    .put("repaired", error.isBlank())
+                    .put("restarted", restarted)
+                    .put("log", lines.toString().takeLast(4000))
+                    .put("error", error)
+            )
+        }
         "altaris_gadget_prepare" -> {
             val ctx = ControlServer.context() ?: throw IllegalStateException("App context unavailable")
             runBlocking { com.altaris.linux.core.rea.ReaDebugger.prepareGadget(ctx) }
@@ -1126,6 +1171,34 @@ object McpProtocol {
             textResult(debugStateJson())
         }
         "altaris_debug_state" -> textResult(debugStateJson())
+        "altaris_debug_mode" -> {
+            val ctx = ControlServer.context() ?: throw IllegalStateException("App context unavailable")
+            val requested = args.optString("mode").takeIf { it.isNotBlank() }
+            if (requested != null) {
+                val mode = ReaDistro.DebugMode.entries
+                    .firstOrNull { it.id.equals(requested, ignoreCase = true) }
+                    ?: throw IllegalArgumentException(
+                        "Unknown mode \"" + requested + "\". Use auto, root or gadget."
+                    )
+                ReaDistro.setDebugMode(ctx, mode)
+            }
+            val hasRoot = com.altaris.linux.core.root.RootShell.isRootAvailable()
+            val chosen = ReaDistro.debugMode(ctx)
+            textResult(
+                JSONObject()
+                    .put("ok", true)
+                    .put("mode", chosen.id)
+                    .put("effective", ReaDistro.effectiveDebugMode(ctx, hasRoot).id)
+                    .put("root", hasRoot)
+                    .put(
+                        "note",
+                        "Gadget only applies to clones built after it was downloaded, " +
+                            "and it cannot reach another app. Root attaches from " +
+                            "outside, works on existing clones, and can reach any " +
+                            "process — keep \"clones only\" on with root.",
+                    )
+            )
+        }
         "altaris_debug_detach" -> {
             val ctx = ControlServer.context() ?: throw IllegalStateException("App context unavailable")
             runBlocking { com.altaris.linux.core.rea.ReaDebugger.detach(ctx) }
@@ -1382,6 +1455,25 @@ object McpProtocol {
         These calls start REA themselves; you do not need to start it first.
         If `altaris_rea_status` says it is not installed, say so and stop —
         do not fall back to reading the file by hand.
+
+        ### Two debug modes, and why the choice matters
+
+        `altaris_debug_mode` reports and sets how a clone is instrumented:
+
+        - **root** — `frida-server` runs as root and attaches from outside. It
+          works on a clone that already exists. It can also attach to **any**
+          process, so a wrong target instruments SystemUI or a real app and
+          takes the phone's screenshots, downloads and UI down with it.
+        - **gadget** — the library is baked into the clone's APK and runs inside
+          the clone's own UID. No root, and it *cannot* reach another app. It
+          only applies to clones built after it was downloaded, so a clone made
+          earlier has no gadget to attach to.
+        - **auto** — gadget when there is no root, root when there is.
+
+        Never point a root attach at anything but a clone, and never call REA's
+        own Frida tools (`start_frida_session`, `list_frida_processes`) with a
+        system package. Those go to the same root daemon and are refused while
+        "Debugger: clones only" is on — leave it on.
 
         ### Runtime work: use the debugger tools, not the frida CLI
 

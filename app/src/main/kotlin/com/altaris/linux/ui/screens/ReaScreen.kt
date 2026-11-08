@@ -1375,12 +1375,64 @@ private fun DebuggerTab(accent: Color) {
         )
         Spacer(Modifier.height(4.dp))
 
+        // Which path instruments a clone. A real choice, not a preference.
+        //
+        // Root can attach to a clone that already exists, but the daemon runs
+        // as root and will attach to *anything* it is told to — which is how a
+        // system app got instrumented and the phone stopped working. Gadget
+        // runs inside the clone's own UID, so it cannot reach another app at
+        // all, at the cost of only applying to clones built after it was
+        // downloaded. The two are not interchangeable, so the mode is explicit
+        // and the clone build honours it.
+        val hasRoot = remember { com.altaris.linux.core.root.RootShell.isRootAvailable() }
+        var debugMode by remember { mutableStateOf(ReaDistro.debugMode(context)) }
+        PrismRow(
+            title = "Debug mode",
+            subtitle = when (debugMode) {
+                ReaDistro.DebugMode.AUTO ->
+                    "Automatic — " + if (hasRoot) {
+                        "root, because this device has it"
+                    } else {
+                        "Gadget, because there is no root"
+                    }
+                ReaDistro.DebugMode.ROOT ->
+                    "frida-server as root. Attaches from outside, works on clones that " +
+                        "already exist — and can reach any process, so keep " +
+                        "\"clones only\" on."
+                ReaDistro.DebugMode.GADGET ->
+                    "Gadget inside the clone. No root, cannot touch another app, and " +
+                        "only applies to clones built from now on."
+            },
+            accent = accent,
+            leading = {
+                PrismOrb(
+                    active = debugMode != ReaDistro.DebugMode.GADGET,
+                    accent = accent,
+                )
+            },
+            trailing = {
+                PrismChip(
+                    debugMode.label,
+                    accent,
+                    selected = true,
+                    onClick = {
+                        debugMode = when (debugMode) {
+                            ReaDistro.DebugMode.AUTO -> ReaDistro.DebugMode.ROOT
+                            ReaDistro.DebugMode.ROOT -> ReaDistro.DebugMode.GADGET
+                            ReaDistro.DebugMode.GADGET -> ReaDistro.DebugMode.AUTO
+                        }
+                        ReaDistro.setDebugMode(context, debugMode)
+                    },
+                )
+            },
+        )
+        Spacer(Modifier.height(4.dp))
+
         // Frida: the backend that can actually see and patch the clone.
         //
         // Root-only. Without root it cannot attach across UIDs, so showing it
         // would offer a button that can only fail; the Gadget row below is the
         // no-root path and is the only one shown in that case.
-        val hasRoot = remember { com.altaris.linux.core.root.RootShell.isRootAvailable() }
         if (hasRoot) PrismRow(
             title = "Frida runtime",
             subtitle = when {

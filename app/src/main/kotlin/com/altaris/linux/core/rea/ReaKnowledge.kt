@@ -206,6 +206,21 @@ object ReaKnowledge {
         the `altaris` server has the clone, screenshot, UI and debugger tools that
         fit it. Use those for clone work; use REA for the artifact.
 
+        **Never attach these to a system process.** `start_frida_session` talks
+        to a root daemon, which will attach to whatever it is given. Pointed at
+        SystemUI, the launcher or any real app, it instruments that process and
+        crashes it — and screenshots, downloads and the UI go with it. Only a
+        clone package (`com.altaris.apps.*`) is a valid target, and the calls
+        are refused for anything else while "Debugger: clones only" is on.
+
+        A `capability_unavailable` from the frida provider means the Node
+        `frida` binding is missing, not that the target is wrong: the binding
+        is an optional dependency npm can skip silently. Repair it from the
+        `altaris` server's Frida repair action, which installs the binding and
+        restarts REA so the provider picks it up. Do not conclude that Frida is
+        unavailable because of that error, and do not try to install the npm
+        module by hand.
+
         ## Reference material
 
         For a human, not required to use the tools:
