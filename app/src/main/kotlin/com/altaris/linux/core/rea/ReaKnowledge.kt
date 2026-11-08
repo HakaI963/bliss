@@ -96,6 +96,26 @@ object ReaKnowledge {
         schema does not list. Read the tool's `inputSchema` from `tools/list`
         before the first call.
 
+        ### When a call is rejected, read the field list
+
+        A shape mistake comes back as a structured reply, not REA's generic
+        sentence. It carries:
+
+            "problems": ["class_name: is required — a string",
+                         "path: is not a recognised argument"]
+            "required": ["class_name", ...]
+            "example":  { ... }   <- a minimal call that its own schema accepts
+
+        Copy `example`, fill in the real values, and call once more. The call
+        was **not sent**, so nothing was analysed and nothing is running. Do not
+        retry with a different guess: a second guess is a second round trip for
+        the same information, which `required` already gave you.
+
+        A missing required key and an unknown key look the same from REA's side
+        (one generic line) but not here: `is required` means add it, `is not a
+        recognised argument` means remove it. Both at once usually means the
+        argument belongs to a different tool in the same family.
+
         ## 0d. Evidence ids: use the parent, not the receipt
 
         A summary reply carries two ids and they are not interchangeable:
@@ -284,12 +304,25 @@ object ReaKnowledge {
         5. Act: `altaris_ui_tap_text`, `altaris_tap`, `altaris_swipe`,
            `altaris_text`. Prefer the semantic tools; use coordinates only when
            nothing else fits. Re-read `altaris_ui_tree` afterwards to confirm.
+        5b. Wait: `altaris_wait { "until": "<text>" }` between the tap and the
+           re-read. There is **no `setTimeout`, `sleep` or `Promise` timer** in
+           the environment that runs your tool calls — referencing one throws
+           `Unknown identifier 'setTimeout'` and the call fails before the tool
+           runs, so the tap never happens. Use the tool, not a timer.
         6. Runtime: `altaris_debug_attach { "target": "<pkg>" }` starts the clone
            if needed, then attaches. Use it for runtime questions — what a method
            returns, what a value is at an address, what the process maps.
            `altaris_debug_command`, then `altaris_debug_detach`. A command
            starting with `$` is JavaScript run by Frida; anything else is a gdb
            command.
+
+           Do not hand-roll `frida` or `frida-ps` commands. The CLI lives
+           **inside this distro**, not on the host, and the server listens on
+           `127.0.0.1:27042` — not on the proot gateway address. A guessed
+           command fails with `unrecognized arguments` or
+           `unable to connect to remote frida-server` while the server is up,
+           which reads as a broken install. The debugger tools already do the
+           attaching; use them.
         7. Clean up: `altaris_stop_clone`. Uninstall a clone **you** installed
            with `altaris_uninstall_clone`; a clone the user already had is theirs.
 

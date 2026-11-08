@@ -555,25 +555,45 @@ class ReaTabsAndFilesTest {
     }
 
     /**
-     * The attach must run where the PID is visible.
+     * The attach must reach a server that runs where the PID is visible.
      *
-     * A debugger inside the distro has its own PID namespace, so the host PID
-     * does not exist there. That is why the first attach did nothing.
+     * The **server** has to be on the host: a debugger inside the distro has
+     * its own PID namespace, so the clone's host PID does not exist there.
+     * That is why the first attach did nothing.
+     *
+     * The **client** is the other half and lives in the distro — `installClient`
+     * is a pip install. An earlier version of this test accepted a literal
+     * `127.0.0.1:` inside the attach body, which the host-side
+     * `frida -H …` command satisfied while being unable to work at all: the
+     * binary is not on the host. The assertion is now that the attach reaches
+     * the loopback server *through the guest helper*, which is the only
+     * invocation that can find the client.
      */
     @Test
-    fun theAttachRunsOnTheHostSide() {
+    fun theAttachReachesTheHostServerFromTheGuest() {
         val manager = readSource(
             "app/src/main/kotlin/com/altaris/linux/core/rea/ReaManager.kt"
         )
         val attach = manager.substringAfter("suspend fun attachDebugger(")
             .substringBefore("suspend fun detachDebugger(")
         assertTrue(
-            "must try frida on the host first",
+            "must start and probe the host server",
             attach.contains("ReaFrida.isServerRunning()"),
         )
         assertTrue(
-            "must reach the server over loopback",
-            attach.contains("127.0.0.1:"),
+            "must reach the server over loopback, from the distro",
+            attach.contains("guestFrida("),
+        )
+        assertTrue(
+            "must run the client inside the distro",
+            attach.contains("GuestExec.run("),
+        )
+        // The loopback address itself lives in the helper, and must be there.
+        val helper = manager.substringAfter("private fun guestFrida(")
+            .substringBefore("suspend fun debuggerCommand(")
+        assertTrue(
+            "the helper must target the loopback server",
+            helper.contains("127.0.0.1:"),
         )
     }
 

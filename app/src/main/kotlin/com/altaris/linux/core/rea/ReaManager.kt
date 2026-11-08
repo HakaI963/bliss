@@ -1202,19 +1202,23 @@ object ReaManager {
             }
             // Gadget first when it is the only option: with no root there is
             // no server, and a clone built with the gadget listens on its own
-            // port. `frida -H` reaches it exactly like a server.
+            // port. `frida -H` reaches it exactly like a server — from inside
+            // the distro, which is where the CLI is installed.
             if (!ReaFrida.isServerRunning() && FridaGadget.isCached(ctx)) {
                 val viaGadget = runCatching {
-                    RootShell.captureResult(
-                        "frida -H 127.0.0.1:" + GADGET_PORT + " -p " + pid +
-                            " -q -e 'console.log(Process.arch)' 2>&1 | head -20",
-                        60_000L,
+                    GuestExec.run(
+                        ctx.applicationContext,
+                        distroId,
+                        guestFrida("-p " + pid + " -q -e 'console.log(Process.arch)' 2>&1 | head -20",
+                            GADGET_PORT),
+                        timeoutMs = 60_000L,
+                        asRoot = true,
                     )
                 }.getOrNull()
-                if (viaGadget != null && viaGadget.exitCode == 0 &&
-                    viaGadget.stdout.isNotBlank()
+                if (viaGadget != null && viaGadget.exit == 0 &&
+                    viaGadget.output.isNotBlank()
                 ) {
-                    return@withContext Attach(pid = pid, output = viaGadget.stdout)
+                    return@withContext Attach(pid = pid, output = viaGadget.output)
                 }
             }
             // Preferred: frida on the host. Start it for this session rather
@@ -1226,16 +1230,20 @@ object ReaManager {
             ReaFrida.touch()
             if (ReaFrida.isServerRunning()) {
                 val result = runCatching {
-                    RootShell.captureResult(
-                        "frida -H 127.0.0.1:" + ReaFrida.PORT + " -p " + pid +
-                            " -q -e 'console.log(Process.arch); " +
-                            "console.log(JSON.stringify(Process.enumerateModules().slice(0,8).map(m=>m.name)))' " +
-                            "2>&1 | head -40",
-                        90_000L,
+                    GuestExec.run(
+                        ctx.applicationContext,
+                        distroId,
+                        guestFrida(
+                            "-p " + pid + " -q -e 'console.log(Process.arch); " +
+                                "console.log(JSON.stringify(Process.enumerateModules().slice(0,8).map(m=>m.name)))' " +
+                                "2>&1 | head -40",
+                        ),
+                        timeoutMs = 90_000L,
+                        asRoot = true,
                     )
                 }.getOrNull()
-                val out = result?.stdout.orEmpty()
-                if (result != null && result.exitCode == 0 && out.isNotBlank()) {
+                val out = result?.output.orEmpty()
+                if (result != null && result.exit == 0 && out.isNotBlank()) {
                     return@withContext Attach(pid = pid, output = out)
                 }
                 // Fall through to gdb rather than reporting a bare failure.
@@ -1301,12 +1309,35 @@ object ReaManager {
         }
 
     /**
-     * Run one console command against the attached process.
+     * The frida CLI invocation for a command run **inside the distro**.
+     *
+     * This distinction is why the attach failed with
+     * `Failed to spawn: unable to connect to remote frida-server` while the
+     * server was demonstrably listening. `installClient` puts `frida` inside
+     * the distro — it is a pip package — but the attach invoked `frida -H …`
+     * through [RootShell], which runs on the **host**. There is no `frida` on
+     * the host (only `frida-server` in [ReaFrida.HOST_DIR]), so the command
+     * either was not found or found something unrelated, and the agent
+     * concluded the server was down.
+     *
+     * A host-side client would be the wrong tool anyway: it has its own view
+     * of the process table. The CLI belongs in the guest, where it reaches the
+     * host's server over the loopback proot and chroot share.
+     *
+     * [port] is the frida-server port, or [GADGET_PORT] for a Gadget-injected
+     * clone: the two listen separately, and a client pointed at the wrong one
+     * reports "unable to connect" even though a server is up.
+     */
+    private fun guestFrida(command: String, port: Int = ReaFrida.PORT): String =
+        "PATH=/usr/local/bin:/usr/bin:/bin:\$PATH; export PATH; " +
+            "frida -H 127.0.0.1:" + port + " " + command
+
+    /**
+     * Run one gdb or Frida command against the attached process.
      *
      * Frida first: a script is evaluated in the target's own JS runtime, which
      * is what makes runtime reads and patching possible. When only gdb is
-     * available the command is passed to it on the host, so it can see the
-     * process — a gdb inside the distro cannot.
+     * available the command is passed to it inside the distro, as root.
      */
     suspend fun debuggerCommand(
         ctx: Context,
@@ -1340,17 +1371,17 @@ object ReaManager {
             // command, so the console can speak both without a mode switch.
             if (command.startsWith("$")) {
                 val js = command.removePrefix("$").trim()
-                val result = runCatching {
-                    RootShell.captureResult(
-                        "frida -H 127.0.0.1:" + ReaFrida.PORT + " -p " + pid +
-                            " -q -e " + GuestExec.shellQuote(js) + " 2>&1 | head -200",
-                        90_000L,
-                    )
-                }.getOrNull()
-                return@withContext GuestExec.Result(
-                    result?.exitCode ?: -1,
-                    result?.stdout.orEmpty(),
+                // The CLI lives in the distro, not on the host: see [guestFrida].
+                val result = GuestExec.run(
+                    ctx.applicationContext,
+                    distroId,
+                    guestFrida(
+                        "-p " + pid + " -q -e " + GuestExec.shellQuote(js) + " 2>&1 | head -200",
+                    ),
+                    timeoutMs = 90_000L,
+                    asRoot = true,
                 )
+                return@withContext GuestExec.Result(result.exit, result.output)
             }
         }
         val script = "set +e; gdb -q -batch -p " + pid +

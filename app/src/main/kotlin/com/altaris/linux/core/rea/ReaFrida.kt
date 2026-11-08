@@ -21,10 +21,14 @@ import java.net.URL
  *    distro and talks to that server over loopback, which proot and chroot
  *    share with the host.
  *
- * That split is not incidental. A `gdb` or `frida` *inside* the distro has its
- * own PID namespace: the host PID the clone reports does not exist there, which
- * is why an attach that looked correct silently debugged nothing. Anything that
- * has to touch the real process runs on the host side.
+ * That split is not incidental, and it has to be honoured by every caller.
+ * The server belongs on the host because only root can ptrace the clone; the
+ * **client** belongs in the guest because that is where it is installed
+ * (`installClient` is a pip install) and because a guest client is the one
+ * that shares the host's loopback. Invoking `frida -H …` through [RootShell]
+ * runs it on the host, where the binary does not exist — which is exactly how
+ * an attach failed with "unable to connect to remote frida-server" while the
+ * server was listening on 127.0.0.1:27042.
  *
  * frida-server is a single static ARM64 binary from the official release, so
  * installing it is one download and one chmod — no package manager involved.

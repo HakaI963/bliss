@@ -140,8 +140,11 @@ object McpProtocol {
         put(
             tool(
                 "altaris_uninstall_clone",
-                "Uninstall a clone package.",
-                schema("package" to "string: clone package")
+                "Uninstall a clone package. Accepts the package or the display id.",
+                schema(
+                    "package" to "string: optional clone package",
+                    "display" to "integer: optional display id, resolved to its clone"
+                )
             )
         )
         put(
@@ -170,8 +173,12 @@ object McpProtocol {
         put(
             tool(
                 "altaris_stop_clone",
-                "Stop one clone and release only its own display; other clones keep running.",
-                schema("package" to "string: clone package")
+                "Stop one clone and release only its own display; other clones keep running. " +
+                    "Accepts the package or the display id.",
+                schema(
+                    "package" to "string: optional clone package",
+                    "display" to "integer: optional display id, resolved to its clone"
+                )
             )
         )
         put(
@@ -180,7 +187,8 @@ object McpProtocol {
                 "Capture one virtual display as a JPEG image.",
                 schema(
                     "width" to "integer: optional max width, default 900",
-                    "package" to "string: optional clone package; defaults to the viewer's clone"
+                    "package" to "string: optional clone package; defaults to the viewer's clone",
+                    "display" to "integer: optional display id, resolved to its clone"
                 )
             )
         )
@@ -191,7 +199,8 @@ object McpProtocol {
                 schema(
                     "fps" to "integer: optional 2-15, default 6",
                     "width" to "integer: optional max width, default 720",
-                    "package" to "string: optional clone package"
+                    "package" to "string: optional clone package",
+                    "display" to "integer: optional display id, resolved to its clone"
                 )
             )
         )
@@ -212,8 +221,15 @@ object McpProtocol {
         put(
             tool(
                 "altaris_logs",
-                "Read recent logcat lines for a clone.",
-                schema("package" to "string: clone package", "lines" to "integer: optional, default 300")
+                "Read recent logcat lines for a clone. Address it by package, or by the " +
+                    "display id you already have from altaris_sessions — you do not need " +
+                    "to convert one to the other. Always returns a `lines` array, empty " +
+                    "when there is nothing to show, so a caller can read it unconditionally.",
+                schema(
+                    "package" to "string: optional clone package",
+                    "display" to "integer: optional display id, resolved to its clone",
+                    "lines" to "integer: optional, default 300"
+                )
             )
         )
         put(
@@ -222,7 +238,8 @@ object McpProtocol {
                 "Tap one virtual display at pixel coordinates.",
                 schema(
                     "x" to "integer", "y" to "integer",
-                    "package" to "string: optional clone package; defaults to the viewer's clone"
+                    "package" to "string: optional clone package; defaults to the viewer's clone",
+                    "display" to "integer: optional display id, resolved to its clone"
                 )
             )
         )
@@ -233,7 +250,8 @@ object McpProtocol {
                 schema(
                     "x1" to "integer", "y1" to "integer", "x2" to "integer",
                     "y2" to "integer", "ms" to "integer: optional, default 260",
-                    "package" to "string: optional clone package"
+                    "package" to "string: optional clone package",
+                    "display" to "integer: optional display id, resolved to its clone"
                 )
             )
         )
@@ -241,7 +259,11 @@ object McpProtocol {
             tool(
                 "altaris_text",
                 "Type text into one virtual display.",
-                schema("text" to "string", "package" to "string: optional clone package")
+                schema(
+                    "text" to "string",
+                    "package" to "string: optional clone package",
+                    "display" to "integer: optional display id, resolved to its clone"
+                )
             )
         )
         put(
@@ -257,7 +279,8 @@ object McpProtocol {
                 "Capture one display and run on-device OCR. Returns text and bounding boxes.",
                 schema(
                     "width" to "integer: optional max width, default 1000",
-                    "package" to "string: optional clone package"
+                    "package" to "string: optional clone package",
+                    "display" to "integer: optional display id, resolved to its clone"
                 )
             )
         )
@@ -306,6 +329,24 @@ object McpProtocol {
                 schema(
                     "text" to "string: text to match",
                     "exact" to "boolean: optional, default false",
+                    "package" to "string: optional clone package",
+                    "display" to "integer: optional display id"
+                )
+            )
+        )
+        put(
+            tool(
+                "altaris_wait",
+                "Wait between steps. Use this instead of setTimeout, sleep or a Promise " +
+                    "timer: code-mode sandboxes have no timers, and a reference to one " +
+                    "fails the whole execute call before the tool is even invoked. " +
+                    "With only ms it waits that long; with until it polls the " +
+                    "accessibility tree until an element's text or description matches " +
+                    "and returns whether it appeared.",
+                schema(
+                    "ms" to "integer: optional fixed wait, default 500, capped at 15000",
+                    "until" to "string: optional text or content description to wait for",
+                    "timeoutMs" to "integer: optional poll limit for until, default 8000",
                     "package" to "string: optional clone package",
                     "display" to "integer: optional display id"
                 )
@@ -385,10 +426,11 @@ object McpProtocol {
                 "Call any REA tool by name (analyze APK, inspect binary, Android resources, live device, …). " +
                     "Arguments are checked against the tool's real schema first, so a shape " +
                     "mistake comes back as the exact field and what it expected instead of a " +
-                    "generic invalid_request.",
+                    "generic invalid_request. `arguments` may be omitted for a tool that takes " +
+                    "none.",
                 schema(
                     "name" to "string: REA tool name from altaris_rea_tools",
-                    "arguments" to "object: tool arguments, in the shape altaris_rea_schema returns",
+                    "arguments" to "object: optional tool arguments, in the shape altaris_rea_schema returns",
                     "timeoutMs" to "integer: optional, default 600000"
                 )
             )
@@ -403,8 +445,12 @@ object McpProtocol {
         put(
             tool(
                 "altaris_rea_clone_apk",
-                "Export a clone's APKs to /sdcard/Download/Altaris/rea so REA can analyze them.",
-                schema("package" to "string: clone package")
+                "Export a clone's APKs to /sdcard/Download/Altaris/rea so REA can analyze them. " +
+                    "Accepts the package or the display id.",
+                schema(
+                    "package" to "string: optional clone package",
+                    "display" to "integer: optional display id, resolved to its clone"
+                )
             )
         )
         put(
@@ -506,13 +552,28 @@ object McpProtocol {
             "Run Ghidra headless on a file and return its function list.",
     )
 
+    /**
+     * Build a tool definition.
+     *
+     * A property is required only when its description says neither
+     * "optional" nor "default". The `default` half matters: `display` was
+     * documented as "integer: display id (default 0, the main screen)" and was
+     * therefore advertised as required, so every client that omitted it was
+     * rejected by schema validation with `display: Missing key` — for a
+     * parameter the tool has a sensible value for. An argument that has a
+     * default can be omitted by definition; saying otherwise in the schema is
+     * the bug.
+     */
     private fun tool(name: String, description: String, properties: JSONObject): JSONObject {
         val required = JSONArray()
         val keys = properties.keys()
         while (keys.hasNext()) {
             val key = keys.next()
             val value = properties.optString(key)
-            if (!value.contains("optional")) required.put(key)
+            val omittable = value.contains("optional") ||
+                value.contains("default", ignoreCase = true) ||
+                value.contains("defaults to", ignoreCase = true)
+            if (!omittable) required.put(key)
         }
         return JSONObject()
             .put("name", name)
@@ -601,7 +662,14 @@ object McpProtocol {
             }
         )
         "altaris_uninstall_clone" -> textResult(
-            runBlocking { HeadlessCloneEngine.apiUninstall(requirePackage(args)) }
+            runBlocking {
+                HeadlessCloneEngine.apiUninstall(
+                    resolveClonePackage(args) ?: throw IllegalArgumentException(
+                        "package is required: pass the clone's package, or the display id " +
+                            "from altaris_sessions."
+                    )
+                )
+            }
         )
         "altaris_launch_clone" -> textResult(
             runBlocking {
@@ -614,7 +682,14 @@ object McpProtocol {
             }
         )
         "altaris_stop_clone" -> textResult(
-            runBlocking { HeadlessCloneEngine.apiStop(requirePackage(args)) }
+            runBlocking {
+                HeadlessCloneEngine.apiStop(
+                    resolveClonePackage(args) ?: throw IllegalArgumentException(
+                        "package is required: pass the clone's package, or the display id " +
+                            "from altaris_sessions."
+                    )
+                )
+            }
         )
         "altaris_sessions" -> textResult(runBlocking { HeadlessCloneEngine.apiSessions() })
         "altaris_screenshot" -> {
@@ -649,14 +724,18 @@ object McpProtocol {
         )
         "altaris_record_stop" -> textResult(CloneRecorder.stop())
         "altaris_record_status" -> textResult(CloneRecorder.status())
-        "altaris_logs" -> textResult(
-            runBlocking {
-                HeadlessCloneEngine.apiLogs(
-                    requirePackage(args),
-                    args.optInt("lines", 300),
+        "altaris_logs" -> {
+            val pkg = resolveClonePackage(args)
+                ?: throw IllegalArgumentException(
+                    "package is required: pass the clone's package, or the display id " +
+                        "from altaris_sessions. altaris_clones lists the packages."
                 )
-            }
-        )
+            textResult(
+                runBlocking {
+                    HeadlessCloneEngine.apiLogs(pkg, args.optInt("lines", 300))
+                }
+            )
+        }
         "altaris_tap" -> textResult(
             runBlocking {
                 HeadlessCloneEngine.apiTap(
@@ -696,8 +775,7 @@ object McpProtocol {
         }
         "altaris_ui_tree" -> {
             val ctx = ControlServer.context() ?: throw IllegalStateException("App context unavailable")
-            val pkg = args.optString("package").takeIf { it.isNotBlank() }
-                ?: HeadlessCloneEngine.activeClonePackage.value
+            val pkg = optionalPackage(args) ?: HeadlessCloneEngine.activeClonePackage.value
             val display = if (args.has("display")) {
                 args.optInt("display")
             } else {
@@ -741,6 +819,76 @@ object McpProtocol {
             textResult(
                 a11yObject(A11yBridge.tapText(ctx, display, args.optString("text"), args.optBoolean("exact", false)))
             )
+        }
+        "altaris_wait" -> {
+            val ctx = ControlServer.context() ?: throw IllegalStateException("App context unavailable")
+            val until = args.optString("until").takeIf { it.isNotBlank() }
+            val pkg = optionalPackage(args)
+            val display = if (args.has("display")) {
+                args.optInt("display")
+            } else {
+                HeadlessCloneEngine.displayIdFor(pkg).takeIf { it > 0 }
+                    ?: HeadlessCloneEngine.displayId.value
+            }
+            if (until == null) {
+                val ms = args.optInt("ms", 500).coerceIn(0, 15_000).toLong()
+                Thread.sleep(ms)
+                textResult(JSONObject().put("ok", true).put("waitedMs", ms))
+            } else {
+                val budget = args.optInt("timeoutMs", 8_000).coerceIn(250, 30_000).toLong()
+                val poll = args.optInt("ms", 250).coerceIn(50, 2_000).toLong()
+                val started = System.currentTimeMillis()
+                var matched: String? = null
+                var lastTree: JSONObject? = null
+                var failure = ""
+                while (System.currentTimeMillis() - started <= budget) {
+                    val root = runCatching {
+                        a11yObject(A11yBridge.tree(ctx, display, 600, pkg))
+                    }.getOrNull()
+                    if (root != null) {
+                        lastTree = root
+                        if (!root.optBoolean("ok", false)) {
+                            // "not enabled" or "no display" cannot fix itself
+                            // by waiting, so polling for the full budget only
+                            // delays the same answer.
+                            failure = root.optString("error")
+                            break
+                        }
+                        val nodes = root.optJSONArray("nodes") ?: JSONArray()
+                        for (i in 0 until nodes.length()) {
+                            val node = nodes.optJSONObject(i) ?: continue
+                            val label = node.optString("text")
+                            val desc = node.optString("desc")
+                            if (label.contains(until, true) || desc.contains(until, true)) {
+                                matched = label.ifBlank { desc }
+                                break
+                            }
+                        }
+                    }
+                    if (matched != null) break
+                    Thread.sleep(poll)
+                }
+                val waited = System.currentTimeMillis() - started
+                textResult(
+                    JSONObject()
+                        .put("ok", matched != null)
+                        .put("found", matched != null)
+                        .put("until", until)
+                        .put("matched", matched ?: "")
+                        .put("waitedMs", waited)
+                        .put(
+                            "error",
+                            when {
+                                matched != null -> ""
+                                failure.isNotBlank() -> failure
+                                else ->
+                                    "no element matched \"$until\" within ${waited}ms; " +
+                                        "read altaris_ui_tree to see what is on screen"
+                            }
+                        )
+                        .put("display", lastTree?.optInt("display", display) ?: display)
+                )
+            }
         }
         "altaris_ui_display" -> {
             val ctx = ControlServer.context() ?: throw IllegalStateException("App context unavailable")
@@ -861,8 +1009,22 @@ object McpProtocol {
             }
         }
         "altaris_rea_call" -> {
+            // Accept the shapes an agent actually sends.
+            //
+            // The reported failure is `altaris_rea_call { name: "inspect_adb_client" }`
+            // answered with "name is required" — a message that contradicts the
+            // call it is rejecting and leaves nothing to act on. `tool` is the
+            // field name REA's own CLI and several clients use, so it is
+            // accepted as an alias rather than costing a round trip.
             val tool = args.optString("name").takeIf { it.isNotBlank() }
-                ?: throw IllegalArgumentException("name is required")
+                ?: args.optString("tool").takeIf { it.isNotBlank() }
+                ?: args.optJSONObject("arguments")?.optString("name")?.takeIf { it.isNotBlank() }
+                ?: throw IllegalArgumentException(
+                    "No REA tool name. Pass it as \"name\": " +
+                        "altaris_rea_call { \"name\": \"inspect_artifact\", \"arguments\": {} }. " +
+                        "Received keys: " + args.keys().asSequence().toList() +
+                        ". Call altaris_rea_tools for the list of names."
+                )
             val arguments = args.optJSONObject("arguments") ?: JSONObject()
             val timeout = args.optLong("timeoutMs", 600_000L).coerceIn(5_000L, 3_600_000L)
             // Start REA rather than telling the agent to.
@@ -919,7 +1081,10 @@ object McpProtocol {
         }
         "altaris_rea_clone_apk" -> {
             val ctx = ControlServer.context() ?: throw IllegalStateException("App context unavailable")
-            val pkg = requirePackage(args)
+            val pkg = resolveClonePackage(args) ?: throw IllegalArgumentException(
+                "package is required: pass the clone's package, or the display id " +
+                    "from altaris_sessions."
+            )
             val (exit, out) = runBlocking { ReaManager.exportCloneApk(ctx, pkg) }
             textResult(
                 JSONObject()
@@ -1012,9 +1177,36 @@ object McpProtocol {
         args.optString("package").takeIf { it.isNotBlank() }
             ?: throw IllegalArgumentException("package is required")
 
+    /**
+     * The clone a tool call is about, from either identifier.
+     *
+     * An agent reads `display_id` from `altaris_sessions` and then has a
+     * display id but no package name — and every tool that acts on a clone
+     * asked for the package. The reported failure is exactly that:
+     *
+     *   altaris_logs { "display": 2 }  ->  package: Missing key
+     *
+     * while `com.altaris.apps.c18c4ecce` was the right answer and already
+     * known to the engine. Both identifiers name the same running clone, so
+     * both are accepted and the engine does the translation.
+     *
+     * Returns null when neither identifies a clone, so the caller can say what
+     * to do instead of guessing.
+     */
+    private fun resolveClonePackage(args: JSONObject): String? {
+        args.optString("package").takeIf { it.isNotBlank() }?.let { return it }
+        if (!args.has("display")) return null
+        return HeadlessCloneEngine.packageForDisplay(args.optInt("display", -1))
+    }
+
     /** Optional clone package: null means "the display the viewer is showing". */
     private fun optionalPackage(args: JSONObject): String? =
         args.optString("package").takeIf { it.isNotBlank() }
+            ?: if (args.has("display")) {
+                HeadlessCloneEngine.packageForDisplay(args.optInt("display", -1))
+            } else {
+                null
+            }
 
     private fun keyCode(value: String): Int? {
         value.trim().toIntOrNull()?.let { return it }
@@ -1130,6 +1322,25 @@ object McpProtocol {
         4. `altaris_stop_clone { "package": "<pkg>" }` — stop it when you are
            done testing. Release the display; do not leave it running.
 
+        ### The clone is not an adb device
+
+        A clone is an isolated copy running on this phone. It has **no adb
+        serial**, so REA's device tools cannot see it:
+
+            read_adb_logcat { "serial": "RZCT409JL8T" }
+            -> unsupported_target: adb: device 'RZCT409JL8T' not found
+
+        That serial is the *phone*, not the clone, and there is no adb server
+        here. The clone's logcat is `altaris_logs`, which reads it through the
+        clone engine and needs no adb at all. Reach for `altaris_logs`,
+        `altaris_ui_tree`, `altaris_screenshot` and `altaris_debug_attach` for
+        anything about a clone; use REA for the artifact on disk. Calling
+        `list_adb_devices`, then `inspect_adb_client`, costs three round trips
+        to learn what this paragraph says.
+
+        Both identifiers work: pass `package`, or pass the `display` you read
+        from `altaris_sessions`. Do not try to join the two lists by hand.
+
         ### Clean up after yourself
 
         A clone is a full installed app. Leaving one behind costs the user disk
@@ -1171,6 +1382,34 @@ object McpProtocol {
         These calls start REA themselves; you do not need to start it first.
         If `altaris_rea_status` says it is not installed, say so and stop —
         do not fall back to reading the file by hand.
+
+        ### Runtime work: use the debugger tools, not the frida CLI
+
+        Do not shell out to `frida`, `frida-ps` or `frida-trace`. Those are
+        REA's own tools' job and the debugger's job, and a hand-rolled command
+        fails in a way that looks like a broken install:
+
+            frida-ps --remote 192.168.145.1:27042
+            -> frida-ps: error: unrecognized arguments: 192.168.145.1:27042
+
+            frida -H localhost com.example.app /tmp/script.js
+            -> Failed to spawn: unable to connect to remote frida-server
+
+        Both are wrong in the same way. `--remote` is not a frida-ps flag (it
+        is `-H host:port`), and the server is on **127.0.0.1:27042**, not on
+        the proot gateway address. The Frida CLI also lives *inside the
+        distro*, not on the host, so a host command finds nothing.
+
+        Use `altaris_debug_attach { "target": "<pkg or pid>" }` — it starts
+        the clone, starts frida-server if needed, and attaches. Then
+        `altaris_debug_command` with a `$` prefix for JavaScript:
+
+            altaris_debug_command { "command": "$ Process.arch" }
+
+        Anything without the `$` is a gdb command. `altaris_debug_detach`
+        ends the session. If you need REA's own Frida tools, they are on the
+        `rea` server under their real names — `list_frida_devices`,
+        `start_frida_session` — and they reach the same server.
 
         ### Two servers, two namespaces
 
@@ -1290,6 +1529,46 @@ object McpProtocol {
         recognition per step. `altaris_tap` / `altaris_swipe` / `altaris_key`
         take raw coordinates and are the last resort. When a step fails,
         re-read the tree instead of guessing a coordinate.
+
+        ### Waiting: use `altaris_wait`, never a timer
+
+        The environment that runs your tool calls has **no `setTimeout`, no
+        `sleep`, no `delay` and no `Promise` timer**. Referencing one throws
+        `ReferenceError: Unknown identifier 'setTimeout'` and the whole call
+        fails before the tool is invoked — so the tap never happens, and it
+        looks like a tool problem when it is not.
+
+        Use the tool instead:
+
+            altaris_wait { "ms": 800 }             // fixed pause
+            altaris_wait { "until": "Settings" }   // poll until it appears
+
+        The second form is what to use after a tap: it waits until the element
+        you expect is on screen and returns `found: false` with a next step
+        when it never appears. A fixed sleep cannot tell you that.
+
+        ### One tool call per step, not a program
+
+        The code body is **one expression, with no `await`, no timer and no
+        tag**. Call the tool, read its reply, then decide the next call.
+
+        Three wrappers fail, and each is the wrapper's fault, not the tool's:
+
+        - **A closing tag or fence inside the body.** The harness answers
+          `SyntaxError: Unterminated regular expression. Code must be plain
+          JavaScript written as a program body.` Do not emit `</result_code>`,
+          an opening tag, or a fence. A `<` reads as a comparison or a regex
+          and the parser cannot recover.
+        - **Top-level `await`.** The body is a plain program, so `await` is a
+          syntax error. It is also unnecessary: a call returns its value
+          directly. A bare call is the correct form, and `JSON.stringify(...)`
+          around it is the only wrapper worth adding.
+        - **`setTimeout`, `sleep` or a `Promise` timer.** There are none. Use
+          `altaris_wait`.
+
+        Every reply is shaped so one call is enough — `lines` is always an
+        array, `found` is always present, and a failure carries `error` without
+        changing the shape. Nothing needs a defensive wrapper.
 
         ## Signing in to a site
 

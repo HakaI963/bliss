@@ -562,6 +562,35 @@ object ReaBridge {
          */
         @Volatile private var definitions: JSONArray? = null
 
+        /**
+         * The cached catalog, or null when it has not been read yet.
+         *
+         * Never fetches. `tools/call` validates against this, and a validation
+         * that could block for two minutes on a catalog download would turn a
+         * shape check into a hang — worse than the generic error it replaces.
+         */
+        fun cachedToolDefinitions(): JSONArray? = definitions
+
+        /**
+         * Seed the cache from a complete `tools/list` reply.
+         *
+         * A client always lists tools before its first call, and that reply
+         * *is* the catalog — so validating against it costs no extra round
+         * trip. A paginated reply is skipped: seeding half a catalog would
+         * make some tools invisible to the validator, and "no opinion" is the
+         * only honest answer there.
+         */
+        fun seedToolDefinitions(tools: JSONArray) {
+            if (definitions != null) return
+            // Copy: the reply array is mutated after this (the synthetic index
+            // tool is appended), and the validator must see REA's catalog only.
+            definitions = JSONArray().apply {
+                for (i in 0 until tools.length()) {
+                    tools.opt(i)?.let { put(it) }
+                }
+            }
+        }
+
         fun toolDefinitions(): JSONArray {
             definitions?.let { return it }
             val all = JSONArray()

@@ -1115,21 +1115,44 @@ object HeadlessCloneEngine {
 
     suspend fun apiLogs(packageName: String, maxLines: Int = 300): JSONObject =
         withContext(Dispatchers.IO) {
+            // `lines` is always present, even on failure.
+            //
+            // A tool whose reply shape changes between success and failure is a
+            // trap: the caller writes `result.lines.slice(...)` once, it works,
+            // and the next call throws `Cannot read properties of undefined
+            // (reading 'slice')` — which reads as a broken tool but is an empty
+            // array that was never sent. The error lives in `error`, and the
+            // array is empty.
             val c = ensureClient()
             if (c == null || !c.isServiceConnected()) {
-                return@withContext JSONObject().put("ok", false).put("error", "Shell engine is not connected")
+                return@withContext JSONObject()
+                    .put("ok", false)
+                    .put("package", packageName)
+                    .put("lines", JSONArray())
+                    .put("error", "Shell engine is not connected")
             }
             val raw = try {
                 c.cloneLogs(packageName, maxLines.coerceIn(20, 2000))
             } catch (t: Throwable) {
-                return@withContext JSONObject().put("ok", false)
+                return@withContext JSONObject()
+                    .put("ok", false)
+                    .put("package", packageName)
+                    .put("lines", JSONArray())
                     .put("error", t.message ?: "Log read failed")
             }
             try {
                 val array = JSONArray(raw)
-                JSONObject().put("ok", true).put("package", packageName).put("lines", array)
+                JSONObject()
+                    .put("ok", true)
+                    .put("package", packageName)
+                    .put("lines", array)
+                    .put("count", array.length())
             } catch (_: Throwable) {
-                JSONObject().put("ok", false).put("error", "Engine returned invalid log JSON")
+                JSONObject()
+                    .put("ok", false)
+                    .put("package", packageName)
+                    .put("lines", JSONArray())
+                    .put("error", "Engine returned invalid log JSON")
             }
         }
 
@@ -1226,6 +1249,25 @@ object HeadlessCloneEngine {
     fun displayIdFor(packageName: String? = null): Int =
         sessions.value[keyOf(packageName)]?.displayId
             ?: if (packageName.isNullOrBlank()) displayId.value else -1
+
+    /**
+     * The package running on a display, or null.
+     *
+     * The inverse of [displayIdFor], and the reason it exists: an agent that
+     * read `display_id` from `altaris_sessions` has a display id but no
+     * package name, and the per-clone tools (logs, tap, stop) are addressed by
+     * package. Rather than make the agent join two lists by hand — which it
+     * gets wrong, or skips and then reports the tool as broken — the engine
+     * answers the mapping directly.
+     */
+    fun packageForDisplay(display: Int): String? {
+        if (display < 0) return null
+        val session = sessions.value.values.firstOrNull { it.displayId == display } ?: return null
+        // The key is what every engine call resolves, and for a clone it is
+        // also the package name; prefer the package when they differ.
+        return session.packageName?.takeIf { it.isNotBlank() }
+            ?: session.key.takeIf { it.isNotBlank() }
+    }
 
     // ---------------------------------------------------------------- internals
 

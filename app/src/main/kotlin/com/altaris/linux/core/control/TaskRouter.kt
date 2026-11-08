@@ -326,6 +326,7 @@ object TaskRouter {
             Step("altaris_launch_clone", "start it if it is not running"),
             Step("altaris_ui_tree", "find the element to move through"),
             Step("altaris_ui_tap_text", "act on it by its label, not coordinates"),
+            Step("altaris_wait", "until the next screen's element is present"),
             Step("altaris_ui_tree", "confirm the screen changed"),
         )
 
@@ -337,12 +338,14 @@ object TaskRouter {
         Kind.UI_INTERACTION -> listOf(
             Step("altaris_ui_tree", "capture the state before"),
             Step("altaris_ui_tap_text", "act on the named element"),
+            Step("altaris_wait", "until the tap's result is on screen"),
             Step("altaris_ui_tree", "capture the state after"),
         )
 
         Kind.UI_TEST -> listOf(
             Step("altaris_ui_tree", "record the state before"),
             Step("altaris_ui_tap_text", "act on the named element"),
+            Step("altaris_wait", "until the expected state is present"),
             Step("altaris_ui_tree", "verify the expected state changed"),
             Step("altaris_logs", "confirm no error was logged", optional = true),
         )
@@ -352,6 +355,7 @@ object TaskRouter {
             Step("altaris_launch_clone", "start it"),
             Step("altaris_ui_tree", "state at each step"),
             Step("altaris_ui_tap_text", "drive the scenario"),
+            Step("altaris_wait", "until each step's screen is ready"),
             Step("altaris_logs", "evidence for each step"),
             Step("altaris_stop_clone", "stop it when done"),
         )
@@ -389,6 +393,7 @@ object TaskRouter {
             Step("altaris_apps", "what is installed to clone"),
             Step("altaris_install_apk", "install the APK as a clone"),
             Step("altaris_launch_clone", "start it on its own display"),
+            Step("altaris_wait", "until the first screen is up"),
             Step("altaris_ui_tree", "inspect it"),
             Step("altaris_screenshot", "capture it"),
             Step("altaris_logs", "read its logs"),
@@ -399,6 +404,7 @@ object TaskRouter {
         Kind.BEHAVIOUR -> listOf(
             Step("altaris_ui_tree", "reproduce and locate the element"),
             Step("altaris_ui_tap_text", "perform the action"),
+            Step("altaris_wait", "until the app has reacted"),
             Step("altaris_ui_tree", "observe what actually happened"),
             Step("altaris_logs", "look for an exception or refusal"),
             Step("altaris_rea_clone_apk", "the APK, if the cause is in the code"),

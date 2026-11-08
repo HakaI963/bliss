@@ -310,9 +310,63 @@ internal class BridgeServer(
 
         if (method == "tools/call") {
             val name = params?.optString("name").orEmpty()
-            val arguments = params?.optJSONObject("arguments")?.toString() ?: "{}"
-            val call = ReaBridge.beginCall(name, arguments)
+            val arguments = params?.optJSONObject("arguments") ?: JSONObject()
+            val call = ReaBridge.beginCall(name, arguments.toString())
             val started = System.currentTimeMillis()
+
+            // Check the arguments before forwarding.
+            //
+            // REA answers a shape mistake with one sentence that names neither
+            // the field nor the shape:
+            //
+            //   The arguments for MCP tool inspect_android_class do not match
+            //   its advertised input schema.
+            //
+            // An agent has nothing to act on there, so it retries the same
+            // guess — which is exactly what the reported log shows. REA does
+            // not send per-field details, so the bridge produces them from the
+            // tool's own `inputSchema`, which it already has.
+            val problems = schemaProblems(name, arguments)
+            if (problems != null && problems.isNotEmpty()) {
+                val body = JSONObject()
+                    .put("ok", false)
+                    .put("error", "Arguments do not match " + name + "'s input schema.")
+                    .put("tool", name)
+                    .put("problems", JSONArray().also { out -> problems.forEach { out.put(it.toString()) } })
+                    .put("required", requiredOf(name) ?: JSONArray())
+                    .put("example", exampleOf(name) ?: JSONObject())
+                    .put(
+                        "hint",
+                        "The call was not sent. Fix the listed fields and call once. " +
+                            "A nested argument is an object with a \"kind\" field, not a " +
+                            "bare string; read the tool's inputSchema from tools/list for " +
+                            "the exact shape.",
+                    )
+                ReaBridge.finishCall(
+                    call.id,
+                    body.toString(),
+                    "arguments rejected before sending: " +
+                        problems.joinToString("; ") { it.toString() },
+                    System.currentTimeMillis() - started,
+                )
+                return withClientId(
+                    JSONObject()
+                        .put("jsonrpc", "2.0")
+                        .put(
+                            "result",
+                            JSONObject()
+                                .put("isError", true)
+                                .put(
+                                    "content",
+                                    JSONArray().put(
+                                        JSONObject().put("type", "text").put("text", body.toString())
+                                    ),
+                                ),
+                        ),
+                    id,
+                ).toString()
+            }
+
             return try {
                 val reply = session.forward(method, params, TOOL_TIMEOUT_MS)
                 val result = reply.optJSONObject("result")
@@ -376,6 +430,19 @@ internal class BridgeServer(
                 val tools = result.optJSONArray("tools") ?: JSONArray()
                 for (i in 0 until tools.length()) {
                     tools.optJSONObject(i)?.remove("outputSchema")
+                }
+                // Warm the definition cache off the request path.
+                //
+                // `tools/call` validates against the tool's real input schema,
+                // which means it needs the catalog. This reply already carries
+                // it, so seeding from here costs nothing — and a client always
+                // lists tools before calling one.
+                if (result.optString("nextCursor").isBlank()) {
+                    session.seedToolDefinitions(tools)
+                } else {
+                    // Paginated: this page is not the whole catalog, and
+                    // seeding a partial one would hide tools from validation.
+                    pool.execute { runCatching { session.toolDefinitions() } }
                 }
                 var present = false
                 for (i in 0 until tools.length()) {
@@ -442,6 +509,37 @@ internal class BridgeServer(
         }
         return reply
     }
+
+    /**
+     * The argument problems in [arguments], or null when it cannot be checked.
+     *
+     * Null means "no opinion": the tool is unknown, or the catalog has not been
+     * read yet. A validator that blocks a valid call is worse than none, so an
+     * unknown tool is always forwarded and left to REA to judge.
+     */
+    private fun schemaProblems(name: String, arguments: JSONObject): List<ReaSchema.Problem>? {
+        val definition = definitionOf(name) ?: return null
+        return ReaSchema.validate(definition.optJSONObject("inputSchema"), arguments)
+    }
+
+    private fun definitionOf(name: String): JSONObject? {
+        if (name.isBlank()) return null
+        // Only the already-cached catalog: validation must not become a
+        // blocking catalog fetch on the call path. The cache is warmed by
+        // `tools/list`, which every client sends before its first call.
+        val tools = runCatching { session.cachedToolDefinitions() }.getOrNull() ?: return null
+        for (i in 0 until tools.length()) {
+            val tool = tools.optJSONObject(i) ?: continue
+            if (tool.optString("name") == name) return tool
+        }
+        return null
+    }
+
+    private fun requiredOf(name: String): JSONArray? =
+        definitionOf(name)?.optJSONObject("inputSchema")?.optJSONArray("required")
+
+    private fun exampleOf(name: String): JSONObject? =
+        ReaSchema.example(definitionOf(name)?.optJSONObject("inputSchema"))
 
     /**
      * The synthetic index tool, as advertised.
