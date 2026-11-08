@@ -216,15 +216,28 @@ internal class BridgeServer(
         val params = request.optJSONObject("params")
         val isNotification = id == null || id == JSONObject.NULL
 
-        // A session whose guest process died cannot answer anything. Say so
-        // plainly and let the caller restart, instead of failing with
-        // "Stream closed" from a writer pointing at a dead pipe.
+        // A session whose guest process died cannot answer anything.
+        //
+        // This used to answer "The bridge will restart it; retry in a moment"
+        // and then do nothing — so the retry hit the same dead session, and the
+        // agent saw the identical message forever. `restart()` existed but was
+        // only wired to the UI. It is called here instead, and the request is
+        // then served normally, so a dead guest costs one slow call rather than
+        // an unwinnable retry loop.
         if (!session.isRunning()) {
             if (isNotification) return ""
-            return errorResponse(
-                id,
-                "REA process is not running. The bridge will restart it; retry in a moment.",
-            )
+            val restarted = runCatching {
+                kotlinx.coroutines.runBlocking { ReaBridge.restart(context) }
+            }.getOrNull()
+            if (restarted?.running != true || !session.isRunning()) {
+                return errorResponse(
+                    id,
+                    "REA is not running and could not be restarted: " +
+                        (restarted?.error?.ifBlank { null } ?: "the process did not come back") +
+                        ". Install or repair REA from Tools → Reverse engineering.",
+                )
+            }
+            ReaBridge.noteConnection()
         }
 
         // A client's initialize is answered with REA's real handshake, replayed

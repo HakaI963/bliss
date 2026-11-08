@@ -647,30 +647,50 @@ object McpProtocol {
      */
     private fun argumentsOf(params: JSONObject?): JSONObject {
         if (params == null) return JSONObject()
-        params.optJSONObject("arguments")?.let { return it }
-        // A string-encoded object.
-        val raw = params.optString("arguments")
-        if (raw.isNotBlank()) {
-            runCatching { JSONObject(raw) }.getOrNull()?.let { return it }
+        // A resolved object wins, but only when it actually carries something.
+        // An empty `arguments` is indistinguishable from "the client put the
+        // fields somewhere else", and returning it early is what produced
+        // `Received: {}` for a call that plainly named a tool.
+        val resolved = params.optJSONObject("arguments")
+            ?: params.optString("arguments").takeIf { it.isNotBlank() }
+                ?.let { runCatching { JSONObject(it) }.getOrNull() }
+        if (resolved != null && resolved.length() > 0) return resolved
+
+        // Inline: every key except the envelope. This runs when `arguments` is
+        // absent *or empty*, which covers both client shapes.
+        val inline = JSONObject()
+        val keys = params.keys()
+        while (keys.hasNext()) {
+            val key = keys.next()
+            if (key == "_meta" || key == "arguments") continue
+            inline.put(key, params.opt(key))
         }
-        // Inline arguments: everything except the envelope keys. This is only
-        // used when there is no `arguments` member at all, so a tool whose own
-        // arguments happen to be named "name" is not misread.
-        if (!params.has("arguments")) {
-            val inline = JSONObject()
-            val keys = params.keys()
-            while (keys.hasNext()) {
-                val key = keys.next()
-                if (key == "_meta" || key == "arguments") continue
-                inline.put(key, params.opt(key))
-            }
-            // `name` is the tool name in the envelope, so it is dropped from
-            // the inline set: a tool that really takes `name` gets it through
-            // the normal `arguments` member.
-            inline.remove("name")
-            if (inline.length() > 0) return inline
+        // `name` is the tool name in the envelope, so it is dropped from the
+        // inline set: a tool that really takes `name` gets it through the
+        // normal `arguments` member.
+        inline.remove("name")
+        if (inline.length() > 0) return inline
+        return resolved ?: JSONObject()
+    }
+
+    /**
+     * True when a REA reply is the missing-`frida`-binding error.
+     *
+     * REA answers every hook tool with
+     * `capability_unavailable … provider_id: frida` when its optional npm
+     * dependency was skipped. It is repairable, so it must be distinguished
+     * from a genuinely unsupported target.
+     */
+    private fun isFridaBindingError(result: JSONObject): Boolean {
+        val text = result.toString()
+        if (!text.contains("capability_unavailable", ignoreCase = true) &&
+            !text.contains("unsupported_provider", ignoreCase = true)
+        ) {
+            return false
         }
-        return JSONObject()
+        return text.contains("\"frida\"", ignoreCase = true) ||
+            text.contains("provider_id", ignoreCase = true) ||
+            text.contains("frida", ignoreCase = true)
     }
 
     private fun callTool(name: String, args: JSONObject): JSONObject = when (name) {
@@ -1105,13 +1125,6 @@ object McpProtocol {
             val tool = args.optString("name").takeIf { it.isNotBlank() }
                 ?: args.optString("tool").takeIf { it.isNotBlank() }
                 ?: nested?.optString("name")?.takeIf { it.isNotBlank() }
-                ?: throw IllegalArgumentException(
-                    "No REA tool name. Pass it as \"name\": " +
-                        "altaris_rea_call { \"name\": \"inspect_artifact\", " +
-                        "\"arguments\": { … } }. Received: " +
-                        args.toString().take(300) +
-                        ". Call altaris_rea_tools for the list of names."
-                )
             // Nested wins when present; otherwise the rest of this object is
             // the tool's arguments.
             val arguments = nested ?: JSONObject().apply {
@@ -1127,49 +1140,119 @@ object McpProtocol {
                 }
             }
             val timeout = args.optLong("timeoutMs", 600_000L).coerceIn(5_000L, 3_600_000L)
-            // Start REA rather than telling the agent to.
+
+            // No name, or a name that is really the index, is not an error.
             //
-            // "REA is not running. Call altaris_rea_start first" is a dead end
-            // for an agent that was told to analyse something: it is one call
-            // away, exactly like launching a clone. An explicit start is still
-            // available; this only removes the pointless failure.
-            ensureReaRunning()
-            // Check the arguments against the tool's real schema first.
-            //
-            // REA's own rejection is one generic sentence, which is why an
-            // agent retries the same guess. This names the field and the shape
-            // it wanted instead. A call that passes is forwarded unchanged —
-            // the validator only ever reports a missing required key, a wrong
-            // type, or an unknown top-level key.
-            val definition = ReaManager.toolDefinition(tool)
-                ?: throw IllegalArgumentException(
-                    "REA has no tool named \"" + tool + "\". Call altaris_rea_tools " +
-                        "for the list, or altaris_rea_schema for one tool's shape."
-                )
-            val schema = definition.optJSONObject("inputSchema")
-            val problems = ReaSchema.validate(schema, arguments)
-            // An expression-bodied function cannot `return`, so the rejection
-            // is the value of this branch rather than an early exit.
-            if (problems.isNotEmpty()) {
-                val details = JSONArray()
-                problems.forEach { details.put(it.toString()) }
+            // The client sometimes sends `arguments: {}`, so the name never
+            // arrives — and answering with a complaint produced the retry loop
+            // in the report: six identical failures, each telling the agent to
+            // do what it had already done. Returning the index is always
+            // useful and can never be wrong. `rea_tools` is the name an agent
+            // reaches for when it wants the catalog, and REA has no such tool.
+            if (tool == null || tool == "rea_tools" || tool == "list_tools" || tool == "help") {
+                ensureReaRunning()
+                val index = ReaManager.toolIndex()
                 textResult(
                     JSONObject()
-                        .put("ok", false)
-                        .put("error", "Arguments do not match " + tool + "'s input schema.")
-                        .put("tool", tool)
-                        .put("problems", details)
-                        .put("required", schema?.optJSONArray("required") ?: JSONArray())
-                        .put("example", ReaSchema.example(schema) ?: JSONObject())
+                        .put("ok", true)
+                        .put("count", index.length())
+                        .put("tools", index)
                         .put(
-                            "hint",
-                            "Call altaris_rea_schema { \"name\": \"" + tool + "\" } for " +
-                                "the full shape. A nested object needs a \"kind\" field; " +
-                                "it is not a bare string.",
+                            "note",
+                            "This is the index, not a tool call. Call " +
+                                "altaris_rea_schema for one tool's real input schema, " +
+                                "then altaris_rea_call { \"name\": …, " +
+                                "\"arguments\": { … } }.",
                         )
                 )
             } else {
-                runBlocking { ReaManager.call(tool, arguments, timeout) }
+                // Narrowed once, so every use below is a plain String.
+                val reaTool = tool
+                // Start REA rather than telling the agent to.
+                //
+                // "REA is not running. Call altaris_rea_start first" is a dead
+                // end for an agent that was told to analyse something: it is
+                // one call away, exactly like launching a clone. An explicit
+                // start is still available; this only removes the pointless
+                // failure.
+                ensureReaRunning()
+                // Check the arguments against the tool's real schema first.
+                //
+                // REA's own rejection is one generic sentence, which is why an
+                // agent retries the same guess. This names the field and the
+                // shape it wanted instead. A call that passes is forwarded
+                // unchanged — the validator only ever reports a missing
+                // required key, a wrong type, or an unknown top-level key.
+                val definition = ReaManager.toolDefinition(reaTool)
+                    ?: throw IllegalArgumentException(
+                        "REA has no tool named \"" + reaTool + "\". Call altaris_rea_tools " +
+                            "for the list, or altaris_rea_schema for one tool's shape."
+                    )
+                val schema = definition.optJSONObject("inputSchema")
+                val problems = ReaSchema.validate(schema, arguments)
+                if (problems.isNotEmpty()) {
+                    val details = JSONArray()
+                    problems.forEach { details.put(it.toString()) }
+                    textResult(
+                        JSONObject()
+                            .put("ok", false)
+                            .put("error", "Arguments do not match " + reaTool + "'s input schema.")
+                            .put("tool", reaTool)
+                            .put("problems", details)
+                            .put("required", schema?.optJSONArray("required") ?: JSONArray())
+                            .put("example", ReaSchema.example(schema) ?: JSONObject())
+                            .put(
+                                "hint",
+                                "Call altaris_rea_schema { \"name\": \"" + reaTool + "\" } for " +
+                                    "the full shape. A nested object needs a \"kind\" field; " +
+                                    "it is not a bare string.",
+                            )
+                    )
+                } else {
+                    val result = runBlocking { ReaManager.call(reaTool, arguments, timeout) }
+                    // A `capability_unavailable` from the frida provider is the
+                    // Node binding, and it is repairable. Retrying cannot help;
+                    // repairing can, and doing it here is the difference
+                    // between an agent that completes a runtime task and one
+                    // that reports Frida as broken.
+                    if (reaTool.contains("frida") && isFridaBindingError(result)) {
+                        val ctx = ControlServer.context()
+                        val distro = ctx?.let { reaTargetDistro(it) }
+                        if (ctx != null && distro != null) {
+                            val lines = StringBuilder()
+                            val repair = runBlocking {
+                                ReaManager.repairFridaBinding(ctx, distro) {
+                                    lines.append(it).append('\n')
+                                }
+                            }
+                            runBlocking { ReaManager.stop() }
+                            val restarted = runBlocking { ReaManager.start(ctx, distro) }.running
+                            textResult(
+                                JSONObject()
+                                    .put("ok", repair.isBlank() && restarted)
+                                    .put("repaired", repair.isBlank())
+                                    .put("restarted", restarted)
+                                    .put("tool", reaTool)
+                                    .put("log", lines.toString().takeLast(3000))
+                                    .put(
+                                        "error",
+                                        if (repair.isBlank()) "" else repair,
+                                    )
+                                    .put(
+                                        "note",
+                                        "The frida provider needs the Node `frida` binding, " +
+                                            "an optional npm dependency npm can skip silently. " +
+                                            "It was just installed and REA restarted; call the " +
+                                            "tool again.",
+                                    )
+                            )
+                        } else {
+                            textResult(result)
+                        }
+                    } else {
+                        textResult(result)
+                    }
+                }
             }
         }
         "altaris_rea_agents" -> {

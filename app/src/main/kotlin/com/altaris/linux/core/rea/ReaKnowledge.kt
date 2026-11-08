@@ -80,6 +80,21 @@ object ReaKnowledge {
         3. `close_binary` when you are done. Its `snapshot_path` lets a later
            session resume without re-analysing.
 
+        ### "The selected analysis provider does not support this target"
+
+        This is not a broken provider — it means **nothing is open**. Tools like
+        `list_documents`, `inspect_artifact`, `list_strings` and the Frida
+        session tools all act on the currently open artifact, so they answer
+        this when the session has no target. Call `open_binary { "path": … }`
+        first, then retry. Do not try another provider and do not reinstall
+        anything: the call order is the whole fix.
+
+        `start_frida_session` additionally needs the Node `frida` binding. If it
+        answers `capability_unavailable` with `provider_id: frida`, that is the
+        optional npm dependency, not the target — the binding is repaired from
+        the Altaris side and REA restarted. Retrying the same call cannot fix
+        it.
+
         ## 0c. Arguments are objects, not names
 
         A nested argument is an object discriminated by a `kind` field, not a

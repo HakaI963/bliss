@@ -105,8 +105,14 @@ class ArgsParsingAndScreenshotTest {
         assertTrue("must fall back to flattened", call.contains("val arguments = nested ?: JSONObject().apply"))
         assertTrue("must skip the envelope keys", call.contains("key == \"timeoutMs\""))
         assertTrue("must skip name", call.contains("key == \"name\""))
-        // The error must show what arrived, not a bare key list.
-        assertTrue("must echo the call", call.contains("args.toString().take(300)"))
+        // No name must yield the index, not a complaint: six identical
+        // failures in the report were all this branch telling the agent to do
+        // what it had already done.
+        assertTrue(
+            "must answer the index when no name arrives",
+            call.contains("tool == null || tool == \"rea_tools\""),
+        )
+        assertTrue("must return the index", call.contains("ReaManager.toolIndex()"))
     }
 
     // ------------------------------------------------------------ screenshot
