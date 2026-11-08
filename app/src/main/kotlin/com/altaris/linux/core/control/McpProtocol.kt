@@ -693,6 +693,101 @@ object McpProtocol {
             text.contains("frida", ignoreCase = true)
     }
 
+    /**
+     * Rewrite a host path into one the distro can actually read.
+     *
+     * `/sdcard` is a symlink to `/storage/emulated/0` on Android, and a chroot
+     * that bind-mounted `/sdcard` gets a mount whose target is that symlink's
+     * text — so every path under it is ENOENT even though the file exists. REA
+     * then answers `Cannot open artifact … ENOENT`, and the agent concludes the
+     * APK is missing.
+     *
+     * Rather than make every caller know that, the path is checked inside the
+     * distro and rewritten to a form that resolves: `/storage/emulated/0/…`
+     * when shared storage is mounted there, and the already-correct path left
+     * untouched when it is fine.
+     *
+     * Returns null when nothing needs changing.
+     */
+    private fun guestPathFix(ctx: Context, path: String): String? {
+        if (!path.startsWith("/sdcard/") && path != "/sdcard") return null
+        val distro = reaTargetDistro(ctx) ?: return null
+        val rest = path.removePrefix("/sdcard")
+        // Ask the guest which candidate resolves. One shell call, and only for
+        // a path under /sdcard, so the common case is untouched.
+        val script = buildString {
+            append("for p in /sdcard").append(rest)
+            append(" /storage/emulated/0").append(rest)
+            append(" /mnt/sdcard").append(rest)
+            append("; do [ -e \"\$p\" ] && { echo \"\$p\"; exit 0; }; done; exit 1")
+        }
+        val found = runCatching {
+            runBlocking { GuestExec.run(ctx.applicationContext, distro, script, timeoutMs = 15_000L) }
+        }.getOrNull() ?: return null
+        if (!found.ok) return null
+        val resolved = found.output.lines().map { it.trim() }.firstOrNull { it.startsWith("/") }
+            ?: return null
+        return if (resolved == path) null else resolved
+    }
+
+    /**
+     * Rewrite every `path`-ish argument that points under `/sdcard`.
+     *
+     * REA's tools name the file field differently — `path`, `file`,
+     * `apk_path`, `target` — so the check is by value, not by key: any string
+     * starting with `/sdcard/` is a candidate. Only fields that actually fail
+     * to resolve are changed, so a working call is forwarded byte-for-byte.
+     */
+    private fun fixSdcardPaths(ctx: Context, arguments: JSONObject): JSONObject {
+        val out = JSONObject(arguments.toString())
+        val keys = out.keys()
+        while (keys.hasNext()) {
+            val key = keys.next()
+            val value = out.optString(key)
+            if (!value.startsWith("/sdcard/")) continue
+            val fixed = guestPathFix(ctx, value) ?: continue
+            out.put(key, fixed)
+        }
+        return out
+    }
+
+    /**
+     * Add the next step to the two REA errors that need one.
+     *
+     * Both read like defects and are not:
+     *
+     *  - `ENOENT` on a path under `/sdcard` means the chroot cannot resolve the
+     *    symlink, so the file is there but unreachable;
+     *  - "No app is open" means `open_binary` has not been called.
+     *
+     * The reply is left otherwise intact, so nothing is hidden.
+     */
+    private fun withPathHint(result: JSONObject, arguments: JSONObject): JSONObject {
+        val text = result.toString()
+        if (text.contains("ENOENT") || text.contains("does not exist or a path component")) {
+            val path = arguments.keys().asSequence()
+                .map { arguments.optString(it) }
+                .firstOrNull { it.startsWith("/sdcard/") || it.startsWith("/") }
+                .orEmpty()
+            return JSONObject(result.toString()).put(
+                "hint",
+                "That path is not reachable from inside the distro" +
+                    (if (path.isBlank()) "" else " ($path)") + ". `/sdcard` is a " +
+                    "symlink on Android and a chroot does not always resolve it. " +
+                    "Call altaris_rea_clone_apk to export the file and use the " +
+                    "paths it prints — they are already correct.",
+            )
+        }
+        if (text.contains("No app is open") || text.contains("does not support this target")) {
+            return JSONObject(result.toString()).put(
+                "hint",
+                "REA analyses one open target at a time. Call open_binary { \"path\": " +
+                    "… } first, then this tool. These tools take no path themselves.",
+            )
+        }
+        return result
+    }
+
     private fun callTool(name: String, args: JSONObject): JSONObject = when (name) {
         "altaris_status" -> textResult(runBlocking { HeadlessCloneEngine.apiStatus() })
         "altaris_plan" -> {
@@ -1209,14 +1304,23 @@ object McpProtocol {
                             )
                     )
                 } else {
-                    val result = runBlocking { ReaManager.call(reaTool, arguments, timeout) }
+                    // Make an /sdcard path readable inside the distro before
+                    // sending it. A chroot that bind-mounted the /sdcard
+                    // symlink cannot resolve anything under it, which is why
+                    // REA answered ENOENT for a file that existed.
+                    val ctx = ControlServer.context()
+                    val safeArguments = if (ctx != null) {
+                        runCatching { fixSdcardPaths(ctx, arguments) }.getOrDefault(arguments)
+                    } else {
+                        arguments
+                    }
+                    val result = runBlocking { ReaManager.call(reaTool, safeArguments, timeout) }
                     // A `capability_unavailable` from the frida provider is the
                     // Node binding, and it is repairable. Retrying cannot help;
                     // repairing can, and doing it here is the difference
                     // between an agent that completes a runtime task and one
                     // that reports Frida as broken.
                     if (reaTool.contains("frida") && isFridaBindingError(result)) {
-                        val ctx = ControlServer.context()
                         val distro = ctx?.let { reaTargetDistro(it) }
                         if (ctx != null && distro != null) {
                             val lines = StringBuilder()
@@ -1247,10 +1351,10 @@ object McpProtocol {
                                     )
                             )
                         } else {
-                            textResult(result)
+                            textResult(withPathHint(result, safeArguments))
                         }
                     } else {
-                        textResult(result)
+                        textResult(withPathHint(result, safeArguments))
                     }
                 }
             }
@@ -1680,6 +1784,31 @@ object McpProtocol {
         is rejected as unknown, retry it with underscores before concluding the
         capability is missing. There is no `rea_tools`, `list_tools` or `help`
         tool on the `rea` server: its catalog *is* `tools/list`.
+
+        There is no `inspector`, `analyze`, `decompile` or `scan` tool either.
+        If you are reaching for a name like that, you want one of the real ones,
+        and `altaris_rea_tools` lists all 229. Do not invent a name and retry it
+        four times: one `altaris_rea_tools` call answers what exists.
+
+        ### Open the file before you inspect it
+
+        REA analyses **one open target at a time**, and most of its tools take no
+        path at all — they act on whatever is open. So the order is fixed:
+
+            open_binary { "path": "/…/app.apk" }     <- takes the path
+            inspect_artifact                          <- no path
+            search_strings { … }
+
+        `inspect_artifact { "path": … }` is rejected with "No app is open", and
+        that is not a broken tool: nothing was opened yet. Likewise "The
+        selected analysis provider does not support this target" means the same
+        thing. Call `open_binary` first.
+
+        **The path must be readable inside the distro.** `/sdcard` is a symlink
+        on Android and a chroot does not always resolve it, so a file that exists
+        on the phone can answer `ENOENT` from REA. `altaris_rea_clone_apk`
+        returns paths that are already correct — prefer it, and if a path fails
+        with ENOENT, use the one it printed rather than guessing another.
 
         ### REA's arguments are not strings
 

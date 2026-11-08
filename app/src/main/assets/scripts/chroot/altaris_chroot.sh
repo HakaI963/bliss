@@ -300,7 +300,33 @@ ensure_mounts() {
   ensure_sticky_tmp
 
   bind_if_missing "$ALTARIS_HOST_TMP" "$ALTARIS_CHROOT/mnt/host-tmp"
-  bind_if_missing /sdcard "$ALTARIS_CHROOT/sdcard"
+  # Shared storage.
+  #
+  # `/sdcard` on Android is a **symlink** to `/storage/emulated/0`. Binding
+  # `/sdcard` into the chroot therefore creates a mount whose target path is
+  # the symlink's *text*, and `/storage` does not exist inside the chroot — so
+  # the mount appears to succeed while every path under it is ENOENT. That is
+  # why REA answered `Cannot open artifact … ENOENT: /sdcard/Download/…` for a
+  # file that plainly existed on the phone.
+  #
+  # Bind the resolved directory instead, and also provide `/storage` so a path
+  # written as `/storage/emulated/0/…` resolves too.
+  SDCARD_REAL=$(readlink -f /sdcard 2>/dev/null)
+  if [ -z "$SDCARD_REAL" ] && [ -n "$BB" ]; then
+    SDCARD_REAL=$($BB readlink -f /sdcard 2>/dev/null)
+  fi
+  # `readlink -f` is not in every Android toolbox; fall back to the known
+  # location rather than leaving the path empty and binding nothing.
+  if [ -z "$SDCARD_REAL" ] || [ ! -d "$SDCARD_REAL" ]; then
+    if [ -d /storage/emulated/0 ]; then
+      SDCARD_REAL=/storage/emulated/0
+    else
+      SDCARD_REAL=/sdcard
+    fi
+  fi
+  mkdir -p "$ALTARIS_CHROOT/storage/emulated/0" 2>/dev/null || true
+  bind_if_missing "$SDCARD_REAL" "$ALTARIS_CHROOT/sdcard"
+  bind_if_missing "$SDCARD_REAL" "$ALTARIS_CHROOT/storage/emulated/0"
 
   # launch_tool bridge: host-tmp → guest sticky /tmp
   if [ -f "$ALTARIS_HOST_TMP/launch_tool.sh" ]; then
