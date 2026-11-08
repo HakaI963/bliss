@@ -4,6 +4,7 @@ import android.graphics.BitmapFactory
 import android.util.Base64
 import com.altaris.linux.core.a11y.A11yBridge
 import com.altaris.linux.core.clone.HeadlessCloneEngine
+import com.altaris.linux.core.rea.ReaDistro
 import com.altaris.linux.core.rea.ReaManager
 import com.altaris.linux.core.rea.ReaSchema
 import kotlinx.coroutines.Dispatchers
