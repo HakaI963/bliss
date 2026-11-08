@@ -425,6 +425,78 @@ object McpProtocol {
         )
         put(
             tool(
+                "altaris_analyze",
+                "Analyse a file: an APK, DEX, native library, archive or firmware image. " +
+                    "Takes a path and does the whole sequence for you — opens it, identifies " +
+                    "the format, and reports what it found. Use this instead of open_binary " +
+                    "and inspect_artifact: REA needs the file opened first and most of its " +
+                    "tools take no path, which is why calling them directly fails with " +
+                    "'No app is open'.",
+                schema(
+                    "path" to "string: file path, /sdcard/… or /storage/emulated/0/…",
+                )
+            )
+        )
+        put(
+            tool(
+                "altaris_apk_info",
+                "Everything static about an APK: package, version, permissions, activities, " +
+                    "services, receivers, providers and native libraries. Takes the APK path " +
+                    "and returns the real manifest, not a summary.",
+                schema("path" to "string: APK path")
+            )
+        )
+        put(
+            tool(
+                "altaris_apk_search",
+                "Search an APK's classes and strings for a term — a token, a URL, a key, a " +
+                    "class name. Returns the matches with their locations.",
+                schema(
+                    "path" to "string: APK path",
+                    "query" to "string: text or regex to find"
+                )
+            )
+        )
+        put(
+            tool(
+                "altaris_frida_attach",
+                "Attach Frida to a running clone. Give the package name or the pid; the " +
+                    "right REA tool and mode are chosen for you. This is the call that " +
+                    "works — start_frida_session and instrument_with_frida need a mode " +
+                    "plus different fields per mode, and guessing at them is what fails.",
+                schema(
+                    "package" to "string: optional clone package",
+                    "pid" to "integer: optional host pid",
+                    "script" to "string: optional JavaScript to load immediately",
+                )
+            )
+        )
+        put(
+            tool(
+                "altaris_frida_run",
+                "Run JavaScript inside the attached clone and return its output. Use " +
+                    "Java.perform(...) to hook, Interceptor.attach(...) to trace, or plain " +
+                    "expressions to read values.",
+                schema("script" to "string: JavaScript to evaluate")
+            )
+        )
+        put(
+            tool(
+                "altaris_frida_list",
+                "List the processes Frida can see on this device, so you can pick a target " +
+                    "instead of guessing a pid.",
+                JSONObject()
+            )
+        )
+        put(
+            tool(
+                "altaris_frida_detach",
+                "Close the Frida session and leave the clone running.",
+                JSONObject()
+            )
+        )
+        put(
+            tool(
                 "altaris_rea_call",
                 "Call any REA tool by name (analyze APK, inspect binary, Android resources, live device, …). " +
                     "Arguments are checked against the tool's real schema first, so a shape " +
@@ -559,6 +631,21 @@ object McpProtocol {
      * a reverse-engineering task, and each one starts REA itself.
      */
     private val REA_ENTRY_POINTS = listOf(
+        "altaris_analyze" to
+            "Analyse any file (APK, DEX, .so, archive, firmware). Takes a path and " +
+            "does open + identify for you. Start here.",
+        "altaris_apk_info" to
+            "Manifest facts for an APK: package, permissions, components, libraries.",
+        "altaris_apk_search" to
+            "Search an APK's classes and strings for a term.",
+        "altaris_frida_attach" to
+            "Attach Frida to a clone by package or pid; the tool and mode are chosen for you.",
+        "altaris_frida_run" to
+            "Run JavaScript in the attached clone.",
+        "altaris_frida_list" to
+            "List the clones and processes Frida can target.",
+        "altaris_frida_detach" to
+            "Close the Frida session.",
         "altaris_rea_status" to
             "REA status. Call this first for any binary, APK, DEX or native-library task.",
         "altaris_rea_start" to
@@ -789,6 +876,328 @@ object McpProtocol {
         }
         return result
     }
+
+    // ---------------------------------------------------------- plain tools
+
+    /**
+     * Analyse any artifact: open it, then identify it.
+     *
+     * REA's model is "one open target at a time", and most tools take no path.
+     * That is correct and it is also why direct calls fail: `inspect_artifact`
+     * answers "No app is open" until `open_binary` has run. This does both, in
+     * order, and reports the open result alongside the identification.
+     */
+    private suspend fun analyzeFile(ctx: Context, path: String): JSONObject {
+        val safe = runCatching { fixSdcardPaths(ctx, JSONObject().put("path", path)) }
+            .getOrDefault(JSONObject().put("path", path))
+            .optString("path")
+        val openTool = ReaPlain.resolve("open_binary", "open_artifact")
+            ?: return JSONObject().put("ok", false).put("error", "REA has no open tool")
+        val opened = ReaManager.call(openTool, JSONObject().put("path", safe), 300_000L)
+        val openError = opened.optJSONObject("error")?.optString("message").orEmpty()
+        if (openError.isNotBlank()) {
+            return JSONObject()
+                .put("ok", false)
+                .put("error", openError)
+                .put("path", safe)
+                .put("hint", pathHintFor(safe, openError))
+        }
+        // Now the identification tools, which need no path.
+        val out = JSONObject()
+            .put("ok", true)
+            .put("path", safe)
+            .put("open", unwrap(opened))
+        val inspectTool = ReaPlain.resolve("inspect_artifact", "inspect_binary")
+        if (inspectTool != null) {
+            out.put("artifact", unwrap(ReaManager.call(inspectTool, JSONObject(), 300_000L)))
+        }
+        // An APK has more to say; include the package facts when it applies.
+        if (safe.endsWith(".apk", ignoreCase = true)) {
+            val pkgTool = ReaPlain.resolve("inspect_android_package")
+            if (pkgTool != null) {
+                out.put("package", unwrap(ReaManager.call(pkgTool, JSONObject().put("path", safe), 300_000L)))
+            }
+        }
+        return out
+    }
+
+    /** The manifest facts of an APK, with the Android lane installed on demand. */
+    private suspend fun apkInfo(ctx: Context, path: String): JSONObject {
+        val safe = runCatching { fixSdcardPaths(ctx, JSONObject().put("path", path)) }
+            .getOrDefault(JSONObject().put("path", path))
+            .optString("path")
+        val tool = ReaPlain.resolve("inspect_android_package", "inspect_android_app")
+            ?: return JSONObject().put("ok", false).put("error", "REA has no Android package tool")
+        val first = ReaManager.call(tool, JSONObject().put("path", safe), 600_000L)
+        if (needsJadx(first)) {
+            val distro = reaTargetDistro(ctx)
+            if (distro != null) {
+                val lines = StringBuilder()
+                val failure = ReaManager.installJadxBridge(ctx, distro) { lines.append(it).append('\n') }
+                runBlocking { ReaManager.stop() }
+                ReaManager.start(ctx, distro)
+                if (failure.isNotBlank()) {
+                    return JSONObject()
+                        .put("ok", false)
+                        .put("error", failure)
+                        .put("log", lines.toString().takeLast(3000))
+                        .put(
+                            "hint",
+                            "The Android lane needs the jadx bridge; installing it failed. " +
+                                "Static analysis of the native libraries still works via " +
+                                "altaris_analyze.",
+                        )
+                }
+                val retried = ReaManager.call(tool, JSONObject().put("path", safe), 600_000L)
+                return JSONObject()
+                    .put("ok", true)
+                    .put("path", safe)
+                    .put("package", unwrap(retried))
+                    .put("note", "The jadx bridge was missing and was installed.")
+            }
+        }
+        return JSONObject()
+            .put("ok", true)
+            .put("path", safe)
+            .put("package", unwrap(first))
+    }
+
+    /** Search an APK's classes and strings. */
+    private suspend fun apkSearch(ctx: Context, path: String, query: String): JSONObject {
+        val safe = runCatching { fixSdcardPaths(ctx, JSONObject().put("path", path)) }
+            .getOrDefault(JSONObject().put("path", path))
+            .optString("path")
+        val out = JSONObject().put("ok", true).put("path", safe).put("query", query)
+        val classTool = ReaPlain.resolve("search_android_classes")
+        if (classTool != null) {
+            out.put(
+                "classes",
+                unwrap(ReaManager.call(classTool, JSONObject().put("path", safe).put("query", query), 600_000L)),
+            )
+        }
+        // Strings live behind the open artifact, not a path.
+        val openTool = ReaPlain.resolve("open_binary")
+        if (openTool != null) {
+            ReaManager.call(openTool, JSONObject().put("path", safe), 300_000L)
+        }
+        val stringTool = ReaPlain.resolve("search_strings", "list_strings")
+        if (stringTool != null) {
+            out.put(
+                "strings",
+                unwrap(ReaManager.call(stringTool, JSONObject().put("query", query), 300_000L)),
+            )
+        }
+        return out
+    }
+
+    /**
+     * Attach Frida to a clone, choosing REA's tool and mode for the caller.
+     *
+     * `start_frida_session` and `instrument_with_frida` both take a `mode` plus
+     * a *different* required field per mode. The caller has a package or a pid;
+     * which REA tool and which mode that implies is this function's job, and
+     * `ReaPlain.build` fills the branch.
+     */
+    private suspend fun fridaAttach(
+        ctx: Context,
+        packageName: String?,
+        pid: Int?,
+        script: String?,
+    ): JSONObject {
+        if (packageName == null && pid == null) {
+            return JSONObject()
+                .put("ok", false)
+                .put("error", "Give a package or a pid.")
+                .put("hint", "Call altaris_frida_list to see what is running.")
+        }
+        // Resolve the pid from the package when only a package was given, so the
+        // call carries the field REA's attach mode actually wants.
+        val resolvedPid = pid ?: packageName?.let { runCatching { resolveClonePidPublic(ctx, it) }.getOrNull() }
+        val distro = reaTargetDistro(ctx)
+            ?: return JSONObject().put("ok", false).put("error", "no installed distro")
+
+        // Preferred: Altaris's own debugger, which already knows the modes and
+        // the clone rule. It also starts the clone when it is not running.
+        if (packageName != null) {
+            val attached = ReaManager.attachDebugger(ctx, distro, packageName)
+            if (attached.pid != null) {
+                if (script != null) {
+                    ReaManager.debuggerCommand(ctx, distro, "${'$'} " + script)
+                }
+                return JSONObject()
+                    .put("ok", true)
+                    .put("pid", attached.pid)
+                    .put("package", packageName)
+                    .put("backend", "altaris")
+                    .put("output", attached.output.takeLast(4000))
+            }
+            // Fall through to REA's own tools, which may reach a device Altaris
+            // does not own.
+        }
+
+        val tool = ReaPlain.resolve(
+            "instrument_with_frida",
+            "start_frida_session",
+            "attach_frida",
+        ) ?: return JSONObject()
+            .put("ok", false)
+            .put("error", "REA publishes no Frida attach tool")
+            .put("hint", "Call altaris_doctor to check the frida provider.")
+
+        val supplied = JSONObject()
+        resolvedPid?.let { supplied.put("pid", it) }
+        packageName?.let {
+            supplied.put("package", it)
+            supplied.put("program", it)
+        }
+        if (script != null) {
+            supplied.put("source_kind", "inline")
+            supplied.put("source", script)
+            supplied.put("script", script)
+        }
+        val built = ReaPlain.build(tool, supplied)
+        val missing = ReaPlain.problems(tool, built)
+        if (missing.isNotEmpty()) {
+            return JSONObject()
+                .put("ok", false)
+                .put("error", "REA's " + tool + " needs more than that.")
+                .put("tool", tool)
+                .put("missing", JSONArray().also { a -> missing.forEach { a.put(it) } })
+                .put("sent", built)
+                .put("example", ReaSchema.example(ReaManager.toolDefinition(tool)?.optJSONObject("inputSchema")) ?: JSONObject())
+        }
+        val reply = ReaManager.call(tool, built, 300_000L)
+        val failed = reply.optJSONObject("error") != null
+        return JSONObject()
+            .put("ok", !failed)
+            .put("tool", tool)
+            .put("sent", built)
+            .put("result", unwrap(reply))
+    }
+
+    /** Run JavaScript in the attached clone. */
+    private suspend fun fridaRun(ctx: Context, script: String): JSONObject {
+        val distro = reaTargetDistro(ctx)
+            ?: return JSONObject().put("ok", false).put("error", "no installed distro")
+        // Altaris's console speaks Frida with a `$` prefix and already holds the
+        // attached pid, so this needs no REA session at all.
+        val out = ReaManager.debuggerCommand(ctx, distro, "${'$'} " + script)
+        if (out.ok || out.output.isNotBlank()) {
+            return JSONObject()
+                .put("ok", out.ok)
+                .put("backend", "altaris")
+                .put("output", out.output.takeLast(8000))
+        }
+        // Otherwise try REA's own loader.
+        val tool = ReaPlain.resolve("load_frida_script", "evaluate_frida_script", "run_frida_script")
+            ?: return JSONObject()
+                .put("ok", false)
+                .put("error", out.output.ifBlank { "no Frida session is attached" })
+                .put("hint", "Call altaris_frida_attach first.")
+        val built = ReaPlain.build(
+            tool,
+            JSONObject().put("source_kind", "inline").put("source", script).put("script", script),
+        )
+        val missing = ReaPlain.problems(tool, built)
+        if (missing.isNotEmpty()) {
+            return JSONObject()
+                .put("ok", false)
+                .put("error", "REA's " + tool + " needs more than that.")
+                .put("tool", tool)
+                .put("missing", JSONArray().also { a -> missing.forEach { a.put(it) } })
+                .put("sent", built)
+        }
+        return JSONObject()
+            .put("ok", true)
+            .put("tool", tool)
+            .put("sent", built)
+            .put("result", unwrap(ReaManager.call(tool, built, 300_000L)))
+    }
+
+    /** Processes Frida can see. */
+    private suspend fun fridaList(ctx: Context): JSONObject {
+        val distro = reaTargetDistro(ctx)
+        val tool = ReaPlain.resolve("list_frida_processes", "list_frida_applications")
+        val out = JSONObject().put("ok", true)
+        // Altaris knows its own clones and their pids directly.
+        out.put("clones", HeadlessCloneEngine.clones.value.let { list ->
+            JSONArray().also { arr ->
+                list.forEach { clone ->
+                    val pid = distro?.let { runCatching { resolveClonePidPublic(ctx, clone.packageName) }.getOrNull() }
+                    arr.put(
+                        JSONObject()
+                            .put("package", clone.packageName)
+                            .put("label", clone.label)
+                            .put("pid", pid ?: JSONObject.NULL)
+                    )
+                }
+            }
+        })
+        if (tool != null) {
+            val built = ReaPlain.build(tool, JSONObject())
+            val reply = ReaManager.call(tool, built, 120_000L)
+            out.put("frida", unwrap(reply))
+            if (reply.optJSONObject("error") != null) {
+                out.put("ok", false)
+                out.put("frida_error", reply.optJSONObject("error")?.optString("message").orEmpty())
+            }
+        }
+        return out
+    }
+
+    /** Close the Frida session. */
+    private suspend fun fridaDetach(ctx: Context): JSONObject {
+        val distro = reaTargetDistro(ctx)
+        if (distro != null) {
+            runCatching { ReaManager.detachDebugger(ctx, distro) }
+        }
+        val tool = ReaPlain.resolve("close_frida_session", "detach_frida")
+        if (tool != null) {
+            runCatching { ReaManager.call(tool, ReaPlain.build(tool, JSONObject()), 60_000L) }
+        }
+        return JSONObject().put("ok", true).put("detached", true)
+    }
+
+    /** REA's reply, unwrapped from the MCP `content` envelope. */
+    private fun unwrap(reply: JSONObject): JSONObject {
+        val text = reply.optJSONArray("content")
+            ?.let { content ->
+                buildString {
+                    for (i in 0 until content.length()) {
+                        val part = content.optJSONObject(i)?.optString("text").orEmpty()
+                        if (part.isNotBlank()) append(part)
+                    }
+                }
+            }
+            ?.takeIf { it.isNotBlank() }
+        if (text == null) return reply
+        return runCatching { JSONObject(text) }.getOrElse {
+            JSONObject().put("text", text.take(20_000))
+        }
+    }
+
+    /** True when a REA reply is the missing-jadx-bridge error. */
+    private fun needsJadx(reply: JSONObject): Boolean {
+        val text = reply.toString()
+        return text.contains("REA_JADX_MCP_JAR") ||
+            text.contains("jadx", ignoreCase = true) && text.contains("capability_unavailable", ignoreCase = true)
+    }
+
+    /** A path that REA could not open, explained. */
+    private fun pathHintFor(path: String, error: String): String = when {
+        error.contains("ENOENT") || error.contains("does not exist") ->
+            "That path is not reachable from inside the distro. `/sdcard` is a symlink " +
+                "and a chroot does not always resolve it. Call altaris_rea_clone_apk to " +
+                "export the file and use the paths it prints."
+        error.contains("No app is open") ->
+            "REA analyses one open target at a time; open_binary must run first. " +
+                "altaris_analyze does that for you."
+        else -> ""
+    }
+
+    /** Resolve a clone package to its host pid, for the Frida tools. */
+    private fun resolveClonePidPublic(ctx: Context, packageName: String): Int? =
+        runCatching { ReaManager.resolveClonePidForTool(ctx, packageName) }.getOrNull()
 
     private fun callTool(name: String, args: JSONObject): JSONObject = when (name) {
         "altaris_status" -> textResult(runBlocking { HeadlessCloneEngine.apiStatus() })
@@ -1205,6 +1614,50 @@ object McpProtocol {
                         )
                 )
             }
+        }
+        "altaris_analyze" -> {
+            val ctx = ControlServer.context() ?: throw IllegalStateException("App context unavailable")
+            val path = args.optString("path").takeIf { it.isNotBlank() }
+                ?: throw IllegalArgumentException("path is required")
+            textResult(runBlocking { analyzeFile(ctx, path) })
+        }
+        "altaris_apk_info" -> {
+            val ctx = ControlServer.context() ?: throw IllegalStateException("App context unavailable")
+            val path = args.optString("path").takeIf { it.isNotBlank() }
+                ?: throw IllegalArgumentException("path is required")
+            textResult(runBlocking { apkInfo(ctx, path) })
+        }
+        "altaris_apk_search" -> {
+            val ctx = ControlServer.context() ?: throw IllegalStateException("App context unavailable")
+            val path = args.optString("path").takeIf { it.isNotBlank() }
+                ?: throw IllegalArgumentException("path is required")
+            val query = args.optString("query").takeIf { it.isNotBlank() }
+                ?: throw IllegalArgumentException("query is required")
+            textResult(runBlocking { apkSearch(ctx, path, query) })
+        }
+        "altaris_frida_attach" -> {
+            val ctx = ControlServer.context() ?: throw IllegalStateException("App context unavailable")
+            val pkg = args.optString("package").takeIf { it.isNotBlank() }
+            val pid = if (args.has("pid")) args.optInt("pid") else null
+            textResult(
+                runBlocking {
+                    fridaAttach(ctx, pkg, pid, args.optString("script").takeIf { it.isNotBlank() })
+                }
+            )
+        }
+        "altaris_frida_run" -> {
+            val ctx = ControlServer.context() ?: throw IllegalStateException("App context unavailable")
+            val script = args.optString("script").takeIf { it.isNotBlank() }
+                ?: throw IllegalArgumentException("script is required")
+            textResult(runBlocking { fridaRun(ctx, script) })
+        }
+        "altaris_frida_list" -> {
+            val ctx = ControlServer.context() ?: throw IllegalStateException("App context unavailable")
+            textResult(runBlocking { fridaList(ctx) })
+        }
+        "altaris_frida_detach" -> {
+            val ctx = ControlServer.context() ?: throw IllegalStateException("App context unavailable")
+            textResult(runBlocking { fridaDetach(ctx) })
         }
         "altaris_rea_call" -> {
             // Accept the shapes an agent actually sends.
@@ -1707,22 +2160,38 @@ object McpProtocol {
 
         Start here, every time:
 
-        1. `altaris_rea_status` — is REA installed and running.
-        2. `altaris_rea_tools` — the index of REA's ~229 tools: name, one-line
-           summary, required arguments. Find the one that matches the question.
-        3. `altaris_rea_schema { "name": "<tool>" }` — that tool's **real input
-           schema** and a minimal example. Do this before the first call to any
-           tool you have not already used in this session.
-        4. `altaris_rea_call { "name": "<tool>", "arguments": { ... } }` — with
-           arguments in exactly the shape the schema showed.
-        5. `altaris_rea_clone_apk` — export a clone's APKs and .so files, which
-           returns the paths to analyse.
-        6. `altaris_debug_attach` — for runtime behaviour (what a method
-           returns, what an address holds, what the process maps).
+        1. `altaris_analyze { "path": "…" }` — the whole opening sequence for any
+           artifact. It opens the file and identifies it, and returns the
+           package facts when it is an APK. **This is the call to reach for.**
+        2. `altaris_apk_info { "path": "…" }` — the manifest: package,
+           permissions, components, native libraries.
+        3. `altaris_apk_search { "path": "…", "query": "…" }` — classes and
+           strings matching a term.
+        4. `altaris_frida_attach { "package": "…" }` — attach, with the tool and
+           mode chosen for you. Then `altaris_frida_run { "script": "…" }`.
+           `altaris_frida_list` shows what can be targeted.
+        5. `altaris_rea_tools` — the full index, when you need a REA tool the
+           four above do not cover.
+        6. `altaris_rea_schema { "name": "<tool>" }` then
+           `altaris_rea_call { "name": "<tool>", "arguments": { … } }` — for
+           anything else, with the arguments in exactly the shape shown.
 
         These calls start REA themselves; you do not need to start it first.
         If `altaris_rea_status` says it is not installed, say so and stop —
         do not fall back to reading the file by hand.
+
+        ### Do not call REA's Frida tools directly
+
+        `start_frida_session` and `instrument_with_frida` take a `mode` plus a
+        **different set of required fields per mode** — `pid` for attach,
+        `program` for spawn, `source_kind` for a script. Guessing at that
+        produces `The arguments for MCP tool … do not match its advertised input
+        schema` with no field named, over and over.
+
+        `altaris_frida_attach` takes the package or the pid and derives the rest
+        from REA's live schema. Use it. The same applies to `open_binary` +
+        `inspect_artifact`: `altaris_analyze` does both in order, which is what
+        "No app is open" is asking for.
 
         ### Two debug modes, and why the choice matters
 

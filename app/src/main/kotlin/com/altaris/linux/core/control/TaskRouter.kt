@@ -363,15 +363,18 @@ object TaskRouter {
         Kind.APK_ANALYSIS -> listOf(
             Step("altaris_rea_status", "is the analyzer up"),
             Step("altaris_rea_clone_apk", "the APK and native libraries, with paths"),
-            Step("altaris_rea_tools", "the Android lane's real tool names"),
-            Step("altaris_rea_call", "inspect_android_package, then resources and classes"),
+            Step("altaris_analyze", "open and identify it — takes the path"),
+            Step("altaris_apk_info", "manifest: package, permissions, components"),
+            Step("altaris_apk_search", "classes and strings matching a term"),
         )
 
         Kind.STATIC_RE -> listOf(
             Step("altaris_rea_status", "is the analyzer up"),
             Step("altaris_rea_clone_apk", "get the artifact path"),
-            Step("altaris_rea_tools", "the catalog"),
-            Step("altaris_rea_call", "identify, then targeted decompilation"),
+            Step("altaris_analyze", "open and identify it — takes the path"),
+            Step("altaris_rea_tools", "the catalog, for anything the above does not cover"),
+            Step("altaris_rea_schema", "one tool's real shape before calling it"),
+            Step("altaris_rea_call", "targeted decompilation"),
             Step("altaris_ghidra_analyze", "native code only, low mode", optional = true),
         )
 
@@ -382,11 +385,10 @@ object TaskRouter {
         )
 
         Kind.FRIDA_INSTRUMENTATION -> listOf(
-            Step("altaris_frida_install", "server and CLI, root only", optional = true),
-            Step("altaris_gadget_prepare", "no-root path for clones", optional = true),
-            Step("altaris_debug_attach", "attach"),
-            Step("altaris_debug_command", "a \$ prefixed command is JavaScript"),
-            Step("altaris_debug_detach", "close the session"),
+            Step("altaris_frida_list", "what can be targeted"),
+            Step("altaris_frida_attach", "package or pid; the mode is chosen for you"),
+            Step("altaris_frida_run", "JavaScript in the clone's own runtime"),
+            Step("altaris_frida_detach", "close the session"),
         )
 
         Kind.CLONE_TEST -> listOf(

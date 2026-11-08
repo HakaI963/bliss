@@ -1480,6 +1480,18 @@ object ReaManager {
      * the registry is the authoritative list and it also covers clones created
      * before the prefix was fixed.
      */
+    /**
+     * The host pid of a clone, for the flat tools.
+     *
+     * A thin public wrapper: `resolveClonePid` is private because it encodes
+     * the clone-only rule, and that rule must not be bypassed — so this applies
+     * it too rather than exposing the raw resolver.
+     */
+    fun resolveClonePidForTool(ctx: Context, packageName: String): Int? {
+        if (!isClone(packageName)) return null
+        return resolvePid(packageName)
+    }
+
     private fun resolveClonePid(ctx: Context, target: String): Int? {
         val value = target.trim().substringBefore(':')
         if (value.isEmpty()) return null

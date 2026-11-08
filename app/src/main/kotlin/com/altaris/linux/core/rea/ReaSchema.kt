@@ -92,6 +92,29 @@ object ReaSchema {
             return
         }
 
+        // `if` / `then` / `else`: the conditional shape REA uses for tools whose
+        // required fields depend on a discriminator.
+        //
+        // `instrument_with_frida` is the case that exposed this: with
+        // `mode: "attach"` it needs `pid`, with `mode: "spawn"` it needs
+        // `program`. The schema expresses that as
+        //
+        //   { "if":   { "properties": { "mode": { "const": "attach" } } },
+        //     "then": { "required": ["pid"] } }
+        //
+        // and a validator that ignores `if`/`then` accepts the call, forwards
+        // it, and lets REA reject it with one sentence that names nothing.
+        //
+        // REA wraps these in `allOf`, so every member is checked rather than
+        // only a top-level `if`. That is the difference between an error that
+        // names `pid` and the generic one in the report.
+        checkConditionals(schema, value, path, out)
+        schema.optJSONArray("allOf")?.let { parts ->
+            for (i in 0 until parts.length()) {
+                parts.optJSONObject(i)?.let { checkConditionals(it, value, path, out) }
+            }
+        }
+
         val allowed = schema.optJSONArray("enum")
         if (allowed != null) {
             val values = (0 until allowed.length()).map { allowed.opt(it) }
@@ -125,7 +148,23 @@ object ReaSchema {
             "null" -> if (value != null) {
                 out.add(Problem(path, "expected null, got " + describe(value)))
             }
-            // No `type`, or a type this validator does not model: accept.
+            // No `type`: infer it from the keywords that are present.
+            //
+            // REA's `if` conditions omit `"type": "object"` and carry only
+            // `properties` and `required`. Treating that as "a construct this
+            // validator does not model" made every condition match — so
+            // `if: { properties: { mode: { const: "attach" } } }` was true for
+            // `mode: "spawn"` as well, the `then` branch was never selected, and
+            // `instrument_with_frida` lost its `pid`/`program` check entirely.
+            "" -> when {
+                schema.has("properties") || schema.has("required") ||
+                    schema.has("additionalProperties") -> checkObject(schema, value, path, out)
+                schema.has("items") -> checkArray(schema, value, path, out)
+                // Genuinely unmodelled: accept, as before.
+                else -> Unit
+            }
+            // A type this validator does not model: accept.
+            else -> Unit
         }
     }
 
@@ -199,6 +238,24 @@ object ReaSchema {
         for (i in 0 until value.length()) {
             check(itemSchema, value.opt(i), "$path[$i]", out)
         }
+    }
+
+    /**
+     * Apply the `if`/`then`/`else` of [schema], when it has one.
+     *
+     * A missing `if` is not an error: most schemas do not have one.
+     */
+    private fun checkConditionals(
+        schema: JSONObject,
+        value: Any?,
+        path: String,
+        out: MutableList<Problem>,
+    ) {
+        val condition = schema.optJSONObject("if") ?: return
+        val matches = validateBranch(condition, value).isEmpty()
+        val branch = if (matches) schema.optJSONObject("then") else schema.optJSONObject("else")
+            ?: return
+        check(branch, value, path, out)
     }
 
     /** Validate against one branch without recording problems. */
@@ -286,6 +343,22 @@ object ReaSchema {
         unionBranches(schema)?.firstOrNull()?.let { return sample(it, depth + 1) }
         schema.opt("const")?.let { return it }
         schema.optJSONArray("enum")?.let { if (it.length() > 0) return it.opt(0) }
+        // `allOf` is how a schema adds the conditional fields; merge the
+        // branches so the example carries what `if`/`then` requires.
+        schema.optJSONArray("allOf")?.let { parts ->
+            val merged = JSONObject()
+            for (i in 0 until parts.length()) {
+                val part = parts.optJSONObject(i) ?: continue
+                (sample(part, depth + 1) as? JSONObject)?.let { add ->
+                    val keys = add.keys()
+                    while (keys.hasNext()) {
+                        val key = keys.next()
+                        merged.put(key, add.opt(key))
+                    }
+                }
+            }
+            if (merged.length() > 0) return merged
+        }
         return when (schema.optString("type")) {
             "object" -> {
                 val out = JSONObject()
@@ -295,6 +368,22 @@ object ReaSchema {
                     val key = required.optString(i)
                     if (key.isBlank()) continue
                     out.put(key, sample(properties?.optJSONObject(key) ?: JSONObject(), depth + 1))
+                }
+                // Fill the branch a discriminator selects, so an example for
+                // `instrument_with_frida { mode: "attach" }` also carries `pid`
+                // rather than being rejected on the fields it omitted.
+                schema.optJSONObject("if")?.let { cond ->
+                    val branch = schema.optJSONObject("then") ?: return@let
+                    val probe = JSONObject(out.toString())
+                    if (validateBranch(cond, probe).isEmpty()) {
+                        (sample(branch, depth + 1) as? JSONObject)?.let { extra ->
+                            val keys = extra.keys()
+                            while (keys.hasNext()) {
+                                val key = keys.next()
+                                if (!out.has(key)) out.put(key, extra.opt(key))
+                            }
+                        }
+                    }
                 }
                 out
             }
