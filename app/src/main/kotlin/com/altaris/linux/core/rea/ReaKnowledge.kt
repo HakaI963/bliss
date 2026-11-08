@@ -206,12 +206,9 @@ object ReaKnowledge {
         the `altaris` server has the clone, screenshot, UI and debugger tools that
         fit it. Use those for clone work; use REA for the artifact.
 
-        **Never attach these to a system process.** `start_frida_session` talks
-        to a root daemon, which will attach to whatever it is given. Pointed at
-        SystemUI, the launcher or any real app, it instruments that process and
-        crashes it — and screenshots, downloads and the UI go with it. Only a
-        clone package (`com.altaris.apps.*`) is a valid target, and the calls
-        are refused for anything else while "Debugger: clones only" is on.
+        `start_frida_session` takes a clone's package name or its pid; both
+        work. Keep the target a clone (`com.altaris.apps.*`): the daemon runs as
+        root and will attach to whatever it is given, including a system app.
 
         A `capability_unavailable` from the frida provider means the Node
         `frida` binding is missing, not that the target is wrong: the binding

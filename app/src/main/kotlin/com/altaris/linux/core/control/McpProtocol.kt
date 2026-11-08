@@ -54,7 +54,7 @@ object McpProtocol {
             "tools/call" -> {
                 val params = request.optJSONObject("params")
                 val name = params?.optString("name").orEmpty()
-                val args = params?.optJSONObject("arguments") ?: JSONObject()
+                val args = argumentsOf(params)
                 try {
                     result(id, callTool(name, args))
                 } catch (t: Throwable) {
@@ -628,6 +628,51 @@ object McpProtocol {
         return props
     }
 
+    /**
+     * The arguments of a `tools/call`, in whatever shape the client sent them.
+     *
+     * `params.arguments` is *supposed* to be a JSON object, and for most
+     * clients it is. Two others exist in the wild and both used to arrive here
+     * as an empty object, which is why `altaris_rea_call { name: … }` answered
+     * `Received keys: []` for a call that plainly carried a name:
+     *
+     *  - **a JSON string** holding the object (`"arguments": "{\"name\":…}"`),
+     *    which `optJSONObject` reports as null;
+     *  - **arguments inlined into `params`**, with no `arguments` member at all
+     *    (`"params": {"name": "…", "text": "…"}`), where the tool's own
+     *    arguments sit beside the tool name.
+     *
+     * Both are handled here rather than reported as a client bug: the server
+     * can read them, so it should.
+     */
+    private fun argumentsOf(params: JSONObject?): JSONObject {
+        if (params == null) return JSONObject()
+        params.optJSONObject("arguments")?.let { return it }
+        // A string-encoded object.
+        val raw = params.optString("arguments")
+        if (raw.isNotBlank()) {
+            runCatching { JSONObject(raw) }.getOrNull()?.let { return it }
+        }
+        // Inline arguments: everything except the envelope keys. This is only
+        // used when there is no `arguments` member at all, so a tool whose own
+        // arguments happen to be named "name" is not misread.
+        if (!params.has("arguments")) {
+            val inline = JSONObject()
+            val keys = params.keys()
+            while (keys.hasNext()) {
+                val key = keys.next()
+                if (key == "_meta" || key == "arguments") continue
+                inline.put(key, params.opt(key))
+            }
+            // `name` is the tool name in the envelope, so it is dropped from
+            // the inline set: a tool that really takes `name` gets it through
+            // the normal `arguments` member.
+            inline.remove("name")
+            if (inline.length() > 0) return inline
+        }
+        return JSONObject()
+    }
+
     private fun callTool(name: String, args: JSONObject): JSONObject = when (name) {
         "altaris_status" -> textResult(runBlocking { HeadlessCloneEngine.apiStatus() })
         "altaris_plan" -> {
@@ -715,14 +760,22 @@ object McpProtocol {
         )
         "altaris_sessions" -> textResult(runBlocking { HeadlessCloneEngine.apiSessions() })
         "altaris_screenshot" -> {
+            val pkg = optionalPackage(args)
             val bytes = runBlocking {
                 HeadlessCloneEngine.apiCapture(
                     args.optInt("width", 900).coerceIn(200, 2160),
                     90,
                     5_000,
-                    optionalPackage(args),
+                    pkg,
                 )
-            } ?: throw IllegalStateException("No display frame")
+            } ?: throw IllegalStateException(
+                "No frame from the clone's display" +
+                    (pkg?.let { " for $it" } ?: "") + ". The clone is not running, or " +
+                    "it is running on a display the engine cannot capture. Call " +
+                    "altaris_clones to see what is running, altaris_launch_clone to " +
+                    "start it, and for the phone's own screen use " +
+                    "altaris_device_screenshot."
+            )
             JSONObject()
                 .put("isError", false)
                 .put(
@@ -788,9 +841,15 @@ object McpProtocol {
         }
         "altaris_ocr" -> {
             val width = args.optInt("width", 1000).coerceIn(200, 2160)
+            val pkg = optionalPackage(args)
             val bytes = runBlocking {
-                HeadlessCloneEngine.apiCapture(width, 92, 5_000, optionalPackage(args))
-            } ?: throw IllegalStateException("No display frame")
+                HeadlessCloneEngine.apiCapture(width, 92, 5_000, pkg)
+            } ?: throw IllegalStateException(
+                "No frame from the clone's display" +
+                    (pkg?.let { " for $it" } ?: "") + ". The clone is not running, or " +
+                    "it is on a display the engine cannot capture. Call altaris_clones " +
+                    "to see what is running and altaris_launch_clone to start it."
+            )
             val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
                 ?: throw IllegalStateException("Frame decode failed")
             textResult(runBlocking { OcrEngine.recognize(bitmap) })
@@ -1033,21 +1092,40 @@ object McpProtocol {
         "altaris_rea_call" -> {
             // Accept the shapes an agent actually sends.
             //
-            // The reported failure is `altaris_rea_call { name: "inspect_adb_client" }`
-            // answered with "name is required" — a message that contradicts the
-            // call it is rejecting and leaves nothing to act on. `tool` is the
-            // field name REA's own CLI and several clients use, so it is
-            // accepted as an alias rather than costing a round trip.
+            // Two forms are in use, and the second is the one that failed:
+            //
+            //   { "name": "inspect_artifact", "arguments": { "path": "…" } }
+            //   { "name": "inspect_artifact", "path": "…" }
+            //
+            // The second puts the REA tool's own arguments beside the tool
+            // name. Reading only `arguments` made that call arrive as `{}` and
+            // be rejected with "No REA tool name" — a message that contradicted
+            // the call it was rejecting.
+            val nested = args.optJSONObject("arguments")
             val tool = args.optString("name").takeIf { it.isNotBlank() }
                 ?: args.optString("tool").takeIf { it.isNotBlank() }
-                ?: args.optJSONObject("arguments")?.optString("name")?.takeIf { it.isNotBlank() }
+                ?: nested?.optString("name")?.takeIf { it.isNotBlank() }
                 ?: throw IllegalArgumentException(
                     "No REA tool name. Pass it as \"name\": " +
-                        "altaris_rea_call { \"name\": \"inspect_artifact\", \"arguments\": {} }. " +
-                        "Received keys: " + args.keys().asSequence().toList() +
+                        "altaris_rea_call { \"name\": \"inspect_artifact\", " +
+                        "\"arguments\": { … } }. Received: " +
+                        args.toString().take(300) +
                         ". Call altaris_rea_tools for the list of names."
                 )
-            val arguments = args.optJSONObject("arguments") ?: JSONObject()
+            // Nested wins when present; otherwise the rest of this object is
+            // the tool's arguments.
+            val arguments = nested ?: JSONObject().apply {
+                val keys = args.keys()
+                while (keys.hasNext()) {
+                    val key = keys.next()
+                    if (key == "name" || key == "tool" || key == "arguments" ||
+                        key == "timeoutMs"
+                    ) {
+                        continue
+                    }
+                    put(key, args.opt(key))
+                }
+            }
             val timeout = args.optLong("timeoutMs", 600_000L).coerceIn(5_000L, 3_600_000L)
             // Start REA rather than telling the agent to.
             //
@@ -1471,10 +1549,9 @@ object McpProtocol {
           earlier has no gadget to attach to.
         - **auto** — gadget when there is no root, root when there is.
 
-        Never point a root attach at anything but a clone, and never call REA's
-        own Frida tools (`start_frida_session`, `list_frida_processes`) with a
-        system package. Those go to the same root daemon and are refused while
-        "Debugger: clones only" is on — leave it on.
+        REA's own Frida tools (`start_frida_session`, `list_frida_processes`)
+        reach the same daemon and work on a clone. Pass the clone's package or
+        its pid; both are resolved.
 
         ### Runtime work: use the debugger tools, not the frida CLI
 

@@ -109,19 +109,32 @@ object DeviceScreenshot {
                 .put("error", "Shizuku screencap failed: " + run.error.ifBlank { "exit ${run.exitCode}" })
                 .put("backend", "shizuku")
         }
-        // Copy it out as the shell. Reading the shell's file directly is not
-        // permitted on every Android version, and returning a path the caller
-        // cannot open is worse than returning an error.
-        val copy = ShizukuShell.run(
-            "cp $tmp " + target.absolutePath + " && chmod 644 " + target.absolutePath,
-            timeoutMs = 20_000L,
-        )
+        // Copy it out **as the app**, not as the shell.
+        //
+        // The previous version ran `cp $tmp <cache>` through Shizuku, which is
+        // a different uid: it cannot write into this app's private cache, so
+        // the copy always failed and the tool reported "screencap produced no
+        // readable file" while the capture itself had worked. The shell only
+        // has to leave the PNG somewhere world-readable; moving it into the
+        // sandbox is the app's own job, and it can do that with plain file IO.
+        val copied = runCatching {
+            target.parentFile?.mkdirs()
+            java.io.File(tmp).inputStream().use { input ->
+                target.outputStream().use { output -> input.copyTo(output, 64 * 1024) }
+            }
+            target.isFile && target.length() > 0L
+        }.getOrDefault(false)
         ShizukuShell.run("rm -f $tmp", timeoutMs = 5_000L)
-        if (!copy.ok || !target.isFile || target.length() == 0L) {
+        if (!copied) {
             return JSONObject()
                 .put("ok", false)
-                .put("error", "screencap produced no readable file: " +
-                    copy.error.ifBlank { "exit ${copy.exitCode}" })
+                .put(
+                    "error",
+                    "screencap wrote the PNG to " + tmp + " but it could not be read " +
+                        "back. The shell may be restricted from /data/local/tmp on this " +
+                        "device; enable the Altaris accessibility service for a capture " +
+                        "path that needs no shell.",
+                )
                 .put("backend", "shizuku")
         }
         val size = pngSize(target)

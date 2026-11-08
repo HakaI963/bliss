@@ -13,13 +13,10 @@ import java.io.File
  * on a rooted device there was no way to ask for the no-root path at all — the
  * clone was built without the gadget and every no-root attach failed.
  *
- * **Root Frida crashed the phone.** `frida-server` runs as root and attaches to
- * whatever it is pointed at. REA's own tools (`start_frida_session`,
- * `list_frida_processes`) went through the generic call path with no clone
- * check, so pointing one at a system package instrumented SystemUI — and with
- * it went screenshots, downloads, the HTML view and the launcher.
+ * The mode is a real setting: it is persisted, resolved against root, honoured
+ * by the clone build, by attach, and by the installer.
  */
-class DebugModeAndProcessGuardTest {
+class DebugModeTest {
 
     // ------------------------------------------------------- mode selection
 
@@ -134,96 +131,6 @@ class DebugModeAndProcessGuardTest {
         assertTrue("must reject an unknown mode", route.contains("Use auto, root or gadget"))
     }
 
-    // --------------------------------------------------------- process guard
-
-    /**
-     * REA's own process tools must be clone-guarded.
-     *
-     * `start_frida_session` reaches root frida-server directly, so without this
-     * a system package can be instrumented — which is what crashed the device.
-     */
-    @Test
-    fun theProcessToolsAreGuarded() {
-        val manager = readSource("app/src/main/kotlin/com/altaris/linux/core/rea/ReaManager.kt")
-        assertTrue(
-            "must name the process tools",
-            manager.contains("private val PROCESS_TOOLS"),
-        )
-        for (tool in listOf("start_frida_session", "list_frida_processes", "read_adb_logcat")) {
-            assertTrue("must guard $tool", manager.contains("\"" + tool + "\""))
-        }
-        assertTrue(
-            "must be callable from the bridge too",
-            manager.contains("fun cloneGuardProblem(ctx: Context?, name: String"),
-        )
-        // It has to run before the call reaches REA.
-        val call = manager.substringAfter("suspend fun call(name: String")
-            .substringBefore("// ------------------------------------------------------------- agents")
-        assertTrue("must guard the call path", call.contains("cloneGuardProblem("))
-        assertTrue(
-            "the guard must precede the forward",
-            call.indexOf("cloneGuardProblem(") < call.indexOf("client.callTool("),
-        )
-    }
-
-    /**
-     * The `rea` bridge must guard too.
-     *
-     * It forwards straight to REA and never passes through `ReaManager.call`,
-     * so a guard only on the Altaris side would leave the hole open for the
-     * client that calls REA's tools by their bare names — which is exactly what
-     * the in-distro agent does.
-     */
-    @Test
-    fun theBridgeAlsoGuards() {
-        val bridge = readSource("app/src/main/kotlin/com/altaris/linux/core/rea/BridgeServer.kt")
-        assertTrue(
-            "must apply the shared guard",
-            bridge.contains("ReaManager.cloneGuardProblem("),
-        )
-        assertTrue(
-            "must refuse rather than forward",
-            bridge.contains("\"refused: not a clone\""),
-        )
-        // The guard must sit before the forward, or it buys nothing.
-        val call = bridge.substringAfter("if (method == \"tools/call\")")
-            .substringBefore("private fun decorate(")
-        assertTrue(
-            "the guard must precede the forward",
-            call.indexOf("cloneGuardProblem(") < call.indexOf("session.forward(method, params, TOOL_TIMEOUT_MS)"),
-        )
-    }
-
-    /** A bare pid must be refused, because ownership cannot be checked. */
-    @Test
-    fun aRawPidIsRefused() {
-        val manager = readSource("app/src/main/kotlin/com/altaris/linux/core/rea/ReaManager.kt")
-        val guard = manager.substringAfter("fun cloneGuardProblem(")
-            .substringBefore("suspend fun call(name: String")
-        assertTrue("must detect a pid", guard.contains("toIntOrNull() != null"))
-        assertTrue("must say why", guard.contains("is a pid"))
-        assertTrue(
-            "must say what to pass instead",
-            guard.contains("Pass the clone's package name"),
-        )
-        // A real clone must pass.
-        assertTrue("must allow a clone", guard.contains("if (isClone(packageName)) return \"\""))
-        // And the setting must be honoured, so a developer can opt out.
-        assertTrue("must honour clones-only", guard.contains("!ReaDistro.isCloneOnly(ctx)"))
-    }
-
-    /** A discovery call with no target must not be blocked. */
-    @Test
-    fun aTargetlessDiscoveryCallIsAllowed() {
-        val manager = readSource("app/src/main/kotlin/com/altaris/linux/core/rea/ReaManager.kt")
-        val guard = manager.substringAfter("fun cloneGuardProblem(")
-            .substringBefore("suspend fun call(name: String")
-        assertTrue(
-            "must allow a call with no target",
-            guard.contains("if (target == null) return \"\""),
-        )
-    }
-
     // ------------------------------------------------------ instructions
 
     /** The agent must know the two modes and the risk of each. */
@@ -254,30 +161,26 @@ class DebugModeAndProcessGuardTest {
             instructions.contains("built after it was downloaded"),
         )
         assertTrue(
-            "must forbid pointing root at a system package",
-            instructions.contains("system package"),
+            "must say a pid works too",
+            instructions.contains("package or its pid"),
         )
     }
 
     /** The REA guide must carry the same warning, since that is its server. */
     @Test
-    fun theReaGuideWarnsAboutSystemProcesses() {
+    fun theReaGuideExplainsTheRuntimeTools() {
         val guide = ReaKnowledge.REA_GUIDE.replace(Regex("\\s+"), " ")
         assertTrue(
-            "must warn about the root daemon",
-            guide.contains("Never attach these to a system process"),
-        )
-        assertTrue(
-            "must name the tool that can crash the phone",
+            "must name the tool",
             guide.contains("start_frida_session"),
         )
         assertTrue(
-            "must say what breaks",
-            guide.contains("screenshots, downloads and the UI go with it"),
+            "must say a pid works",
+            guide.contains("package name or its pid"),
         )
         assertTrue(
-            "must say the calls are refused",
-            guide.contains("Debugger: clones only"),
+            "must say the daemon runs as root",
+            guide.contains("runs as root"),
         )
         assertTrue(
             "must explain the provider error",

@@ -132,29 +132,39 @@ class AltarisAccessibilityService : AccessibilityService() {
             object : TakeScreenshotCallback {
                 override fun onSuccess(screenshot: ScreenshotResult) {
                     result = runCatching {
-                        val bitmap = android.graphics.Bitmap.wrapHardwareBuffer(
+                        val hardware = android.graphics.Bitmap.wrapHardwareBuffer(
                             screenshot.hardwareBuffer,
                             screenshot.colorSpace,
                         ) ?: throw IllegalStateException("the captured buffer was unreadable")
-                        val width = bitmap.width
-                        val height = bitmap.height
+                        val width = hardware.width
+                        val height = hardware.height
+                        // A hardware bitmap cannot be compressed: `compress` on
+                        // one returns false on many devices, which surfaced as
+                        // "PNG encoding failed" on a capture that had actually
+                        // worked. Copying to a software bitmap first is the
+                        // supported way to encode it.
+                        val software = hardware.copy(
+                            android.graphics.Bitmap.Config.ARGB_8888,
+                            false,
+                        ) ?: throw IllegalStateException("the captured buffer could not be copied")
+                        hardware.recycle()
                         val file = java.io.File(outPath)
                         file.parentFile?.mkdirs()
-                        file.outputStream().use { out ->
-                            if (!bitmap.compress(
+                        val encoded = try {
+                            file.outputStream().use { out ->
+                                software.compress(
                                     android.graphics.Bitmap.CompressFormat.PNG,
                                     100,
                                     out,
                                 )
-                            ) {
-                                throw IllegalStateException("PNG encoding failed")
                             }
+                        } finally {
+                            software.recycle()
+                            // Releasing the buffer is what keeps repeated
+                            // captures from exhausting the graphics allocator.
+                            screenshot.hardwareBuffer.close()
                         }
-                        // A hardware bitmap holds a reference to the buffer;
-                        // releasing both is what keeps repeated captures from
-                        // exhausting the graphics allocator.
-                        bitmap.recycle()
-                        screenshot.hardwareBuffer.close()
+                        if (!encoded) throw IllegalStateException("PNG encoding failed")
                         if (!file.isFile || file.length() == 0L) {
                             throw IllegalStateException("the screenshot file is empty")
                         }

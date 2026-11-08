@@ -2092,94 +2092,11 @@ object ReaManager {
         toolsCache ?: JSONArray()
     }
 
-    /**
-     * REA tools that instrument a **live process** and must be clone-guarded.
-     *
-     * REA's own Frida and ADB tools reach the same root daemon the debugger
-     * does, and they do not know what a clone is. `start_frida_session` with a
-     * system package attaches root frida-server to SystemUI, which is exactly
-     * how the device ended up with screenshots, downloads and the launcher
-     * dead: the process was instrumented and then crashed, and with it went
-     * everything the user was relying on.
-     *
-     * The debugger tools have had a per-command clone check for a while. These
-     * names are the hole that remained, because they go through the generic
-     * REA call path instead.
-     */
-    private val PROCESS_TOOLS = setOf(
-        "start_frida_session",
-        "list_frida_processes",
-        "list_frida_devices",
-        "resume_frida_session",
-        "close_frida_session",
-        "read_adb_logcat",
-        "capture_adb_screen",
-        "list_adb_devices",
-        "start_adb_session",
-    )
-
-    /** Argument names that carry a live-process target in REA's tools. */
-    private val PROCESS_TARGET_KEYS = listOf(
-        "package", "package_name", "process", "pid", "target", "app",
-    )
-
-    /**
-     * Refuse a process-instrumenting REA call that names a non-clone.
-     *
-     * Returns an error message, or "" when the call may proceed. Only applies
-     * while "Debugger: clones only" is on, which is the default: a developer
-     * who deliberately turned it off has already accepted the risk.
-     *
-     * Public because there are two call paths — `altaris_rea_call` here, and
-     * the `rea` bridge, which forwards to REA directly. A guard that only
-     * covered the first would leave the hole open for exactly the client that
-     * calls REA's tools by their bare names.
-     */
-    fun cloneGuardProblem(ctx: Context?, name: String, arguments: JSONObject): String {
-        if (ctx == null || !ReaDistro.isCloneOnly(ctx)) return ""
-        if (name !in PROCESS_TOOLS) return ""
-        // `list_*` with no target is a read of the device inventory. It cannot
-        // attach anything, and refusing it would block the one call an agent
-        // needs to discover what is there.
-        val target = PROCESS_TARGET_KEYS
-            .asSequence()
-            .mapNotNull { key -> arguments.optString(key).takeIf { it.isNotBlank() } }
-            .firstOrNull()
-        if (target == null) return ""
-        val packageName = target.trim().substringBefore(':')
-        // A bare number is a pid, and a pid says nothing about ownership.
-        if (packageName.toIntOrNull() != null) {
-            return "\"" + target + "\" is a pid. Pass the clone's package name " +
-                "instead: the debugger only touches apps running in a clone, and a " +
-                "raw pid cannot be checked before the attach."
-        }
-        if (isClone(packageName)) return ""
-        return notACloneReason(packageName)
-    }
-
     suspend fun call(name: String, arguments: JSONObject, timeoutMs: Long = 600_000L): JSONObject =
         withContext(Dispatchers.IO) {
             val client = active ?: throw IllegalStateException(
                 "REA is not running. Call altaris_rea_start first (Tools > Reverse engineering)."
             )
-            // Guard the process tools before they reach the root daemon. This
-            // is the last line of defence for a call that did not come through
-            // altaris_debug_*, including one made on the `rea` bridge.
-            val refusal = cloneGuardProblem(
-                com.altaris.linux.core.control.ControlServer.context(), name, arguments,
-            )
-            if (refusal.isNotBlank()) {
-                return@withContext JSONObject()
-                    .put("ok", false)
-                    .put("error", refusal)
-                    .put("tool", name)
-                    .put(
-                        "hint",
-                        "Use altaris_clones to list the clones, or turn off " +
-                            "\"Debugger: clones only\" in Tools → Reverse engineering " +
-                            "if you really mean the real app.",
-                    )
-            }
             client.callTool(name, arguments, timeoutMs)
         }
 
