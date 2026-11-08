@@ -1402,11 +1402,11 @@ object McpProtocol {
 
         Use `altaris_debug_attach { "target": "<pkg or pid>" }` — it starts
         the clone, starts frida-server if needed, and attaches. Then
-        `altaris_debug_command` with a `$` prefix for JavaScript:
+        `altaris_debug_command` with a `${'$'}` prefix for JavaScript:
 
-            altaris_debug_command { "command": "$ Process.arch" }
+            altaris_debug_command { "command": "${'$'} Process.arch" }
 
-        Anything without the `$` is a gdb command. `altaris_debug_detach`
+        Anything without the `${'$'}` is a gdb command. `altaris_debug_detach`
         ends the session. If you need REA's own Frida tools, they are on the
         `rea` server under their real names — `list_frida_devices`,
         `start_frida_session` — and they reach the same server.

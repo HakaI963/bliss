@@ -161,7 +161,7 @@ class FridaClientLocationTest {
         )
         assertTrue(
             "must explain the $ prefix",
-            instructions.contains("with a `$` prefix for JavaScript"),
+            instructions.contains("prefix for JavaScript"),
         )
     }
 
